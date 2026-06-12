@@ -160,7 +160,7 @@
 
 ## チャンク H: CLI(T25–T29)
 
-- [ ] **P1-T25**(S)`ext init`
+- [x] **P1-T25**(S)`ext init`
   - RED: 生成された scaffold が `ext build` でそのまま通る(生成物の自己検証)
   - GREEN: plugin scaffold 生成(manifest + handler + テスト雛形 — **雛形にもテストを含める**)
   - DoD: scaffold → build → test が一発で green
