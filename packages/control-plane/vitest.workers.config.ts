@@ -4,8 +4,17 @@ import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-worker
 import { defineConfig } from "vitest/config";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(dirname, "../..");
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: /^@tenantscript\/([^/]+)$/,
+        replacement: `${workspaceRoot}/packages/$1/src/index.ts`
+      }
+    ]
+  },
   plugins: [
     cloudflareTest(async () => ({
       main: path.join(dirname, "src/worker-entry.ts"),

@@ -117,6 +117,39 @@ describe("createD1ControlPlaneStore", () => {
       })
     ).resolves.toEqual([]);
   });
+
+  it("finds plugins and versions through first/list queries", async () => {
+    const db = new FakeD1Database(
+      [],
+      [],
+      [{ id: "plugin_1", app_id: "app_1", key: "large-invoice-notify" }],
+      [
+        {
+          id: "version_1",
+          plugin_id: "plugin_1",
+          version: "1.0.0",
+          artifact_hash: "hash_1",
+          manifest_json: JSON.stringify(manifest)
+        }
+      ]
+    );
+    const store = createD1ControlPlaneStore(db);
+
+    await expect(
+      store.findPluginByKey({ appId: "app_1", key: "large-invoice-notify" })
+    ).resolves.toEqual({
+      id: "plugin_1",
+      appId: "app_1",
+      key: "large-invoice-notify"
+    });
+    await expect(
+      store.findPluginVersion({ pluginId: "plugin_1", version: "1.0.0" })
+    ).resolves.toEqual(expect.objectContaining({ id: "version_1", artifactHash: "hash_1" }));
+    await expect(store.listPluginVersions({ pluginId: "plugin_1" })).resolves.toEqual([
+      expect.objectContaining({ id: "version_1", version: "1.0.0" })
+    ]);
+    await expect(store.findPluginByKey({ appId: "app_1", key: "missing" })).resolves.toBeNull();
+  });
 });
 
 describe("createR2ArtifactStore", () => {
@@ -171,7 +204,9 @@ class FakeD1Database implements D1DatabaseLike {
 
   constructor(
     private readonly executionRows: unknown[] = [],
-    private readonly installationRows: unknown[] = []
+    private readonly installationRows: unknown[] = [],
+    private readonly pluginRows: unknown[] = [],
+    private readonly pluginVersionRows: unknown[] = []
   ) {}
 
   prepare(query: string): D1PreparedStatementLike {
@@ -186,17 +221,41 @@ class FakeD1Database implements D1DatabaseLike {
     if (query.includes("FROM installations")) {
       return { results: this.installationRows };
     }
+    if (query.includes("FROM plugin_versions")) {
+      return { results: this.pluginVersionRows };
+    }
     return { results: this.executionRows };
+  }
+
+  executeFirst(query: string, values: readonly unknown[]) {
+    if (query.includes("FROM plugins")) {
+      return (
+        this.pluginRows.find(
+          (row) => isRecord(row) && row.app_id === values[0] && row.key === values[1]
+        ) ?? null
+      );
+    }
+    if (query.includes("FROM plugin_versions")) {
+      return (
+        this.pluginVersionRows.find(
+          (row) => isRecord(row) && row.plugin_id === values[0] && row.version === values[1]
+        ) ?? null
+      );
+    }
+    return null;
   }
 }
 
 class FakeD1Statement implements D1PreparedStatementLike {
+  private values: unknown[] = [];
+
   constructor(
     private readonly db: FakeD1Database,
     private readonly query: string
   ) {}
 
-  bind() {
+  bind(...values: unknown[]) {
+    this.values = values;
     return this;
   }
 
@@ -206,12 +265,16 @@ class FakeD1Statement implements D1PreparedStatementLike {
   }
 
   first<T = unknown>() {
-    return Promise.resolve(null as T | null);
+    return Promise.resolve(this.db.executeFirst(this.query, this.values) as T | null);
   }
 
   all() {
     return Promise.resolve(this.db.executeAll(this.query));
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 class FakeR2Bucket implements R2BucketLike {

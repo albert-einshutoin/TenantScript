@@ -64,6 +64,17 @@ function cloneExecution(record: ExecutionRecord): ExecutionRecord {
 }
 
 export {
+  ControlPlaneApiError,
+  createControlPlaneApi,
+  type ArtifactStore,
+  type ControlPlaneApi,
+  type ControlPlaneStore,
+  type ListPluginVersionsRequest,
+  type RegisterPluginRequest,
+  type RegisterPluginVersionRequest
+} from "./api.js";
+
+export {
   ArtifactAlreadyExistsError,
   createD1ControlPlaneStore,
   createR2ArtifactStore,

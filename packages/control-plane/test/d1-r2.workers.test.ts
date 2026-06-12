@@ -88,6 +88,35 @@ describe("D1 control-plane store", () => {
       version: "1.0.0"
     });
   });
+
+  it("finds plugins by app key and lists immutable versions", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await seedInstallation(store, { enabled: true });
+
+    const plugin = await store.findPluginByKey({
+      appId: "app_1",
+      key: "large-invoice-notify"
+    });
+    const versions = plugin === null ? [] : await store.listPluginVersions({ pluginId: plugin.id });
+
+    expect(plugin).toMatchObject({
+      id: "plugin_1",
+      appId: "app_1",
+      key: "large-invoice-notify"
+    });
+    expect(versions).toEqual([
+      expect.objectContaining({
+        id: "version_1",
+        pluginId: "plugin_1",
+        version: "1.0.0",
+        artifactHash: "hash_1",
+        manifest
+      })
+    ]);
+    await expect(
+      store.findPluginVersion({ pluginId: "plugin_1", version: "1.0.0" })
+    ).resolves.toEqual(expect.objectContaining({ id: "version_1" }));
+  });
 });
 
 describe("R2 artifact store", () => {

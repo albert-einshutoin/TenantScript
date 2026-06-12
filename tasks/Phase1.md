@@ -16,7 +16,7 @@
 
 ## チャンク A: ドメイン・永続化の完成(T01–T04)
 
-- [ ] **P1-T01**(M)plugin / version 登録 API
+- [x] **P1-T01**(M)plugin / version 登録 API
   - RED: manifest + artifact を登録 → version 一覧取得 / 同一 version 再登録は拒否(immutable)
   - GREEN: control-plane に plugin/version エンドポイント実装
   - DoD: 登録・重複拒否・一覧のテスト green

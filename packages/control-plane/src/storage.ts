@@ -81,7 +81,10 @@ export function createD1ControlPlaneStore(db: D1DatabaseLike) {
     createApp: createAppWriter(db),
     createTenant: createTenantWriter(db),
     createPlugin: createPluginWriter(db),
+    findPluginByKey: createPluginByKeyFinder(db),
     createPluginVersion: createPluginVersionWriter(db),
+    findPluginVersion: createPluginVersionFinder(db),
+    listPluginVersions: createPluginVersionLister(db),
     createInstallation: createInstallationWriter(db),
     writeExecution: createExecutionWriter(db),
     searchExecutions: createExecutionSearcher(db),
@@ -119,6 +122,17 @@ function createPluginWriter(db: D1DatabaseLike) {
   };
 }
 
+function createPluginByKeyFinder(db: D1DatabaseLike) {
+  return async (query: { appId: string; key: string }) => {
+    const row = await db
+      .prepare("SELECT id, app_id, key FROM plugins WHERE app_id = ? AND key = ?")
+      .bind(query.appId, query.key)
+      .first<PluginRow>();
+
+    return row === null ? null : pluginFromRow(row);
+  };
+}
+
 function createPluginVersionWriter(db: D1DatabaseLike) {
   return async (record: PluginVersionRecord) => {
     await db
@@ -138,6 +152,39 @@ function createPluginVersionWriter(db: D1DatabaseLike) {
       )
       .run();
     return record;
+  };
+}
+
+function createPluginVersionFinder(db: D1DatabaseLike) {
+  return async (query: { pluginId: string; version: string }) => {
+    const row = await db
+      .prepare(
+        [
+          "SELECT id, plugin_id, version, artifact_hash, manifest_json FROM plugin_versions",
+          "WHERE plugin_id = ? AND version = ?"
+        ].join(" ")
+      )
+      .bind(query.pluginId, query.version)
+      .first<PluginVersionRow>();
+
+    return row === null ? null : pluginVersionFromRow(row);
+  };
+}
+
+function createPluginVersionLister(db: D1DatabaseLike) {
+  return async (query: { pluginId: string }) => {
+    const rows = await db
+      .prepare(
+        [
+          "SELECT id, plugin_id, version, artifact_hash, manifest_json FROM plugin_versions",
+          "WHERE plugin_id = ?",
+          "ORDER BY created_at ASC, version ASC"
+        ].join(" ")
+      )
+      .bind(query.pluginId)
+      .all();
+
+    return (rows.results as PluginVersionRow[]).map(pluginVersionFromRow);
   };
 }
 
@@ -275,6 +322,20 @@ interface ExecutionRow {
   created_at: string;
 }
 
+interface PluginRow {
+  id: string;
+  app_id: string;
+  key: string;
+}
+
+interface PluginVersionRow {
+  id: string;
+  plugin_id: string;
+  version: string;
+  artifact_hash: string;
+  manifest_json: string;
+}
+
 interface ResolvedInstallationRow {
   installation_id: string;
   tenant_id: string;
@@ -286,6 +347,24 @@ interface ResolvedInstallationRow {
   version: string;
   manifest_json: string;
   plugin_id: string;
+}
+
+function pluginFromRow(row: PluginRow): PluginRecord {
+  return {
+    id: row.id,
+    appId: row.app_id,
+    key: row.key
+  };
+}
+
+function pluginVersionFromRow(row: PluginVersionRow): PluginVersionRecord {
+  return {
+    id: row.id,
+    pluginId: row.plugin_id,
+    version: row.version,
+    artifactHash: row.artifact_hash,
+    manifest: JSON.parse(row.manifest_json) as TenantScriptManifest
+  };
 }
 
 function executionFromRow(row: ExecutionRow): ExecutionRecord {
