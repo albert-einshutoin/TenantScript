@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleWebhookProxy, type ProxyForwardRequest } from "../src/index.js";
+import {
+  createInMemoryProxyMappingStore,
+  handleWebhookProxy,
+  type ProxyForwardRequest
+} from "../src/index.js";
 
 describe("handleWebhookProxy", () => {
   it("resolves the tenant, applies transform plugins in priority order, and forwards", async () => {
@@ -127,6 +131,39 @@ describe("handleWebhookProxy", () => {
         forward: () => ({ status: 200 })
       })
     ).rejects.toThrow("proxy mapping for /hooks/missing was not found");
+  });
+});
+
+describe("createInMemoryProxyMappingStore", () => {
+  it("creates, updates, lists, finds, and deletes proxy mappings", async () => {
+    const store = createInMemoryProxyMappingStore({
+      allowedDestinationOrigins: ["https://origin.example.com"]
+    });
+
+    await expect(
+      store.upsertProxyMapping({
+        inboundPath: "/hooks/stripe",
+        tenantId: "tenant_1",
+        destinationUrl: "https://origin.example.com/stripe",
+        transformHookName: "webhook.proxy.transform"
+      })
+    ).resolves.toMatchObject({ inboundPath: "/hooks/stripe", tenantId: "tenant_1" });
+    await expect(store.findProxyMappingByPath("/hooks/stripe")).resolves.toMatchObject({
+      destinationUrl: "https://origin.example.com/stripe"
+    });
+
+    await store.upsertProxyMapping({
+      inboundPath: "/hooks/stripe",
+      tenantId: "tenant_1",
+      destinationUrl: "https://origin.example.com/stripe-v2",
+      transformHookName: "webhook.proxy.transform"
+    });
+
+    await expect(store.listProxyMappings()).resolves.toEqual([
+      expect.objectContaining({ destinationUrl: "https://origin.example.com/stripe-v2" })
+    ]);
+    await expect(store.deleteProxyMapping("/hooks/stripe")).resolves.toBe(true);
+    await expect(store.findProxyMappingByPath("/hooks/stripe")).resolves.toBeNull();
   });
 });
 

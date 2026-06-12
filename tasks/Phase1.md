@@ -143,7 +143,7 @@
   - GREEN: `packages/proxy` 実装(host SDK の transform 実行計画を再利用)
   - DoD: 変換・skip・転送のテスト green
 
-- [ ] **P1-T23**(S)proxy mapping 設定
+- [x] **P1-T23**(S)proxy mapping 設定
   - RED: 宛先 URL の allowlist 検証(任意 URL への転送を拒否 = SSRF 防止)
   - GREEN: mapping CRUD(inbound path → 宛先、tenant 対応)
   - DoD: mapping テスト + SSRF 防止テスト green(security suite 追加)
