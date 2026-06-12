@@ -138,7 +138,7 @@
 
 ## チャンク G: proxy mode(T22–T24)— D-015
 
-- [ ] **P1-T22**(M)webhook proxy worker
+- [x] **P1-T22**(M)webhook proxy worker
   - RED: inbound webhook → tenant 解決 → transform チェーン適用 → 元の宛先へ転送、が E2E で通る / 変換失敗時は failure policy(skip)で原文転送
   - GREEN: `packages/proxy` 実装(host SDK の transform 実行計画を再利用)
   - DoD: 変換・skip・転送のテスト green

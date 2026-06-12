@@ -145,6 +145,16 @@ importers:
         specifier: workspace:*
         version: link:../test-config
 
+  packages/proxy:
+    dependencies:
+      '@tenantscript/host-sdk':
+        specifier: workspace:*
+        version: link:../host-sdk
+    devDependencies:
+      '@tenantscript/test-config':
+        specifier: workspace:*
+        version: link:../test-config
+
   packages/test-config:
     devDependencies:
       vitest:
