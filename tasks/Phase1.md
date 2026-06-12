@@ -131,7 +131,7 @@
     - [x] P1-T20b Slack OAuth callback API + tenant workspace connection metadata
     - [x] P1-T20c token 非露出 scan(API response / execution log / D1 metadata)
 
-- [ ] **P1-T21**(S)capability 共通レート制限(最小)
+- [x] **P1-T21**(S)capability 共通レート制限(最小)
   - RED: capability ごとの rateLimit 超過で拒否され、audit に残る
   - GREEN: DO ベースの簡易 rate limiter
   - DoD: 上限・回復のテスト green

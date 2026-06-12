@@ -34,6 +34,49 @@ export interface CapabilityCallJournalStorage {
   put: (key: string, entry: CapabilityCallJournalEntry) => Promise<void> | void;
 }
 
+export interface CapabilityRateLimit {
+  limit: number;
+  windowMs: number;
+}
+
+export interface CapabilityRateLimitBucket {
+  capability: string;
+  windowStartedAt: Date;
+  count: number;
+}
+
+export interface CapabilityRateLimitDecision {
+  allowed: boolean;
+  count: number;
+  limit: number;
+  resetAt: Date;
+}
+
+export interface CapabilityRateLimiter {
+  checkCapabilityRateLimit: (request: {
+    capability: string;
+    at: Date;
+  }) => Promise<CapabilityRateLimitDecision> | CapabilityRateLimitDecision;
+}
+
+export interface CapabilityRateLimiterStorage {
+  get: (
+    key: string
+  ) => Promise<CapabilityRateLimitBucket | undefined> | CapabilityRateLimitBucket | undefined;
+  put: (key: string, bucket: CapabilityRateLimitBucket) => Promise<void> | void;
+}
+
+export interface CapabilityAuditRecord {
+  capability: string;
+  status: "denied";
+  reason: "rate_limited";
+  at: Date;
+}
+
+export interface CapabilityAuditSink {
+  writeCapabilityAudit: (record: CapabilityAuditRecord) => Promise<void> | void;
+}
+
 export interface CapabilityBroker {
   call: (name: string, input: unknown) => Promise<unknown>;
 }
@@ -95,6 +138,8 @@ export function createCapabilityBroker(params: {
   providers: Record<string, CapabilityProvider>;
   executionId?: string;
   journal?: CapabilityCallJournal;
+  rateLimiter?: CapabilityRateLimiter;
+  auditSink?: CapabilityAuditSink;
   now?: () => Date;
 }): CapabilityBroker {
   if (params.journal !== undefined && params.executionId === undefined) {
@@ -131,6 +176,14 @@ export function createCapabilityBroker(params: {
         return journaled.result;
       }
 
+      const calledAt = params.now?.() ?? new Date();
+      await enforceCapabilityRateLimit({
+        capability: name,
+        at: calledAt,
+        rateLimiter: params.rateLimiter,
+        auditSink: params.auditSink
+      });
+
       const result = applyResultScope(name, grant, await provider(input));
       await params.journal?.writeCapabilityCall({
         executionId: params.executionId ?? "",
@@ -138,10 +191,75 @@ export function createCapabilityBroker(params: {
         capability: name,
         inputHash,
         result,
-        completedAt: params.now?.() ?? new Date()
+        completedAt: calledAt
       });
 
       return result;
+    }
+  };
+}
+
+export function createInMemoryCapabilityRateLimiter(params: {
+  limits: Record<string, CapabilityRateLimit>;
+}): CapabilityRateLimiter {
+  const buckets = new Map<string, CapabilityRateLimitBucket>();
+  return createDurableObjectCapabilityRateLimiter({
+    limits: params.limits,
+    storage: {
+      get: (key) => buckets.get(key),
+      put: (key, bucket) => {
+        buckets.set(key, bucket);
+      }
+    }
+  });
+}
+
+export function createDurableObjectCapabilityRateLimiter(params: {
+  limits: Record<string, CapabilityRateLimit>;
+  storage: CapabilityRateLimiterStorage;
+}): CapabilityRateLimiter {
+  return {
+    checkCapabilityRateLimit: async (request) => {
+      const limit = params.limits[request.capability];
+      if (limit === undefined) {
+        return {
+          allowed: true,
+          count: 0,
+          limit: Number.POSITIVE_INFINITY,
+          resetAt: request.at
+        };
+      }
+      validateCapabilityRateLimit(request.capability, limit);
+
+      const key = request.capability;
+      const current = await params.storage.get(key);
+      const windowExpired =
+        current === undefined ||
+        request.at.getTime() - current.windowStartedAt.getTime() >= limit.windowMs;
+      const bucket = windowExpired
+        ? { capability: request.capability, windowStartedAt: request.at, count: 0 }
+        : current;
+      const next = {
+        ...bucket,
+        count: bucket.count + 1
+      };
+      const resetAt = new Date(bucket.windowStartedAt.getTime() + limit.windowMs);
+      if (next.count > limit.limit) {
+        return {
+          allowed: false,
+          count: next.count,
+          limit: limit.limit,
+          resetAt
+        };
+      }
+
+      await params.storage.put(key, next);
+      return {
+        allowed: true,
+        count: next.count,
+        limit: limit.limit,
+        resetAt
+      };
     }
   };
 }
@@ -167,6 +285,44 @@ export function createDurableObjectCapabilityCallJournal(
       return entry;
     }
   };
+}
+
+async function enforceCapabilityRateLimit(params: {
+  capability: string;
+  at: Date;
+  rateLimiter: CapabilityRateLimiter | undefined;
+  auditSink: CapabilityAuditSink | undefined;
+}): Promise<void> {
+  if (params.rateLimiter === undefined) {
+    return;
+  }
+
+  const decision = await params.rateLimiter.checkCapabilityRateLimit({
+    capability: params.capability,
+    at: params.at
+  });
+  if (decision.allowed) {
+    return;
+  }
+
+  await params.auditSink?.writeCapabilityAudit({
+    capability: params.capability,
+    status: "denied",
+    reason: "rate_limited",
+    at: params.at
+  });
+  throw new CapabilityDeniedError(`capability ${params.capability} exceeded rate limit`);
+}
+
+function validateCapabilityRateLimit(capability: string, limit: CapabilityRateLimit): void {
+  if (
+    !Number.isInteger(limit.limit) ||
+    limit.limit < 1 ||
+    !Number.isInteger(limit.windowMs) ||
+    limit.windowMs < 1
+  ) {
+    throw new Error(`capability ${capability} has invalid rate limit`);
+  }
 }
 
 export function createPluginCapabilityContext(broker: CapabilityBroker): PluginCapabilityContext {

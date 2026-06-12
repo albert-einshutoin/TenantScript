@@ -5,6 +5,7 @@ import {
   createCapabilityBroker,
   createDurableObjectCapabilityCallJournal,
   createInMemoryCapabilityCallJournal,
+  createInMemoryCapabilityRateLimiter,
   createInvoiceReadProvider,
   createMockSlackSendProvider,
   createPluginCapabilityContext,
@@ -216,6 +217,69 @@ describe("createCapabilityBroker", () => {
       id: "inv_1",
       amountCents: 150_000
     });
+  });
+
+  it("rejects capability calls over the per-capability rate limit and writes audit", async () => {
+    const provider = vi.fn().mockResolvedValue({ ok: true });
+    const audits: unknown[] = [];
+    const broker = createCapabilityBroker({
+      grants: { "slack.send": { channel: "C123" } },
+      providers: { "slack.send": provider },
+      rateLimiter: createInMemoryCapabilityRateLimiter({
+        limits: { "slack.send": { limit: 1, windowMs: 1_000 } }
+      }),
+      auditSink: {
+        writeCapabilityAudit: (record) => {
+          audits.push(record);
+        }
+      },
+      now: () => new Date("2026-06-13T01:00:00.000Z")
+    });
+
+    await expect(broker.call("slack.send", { channel: "C123", text: "one" })).resolves.toEqual({
+      ok: true
+    });
+    await expect(broker.call("slack.send", { channel: "C123", text: "two" })).rejects.toThrow(
+      "capability slack.send exceeded rate limit"
+    );
+
+    expect(provider).toHaveBeenCalledOnce();
+    expect(audits).toEqual([
+      {
+        capability: "slack.send",
+        status: "denied",
+        reason: "rate_limited",
+        at: new Date("2026-06-13T01:00:00.000Z")
+      }
+    ]);
+  });
+
+  it("allows capability calls again after the rate-limit window resets", async () => {
+    const provider = vi.fn().mockResolvedValue({ ok: true });
+    const calls = [
+      new Date("2026-06-13T01:00:00.000Z"),
+      new Date("2026-06-13T01:00:00.500Z"),
+      new Date("2026-06-13T01:00:01.001Z")
+    ];
+    const broker = createCapabilityBroker({
+      grants: { "slack.send": { channel: "C123" } },
+      providers: { "slack.send": provider },
+      rateLimiter: createInMemoryCapabilityRateLimiter({
+        limits: { "slack.send": { limit: 1, windowMs: 1_000 } }
+      }),
+      now: () => calls.shift() ?? new Date("2026-06-13T01:00:01.001Z")
+    });
+
+    await expect(broker.call("slack.send", { channel: "C123", text: "one" })).resolves.toEqual({
+      ok: true
+    });
+    await expect(broker.call("slack.send", { channel: "C123", text: "two" })).rejects.toThrow(
+      "capability slack.send exceeded rate limit"
+    );
+    await expect(broker.call("slack.send", { channel: "C123", text: "three" })).resolves.toEqual({
+      ok: true
+    });
+    expect(provider).toHaveBeenCalledTimes(2);
   });
 });
 
