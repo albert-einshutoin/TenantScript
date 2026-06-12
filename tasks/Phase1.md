@@ -175,7 +175,7 @@
   - GREEN: replay 実装(execution log から sample 取得)
   - DoD: replay の比較テスト green
 
-- [ ] **P1-T28**(M)`ext schema diff` + manifest lint
+- [x] **P1-T28**(M)`ext schema diff` + manifest lint
   - RED: hook schema の breaking change(field 削除・型変更)を検出して exit code ≠ 0 / 互換変更(optional 追加)は警告のみ
   - GREEN: semver 互換判定 + CI 組み込み手順
   - DoD: breaking/非 breaking のマトリクステスト green

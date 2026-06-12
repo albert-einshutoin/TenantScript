@@ -87,6 +87,9 @@ importers:
       '@tenantscript/loader':
         specifier: workspace:*
         version: link:../loader
+      '@tenantscript/manifest':
+        specifier: workspace:*
+        version: link:../manifest
     devDependencies:
       '@tenantscript/test-config':
         specifier: workspace:*

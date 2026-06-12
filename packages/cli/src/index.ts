@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { bundlePlugin, runScopedHandler } from "@tenantscript/loader";
+import { parseManifest } from "@tenantscript/manifest";
 import type {
   ApprovalRecord,
   DecideApprovalRequest,
@@ -70,6 +71,12 @@ export async function runExtCli(
   }
   if (command === "replay") {
     return await runReplay(args, io);
+  }
+  if (command === "schema") {
+    return await runSchema(args, io);
+  }
+  if (command === "manifest") {
+    return await runManifest(args, io);
   }
   if (command === "rollback-drill") {
     return runRollbackDrill(args, io);
@@ -317,6 +324,64 @@ async function runReplay(args: readonly string[], io: CliIo): Promise<number> {
   }
 }
 
+async function runSchema(args: readonly string[], io: CliIo): Promise<number> {
+  const [action, ...actionArgs] = args;
+  if (action !== "diff") {
+    io.stderr(`unknown schema action: ${action ?? ""}`);
+    return 2;
+  }
+  const parsed = parseSchemaDiffArgs(actionArgs);
+  if (!parsed.ok) {
+    io.stderr(parsed.error);
+    return 2;
+  }
+
+  try {
+    const from = await readHookSchema(parsed.request.from);
+    const to = await readHookSchema(parsed.request.to);
+    const diff = diffHookSchemas(from, to);
+    io.stdout(JSON.stringify(diff));
+    return diff.compatible ? 0 : 1;
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "schema diff failed");
+    return 1;
+  }
+}
+
+async function runManifest(args: readonly string[], io: CliIo): Promise<number> {
+  const [action, ...actionArgs] = args;
+  if (action !== "lint") {
+    io.stderr(`unknown manifest action: ${action ?? ""}`);
+    return 2;
+  }
+  const parsed = parseManifestLintArgs(actionArgs);
+  if (!parsed.ok) {
+    io.stderr(parsed.error);
+    return 2;
+  }
+
+  try {
+    const manifest = JSON.parse(await readFile(parsed.request.manifest, "utf8")) as unknown;
+    const result = parseManifest(manifest);
+    if (!result.ok) {
+      io.stdout(JSON.stringify({ ok: false, errors: result.errors }));
+      return 1;
+    }
+    io.stdout(
+      JSON.stringify({
+        ok: true,
+        name: result.value.name,
+        version: result.value.version,
+        hooks: result.value.hooks.map((hook) => hook.name)
+      })
+    );
+    return 0;
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "manifest lint failed");
+    return 1;
+  }
+}
+
 async function runApprovalDecision(
   args: readonly string[],
   client: Partial<ApprovalDecisionClient>,
@@ -388,6 +453,26 @@ interface ReplaySample {
   payload: unknown;
   value: unknown;
   capabilityResponses: Record<string, unknown>;
+}
+
+interface SchemaDiffRequest {
+  from: string;
+  to: string;
+}
+
+interface ManifestLintRequest {
+  manifest: string;
+}
+
+interface HookSchema {
+  properties: Record<string, { type: string }>;
+  required: ReadonlySet<string>;
+}
+
+interface SchemaDiffResult {
+  compatible: boolean;
+  breaking: readonly string[];
+  warnings: readonly string[];
 }
 
 class ReplaySampleError extends Error {}
@@ -502,6 +587,32 @@ function parseReplayArgs(
   };
 }
 
+function parseSchemaDiffArgs(
+  args: readonly string[]
+): { ok: true; request: SchemaDiffRequest } | { ok: false; error: string } {
+  const flags = readFlags(args);
+  const from = flags.from;
+  if (from === undefined) {
+    return { ok: false, error: "missing required schema diff option: --from" };
+  }
+  const to = flags.to;
+  if (to === undefined) {
+    return { ok: false, error: "missing required schema diff option: --to" };
+  }
+  return { ok: true, request: { from: resolve(from), to: resolve(to) } };
+}
+
+function parseManifestLintArgs(
+  args: readonly string[]
+): { ok: true; request: ManifestLintRequest } | { ok: false; error: string } {
+  const flags = readFlags(args);
+  const manifest = flags.manifest;
+  if (manifest === undefined) {
+    return { ok: false, error: "missing required manifest lint option: --manifest" };
+  }
+  return { ok: true, request: { manifest: resolve(manifest) } };
+}
+
 function parseJsonPayload(
   value: string
 ): { ok: true; value: unknown } | { ok: false; error: string } {
@@ -510,6 +621,67 @@ function parseJsonPayload(
   } catch {
     return { ok: false, error: "invalid dev option: --payload must be JSON" };
   }
+}
+
+async function readHookSchema(path: string): Promise<HookSchema> {
+  const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
+  if (!isRecord(parsed)) {
+    throw new Error(`schema ${path} must be an object`);
+  }
+  const properties = parseSchemaProperties(parsed.properties);
+  const required = Array.isArray(parsed.required)
+    ? new Set(parsed.required.filter((name): name is string => typeof name === "string"))
+    : new Set<string>();
+  return { properties, required };
+}
+
+function parseSchemaProperties(value: unknown): Record<string, { type: string }> {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const properties: Record<string, { type: string }> = {};
+  for (const [name, field] of Object.entries(value)) {
+    if (isRecord(field) && typeof field.type === "string") {
+      properties[name] = { type: field.type };
+    }
+  }
+  return properties;
+}
+
+function diffHookSchemas(from: HookSchema, to: HookSchema): SchemaDiffResult {
+  const breaking: string[] = [];
+  const warnings: string[] = [];
+
+  for (const [name, previousField] of Object.entries(from.properties)) {
+    const nextField = to.properties[name];
+    if (nextField === undefined) {
+      breaking.push(`field ${name} was removed`);
+      continue;
+    }
+    if (nextField.type !== previousField.type) {
+      breaking.push(`field ${name} changed type from ${previousField.type} to ${nextField.type}`);
+    }
+    if (!from.required.has(name) && to.required.has(name)) {
+      breaking.push(`field ${name} became required`);
+    }
+  }
+
+  for (const name of Object.keys(to.properties)) {
+    if (from.properties[name] !== undefined) {
+      continue;
+    }
+    if (to.required.has(name)) {
+      breaking.push(`required field ${name} was added`);
+    } else {
+      warnings.push(`optional field ${name} was added`);
+    }
+  }
+
+  return {
+    compatible: breaking.length === 0,
+    breaking,
+    warnings
+  };
 }
 
 async function readReplaySample(path: string): Promise<ReplaySample> {

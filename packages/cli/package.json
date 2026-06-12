@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "@tenantscript/control-plane": "workspace:*",
-    "@tenantscript/loader": "workspace:*"
+    "@tenantscript/loader": "workspace:*",
+    "@tenantscript/manifest": "workspace:*"
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*"
