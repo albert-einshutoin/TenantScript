@@ -66,17 +66,17 @@
 
 ## チャンク C: SDK(T09–T13)
 
-- [ ] **P0-T09**(M)host-sdk: defineHooks
+- [x] **P0-T09**(M)host-sdk: defineHooks
   - RED: event/transform/policy の型ごとの default failure policy(fail-open / skip / deny)が設定される / 未知 hook 型が拒否される / budgetMs 必須条件(blocking のみ)
   - GREEN: `defineHooks()` 実装(D-012)
   - DoD: 3 hook 型の宣言テスト green、型レベルでも誤用がコンパイルエラーになる(type-level test)
 
-- [ ] **P0-T10**(S)host-sdk: payload schema 検証
+- [x] **P0-T10**(S)host-sdk: payload schema 検証
   - RED: schema 違反 payload で `extensions.run()` が HookPayloadError を返し、plugin が実行されないこと
   - GREEN: run() 冒頭での Zod 検証
   - DoD: 正常 / 違反 / 欠落フィールドのテスト green
 
-- [ ] **P0-T11**(M)host-sdk: 実行計画(in-memory)
+- [x] **P0-T11**(M)host-sdk: 実行計画(in-memory)
   - RED: 複数 installation で event は並列(順序非保証)・transform/policy は priority 順直列になる / disabled installation が除外される / transform チェーンで前段出力が後段入力になる
   - GREEN: in-memory installation store + `planExecution()` 実装
   - DoD: 並列・直列・優先度・除外の4系統テスト green

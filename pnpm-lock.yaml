@@ -49,6 +49,10 @@ importers:
         version: link:../test-config
 
   packages/host-sdk:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@tenantscript/test-config':
         specifier: workspace:*
