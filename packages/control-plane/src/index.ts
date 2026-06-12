@@ -115,6 +115,16 @@ export {
 } from "./usage-counter.js";
 
 export {
+  enforceBudgetBeforeExecution,
+  reEnableBudgetDisabledInstallation,
+  type BudgetExceededNotification,
+  type BudgetGuardResult,
+  type BudgetGuardStore,
+  type BudgetNotificationSink,
+  type DailyBudget
+} from "./budget-guard.js";
+
+export {
   ArtifactAlreadyExistsError,
   createD1ControlPlaneStore,
   createR2ArtifactStore,

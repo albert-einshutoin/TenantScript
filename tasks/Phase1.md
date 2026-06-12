@@ -105,7 +105,7 @@
   - GREEN: DO ベースのカウンタ(D-010)
   - DoD: 加算・境界・並行加算(競合)テスト green
 
-- [ ] **P1-T17**(M)超過時 auto-disable
+- [x] **P1-T17**(M)超過時 auto-disable
   - RED: budget 超過の次の実行が拒否され、execution に `budget_exceeded` が記録され、installation が disabled になり、管理者通知イベントが発行される(MVP の通知は **webhook イベント発行のみ**。メール等の配送チャネルは作らない)
   - GREEN: 実行前チェック + disable + 通知イベント
   - DoD: 超過系テスト green。**復旧手順(re-enable)もテスト**
