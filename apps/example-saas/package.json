@@ -18,6 +18,7 @@
     "@tenantscript/control-plane": "workspace:*",
     "@tenantscript/host-sdk": "workspace:*",
     "@tenantscript/manifest": "workspace:*",
-    "@tenantscript/plugin-sdk": "workspace:*"
+    "@tenantscript/plugin-sdk": "workspace:*",
+    "@tenantscript/proxy": "workspace:*"
   }
 }

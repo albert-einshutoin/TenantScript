@@ -148,7 +148,7 @@
   - GREEN: mapping CRUD(inbound path → 宛先、tenant 対応)
   - DoD: mapping テスト + SSRF 防止テスト green(security suite 追加)
 
-- [ ] **P1-T24**(M)zero-integration quickstart
+- [x] **P1-T24**(M)zero-integration quickstart
   - 内容: 「Stripe/GitHub いずれかの実 webhook を 15分で変換する」チュートリアル + E2E 化
   - DoD: チュートリアル手順がそのまま CI の E2E として動く(docs のコード断片をテストから参照)
 
