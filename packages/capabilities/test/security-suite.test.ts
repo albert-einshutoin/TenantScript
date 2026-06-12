@@ -3,6 +3,7 @@ import {
   CapabilityDeniedError,
   createApprovalsRequestProvider,
   createCapabilityBroker,
+  createInvoiceReadProvider,
   createMockSlackSendProvider,
   createPluginCapabilityContext,
   type ApprovalRecord
@@ -104,5 +105,47 @@ describe("capabilities security suite", () => {
       "approvals.request resumeHook exfiltrateApprovalDecision is outside granted scope"
     );
     expect(store.createApproval).not.toHaveBeenCalled();
+  });
+
+  it("denies invoice.read requests that spoof another tenant", async () => {
+    const store = {
+      findInvoice: vi.fn()
+    };
+    const broker = createCapabilityBroker({
+      grants: { "invoice.read": { fields: ["id", "amountCents"] } },
+      providers: {
+        "invoice.read": createInvoiceReadProvider({
+          tenantId: "tenant_1",
+          store
+        })
+      }
+    });
+
+    await expect(
+      broker.call("invoice.read", { tenantId: "tenant_2", invoiceId: "inv_2" })
+    ).rejects.toThrow("invoice.read tenant tenant_2 is outside tenant scope");
+    expect(store.findInvoice).not.toHaveBeenCalled();
+  });
+
+  it("denies invoice.read records returned outside the bound tenant", async () => {
+    const broker = createCapabilityBroker({
+      grants: { "invoice.read": { fields: ["id", "amountCents"] } },
+      providers: {
+        "invoice.read": createInvoiceReadProvider({
+          tenantId: "tenant_1",
+          store: {
+            findInvoice: () => ({
+              tenantId: "tenant_2",
+              id: "inv_2",
+              amountCents: 90_000
+            })
+          }
+        })
+      }
+    });
+
+    await expect(broker.call("invoice.read", { invoiceId: "inv_2" })).rejects.toThrow(
+      "invoice.read invoice inv_2 is outside tenant scope"
+    );
   });
 });

@@ -5,6 +5,7 @@ import {
   createCapabilityBroker,
   createDurableObjectCapabilityCallJournal,
   createInMemoryCapabilityCallJournal,
+  createInvoiceReadProvider,
   createMockSlackSendProvider,
   createPluginCapabilityContext,
   type ApprovalRecord,
@@ -190,6 +191,31 @@ describe("createCapabilityBroker", () => {
         expiresAt: "2026-06-14T01:00:00.000Z"
       })
     ).rejects.toThrow("approvals.request requires role, subject, resumeHook, and expiresAt");
+  });
+
+  it("filters invoice.read results to granted fields", async () => {
+    const broker = createCapabilityBroker({
+      grants: { "invoice.read": { fields: ["id", "amountCents"] } },
+      providers: {
+        "invoice.read": createInvoiceReadProvider({
+          tenantId: "tenant_1",
+          store: {
+            findInvoice: () => ({
+              tenantId: "tenant_1",
+              id: "inv_1",
+              amountCents: 150_000,
+              customerEmail: "buyer@example.com",
+              internalMemo: "discount approved"
+            })
+          }
+        })
+      }
+    });
+
+    await expect(broker.call("invoice.read", { invoiceId: "inv_1" })).resolves.toEqual({
+      id: "inv_1",
+      amountCents: 150_000
+    });
   });
 });
 

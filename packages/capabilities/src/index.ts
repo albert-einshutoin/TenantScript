@@ -70,6 +70,18 @@ export interface ApprovalWorkflowEngine {
   startApprovalLifecycle: (plan: ApprovalLifecyclePlan) => Promise<void> | void;
 }
 
+export interface InvoiceRecord extends Record<string, unknown> {
+  tenantId: string;
+  id: string;
+}
+
+export interface InvoiceStore {
+  findInvoice: (query: {
+    tenantId: string;
+    invoiceId: string;
+  }) => Promise<InvoiceRecord | null> | InvoiceRecord | null;
+}
+
 export class CapabilityDeniedError extends Error {
   override readonly name = "CapabilityDeniedError";
 }
@@ -119,7 +131,7 @@ export function createCapabilityBroker(params: {
         return journaled.result;
       }
 
-      const result = await provider(input);
+      const result = applyResultScope(name, grant, await provider(input));
       await params.journal?.writeCapabilityCall({
         executionId: params.executionId ?? "",
         callIndex: currentCallIndex,
@@ -183,6 +195,35 @@ export function createApprovalsRequestProvider(params: {
     await params.workflow?.startApprovalLifecycle(createApprovalLifecyclePlan(approval));
 
     return { ok: true, approvalId: approval.id, state: approval.state };
+  };
+}
+
+export function createInvoiceReadProvider(params: {
+  tenantId: string;
+  store: InvoiceStore;
+}): CapabilityProvider {
+  return async (input) => {
+    const request = parseInvoiceReadInput(input);
+    if (request.tenantId !== undefined && request.tenantId !== params.tenantId) {
+      throw new CapabilityDeniedError(
+        `invoice.read tenant ${request.tenantId} is outside tenant scope`
+      );
+    }
+
+    const invoice = await params.store.findInvoice({
+      tenantId: params.tenantId,
+      invoiceId: request.invoiceId
+    });
+    if (invoice === null) {
+      throw new CapabilityDeniedError(`invoice.read invoice ${request.invoiceId} was not found`);
+    }
+    if (invoice.tenantId !== params.tenantId) {
+      throw new CapabilityDeniedError(
+        `invoice.read invoice ${request.invoiceId} is outside tenant scope`
+      );
+    }
+
+    return invoice;
   };
 }
 
@@ -282,6 +323,29 @@ function assertScope(name: string, grant: CapabilityGrant, input: unknown): void
   }
 }
 
+function applyResultScope(name: string, grant: CapabilityGrant, result: unknown): unknown {
+  if (name !== "invoice.read") {
+    return result;
+  }
+
+  if (!isRecord(result)) {
+    throw new CapabilityDeniedError("invoice.read provider must return an object");
+  }
+
+  const allowedFields = grant.fields ?? [];
+  if (allowedFields.length === 0) {
+    return result;
+  }
+
+  const filtered: Record<string, unknown> = {};
+  for (const field of allowedFields) {
+    if (Object.prototype.hasOwnProperty.call(result, field)) {
+      filtered[field] = result[field];
+    }
+  }
+  return filtered;
+}
+
 function journalKey(params: { executionId: string; callIndex: number }): string {
   return `${params.executionId}:${String(params.callIndex)}`;
 }
@@ -355,6 +419,20 @@ function parseApprovalRequestInput(input: unknown): {
     resumeHook: input.resumeHook,
     expiresAt
   };
+}
+
+function parseInvoiceReadInput(input: unknown): { tenantId?: string; invoiceId: string } {
+  if (!isRecord(input) || typeof input.invoiceId !== "string") {
+    throw new CapabilityDeniedError("invoice.read requires invoiceId");
+  }
+  if (input.tenantId !== undefined && typeof input.tenantId !== "string") {
+    throw new CapabilityDeniedError("invoice.read tenantId must be a string");
+  }
+
+  if (input.tenantId === undefined) {
+    return { invoiceId: input.invoiceId };
+  }
+  return { tenantId: input.tenantId, invoiceId: input.invoiceId };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

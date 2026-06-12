@@ -116,7 +116,7 @@
 
 ## チャンク F: capability 拡張(T19–T21)
 
-- [ ] **P1-T19**(M)invoice.read capability
+- [x] **P1-T19**(M)invoice.read capability
   - RED: grant の fields 指定外のフィールドが**結果に含まれない** / tenant 越境の invoice 参照拒否
   - GREEN: field filtering 付き read capability
   - DoD: フィルタ・越境拒否テスト green
