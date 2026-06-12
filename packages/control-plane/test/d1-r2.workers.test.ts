@@ -38,6 +38,15 @@ describe("D1 control-plane store", () => {
     const store = createD1ControlPlaneStore(testEnv.DB);
     await seedInstallation(store, { enabled: true });
 
+    await expect(store.findAppById("app_1")).resolves.toEqual({
+      id: "app_1",
+      name: "Example SaaS"
+    });
+    await expect(store.findTenantById("tenant_1")).resolves.toEqual({
+      id: "tenant_1",
+      appId: "app_1",
+      name: "Acme"
+    });
     await store.writeExecution({
       id: "exec_1",
       tenantId: "tenant_1",

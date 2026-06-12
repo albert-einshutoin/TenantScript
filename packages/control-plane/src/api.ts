@@ -1,8 +1,18 @@
 import type { GrantMap, InstallationConfig, TenantScriptManifest } from "@tenantscript/manifest";
 import { parseManifest, resolveGrants, validateConfig } from "@tenantscript/manifest";
-import type { InstallationRecord, PluginRecord, PluginVersionRecord } from "./storage.js";
+import type {
+  AppRecord,
+  InstallationRecord,
+  PluginRecord,
+  PluginVersionRecord,
+  TenantRecord
+} from "./storage.js";
 
 export interface ControlPlaneStore {
+  createApp: (record: AppRecord) => Promise<AppRecord>;
+  findAppById: (id: string) => Promise<AppRecord | null>;
+  createTenant: (record: TenantRecord) => Promise<TenantRecord>;
+  findTenantById: (id: string) => Promise<TenantRecord | null>;
   createPlugin: (record: PluginRecord) => Promise<PluginRecord>;
   findPluginByKey: (query: { appId: string; key: string }) => Promise<PluginRecord | null>;
   createPluginVersion: (record: PluginVersionRecord) => Promise<PluginVersionRecord>;
@@ -37,6 +47,8 @@ export interface ArtifactStore {
 }
 
 export interface ControlPlaneApi {
+  createApp: (request: CreateAppRequest) => Promise<AppRecord>;
+  createTenant: (request: CreateTenantRequest) => Promise<TenantRecord>;
   registerPlugin: (request: RegisterPluginRequest) => Promise<PluginRecord>;
   registerPluginVersion: (request: RegisterPluginVersionRequest) => Promise<PluginVersionRecord>;
   listPluginVersions: (
@@ -50,6 +62,17 @@ export interface ControlPlaneApi {
   updateInstallationPriority: (
     request: UpdateInstallationPriorityRequest
   ) => Promise<InstallationRecord>;
+}
+
+export interface CreateAppRequest {
+  id: string;
+  name: string;
+}
+
+export interface CreateTenantRequest {
+  id: string;
+  appId: string;
+  name: string;
 }
 
 export interface RegisterPluginRequest {
@@ -115,6 +138,8 @@ export function createControlPlaneApi(params: {
   artifacts: ArtifactStore;
 }): ControlPlaneApi {
   return {
+    createApp: (request) => params.store.createApp(request),
+    createTenant: (request) => createTenant(params.store, request),
     registerPlugin: (request) => registerPlugin(params.store, request),
     registerPluginVersion: (request) =>
       registerPluginVersion(params.store, params.artifacts, request),
@@ -126,10 +151,19 @@ export function createControlPlaneApi(params: {
   };
 }
 
+async function createTenant(
+  store: ControlPlaneStore,
+  request: CreateTenantRequest
+): Promise<TenantRecord> {
+  await requireApp(store, request.appId);
+  return store.createTenant(request);
+}
+
 async function registerPlugin(
   store: ControlPlaneStore,
   request: RegisterPluginRequest
 ): Promise<PluginRecord> {
+  await requireApp(store, request.appId);
   const existing = await store.findPluginByKey({ appId: request.appId, key: request.key });
   if (existing !== null) {
     return existing;
@@ -187,6 +221,7 @@ async function installPlugin(
 ): Promise<InstallationRecord> {
   const plugin = await requirePlugin(store, request.appId, request.pluginKey);
   const version = await requirePluginVersion(store, plugin.id, request.version);
+  await requireTenantInApp(store, request.tenantId, request.appId);
   const grants = validateInstallationGrants(version.manifest, request.config, request.grants);
 
   return store.createInstallation({
@@ -243,6 +278,28 @@ async function requirePlugin(
   }
 
   return plugin;
+}
+
+async function requireApp(store: ControlPlaneStore, appId: string): Promise<AppRecord> {
+  const app = await store.findAppById(appId);
+  if (app === null) {
+    throw new ControlPlaneApiError(404, "app_not_found", `app ${appId} was not found`);
+  }
+
+  return app;
+}
+
+async function requireTenantInApp(
+  store: ControlPlaneStore,
+  tenantId: string,
+  appId: string
+): Promise<TenantRecord> {
+  const tenant = await store.findTenantById(tenantId);
+  if (tenant === null || tenant.appId !== appId) {
+    throw new ControlPlaneApiError(404, "tenant_not_found", `tenant ${tenantId} was not found`);
+  }
+
+  return tenant;
 }
 
 async function requirePluginVersion(

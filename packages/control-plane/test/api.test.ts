@@ -3,9 +3,11 @@ import {
   ControlPlaneApiError,
   createControlPlaneApi,
   type ArtifactStore,
+  type AppRecord,
   type ControlPlaneStore,
   type InstallationRecord,
   type PluginRecord,
+  type TenantRecord,
   type PluginVersionRecord
 } from "../src/index.js";
 import type { TenantScriptManifest } from "@tenantscript/manifest";
@@ -48,6 +50,7 @@ describe("createControlPlaneApi plugin/version registration", () => {
     const artifacts = new InMemoryArtifactStore();
     const api = createControlPlaneApi({ store, artifacts });
 
+    await api.createApp({ id: "app_1", name: "Example SaaS" });
     const plugin = await api.registerPlugin({ appId: "app_1", key: "large-invoice-notify" });
     const version = await api.registerPluginVersion({
       appId: "app_1",
@@ -70,6 +73,7 @@ describe("createControlPlaneApi plugin/version registration", () => {
       store: new InMemoryControlPlaneStore(),
       artifacts: new InMemoryArtifactStore()
     });
+    await api.createApp({ id: "app_1", name: "Example SaaS" });
 
     const first = await api.registerPlugin({ appId: "app_1", key: "large-invoice-notify" });
     const second = await api.registerPlugin({ appId: "app_1", key: "large-invoice-notify" });
@@ -82,6 +86,7 @@ describe("createControlPlaneApi plugin/version registration", () => {
       store: new InMemoryControlPlaneStore(),
       artifacts: new InMemoryArtifactStore()
     });
+    await api.createApp({ id: "app_1", name: "Example SaaS" });
     await api.registerPlugin({ appId: "app_1", key: "large-invoice-notify" });
     await api.registerPluginVersion({
       appId: "app_1",
@@ -113,6 +118,7 @@ describe("createControlPlaneApi plugin/version registration", () => {
       store: new InMemoryControlPlaneStore(),
       artifacts
     });
+    await api.createApp({ id: "app_1", name: "Example SaaS" });
     await api.registerPlugin({ appId: "app_1", key: "large-invoice-notify" });
 
     await expect(
@@ -136,6 +142,7 @@ describe("createControlPlaneApi plugin/version registration", () => {
       store: new InMemoryControlPlaneStore(),
       artifacts: new InMemoryArtifactStore()
     });
+    await api.createApp({ id: "app_1", name: "Example SaaS" });
 
     await expect(
       api.registerPluginVersion({
@@ -164,6 +171,55 @@ describe("createControlPlaneApi plugin/version registration", () => {
     ).rejects.toMatchObject({
       status: 400,
       code: "invalid_manifest"
+    } satisfies Partial<ControlPlaneApiError>);
+  });
+
+  it("rejects plugin registration for missing apps", async () => {
+    const api = createControlPlaneApi({
+      store: new InMemoryControlPlaneStore(),
+      artifacts: new InMemoryArtifactStore()
+    });
+
+    await expect(
+      api.registerPlugin({ appId: "missing_app", key: "large-invoice-notify" })
+    ).rejects.toMatchObject({
+      status: 404,
+      code: "app_not_found"
+    } satisfies Partial<ControlPlaneApiError>);
+  });
+});
+
+describe("createControlPlaneApi app and tenant management", () => {
+  it("creates apps and tenants under an app", async () => {
+    const api = createControlPlaneApi({
+      store: new InMemoryControlPlaneStore(),
+      artifacts: new InMemoryArtifactStore()
+    });
+
+    await expect(api.createApp({ id: "app_1", name: "Example SaaS" })).resolves.toEqual({
+      id: "app_1",
+      name: "Example SaaS"
+    });
+    await expect(
+      api.createTenant({ id: "tenant_1", appId: "app_1", name: "Acme" })
+    ).resolves.toEqual({
+      id: "tenant_1",
+      appId: "app_1",
+      name: "Acme"
+    });
+  });
+
+  it("rejects tenant creation for missing apps", async () => {
+    const api = createControlPlaneApi({
+      store: new InMemoryControlPlaneStore(),
+      artifacts: new InMemoryArtifactStore()
+    });
+
+    await expect(
+      api.createTenant({ id: "tenant_1", appId: "missing_app", name: "Acme" })
+    ).rejects.toMatchObject({
+      status: 404,
+      code: "app_not_found"
     } satisfies Partial<ControlPlaneApiError>);
   });
 });
@@ -249,6 +305,8 @@ describe("createControlPlaneApi installation CRUD", () => {
   it("rejects installs when the plugin version or resolved manifest grants are invalid", async () => {
     const store = new InMemoryControlPlaneStore();
     const api = createControlPlaneApi({ store, artifacts: new InMemoryArtifactStore() });
+    store.seedApp({ id: "app_1", name: "Example SaaS" });
+    store.seedTenant({ id: "tenant_1", appId: "app_1", name: "Acme" });
     store.seedPlugin({ id: "plugin_1", appId: "app_1", key: "large-invoice-notify" });
 
     await expect(
@@ -277,6 +335,38 @@ describe("createControlPlaneApi installation CRUD", () => {
         priority: 20
       })
     ).rejects.toMatchObject({ status: 400, code: "invalid_grants" });
+  });
+
+  it("rejects installation into a tenant outside the app scope", async () => {
+    const store = new InMemoryControlPlaneStore();
+    const api = createControlPlaneApi({ store, artifacts: new InMemoryArtifactStore() });
+    store.seedApp({ id: "app_1", name: "Example SaaS" });
+    store.seedApp({ id: "app_2", name: "Other SaaS" });
+    store.seedTenant({ id: "tenant_other", appId: "app_2", name: "Other Tenant" });
+    store.seedPlugin({ id: "plugin_1", appId: "app_1", key: "large-invoice-notify" });
+    store.seedPluginVersion({
+      id: "version_1",
+      pluginId: "plugin_1",
+      version: "1.0.0",
+      artifactHash: "hash_1",
+      manifest
+    });
+
+    await expect(
+      api.installPlugin({
+        id: "inst_1",
+        appId: "app_1",
+        tenantId: "tenant_other",
+        pluginKey: "large-invoice-notify",
+        version: "1.0.0",
+        config: {},
+        grants: { "slack.send": { channel: "C123" } },
+        priority: 20
+      })
+    ).rejects.toMatchObject({
+      status: 404,
+      code: "tenant_not_found"
+    } satisfies Partial<ControlPlaneApiError>);
   });
 
   it("updates installation config, enabled state, and priority", async () => {
@@ -347,6 +437,8 @@ function createApiWithVersion(manifestInput: TenantScriptManifest) {
     store,
     artifacts: new InMemoryArtifactStore()
   });
+  store.seedApp({ id: "app_1", name: "Example SaaS" });
+  store.seedTenant({ id: "tenant_1", appId: "app_1", name: "Acme" });
   store.seedPlugin({ id: "plugin_1", appId: "app_1", key: "large-invoice-notify" });
   store.seedPluginVersion({
     id: "version_1",
@@ -359,9 +451,37 @@ function createApiWithVersion(manifestInput: TenantScriptManifest) {
 }
 
 class InMemoryControlPlaneStore implements ControlPlaneStore {
+  private readonly apps = new Map<string, AppRecord>();
+  private readonly tenants = new Map<string, TenantRecord>();
   private readonly plugins = new Map<string, PluginRecord>();
   private readonly versions = new Map<string, PluginVersionRecord>();
   private readonly installations = new Map<string, InstallationRecord>();
+
+  createApp(record: AppRecord) {
+    this.seedApp(record);
+    return Promise.resolve(record);
+  }
+
+  seedApp(record: AppRecord) {
+    this.apps.set(record.id, record);
+  }
+
+  findAppById(id: string) {
+    return Promise.resolve(this.apps.get(id) ?? null);
+  }
+
+  createTenant(record: TenantRecord) {
+    this.seedTenant(record);
+    return Promise.resolve(record);
+  }
+
+  seedTenant(record: TenantRecord) {
+    this.tenants.set(record.id, record);
+  }
+
+  findTenantById(id: string) {
+    return Promise.resolve(this.tenants.get(id) ?? null);
+  }
 
   createPlugin(record: PluginRecord) {
     this.seedPlugin(record);

@@ -26,7 +26,7 @@
   - GREEN: installation エンドポイント実装(D-013 のサーバ側)
   - DoD: install / update config / enable / disable / 優先度変更のテスト green
 
-- [ ] **P1-T03**(S)tenant / app 管理最小 API
+- [x] **P1-T03**(S)tenant / app 管理最小 API
   - RED: app 作成 → tenant 作成 → installation がその配下にスコープされる(越境参照は 404/403)
   - GREEN: app/tenant エンドポイント
   - DoD: スコープテスト green(security suite にも追加)

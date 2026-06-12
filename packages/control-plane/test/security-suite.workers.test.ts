@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createD1ControlPlaneStore } from "../src/index.js";
+import { createControlPlaneApi, createD1ControlPlaneStore } from "../src/index.js";
 import type { TenantScriptManifest } from "@tenantscript/manifest";
 
 interface TestWorkersEnv {
@@ -27,6 +27,47 @@ beforeEach(async () => {
 });
 
 describe("D1 tenant boundary security suite", () => {
+  it("rejects installing an app plugin into another app's tenant", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    const api = createControlPlaneApi({
+      store,
+      artifacts: {
+        putArtifact: (hash) => Promise.resolve({ hash })
+      }
+    });
+
+    await store.createApp({ id: "app_1", name: "Example SaaS" });
+    await store.createApp({ id: "app_2", name: "Other SaaS" });
+    await store.createTenant({ id: "tenant_other", appId: "app_2", name: "Other Tenant" });
+    await store.createPlugin({ id: "plugin_1", appId: "app_1", key: "large-invoice-notify" });
+    await store.createPluginVersion({
+      id: "version_1",
+      pluginId: "plugin_1",
+      version: "1.0.0",
+      artifactHash: "hash_1",
+      manifest
+    });
+
+    await expect(
+      api.installPlugin({
+        id: "inst_cross_scope",
+        appId: "app_1",
+        tenantId: "tenant_other",
+        pluginKey: "large-invoice-notify",
+        version: "1.0.0",
+        config: {},
+        grants: { "slack.send": { channel: "C123" } },
+        priority: 10
+      })
+    ).rejects.toMatchObject({ status: 404, code: "tenant_not_found" });
+    await expect(
+      store.resolveInstallationsForHook({
+        tenantId: "tenant_other",
+        hookName: "invoice.created"
+      })
+    ).resolves.toEqual([]);
+  });
+
   it("does not resolve another tenant's installations, grants, or config", async () => {
     const store = createD1ControlPlaneStore(testEnv.DB);
     await seedTenant(store, "tenant_1", "C123");

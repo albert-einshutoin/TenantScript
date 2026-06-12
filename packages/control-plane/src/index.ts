@@ -69,6 +69,8 @@ export {
   type ArtifactStore,
   type ControlPlaneApi,
   type ControlPlaneStore,
+  type CreateAppRequest,
+  type CreateTenantRequest,
   type InstallPluginRequest,
   type ListPluginVersionsRequest,
   type RegisterPluginRequest,

@@ -79,7 +79,9 @@ export class ArtifactAlreadyExistsError extends Error {
 export function createD1ControlPlaneStore(db: D1DatabaseLike) {
   return {
     createApp: createAppWriter(db),
+    findAppById: createAppByIdFinder(db),
     createTenant: createTenantWriter(db),
+    findTenantById: createTenantByIdFinder(db),
     createPlugin: createPluginWriter(db),
     findPluginByKey: createPluginByKeyFinder(db),
     createPluginVersion: createPluginVersionWriter(db),
@@ -107,6 +109,14 @@ function createAppWriter(db: D1DatabaseLike) {
   };
 }
 
+function createAppByIdFinder(db: D1DatabaseLike) {
+  return async (id: string) => {
+    const row = await db.prepare("SELECT id, name FROM apps WHERE id = ?").bind(id).first<AppRow>();
+
+    return row === null ? null : appFromRow(row);
+  };
+}
+
 function createTenantWriter(db: D1DatabaseLike) {
   return async (record: TenantRecord) => {
     await db
@@ -114,6 +124,17 @@ function createTenantWriter(db: D1DatabaseLike) {
       .bind(record.id, record.appId, record.name)
       .run();
     return record;
+  };
+}
+
+function createTenantByIdFinder(db: D1DatabaseLike) {
+  return async (id: string) => {
+    const row = await db
+      .prepare("SELECT id, app_id, name FROM tenants WHERE id = ?")
+      .bind(id)
+      .first<TenantRow>();
+
+    return row === null ? null : tenantFromRow(row);
   };
 }
 
@@ -408,6 +429,17 @@ interface PluginRow {
   key: string;
 }
 
+interface AppRow {
+  id: string;
+  name: string;
+}
+
+interface TenantRow {
+  id: string;
+  app_id: string;
+  name: string;
+}
+
 interface PluginVersionRow {
   id: string;
   plugin_id: string;
@@ -437,6 +469,21 @@ interface ResolvedInstallationRow {
   version: string;
   manifest_json: string;
   plugin_id: string;
+}
+
+function appFromRow(row: AppRow): AppRecord {
+  return {
+    id: row.id,
+    name: row.name
+  };
+}
+
+function tenantFromRow(row: TenantRow): TenantRecord {
+  return {
+    id: row.id,
+    appId: row.app_id,
+    name: row.name
+  };
 }
 
 function pluginFromRow(row: PluginRow): PluginRecord {
