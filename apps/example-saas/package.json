@@ -1,0 +1,16 @@
+{
+  "name": "@tenantscript/example-saas",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@tenantscript/test-config": "workspace:*"
+  }
+}

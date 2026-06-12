@@ -19,7 +19,7 @@
 
 ## チャンク A: 基盤(T01–T04, T29)
 
-- [ ] **P0-T01**(M)monorepo scaffold(設定系タスク: RED の代わりに検証手順)
+- [x] **P0-T01**(M)monorepo scaffold(設定系タスク: RED の代わりに検証手順)
   - 検証手順: `pnpm -r typecheck && pnpm -r lint && pnpm -r test` が green / strict 違反コードを一時的に置くと typecheck が fail することを確認
   - GREEN: pnpm workspaces、`packages/{manifest,plugin-sdk,host-sdk,loader,capabilities,control-plane}` と `apps/example-saas` の骨組み、共有 tsconfig(strict)、Vitest、ESLint + Prettier
   - DoD: 検証手順を全て通過
@@ -34,7 +34,7 @@
   - GREEN: `@cloudflare/vitest-pool-workers` 設定、テスト用 wrangler config(D1 / R2 / DO バインディング)
   - DoD: integration テストが workerd 内で実行され、D1/R2/DO に触れる
 
-- [ ] **P0-T04**(S)ADR 運用開始
+- [x] **P0-T04**(S)ADR 運用開始
   - GREEN: `docs/adr/` を作成し、ADR-000(TypeScript 選定、D-017 の実装版)を記録。テンプレートを置く
   - DoD: ADR テンプレと ADR-000 がコミットされている
 

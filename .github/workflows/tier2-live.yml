@@ -1,0 +1,19 @@
+name: Tier 2 Live
+
+on:
+  schedule:
+    - cron: "17 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-smoke-placeholder:
+    name: live Cloudflare smoke placeholder
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'albert-einshutoin'
+    steps:
+      - run: |
+          echo "Tier 2 is reserved for Cloudflare-backed smoke and latency benchmarks."
+          echo "Keep all fork-safe checks in Tier 1."
