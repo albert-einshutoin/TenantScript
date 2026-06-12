@@ -1,4 +1,64 @@
-export const controlPlanePackage = {
-  name: "@tenantscript/control-plane",
-  purpose: "Tenant, plugin, installation, execution, and audit APIs"
-} as const;
+export type ExecutionStatus = "success" | "error" | "timeout" | "egress_denied" | "budget_exceeded";
+
+export interface CapabilityCallRecord {
+  name: string;
+  status: "success" | "denied" | "error";
+}
+
+export interface ExecutionRecord {
+  id: string;
+  tenantId: string;
+  pluginId: string;
+  hookName: string;
+  version: string;
+  status: ExecutionStatus;
+  durationMs: number;
+  error?: string;
+  capabilityCalls: readonly CapabilityCallRecord[];
+  createdAt: Date;
+}
+
+export interface ExecutionSearchQuery {
+  tenantId?: string;
+  pluginId?: string;
+  hookName?: string;
+  status?: ExecutionStatus;
+}
+
+export interface ExecutionLogStore {
+  writeExecution: (record: ExecutionRecord) => ExecutionRecord;
+  searchExecutions: (query: ExecutionSearchQuery) => readonly ExecutionRecord[];
+}
+
+export function createInMemoryExecutionLogStore(): ExecutionLogStore {
+  const executions: ExecutionRecord[] = [];
+
+  return {
+    writeExecution: (record) => {
+      const stored = cloneExecution(record);
+      executions.push(stored);
+      return cloneExecution(stored);
+    },
+    searchExecutions: (query) =>
+      executions
+        .filter((record) => matchesQuery(record, query))
+        .map((record) => cloneExecution(record))
+  };
+}
+
+function matchesQuery(record: ExecutionRecord, query: ExecutionSearchQuery): boolean {
+  return (
+    (query.tenantId === undefined || record.tenantId === query.tenantId) &&
+    (query.pluginId === undefined || record.pluginId === query.pluginId) &&
+    (query.hookName === undefined || record.hookName === query.hookName) &&
+    (query.status === undefined || record.status === query.status)
+  );
+}
+
+function cloneExecution(record: ExecutionRecord): ExecutionRecord {
+  return {
+    ...record,
+    capabilityCalls: record.capabilityCalls.map((call) => ({ ...call })),
+    createdAt: new Date(record.createdAt)
+  };
+}

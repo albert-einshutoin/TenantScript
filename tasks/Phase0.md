@@ -140,7 +140,7 @@
   - GREEN: artifact put/get + immutable ガード
   - DoD: round-trip・immutability テスト green
 
-- [ ] **P0-T23**(M)execution log 書き込み / 検索
+- [x] **P0-T23**(M)execution log 書き込み / 検索
   - RED: 実行ごとに status / duration / error / capabilityCalls / version が保存される / tenant・plugin・hook で検索できる
   - GREEN: execution 記録 + 検索 API(最小)
   - DoD: 書き込み・検索テスト green
