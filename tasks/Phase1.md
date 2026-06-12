@@ -21,7 +21,7 @@
   - GREEN: control-plane に plugin/version エンドポイント実装
   - DoD: 登録・重複拒否・一覧のテスト green
 
-- [ ] **P1-T02**(M)installation CRUD + grant + config
+- [x] **P1-T02**(M)installation CRUD + grant + config
   - RED: install 時に manifest 要求 capability と grant の照合 / configSchema 検証(required 欠落で install 失敗)/ priority 設定
   - GREEN: installation エンドポイント実装(D-013 のサーバ側)
   - DoD: install / update config / enable / disable / 優先度変更のテスト green

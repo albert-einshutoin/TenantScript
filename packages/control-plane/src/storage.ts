@@ -83,9 +83,14 @@ export function createD1ControlPlaneStore(db: D1DatabaseLike) {
     createPlugin: createPluginWriter(db),
     findPluginByKey: createPluginByKeyFinder(db),
     createPluginVersion: createPluginVersionWriter(db),
+    findPluginVersionById: createPluginVersionByIdFinder(db),
     findPluginVersion: createPluginVersionFinder(db),
     listPluginVersions: createPluginVersionLister(db),
     createInstallation: createInstallationWriter(db),
+    findInstallationById: createInstallationByIdFinder(db),
+    updateInstallationConfig: createInstallationConfigUpdater(db),
+    setInstallationEnabled: createInstallationEnabledUpdater(db),
+    updateInstallationPriority: createInstallationPriorityUpdater(db),
     writeExecution: createExecutionWriter(db),
     searchExecutions: createExecutionSearcher(db),
     resolveInstallationsForHook: createInstallationResolver(db)
@@ -171,6 +176,19 @@ function createPluginVersionFinder(db: D1DatabaseLike) {
   };
 }
 
+function createPluginVersionByIdFinder(db: D1DatabaseLike) {
+  return async (id: string) => {
+    const row = await db
+      .prepare(
+        "SELECT id, plugin_id, version, artifact_hash, manifest_json FROM plugin_versions WHERE id = ?"
+      )
+      .bind(id)
+      .first<PluginVersionRow>();
+
+    return row === null ? null : pluginVersionFromRow(row);
+  };
+}
+
 function createPluginVersionLister(db: D1DatabaseLike) {
   return async (query: { pluginId: string }) => {
     const rows = await db
@@ -209,6 +227,68 @@ function createInstallationWriter(db: D1DatabaseLike) {
       )
       .run();
     return record;
+  };
+}
+
+function createInstallationByIdFinder(db: D1DatabaseLike) {
+  return async (id: string) => {
+    const row = await db
+      .prepare(
+        [
+          "SELECT id, tenant_id, plugin_version_id, enabled, priority, config_json, grants_json",
+          "FROM installations WHERE id = ?"
+        ].join(" ")
+      )
+      .bind(id)
+      .first<InstallationRow>();
+
+    return row === null ? null : installationFromRow(row);
+  };
+}
+
+function createInstallationConfigUpdater(db: D1DatabaseLike) {
+  return async (request: {
+    id: string;
+    config: Record<string, unknown>;
+    grants: Record<string, unknown>;
+  }) => {
+    await db
+      .prepare("UPDATE installations SET config_json = ?, grants_json = ? WHERE id = ?")
+      .bind(JSON.stringify(request.config), JSON.stringify(request.grants), request.id)
+      .run();
+    const updated = await createInstallationByIdFinder(db)(request.id);
+    if (updated === null) {
+      throw new Error(`installation ${request.id} was not found after config update`);
+    }
+    return updated;
+  };
+}
+
+function createInstallationEnabledUpdater(db: D1DatabaseLike) {
+  return async (request: { id: string; enabled: boolean }) => {
+    await db
+      .prepare("UPDATE installations SET enabled = ? WHERE id = ?")
+      .bind(request.enabled ? 1 : 0, request.id)
+      .run();
+    const updated = await createInstallationByIdFinder(db)(request.id);
+    if (updated === null) {
+      throw new Error(`installation ${request.id} was not found after enabled update`);
+    }
+    return updated;
+  };
+}
+
+function createInstallationPriorityUpdater(db: D1DatabaseLike) {
+  return async (request: { id: string; priority: number }) => {
+    await db
+      .prepare("UPDATE installations SET priority = ? WHERE id = ?")
+      .bind(request.priority, request.id)
+      .run();
+    const updated = await createInstallationByIdFinder(db)(request.id);
+    if (updated === null) {
+      throw new Error(`installation ${request.id} was not found after priority update`);
+    }
+    return updated;
   };
 }
 
@@ -336,6 +416,16 @@ interface PluginVersionRow {
   manifest_json: string;
 }
 
+interface InstallationRow {
+  id: string;
+  tenant_id: string;
+  plugin_version_id: string;
+  enabled: number;
+  priority: number;
+  config_json: string;
+  grants_json: string;
+}
+
 interface ResolvedInstallationRow {
   installation_id: string;
   tenant_id: string;
@@ -364,6 +454,18 @@ function pluginVersionFromRow(row: PluginVersionRow): PluginVersionRecord {
     version: row.version,
     artifactHash: row.artifact_hash,
     manifest: JSON.parse(row.manifest_json) as TenantScriptManifest
+  };
+}
+
+function installationFromRow(row: InstallationRow): InstallationRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    pluginVersionId: row.plugin_version_id,
+    enabled: row.enabled === 1,
+    priority: row.priority,
+    config: JSON.parse(row.config_json) as Record<string, unknown>,
+    grants: JSON.parse(row.grants_json) as Record<string, unknown>
   };
 }
 

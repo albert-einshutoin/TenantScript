@@ -69,9 +69,13 @@ export {
   type ArtifactStore,
   type ControlPlaneApi,
   type ControlPlaneStore,
+  type InstallPluginRequest,
   type ListPluginVersionsRequest,
   type RegisterPluginRequest,
-  type RegisterPluginVersionRequest
+  type RegisterPluginVersionRequest,
+  type SetInstallationEnabledRequest,
+  type UpdateInstallationConfigRequest,
+  type UpdateInstallationPriorityRequest
 } from "./api.js";
 
 export {

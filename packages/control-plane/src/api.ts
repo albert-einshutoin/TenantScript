@@ -1,16 +1,32 @@
-import type { TenantScriptManifest } from "@tenantscript/manifest";
-import { parseManifest } from "@tenantscript/manifest";
-import type { PluginRecord, PluginVersionRecord } from "./storage.js";
+import type { GrantMap, InstallationConfig, TenantScriptManifest } from "@tenantscript/manifest";
+import { parseManifest, resolveGrants, validateConfig } from "@tenantscript/manifest";
+import type { InstallationRecord, PluginRecord, PluginVersionRecord } from "./storage.js";
 
 export interface ControlPlaneStore {
   createPlugin: (record: PluginRecord) => Promise<PluginRecord>;
   findPluginByKey: (query: { appId: string; key: string }) => Promise<PluginRecord | null>;
   createPluginVersion: (record: PluginVersionRecord) => Promise<PluginVersionRecord>;
+  findPluginVersionById: (id: string) => Promise<PluginVersionRecord | null>;
   findPluginVersion: (query: {
     pluginId: string;
     version: string;
   }) => Promise<PluginVersionRecord | null>;
   listPluginVersions: (query: { pluginId: string }) => Promise<readonly PluginVersionRecord[]>;
+  createInstallation: (record: InstallationRecord) => Promise<InstallationRecord>;
+  findInstallationById: (id: string) => Promise<InstallationRecord | null>;
+  updateInstallationConfig: (request: {
+    id: string;
+    config: Record<string, unknown>;
+    grants: Record<string, unknown>;
+  }) => Promise<InstallationRecord>;
+  setInstallationEnabled: (request: {
+    id: string;
+    enabled: boolean;
+  }) => Promise<InstallationRecord>;
+  updateInstallationPriority: (request: {
+    id: string;
+    priority: number;
+  }) => Promise<InstallationRecord>;
 }
 
 export interface ArtifactStore {
@@ -26,6 +42,14 @@ export interface ControlPlaneApi {
   listPluginVersions: (
     request: ListPluginVersionsRequest
   ) => Promise<readonly PluginVersionRecord[]>;
+  installPlugin: (request: InstallPluginRequest) => Promise<InstallationRecord>;
+  updateInstallationConfig: (
+    request: UpdateInstallationConfigRequest
+  ) => Promise<InstallationRecord>;
+  setInstallationEnabled: (request: SetInstallationEnabledRequest) => Promise<InstallationRecord>;
+  updateInstallationPriority: (
+    request: UpdateInstallationPriorityRequest
+  ) => Promise<InstallationRecord>;
 }
 
 export interface RegisterPluginRequest {
@@ -45,6 +69,33 @@ export interface RegisterPluginVersionRequest {
 export interface ListPluginVersionsRequest {
   appId: string;
   pluginKey: string;
+}
+
+export interface InstallPluginRequest {
+  id: string;
+  appId: string;
+  tenantId: string;
+  pluginKey: string;
+  version: string;
+  config: Record<string, unknown>;
+  grants: Record<string, unknown>;
+  priority: number;
+  enabled?: boolean;
+}
+
+export interface UpdateInstallationConfigRequest {
+  id: string;
+  config: Record<string, unknown>;
+}
+
+export interface SetInstallationEnabledRequest {
+  id: string;
+  enabled: boolean;
+}
+
+export interface UpdateInstallationPriorityRequest {
+  id: string;
+  priority: number;
 }
 
 export class ControlPlaneApiError extends Error {
@@ -67,7 +118,11 @@ export function createControlPlaneApi(params: {
     registerPlugin: (request) => registerPlugin(params.store, request),
     registerPluginVersion: (request) =>
       registerPluginVersion(params.store, params.artifacts, request),
-    listPluginVersions: (request) => listPluginVersions(params.store, request)
+    listPluginVersions: (request) => listPluginVersions(params.store, request),
+    installPlugin: (request) => installPlugin(params.store, request),
+    updateInstallationConfig: (request) => updateInstallationConfig(params.store, request),
+    setInstallationEnabled: (request) => setInstallationEnabled(params.store, request),
+    updateInstallationPriority: (request) => updateInstallationPriority(params.store, request)
   };
 }
 
@@ -126,6 +181,57 @@ async function listPluginVersions(
   return store.listPluginVersions({ pluginId: plugin.id });
 }
 
+async function installPlugin(
+  store: ControlPlaneStore,
+  request: InstallPluginRequest
+): Promise<InstallationRecord> {
+  const plugin = await requirePlugin(store, request.appId, request.pluginKey);
+  const version = await requirePluginVersion(store, plugin.id, request.version);
+  const grants = validateInstallationGrants(version.manifest, request.config, request.grants);
+
+  return store.createInstallation({
+    id: request.id,
+    tenantId: request.tenantId,
+    pluginVersionId: version.id,
+    enabled: request.enabled ?? true,
+    priority: request.priority,
+    config: grants.config,
+    grants: grants.resolvedGrants
+  });
+}
+
+async function updateInstallationConfig(
+  store: ControlPlaneStore,
+  request: UpdateInstallationConfigRequest
+): Promise<InstallationRecord> {
+  const installation = await requireInstallation(store, request.id);
+  const version = await requirePluginVersionById(store, installation.pluginVersionId);
+  const config = validateInstallationConfig(version.manifest, request.config);
+  const grants = resolveRequiredGrants(version.manifest, config);
+
+  return store.updateInstallationConfig({
+    id: request.id,
+    config,
+    grants
+  });
+}
+
+async function setInstallationEnabled(
+  store: ControlPlaneStore,
+  request: SetInstallationEnabledRequest
+): Promise<InstallationRecord> {
+  await requireInstallation(store, request.id);
+  return store.setInstallationEnabled(request);
+}
+
+async function updateInstallationPriority(
+  store: ControlPlaneStore,
+  request: UpdateInstallationPriorityRequest
+): Promise<InstallationRecord> {
+  await requireInstallation(store, request.id);
+  return store.updateInstallationPriority(request);
+}
+
 async function requirePlugin(
   store: ControlPlaneStore,
   appId: string,
@@ -137,6 +243,55 @@ async function requirePlugin(
   }
 
   return plugin;
+}
+
+async function requirePluginVersion(
+  store: ControlPlaneStore,
+  pluginId: string,
+  version: string
+): Promise<PluginVersionRecord> {
+  const pluginVersion = await store.findPluginVersion({ pluginId, version });
+  if (pluginVersion === null) {
+    throw new ControlPlaneApiError(
+      404,
+      "plugin_version_not_found",
+      `plugin version ${version} was not found`
+    );
+  }
+
+  return pluginVersion;
+}
+
+async function requirePluginVersionById(
+  store: ControlPlaneStore,
+  pluginVersionId: string
+): Promise<PluginVersionRecord> {
+  const pluginVersion = await store.findPluginVersionById(pluginVersionId);
+  if (pluginVersion === null) {
+    throw new ControlPlaneApiError(
+      404,
+      "plugin_version_not_found",
+      `plugin version ${pluginVersionId} was not found`
+    );
+  }
+
+  return pluginVersion;
+}
+
+async function requireInstallation(
+  store: ControlPlaneStore,
+  id: string
+): Promise<InstallationRecord> {
+  const installation = await store.findInstallationById(id);
+  if (installation === null) {
+    throw new ControlPlaneApiError(
+      404,
+      "installation_not_found",
+      `installation ${id} was not found`
+    );
+  }
+
+  return installation;
 }
 
 function parseVersionManifest(input: unknown, version: string): TenantScriptManifest {
@@ -154,6 +309,70 @@ function parseVersionManifest(input: unknown, version: string): TenantScriptMani
   }
 
   return parsed.value;
+}
+
+function validateInstallationGrants(
+  manifest: TenantScriptManifest,
+  configInput: Record<string, unknown>,
+  grantInput: Record<string, unknown>
+): { config: InstallationConfig; resolvedGrants: GrantMap } {
+  const config = validateInstallationConfig(manifest, configInput);
+  const resolvedGrants = resolveRequiredGrants(manifest, config);
+  if (!deepEqual(resolvedGrants, grantInput)) {
+    throw new ControlPlaneApiError(
+      400,
+      "invalid_grants",
+      "installation grants do not match manifest capability requirements"
+    );
+  }
+
+  return { config, resolvedGrants };
+}
+
+function validateInstallationConfig(
+  manifest: TenantScriptManifest,
+  configInput: Record<string, unknown>
+): InstallationConfig {
+  const config = validateConfig(manifest.configSchema, configInput);
+  if (!config.ok) {
+    throw new ControlPlaneApiError(400, "invalid_config", "installation config validation failed");
+  }
+
+  return config.value;
+}
+
+function resolveRequiredGrants(
+  manifest: TenantScriptManifest,
+  config: InstallationConfig
+): GrantMap {
+  const grants = resolveGrants(manifest.capabilities, config);
+  if (!grants.ok) {
+    throw new ControlPlaneApiError(400, "invalid_grants", "manifest capability grants are invalid");
+  }
+
+  return grants.value;
+}
+
+function deepEqual(left: unknown, right: unknown): boolean {
+  return stableJson(left) === stableJson(right);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function pluginIdFor(appId: string, key: string): string {

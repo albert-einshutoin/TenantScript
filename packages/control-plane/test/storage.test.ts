@@ -145,10 +145,63 @@ describe("createD1ControlPlaneStore", () => {
     await expect(
       store.findPluginVersion({ pluginId: "plugin_1", version: "1.0.0" })
     ).resolves.toEqual(expect.objectContaining({ id: "version_1", artifactHash: "hash_1" }));
+    await expect(store.findPluginVersionById("version_1")).resolves.toEqual(
+      expect.objectContaining({ id: "version_1", artifactHash: "hash_1" })
+    );
     await expect(store.listPluginVersions({ pluginId: "plugin_1" })).resolves.toEqual([
       expect.objectContaining({ id: "version_1", version: "1.0.0" })
     ]);
     await expect(store.findPluginByKey({ appId: "app_1", key: "missing" })).resolves.toBeNull();
+  });
+
+  it("finds and updates installation config, enabled state, and priority", async () => {
+    const installationRow = {
+      id: "inst_1",
+      tenant_id: "tenant_1",
+      plugin_version_id: "version_1",
+      enabled: 1,
+      priority: 10,
+      config_json: JSON.stringify({ notifyChannel: "C123" }),
+      grants_json: JSON.stringify({ "slack.send": { channel: "C123" } })
+    };
+    const store = createD1ControlPlaneStore(new FakeD1Database([], [installationRow]));
+
+    await expect(store.findInstallationById("inst_1")).resolves.toEqual({
+      id: "inst_1",
+      tenantId: "tenant_1",
+      pluginVersionId: "version_1",
+      enabled: true,
+      priority: 10,
+      config: { notifyChannel: "C123" },
+      grants: { "slack.send": { channel: "C123" } }
+    });
+    await expect(
+      store.updateInstallationConfig({
+        id: "inst_1",
+        config: { notifyChannel: "C456" },
+        grants: { "slack.send": { channel: "C456" } }
+      })
+    ).resolves.toEqual(expect.objectContaining({ config: { notifyChannel: "C456" } }));
+    await expect(store.setInstallationEnabled({ id: "inst_1", enabled: false })).resolves.toEqual(
+      expect.objectContaining({ enabled: false })
+    );
+    await expect(store.updateInstallationPriority({ id: "inst_1", priority: 1 })).resolves.toEqual(
+      expect.objectContaining({ priority: 1 })
+    );
+  });
+
+  it("rejects installation updates when the row disappears", async () => {
+    const store = createD1ControlPlaneStore(new FakeD1Database());
+
+    await expect(
+      store.updateInstallationConfig({ id: "missing", config: {}, grants: {} })
+    ).rejects.toThrow("installation missing was not found after config update");
+    await expect(store.setInstallationEnabled({ id: "missing", enabled: false })).rejects.toThrow(
+      "installation missing was not found after enabled update"
+    );
+    await expect(store.updateInstallationPriority({ id: "missing", priority: 1 })).rejects.toThrow(
+      "installation missing was not found after priority update"
+    );
   });
 });
 
@@ -213,7 +266,24 @@ class FakeD1Database implements D1DatabaseLike {
     return new FakeD1Statement(this, query);
   }
 
-  executeRun() {
+  executeRun(query: string, values: readonly unknown[]) {
+    if (query.includes("UPDATE installations SET config_json")) {
+      const row = this.findInstallationRow(values[2]);
+      if (row !== undefined) {
+        row.config_json = values[0];
+        row.grants_json = values[1];
+      }
+    } else if (query.includes("UPDATE installations SET enabled")) {
+      const row = this.findInstallationRow(values[1]);
+      if (row !== undefined) {
+        row.enabled = values[0];
+      }
+    } else if (query.includes("UPDATE installations SET priority")) {
+      const row = this.findInstallationRow(values[1]);
+      if (row !== undefined) {
+        row.priority = values[0];
+      }
+    }
     this.runCount += 1;
   }
 
@@ -236,13 +306,25 @@ class FakeD1Database implements D1DatabaseLike {
       );
     }
     if (query.includes("FROM plugin_versions")) {
+      if (query.includes("WHERE id = ?")) {
+        return this.pluginVersionRows.find((row) => isRecord(row) && row.id === values[0]) ?? null;
+      }
       return (
         this.pluginVersionRows.find(
           (row) => isRecord(row) && row.plugin_id === values[0] && row.version === values[1]
         ) ?? null
       );
     }
+    if (query.includes("FROM installations")) {
+      return this.findInstallationRow(values[0]) ?? null;
+    }
     return null;
+  }
+
+  private findInstallationRow(id: unknown): Record<string, unknown> | undefined {
+    return this.installationRows.find((row) => isRecord(row) && row.id === id) as
+      | Record<string, unknown>
+      | undefined;
   }
 }
 
@@ -260,7 +342,7 @@ class FakeD1Statement implements D1PreparedStatementLike {
   }
 
   run() {
-    this.db.executeRun();
+    this.db.executeRun(this.query, this.values);
     return Promise.resolve({});
   }
 
