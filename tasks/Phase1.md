@@ -36,7 +36,7 @@
 
 ## チャンク B: versioning & rollback(T05–T07)
 
-- [ ] **P1-T05**(M)version pinning
+- [x] **P1-T05**(M)version pinning
   - RED: installation が version を pin し、実行時に必ず pinned version が解決される / pin 先 version が存在しないと失敗
   - GREEN: 解決ロジックを control-plane に実装(D-006)
   - DoD: pin・解決・不存在のテスト green

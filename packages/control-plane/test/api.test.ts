@@ -279,6 +279,7 @@ describe("createControlPlaneApi installation CRUD", () => {
       expect.objectContaining({
         id: "inst_1",
         tenantId: "tenant_1",
+        pluginVersionId: "version_1",
         enabled: true,
         priority: 20,
         config: { notifyChannel: "C123", minAmount: 100000 },

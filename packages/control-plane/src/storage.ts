@@ -374,8 +374,8 @@ function createInstallationResolver(db: D1DatabaseLike) {
           "SELECT i.id AS installation_id, i.tenant_id, i.plugin_version_id, i.enabled, i.priority,",
           "i.config_json, i.grants_json, pv.version, pv.manifest_json, p.id AS plugin_id",
           "FROM installations i",
-          "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
-          "JOIN plugins p ON p.id = pv.plugin_id",
+          "LEFT JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
+          "LEFT JOIN plugins p ON p.id = pv.plugin_id",
           "WHERE i.tenant_id = ? AND i.enabled = 1",
           "ORDER BY i.priority ASC"
         ].join(" ")
@@ -466,9 +466,9 @@ interface ResolvedInstallationRow {
   priority: number;
   config_json: string;
   grants_json: string;
-  version: string;
-  manifest_json: string;
-  plugin_id: string;
+  version: string | null;
+  manifest_json: string | null;
+  plugin_id: string | null;
 }
 
 function appFromRow(row: AppRow): AppRecord {
@@ -532,6 +532,7 @@ function executionFromRow(row: ExecutionRow): ExecutionRecord {
 }
 
 function resolvedInstallationFromRow(row: ResolvedInstallationRow): ResolvedInstallation {
+  assertPinnedVersionResolved(row);
   const manifest = JSON.parse(row.manifest_json) as TenantScriptManifest;
   return {
     id: row.installation_id,
@@ -546,4 +547,18 @@ function resolvedInstallationFromRow(row: ResolvedInstallationRow): ResolvedInst
     grants: JSON.parse(row.grants_json) as Record<string, unknown>,
     manifest
   };
+}
+
+function assertPinnedVersionResolved(
+  row: ResolvedInstallationRow
+): asserts row is ResolvedInstallationRow & {
+  version: string;
+  manifest_json: string;
+  plugin_id: string;
+} {
+  if (row.version === null || row.manifest_json === null || row.plugin_id === null) {
+    throw new Error(
+      `installation ${row.installation_id} references missing pinned version ${row.plugin_version_id}`
+    );
+  }
 }

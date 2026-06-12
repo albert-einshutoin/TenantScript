@@ -105,6 +105,8 @@ describe("createD1ControlPlaneStore", () => {
       expect.objectContaining({
         id: "inst_1",
         pluginId: "plugin_1",
+        pluginVersionId: "version_1",
+        version: "1.0.0",
         hooks: ["invoice.created"],
         config: { notifyChannel: "C123" }
       })
@@ -116,6 +118,35 @@ describe("createD1ControlPlaneStore", () => {
         hookName: "unmatched.hook"
       })
     ).resolves.toEqual([]);
+  });
+
+  it("fails when an enabled installation points at a missing pinned version", async () => {
+    const db = new FakeD1Database(
+      [],
+      [
+        {
+          installation_id: "inst_orphaned",
+          tenant_id: "tenant_1",
+          plugin_version_id: "missing_version",
+          enabled: 1,
+          priority: 10,
+          config_json: "{}",
+          grants_json: "{}",
+          version: null,
+          manifest_json: null,
+          plugin_id: null
+        }
+      ]
+    );
+
+    await expect(
+      createD1ControlPlaneStore(db).resolveInstallationsForHook({
+        tenantId: "tenant_1",
+        hookName: "invoice.created"
+      })
+    ).rejects.toThrow(
+      "installation inst_orphaned references missing pinned version missing_version"
+    );
   });
 
   it("finds plugins and versions through first/list queries", async () => {
