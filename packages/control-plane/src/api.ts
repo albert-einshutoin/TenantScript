@@ -66,6 +66,17 @@ export interface ContinuationRunner {
   ) => Promise<ControlPlaneExecutionRecord>;
 }
 
+export interface AuthenticatedIdentity {
+  subject: string;
+  role: string;
+}
+
+export interface IdentityResolver {
+  resolveToken: (
+    token: string
+  ) => Promise<AuthenticatedIdentity | null> | AuthenticatedIdentity | null;
+}
+
 export interface ControlPlaneApi {
   createApp: (request: CreateAppRequest) => Promise<AppRecord>;
   createTenant: (request: CreateTenantRequest) => Promise<TenantRecord>;
@@ -180,6 +191,8 @@ export interface DecideApprovalRequest {
   auditId: string;
   reason?: string;
   decidedAt?: Date;
+  authToken?: string;
+  role?: string;
 }
 
 export interface ApprovalDecisionPayload {
@@ -227,7 +240,7 @@ export interface RollbackResult {
   audit: RollbackAuditRecord;
 }
 
-export type ControlPlaneErrorStatus = 400 | 404 | 409 | 500;
+export type ControlPlaneErrorStatus = 400 | 403 | 404 | 409 | 500;
 
 export interface ControlPlaneErrorEnvelope {
   error: {
@@ -281,6 +294,7 @@ export function createControlPlaneApi(params: {
   store: ControlPlaneStore;
   artifacts: ArtifactStore;
   continuationRunner?: ContinuationRunner;
+  identityResolver?: IdentityResolver;
 }): ControlPlaneApi {
   return {
     createApp: (request) => params.store.createApp(request),
@@ -294,7 +308,19 @@ export function createControlPlaneApi(params: {
     setInstallationEnabled: (request) => setInstallationEnabled(params.store, request),
     updateInstallationPriority: (request) => updateInstallationPriority(params.store, request),
     rollbackInstallation: (request) => rollbackInstallation(params.store, request),
-    decideApproval: (request) => decideApproval(params.store, request, params.continuationRunner)
+    decideApproval: (request) =>
+      decideApproval(params.store, request, {
+        continuationRunner: params.continuationRunner,
+        identityResolver: params.identityResolver
+      })
+  };
+}
+
+export function createStaticTokenIdentityResolver(
+  identitiesByToken: Record<string, AuthenticatedIdentity>
+): IdentityResolver {
+  return {
+    resolveToken: (token) => identitiesByToken[token] ?? null
   };
 }
 
@@ -443,9 +469,13 @@ async function rollbackInstallation(
 async function decideApproval(
   store: ControlPlaneStore,
   request: DecideApprovalRequest,
-  continuationRunner: ContinuationRunner | undefined
+  params: {
+    continuationRunner: ContinuationRunner | undefined;
+    identityResolver: IdentityResolver | undefined;
+  }
 ): Promise<ApprovalRecord> {
   const approval = await requireApproval(store, request.id, request.tenantId);
+  await authorizeApprovalDecision(params.identityResolver, request, approval);
   if (approval.state !== "pending") {
     throw apiError(
       409,
@@ -463,9 +493,9 @@ async function decideApproval(
     decidedAt
   });
   await store.writeExecution(approvalDecisionAuditRecord({ request, approval, decidedAt }));
-  if (continuationRunner !== undefined) {
+  if (params.continuationRunner !== undefined) {
     await store.writeExecution(
-      await continuationRunner.runApprovalContinuation({
+      await params.continuationRunner.runApprovalContinuation({
         approval,
         payload: approvalDecisionPayload({ request, approval }),
         decidedAt
@@ -632,6 +662,28 @@ function apiError(
   message: string
 ): ControlPlaneApiError {
   return new ControlPlaneApiError(status, code, message);
+}
+
+async function authorizeApprovalDecision(
+  identityResolver: IdentityResolver | undefined,
+  request: DecideApprovalRequest,
+  approval: ApprovalRecord
+): Promise<void> {
+  if (identityResolver === undefined) {
+    return;
+  }
+
+  const token = request.authToken;
+  const identity = token === undefined ? null : await identityResolver.resolveToken(token);
+  // MVP identity is deliberately a static token -> role claim map. P2-T05 replaces this
+  // with RBAC; request.role is ignored so callers cannot self-assert manager privileges.
+  if (identity === null || identity.role !== approval.role) {
+    throw apiError(
+      403,
+      "approval_role_forbidden",
+      `approval ${approval.id} requires role ${approval.role}`
+    );
+  }
 }
 
 function rollbackAuditRecord(params: {

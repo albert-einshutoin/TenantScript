@@ -66,6 +66,7 @@ function cloneExecution(record: ExecutionRecord): ExecutionRecord {
 export {
   ControlPlaneApiError,
   createControlPlaneApi,
+  createStaticTokenIdentityResolver,
   toControlPlaneErrorResponse,
   type ApprovalDecision,
   type ApprovalContinuationRequest,
@@ -73,6 +74,7 @@ export {
   type ApprovalRecord,
   type ApprovalState,
   type ArtifactStore,
+  type AuthenticatedIdentity,
   type ContinuationRunner,
   type ControlPlaneApi,
   type ControlPlaneErrorEnvelope,
@@ -83,6 +85,7 @@ export {
   type CreateAppRequest,
   type CreateTenantRequest,
   type DecideApprovalRequest,
+  type IdentityResolver,
   type InstallPluginRequest,
   type ListPluginVersionsRequest,
   type RegisterPluginRequest,

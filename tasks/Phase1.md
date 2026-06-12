@@ -73,7 +73,7 @@
   - GREEN: decision → loader 起動の接続(D-011 の完成)
   - DoD: E2E(request → decision → continuation)green
 
-- [ ] **P1-T41**(M)最小 identity / role マッピング(v1.1 追加: セルフレビュー反映)
+- [x] **P1-T41**(M)最小 identity / role マッピング(v1.1 追加: セルフレビュー反映)
   - 背景: approval queue(T36)は「manager role」を前提とするが、RBAC は Phase 2(P2-T05)。MVP では API トークン発行時に role クレームを静的に埋め込む最小 identity で成立させる
   - RED: manager クレーム付きトークンのみ approve できる / viewer トークンは 403 / role の自己申告(リクエストボディでの role 指定)が無視される
   - GREEN: トークン → role クレームの静的マッピングと、decision API / approval queue での検証
