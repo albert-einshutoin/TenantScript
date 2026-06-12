@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   CapabilityDeniedError,
+  createApprovalsRequestProvider,
   createCapabilityBroker,
   createMockSlackSendProvider,
-  createPluginCapabilityContext
+  createPluginCapabilityContext,
+  type ApprovalRecord
 } from "../src/index.js";
 
 describe("createCapabilityBroker", () => {
@@ -40,6 +42,97 @@ describe("createCapabilityBroker", () => {
     await expect(broker.call("slack.send", { channel: "C999", text: "hello" })).rejects.toThrow(
       "slack.send channel C999 is outside granted scope"
     );
+  });
+
+  it("creates an approval and lets the handler finish without suspension", async () => {
+    const approvals: ApprovalRecord[] = [];
+    const broker = createCapabilityBroker({
+      grants: { "approvals.request": { roles: ["manager"] } },
+      providers: {
+        "approvals.request": createApprovalsRequestProvider({
+          store: {
+            createApproval: (record) => {
+              approvals.push(record);
+              return Promise.resolve(record);
+            }
+          },
+          generateId: () => "approval_1",
+          now: () => new Date("2026-06-13T01:00:00.000Z")
+        })
+      }
+    });
+    const context = createPluginCapabilityContext(broker);
+
+    await expect(
+      (async () => {
+        const result = await context.capability("approvals.request", {
+          role: "manager",
+          subject: { invoiceId: "inv_1", amountCents: 150_000 },
+          resumeHook: "onInvoiceApprovalDecided",
+          expiresAt: "2026-06-14T01:00:00.000Z"
+        });
+        return { result, handlerCompleted: true };
+      })()
+    ).resolves.toEqual({
+      result: { ok: true, approvalId: "approval_1", state: "pending" },
+      handlerCompleted: true
+    });
+    expect(approvals).toEqual([
+      {
+        id: "approval_1",
+        role: "manager",
+        subject: { invoiceId: "inv_1", amountCents: 150_000 },
+        resumeHook: "onInvoiceApprovalDecided",
+        state: "pending",
+        expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+        createdAt: new Date("2026-06-13T01:00:00.000Z")
+      }
+    ]);
+  });
+
+  it("rejects approvals requested for roles outside the grant", async () => {
+    const store = { createApproval: vi.fn() };
+    const broker = createCapabilityBroker({
+      grants: { "approvals.request": { roles: ["manager"] } },
+      providers: {
+        "approvals.request": createApprovalsRequestProvider({
+          store,
+          generateId: () => "approval_1",
+          now: () => new Date("2026-06-13T01:00:00.000Z")
+        })
+      }
+    });
+
+    await expect(
+      broker.call("approvals.request", {
+        role: "admin",
+        subject: { invoiceId: "inv_1" },
+        resumeHook: "onInvoiceApprovalDecided",
+        expiresAt: "2026-06-14T01:00:00.000Z"
+      })
+    ).rejects.toThrow("approvals.request role admin is outside granted scope");
+    expect(store.createApproval).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed approval requests", async () => {
+    const broker = createCapabilityBroker({
+      grants: { "approvals.request": { roles: ["manager"] } },
+      providers: {
+        "approvals.request": createApprovalsRequestProvider({
+          store: { createApproval: vi.fn() },
+          generateId: () => "approval_1",
+          now: () => new Date("2026-06-13T01:00:00.000Z")
+        })
+      }
+    });
+
+    await expect(
+      broker.call("approvals.request", {
+        role: "manager",
+        subject: { invoiceId: "inv_1" },
+        expiresAt: "2026-06-14T01:00:00.000Z"
+      })
+    ).rejects.toThrow("approvals.request requires role, subject, resumeHook, and expiresAt");
   });
 });
 

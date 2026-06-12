@@ -1,6 +1,7 @@
 export interface CapabilityGrant {
   channel?: string | readonly string[];
   fields?: readonly string[];
+  roles?: string | readonly string[];
 }
 
 export type CapabilityGrants = Record<string, CapabilityGrant>;
@@ -12,6 +13,20 @@ export interface CapabilityBroker {
 
 export interface PluginCapabilityContext {
   capability: (name: string, input: unknown) => Promise<unknown>;
+}
+
+export interface ApprovalRecord {
+  id: string;
+  role: string;
+  subject: Record<string, unknown>;
+  resumeHook: string;
+  state: "pending";
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+export interface ApprovalStore {
+  createApproval: (record: ApprovalRecord) => Promise<ApprovalRecord> | ApprovalRecord;
 }
 
 export class CapabilityDeniedError extends Error {
@@ -47,6 +62,27 @@ export function createPluginCapabilityContext(broker: CapabilityBroker): PluginC
   };
 }
 
+export function createApprovalsRequestProvider(params: {
+  store: ApprovalStore;
+  generateId: () => string;
+  now: () => Date;
+}): CapabilityProvider {
+  return async (input) => {
+    const request = parseApprovalRequestInput(input);
+    const approval = await params.store.createApproval({
+      id: params.generateId(),
+      role: request.role,
+      subject: request.subject,
+      resumeHook: request.resumeHook,
+      state: "pending",
+      expiresAt: request.expiresAt,
+      createdAt: params.now()
+    });
+
+    return { ok: true, approvalId: approval.id, state: approval.state };
+  };
+}
+
 export function createMockSlackSendProvider(params: {
   token: string;
   deliver: (message: { channel: string; text: string }) => void;
@@ -64,16 +100,24 @@ export function createMockSlackSendProvider(params: {
 }
 
 function assertScope(name: string, grant: CapabilityGrant, input: unknown): void {
-  if (name !== "slack.send") {
-    return;
+  if (name === "slack.send") {
+    const message = parseSlackSendInput(input);
+    const allowedChannels = grant.channel === undefined ? [] : [grant.channel].flat();
+    if (allowedChannels.length > 0 && !allowedChannels.includes(message.channel)) {
+      throw new CapabilityDeniedError(
+        `slack.send channel ${message.channel} is outside granted scope`
+      );
+    }
   }
 
-  const message = parseSlackSendInput(input);
-  const allowedChannels = grant.channel === undefined ? [] : [grant.channel].flat();
-  if (allowedChannels.length > 0 && !allowedChannels.includes(message.channel)) {
-    throw new CapabilityDeniedError(
-      `slack.send channel ${message.channel} is outside granted scope`
-    );
+  if (name === "approvals.request") {
+    const request = parseApprovalRequestInput(input);
+    const allowedRoles = grant.roles === undefined ? [] : [grant.roles].flat();
+    if (allowedRoles.length > 0 && !allowedRoles.includes(request.role)) {
+      throw new CapabilityDeniedError(
+        `approvals.request role ${request.role} is outside granted scope`
+      );
+    }
   }
 }
 
@@ -85,6 +129,37 @@ function parseSlackSendInput(input: unknown): { channel: string; text: string } 
   return {
     channel: input.channel,
     text: input.text
+  };
+}
+
+function parseApprovalRequestInput(input: unknown): {
+  role: string;
+  subject: Record<string, unknown>;
+  resumeHook: string;
+  expiresAt: Date;
+} {
+  if (
+    !isRecord(input) ||
+    typeof input.role !== "string" ||
+    !isRecord(input.subject) ||
+    typeof input.resumeHook !== "string" ||
+    typeof input.expiresAt !== "string"
+  ) {
+    throw new CapabilityDeniedError(
+      "approvals.request requires role, subject, resumeHook, and expiresAt"
+    );
+  }
+
+  const expiresAt = new Date(input.expiresAt);
+  if (Number.isNaN(expiresAt.getTime())) {
+    throw new CapabilityDeniedError("approvals.request expiresAt must be an ISO timestamp");
+  }
+
+  return {
+    role: input.role,
+    subject: input.subject,
+    resumeHook: input.resumeHook,
+    expiresAt
   };
 }
 

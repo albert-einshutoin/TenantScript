@@ -52,7 +52,7 @@
 
 ## チャンク C: approvals(T08–T13, T41)
 
-- [ ] **P1-T08**(M)approvals.request capability
+- [x] **P1-T08**(M)approvals.request capability
   - RED: plugin から request → Approval レコードが作成され、**handler はそこで正常終了する**(suspend しないこと自体をテスト、D-011)
   - GREEN: capability 実装 + Approval 永続化(role / subject / resumeHook / expiresAt)
   - DoD: 作成・即時終了・grant 外 role 拒否のテスト green
