@@ -15,18 +15,32 @@ export interface PluginCapabilityContext {
   capability: (name: string, input: unknown) => Promise<unknown>;
 }
 
+export type ApprovalState = "pending" | "approved" | "rejected" | "expired";
+
 export interface ApprovalRecord {
   id: string;
   role: string;
   subject: Record<string, unknown>;
   resumeHook: string;
-  state: "pending";
+  state: ApprovalState;
   expiresAt: Date;
   createdAt: Date;
+  updatedAt?: Date;
 }
 
 export interface ApprovalStore {
   createApproval: (record: ApprovalRecord) => Promise<ApprovalRecord> | ApprovalRecord;
+}
+
+export interface ApprovalLifecyclePlan {
+  approvalId: string;
+  notifyAt: Date;
+  reminderAt: Date;
+  expiresAt: Date;
+}
+
+export interface ApprovalWorkflowEngine {
+  startApprovalLifecycle: (plan: ApprovalLifecyclePlan) => Promise<void> | void;
 }
 
 export class CapabilityDeniedError extends Error {
@@ -64,6 +78,7 @@ export function createPluginCapabilityContext(broker: CapabilityBroker): PluginC
 
 export function createApprovalsRequestProvider(params: {
   store: ApprovalStore;
+  workflow?: ApprovalWorkflowEngine;
   generateId: () => string;
   now: () => Date;
 }): CapabilityProvider {
@@ -78,8 +93,33 @@ export function createApprovalsRequestProvider(params: {
       expiresAt: request.expiresAt,
       createdAt: params.now()
     });
+    await params.workflow?.startApprovalLifecycle(createApprovalLifecyclePlan(approval));
 
     return { ok: true, approvalId: approval.id, state: approval.state };
+  };
+}
+
+export function createApprovalLifecyclePlan(approval: ApprovalRecord): ApprovalLifecyclePlan {
+  return {
+    approvalId: approval.id,
+    notifyAt: approval.createdAt,
+    reminderAt: new Date(
+      approval.createdAt.getTime() +
+        Math.floor((approval.expiresAt.getTime() - approval.createdAt.getTime()) / 2)
+    ),
+    expiresAt: approval.expiresAt
+  };
+}
+
+export function expireApproval(approval: ApprovalRecord, now: Date): ApprovalRecord {
+  if (approval.state !== "pending" || now.getTime() < approval.expiresAt.getTime()) {
+    return approval;
+  }
+
+  return {
+    ...approval,
+    state: "expired",
+    updatedAt: now
   };
 }
 

@@ -57,7 +57,7 @@
   - GREEN: capability 実装 + Approval 永続化(role / subject / resumeHook / expiresAt)
   - DoD: 作成・即時終了・grant 外 role 拒否のテスト green
 
-- [ ] **P1-T09**(M)approval lifecycle(Workflows)
+- [x] **P1-T09**(M)approval lifecycle(Workflows)
   - 設計: workflow エンジンを interface(seam)で包み、状態遷移ロジックはエンジン非依存の unit テストで検証する。実 Workflows の結線は **Tier 2**(nightly)で検証する(Workflows のローカルテスト機構の存在を前提にしない)
   - RED: 期限切れで expired に遷移 / リマインド予定が生成される(時間はモッククロック)
   - GREEN: Cloudflare Workflows で通知・リマインド・期限切れを管理
