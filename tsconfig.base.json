@@ -13,6 +13,10 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@tenantscript/*": ["packages/*/src/index.ts"]
+    }
   }
 }

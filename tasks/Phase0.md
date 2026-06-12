@@ -81,12 +81,12 @@
   - GREEN: in-memory installation store + `planExecution()` 実装
   - DoD: 並列・直列・優先度・除外の4系統テスト green
 
-- [ ] **P0-T12**(M)plugin-sdk: definePlugin
+- [x] **P0-T12**(M)plugin-sdk: definePlugin
   - RED: 宣言した handler が登録される / manifest の hooks に無い handler 呼び出しはエラー / handler 例外が構造化エラーとして伝播する
   - GREEN: `definePlugin()` と handler dispatch 実装
   - DoD: 正常 dispatch・未知 hook・例外伝播のテスト green
 
-- [ ] **P0-T13**(S)戻り値契約
+- [x] **P0-T13**(S)戻り値契約
   - RED: transform は payload 返却必須(返さなければ契約違反エラー)/ policy は `allow | deny | modify` の union 以外を拒否 / event は戻り値無視
   - GREEN: hook 型ごとの戻り値バリデータ
   - DoD: 3 hook 型 × 正常/違反のテスト green

@@ -17,5 +17,8 @@
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*"
+  },
+  "dependencies": {
+    "@tenantscript/manifest": "workspace:*"
   }
 }

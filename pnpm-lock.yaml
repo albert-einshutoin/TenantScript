@@ -78,6 +78,10 @@ importers:
         version: 4.8.0
 
   packages/plugin-sdk:
+    dependencies:
+      '@tenantscript/manifest':
+        specifier: workspace:*
+        version: link:../manifest
     devDependencies:
       '@tenantscript/test-config':
         specifier: workspace:*
