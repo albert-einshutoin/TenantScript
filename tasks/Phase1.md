@@ -83,7 +83,7 @@
   - RED: 権限のない role による決定 / 他 tenant の approval への決定 / resumeHook の偽装呼び出し — 全て拒否されること
   - DoD: security suite に追加され green
 
-- [ ] **P1-T13**(S)チャンク C refactor
+- [x] **P1-T13**(S)チャンク C refactor
   - DoD: approval 状態機械を独立モジュール化し、状態遷移表をテストと1対1対応させる
 
 ## チャンク D: 冪等性 journal(T14–T15)

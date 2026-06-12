@@ -99,6 +99,12 @@ export {
 } from "./api.js";
 
 export {
+  approvalDecisionTransitions,
+  resolveApprovalDecisionTransition,
+  type ApprovalDecisionTransition
+} from "./approval-state.js";
+
+export {
   ArtifactAlreadyExistsError,
   createD1ControlPlaneStore,
   createR2ArtifactStore,

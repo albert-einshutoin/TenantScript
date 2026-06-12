@@ -7,6 +7,10 @@ import type {
   PluginVersionRecord,
   TenantRecord
 } from "./storage.js";
+import { resolveApprovalDecisionTransition } from "./approval-state.js";
+import type { ApprovalDecision, ApprovalState } from "./approval-state.js";
+
+export type { ApprovalDecision, ApprovalState } from "./approval-state.js";
 
 export interface ControlPlaneStore {
   createApp: (record: AppRecord) => Promise<AppRecord>;
@@ -164,9 +168,6 @@ export interface RollbackInstallationRequest {
   reason?: string;
   createdAt?: Date;
 }
-
-export type ApprovalDecision = "approved" | "rejected";
-export type ApprovalState = "pending" | ApprovalDecision | "expired";
 
 export interface ApprovalRecord {
   id: string;
@@ -476,7 +477,8 @@ async function decideApproval(
 ): Promise<ApprovalRecord> {
   const approval = await requireApproval(store, request.id, request.tenantId);
   await authorizeApprovalDecision(params.identityResolver, request, approval);
-  if (approval.state !== "pending") {
+  const transition = resolveApprovalDecisionTransition(approval.state, request.decision);
+  if (!transition.allowed) {
     throw apiError(
       409,
       "approval_already_decided",
