@@ -120,12 +120,12 @@
 
 ## チャンク E: capability broker + control plane 最小(T19–T23, T30)
 
-- [ ] **P0-T19**(M)capability 呼び出しブリッジ
+- [x] **P0-T19**(M)capability 呼び出しブリッジ
   - RED: grant 済み capability は通る / 未 grant は CapabilityDeniedError / 引数が grant の scope(channel 制限等)で検証される
   - GREEN: isolate → broker の RPC 契約 + grant 照合
   - DoD: 許可・拒否・scope 違反の3系統 green
 
-- [ ] **P0-T20**(M)slack.send capability(モック)
+- [x] **P0-T20**(M)slack.send capability(モック)
   - RED(攻撃テスト含む): grant 外 channel への送信拒否 / raw token が plugin 側のスコープに存在しない(ctx を deep-inspect するテスト)/ モック Slack サーバへ正しい payload が届く
   - GREEN: broker 側で token を保持し、plugin には結果のみ返す(D-004)
   - DoD: 機能テスト + 露出テスト green
