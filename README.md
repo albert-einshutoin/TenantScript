@@ -6,7 +6,8 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 
 ## ドキュメント
 
-- [プロダクト戦略 & MVP仕様](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md) — v0.3 Working Draft
+- [プロダクト戦略 & MVP仕様](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md) — v0.4 Working Draft
+- [開発プラン & フェーズ別タスク](tasks/README.md) — TDDベースのPhase 0〜4タスク分解(言語: TypeScript、D-017)
 
 ## 方針
 
