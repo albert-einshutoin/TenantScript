@@ -68,7 +68,7 @@
   - GREEN: decision エンドポイント + `ext approvals approve|reject`
   - DoD: 決定・二重決定拒否・audit のテスト green
 
-- [ ] **P1-T11**(M)resumeHook continuation 実行
+- [x] **P1-T11**(M)resumeHook continuation 実行
   - RED: approve 決定 → resumeHook が**新しい execution として**起動し、decision payload(approved/rejected、subject)を受け取る
   - GREEN: decision → loader 起動の接続(D-011 の完成)
   - DoD: E2E(request → decision → continuation)green

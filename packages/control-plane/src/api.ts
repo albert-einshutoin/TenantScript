@@ -41,6 +41,7 @@ export interface ControlPlaneStore {
     id: string;
     pluginVersionId: string;
   }) => Promise<InstallationRecord>;
+  createApproval: (record: ApprovalRecord) => Promise<ApprovalRecord>;
   findApprovalById: (id: string) => Promise<ApprovalRecord | null>;
   decideApproval: (request: {
     id: string;
@@ -57,6 +58,12 @@ export interface ArtifactStore {
     hash: string,
     content: string | ArrayBuffer | Uint8Array
   ) => Promise<{ hash: string }>;
+}
+
+export interface ContinuationRunner {
+  runApprovalContinuation: (
+    request: ApprovalContinuationRequest
+  ) => Promise<ControlPlaneExecutionRecord>;
 }
 
 export interface ControlPlaneApi {
@@ -175,6 +182,20 @@ export interface DecideApprovalRequest {
   decidedAt?: Date;
 }
 
+export interface ApprovalDecisionPayload {
+  approvalId: string;
+  decision: ApprovalDecision;
+  subject: Record<string, unknown>;
+  decidedBy: string;
+  reason?: string;
+}
+
+export interface ApprovalContinuationRequest {
+  approval: ApprovalRecord;
+  payload: ApprovalDecisionPayload;
+  decidedAt: Date;
+}
+
 export interface RollbackAuditRecord {
   id: string;
   tenantId: string;
@@ -259,6 +280,7 @@ export function toControlPlaneErrorResponse(error: unknown): ControlPlaneErrorRe
 export function createControlPlaneApi(params: {
   store: ControlPlaneStore;
   artifacts: ArtifactStore;
+  continuationRunner?: ContinuationRunner;
 }): ControlPlaneApi {
   return {
     createApp: (request) => params.store.createApp(request),
@@ -272,7 +294,7 @@ export function createControlPlaneApi(params: {
     setInstallationEnabled: (request) => setInstallationEnabled(params.store, request),
     updateInstallationPriority: (request) => updateInstallationPriority(params.store, request),
     rollbackInstallation: (request) => rollbackInstallation(params.store, request),
-    decideApproval: (request) => decideApproval(params.store, request)
+    decideApproval: (request) => decideApproval(params.store, request, params.continuationRunner)
   };
 }
 
@@ -420,7 +442,8 @@ async function rollbackInstallation(
 
 async function decideApproval(
   store: ControlPlaneStore,
-  request: DecideApprovalRequest
+  request: DecideApprovalRequest,
+  continuationRunner: ContinuationRunner | undefined
 ): Promise<ApprovalRecord> {
   const approval = await requireApproval(store, request.id, request.tenantId);
   if (approval.state !== "pending") {
@@ -440,6 +463,15 @@ async function decideApproval(
     decidedAt
   });
   await store.writeExecution(approvalDecisionAuditRecord({ request, approval, decidedAt }));
+  if (continuationRunner !== undefined) {
+    await store.writeExecution(
+      await continuationRunner.runApprovalContinuation({
+        approval,
+        payload: approvalDecisionPayload({ request, approval }),
+        decidedAt
+      })
+    );
+  }
 
   return updated;
 }
@@ -649,6 +681,19 @@ function approvalDecisionAuditRecord(params: {
 function approvalDecisionAuditMessage(request: DecideApprovalRequest): string {
   const reason = request.reason === undefined ? "" : `: ${request.reason}`;
   return `${request.decision} by ${request.actor}${reason}`;
+}
+
+function approvalDecisionPayload(params: {
+  request: DecideApprovalRequest;
+  approval: ApprovalRecord;
+}): ApprovalDecisionPayload {
+  return {
+    approvalId: params.approval.id,
+    decision: params.request.decision,
+    subject: params.approval.subject,
+    decidedBy: params.request.actor,
+    ...(params.request.reason === undefined ? {} : { reason: params.request.reason })
+  };
 }
 
 function deepEqual(left: unknown, right: unknown): boolean {

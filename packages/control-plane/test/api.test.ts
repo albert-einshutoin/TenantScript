@@ -3,8 +3,10 @@ import {
   ControlPlaneApiError,
   createControlPlaneApi,
   toControlPlaneErrorResponse,
+  type ApprovalContinuationRequest,
   type ApprovalRecord,
   type ArtifactStore,
+  type ContinuationRunner,
   type AppRecord,
   type ControlPlaneStore,
   type ExecutionRecord,
@@ -659,15 +661,90 @@ describe("createControlPlaneApi installation CRUD", () => {
       })
     ).rejects.toMatchObject({ status: 409, code: "approval_already_decided" });
   });
+
+  it("runs the resumeHook as a new execution with the decision payload", async () => {
+    const store = new InMemoryControlPlaneStore();
+    const continuationCalls: ApprovalContinuationRequest[] = [];
+    const continuationRunner: ContinuationRunner = {
+      runApprovalContinuation: (request) => {
+        continuationCalls.push(request);
+        return Promise.resolve({
+          id: "exec_resume_1",
+          tenantId: request.approval.tenantId,
+          pluginId: request.approval.pluginId,
+          hookName: request.approval.resumeHook,
+          version: "1.0.0",
+          status: "success",
+          durationMs: 7,
+          capabilityCalls: [],
+          createdAt: request.decidedAt
+        });
+      }
+    };
+    const api = createApiWithVersion(configurableManifest, store, continuationRunner);
+    await store.createApproval({
+      id: "approval_1",
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      role: "manager",
+      subject: { invoiceId: "inv_1", amountCents: 150_000 },
+      resumeHook: "onInvoiceApprovalDecided",
+      state: "pending",
+      expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+      createdAt: new Date("2026-06-13T01:00:00.000Z")
+    });
+
+    await expect(
+      api.decideApproval({
+        id: "approval_1",
+        tenantId: "tenant_1",
+        decision: "approved",
+        actor: "manager@example.com",
+        reason: "valid invoice",
+        auditId: "audit_approval_1",
+        decidedAt: new Date("2026-06-13T01:15:00.000Z")
+      })
+    ).resolves.toMatchObject({ state: "approved" });
+
+    expect(continuationCalls).toEqual([
+      {
+        approval: {
+          id: "approval_1",
+          tenantId: "tenant_1",
+          pluginId: "plugin_1",
+          role: "manager",
+          resumeHook: "onInvoiceApprovalDecided",
+          state: "pending",
+          subject: { invoiceId: "inv_1", amountCents: 150_000 },
+          expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+          createdAt: new Date("2026-06-13T01:00:00.000Z")
+        },
+        payload: {
+          approvalId: "approval_1",
+          decision: "approved",
+          subject: { invoiceId: "inv_1", amountCents: 150_000 },
+          decidedBy: "manager@example.com",
+          reason: "valid invoice"
+        },
+        decidedAt: new Date("2026-06-13T01:15:00.000Z")
+      }
+    ]);
+    expect(store.executions).toEqual([
+      expect.objectContaining({ id: "audit_approval_1", hookName: "approval.decision" }),
+      expect.objectContaining({ id: "exec_resume_1", hookName: "onInvoiceApprovalDecided" })
+    ]);
+  });
 });
 
 function createApiWithVersion(
   manifestInput: TenantScriptManifest,
-  store = new InMemoryControlPlaneStore()
+  store = new InMemoryControlPlaneStore(),
+  continuationRunner?: ContinuationRunner
 ) {
   const api = createControlPlaneApi({
     store,
-    artifacts: new InMemoryArtifactStore()
+    artifacts: new InMemoryArtifactStore(),
+    ...(continuationRunner === undefined ? {} : { continuationRunner })
   });
   store.seedApp({ id: "app_1", name: "Example SaaS" });
   store.seedTenant({ id: "tenant_1", appId: "app_1", name: "Acme" });
@@ -821,6 +898,11 @@ class InMemoryControlPlaneStore implements ControlPlaneStore {
 
   writeExecution(record: ExecutionRecord) {
     this.executions.push(record);
+    return Promise.resolve(record);
+  }
+
+  createApproval(record: ApprovalRecord) {
+    this.seedApproval(record);
     return Promise.resolve(record);
   }
 

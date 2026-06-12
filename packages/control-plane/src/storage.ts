@@ -96,6 +96,7 @@ export function createD1ControlPlaneStore(db: D1DatabaseLike) {
     setInstallationEnabled: createInstallationEnabledUpdater(db),
     updateInstallationPriority: createInstallationPriorityUpdater(db),
     updateInstallationVersion: createInstallationVersionUpdater(db),
+    createApproval: createApprovalWriter(db),
     findApprovalById: createApprovalByIdFinder(db),
     decideApproval: createApprovalDecisionUpdater(db),
     writeExecution: createExecutionWriter(db),
@@ -346,6 +347,35 @@ function createApprovalByIdFinder(db: D1DatabaseLike) {
       .first<ApprovalRow>();
 
     return row === null ? null : approvalFromRow(row);
+  };
+}
+
+function createApprovalWriter(db: D1DatabaseLike) {
+  return async (record: ApprovalRecord) => {
+    await db
+      .prepare(
+        [
+          "INSERT INTO approvals",
+          "(id, tenant_id, plugin_id, role, subject_json, resume_hook, state, expires_at, created_at, decided_by, decision_reason, decided_at)",
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ].join(" ")
+      )
+      .bind(
+        record.id,
+        record.tenantId,
+        record.pluginId,
+        record.role,
+        JSON.stringify(record.subject),
+        record.resumeHook,
+        record.state,
+        record.expiresAt.toISOString(),
+        record.createdAt.toISOString(),
+        record.decidedBy ?? null,
+        record.decisionReason ?? null,
+        record.decidedAt?.toISOString() ?? null
+      )
+      .run();
+    return record;
   };
 }
 

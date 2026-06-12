@@ -6,6 +6,7 @@ import {
   ScopedRuntimeLimitError,
   ScopedRuntimeTimeoutError,
   bundlePlugin,
+  createApprovalContinuationRunner,
   runScopedHandler
 } from "../src/index.js";
 
@@ -253,6 +254,111 @@ describe("runScopedHandler", () => {
         context: { capability: vi.fn() }
       })
     ).rejects.toThrow("plugin bundle does not export handler invoice.created");
+  });
+});
+
+describe("createApprovalContinuationRunner", () => {
+  it("runs the approval resumeHook with the decision payload", async () => {
+    const capture = vi.fn().mockResolvedValue({ ok: true });
+    const runner = createApprovalContinuationRunner({
+      bundleCode: await bundleFromSource(`
+        exports.handlers = {
+          onInvoiceApprovalDecided: async (payload, context) => {
+            await context.capability("test.capture", payload);
+          }
+        };
+      `),
+      version: "1.0.0",
+      context: { capability: capture },
+      generateExecutionId: () => "exec_resume_1",
+      now: () => new Date("2026-06-13T01:15:00.000Z")
+    });
+
+    await expect(
+      runner.runApprovalContinuation({
+        approval: {
+          id: "approval_1",
+          tenantId: "tenant_1",
+          pluginId: "plugin_1",
+          role: "manager",
+          subject: { invoiceId: "inv_1" },
+          resumeHook: "onInvoiceApprovalDecided",
+          state: "approved",
+          expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+          createdAt: new Date("2026-06-13T01:00:00.000Z"),
+          decidedBy: "manager@example.com",
+          decidedAt: new Date("2026-06-13T01:15:00.000Z")
+        },
+        payload: {
+          approvalId: "approval_1",
+          decision: "approved",
+          subject: { invoiceId: "inv_1" },
+          decidedBy: "manager@example.com"
+        },
+        decidedAt: new Date("2026-06-13T01:15:00.000Z")
+      })
+    ).resolves.toEqual({
+      id: "exec_resume_1",
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      hookName: "onInvoiceApprovalDecided",
+      version: "1.0.0",
+      status: "success",
+      durationMs: 0,
+      capabilityCalls: [],
+      createdAt: new Date("2026-06-13T01:15:00.000Z")
+    });
+    expect(capture).toHaveBeenCalledWith("test.capture", {
+      approvalId: "approval_1",
+      decision: "approved",
+      subject: { invoiceId: "inv_1" },
+      decidedBy: "manager@example.com"
+    });
+  });
+
+  it("supports default clocks and scoped runtime limits", async () => {
+    const runner = createApprovalContinuationRunner({
+      bundleCode: await bundleFromSource(`
+        exports.handlers = {
+          onInvoiceApprovalDecided: () => "continued"
+        };
+      `),
+      version: "1.0.0",
+      context: { capability: vi.fn() },
+      limits: { timeoutMs: 250, maxSubrequests: 0 },
+      generateExecutionId: () => "exec_resume_default_clock"
+    });
+
+    await expect(
+      runner.runApprovalContinuation({
+        approval: {
+          id: "approval_1",
+          tenantId: "tenant_1",
+          pluginId: "plugin_1",
+          role: "manager",
+          subject: { invoiceId: "inv_1" },
+          resumeHook: "onInvoiceApprovalDecided",
+          state: "rejected",
+          expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+          createdAt: new Date("2026-06-13T01:00:00.000Z"),
+          decidedBy: "manager@example.com",
+          decidedAt: new Date("2026-06-13T01:15:00.000Z")
+        },
+        payload: {
+          approvalId: "approval_1",
+          decision: "rejected",
+          subject: { invoiceId: "inv_1" },
+          decidedBy: "manager@example.com"
+        },
+        decidedAt: new Date("2026-06-13T01:15:00.000Z")
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "exec_resume_default_clock",
+        status: "success",
+        hookName: "onInvoiceApprovalDecided"
+      })
+    );
   });
 });
 

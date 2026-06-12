@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import vm from "node:vm";
 import { build } from "esbuild";
+import type {
+  ApprovalContinuationRequest,
+  ControlPlaneExecutionRecord,
+  ContinuationRunner
+} from "@tenantscript/control-plane";
 
 export interface PluginBundle {
   code: string;
@@ -24,6 +29,15 @@ export interface ScopedRuntimeLimits {
 export interface ScopedRuntimeResult {
   value: unknown;
   logs: readonly ScopedRuntimeLog[];
+}
+
+export interface ApprovalContinuationRunnerOptions {
+  bundleCode: string;
+  version: string;
+  context: ScopedRuntimeContext;
+  generateExecutionId: (request: ApprovalContinuationRequest) => string;
+  now?: () => Date;
+  limits?: ScopedRuntimeLimits;
 }
 
 export class ScopedRuntimeTimeoutError extends Error {
@@ -108,6 +122,37 @@ export async function runScopedHandler(params: {
   return {
     value: await withWallClockTimeout(handlerResult, limits.timeoutMs, params.handlerName),
     logs
+  };
+}
+
+export function createApprovalContinuationRunner(
+  options: ApprovalContinuationRunnerOptions
+): ContinuationRunner {
+  return {
+    runApprovalContinuation: async (request) => {
+      const now = options.now ?? (() => new Date());
+      const startedAt = now();
+      await runScopedHandler({
+        bundleCode: options.bundleCode,
+        handlerName: request.approval.resumeHook,
+        payload: request.payload,
+        context: options.context,
+        ...(options.limits === undefined ? {} : { limits: options.limits })
+      });
+      const finishedAt = now();
+
+      return {
+        id: options.generateExecutionId(request),
+        tenantId: request.approval.tenantId,
+        pluginId: request.approval.pluginId,
+        hookName: request.approval.resumeHook,
+        version: options.version,
+        status: "success",
+        durationMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+        capabilityCalls: [],
+        createdAt: startedAt
+      } satisfies ControlPlaneExecutionRecord;
+    }
   };
 }
 

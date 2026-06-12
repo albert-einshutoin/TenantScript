@@ -258,6 +258,19 @@ describe("createD1ControlPlaneStore", () => {
     };
     const store = createD1ControlPlaneStore(new FakeD1Database([], [], [], [], [approvalRow]));
 
+    await expect(
+      store.createApproval({
+        id: "approval_2",
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        role: "manager",
+        subject: { invoiceId: "inv_2" },
+        resumeHook: "onInvoiceApprovalDecided",
+        state: "pending",
+        expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+        createdAt: new Date("2026-06-13T01:00:00.000Z")
+      })
+    ).resolves.toEqual(expect.objectContaining({ id: "approval_2", state: "pending" }));
     await expect(store.findApprovalById("approval_1")).resolves.toEqual({
       id: "approval_1",
       tenantId: "tenant_1",
