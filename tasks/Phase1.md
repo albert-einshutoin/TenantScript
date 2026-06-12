@@ -46,7 +46,7 @@
   - GREEN: rollback エンドポイント + `ext rollback` コマンド
   - DoD: API/CLI 双方のテスト green
 
-- [ ] **P1-T07**(S)rollback drill(MTTR 計測)
+- [x] **P1-T07**(S)rollback drill(MTTR 計測)
   - 内容: 「壊れた version を deploy → 検知 → rollback 完了」までの手順書と計測スクリプト
   - DoD: drill 実施で MTTR < 5分を記録(`docs/benchmarks/` に追記)
 

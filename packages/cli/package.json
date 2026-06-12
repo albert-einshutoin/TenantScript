@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "rollback:drill": "node scripts/rollback-drill.mjs"
   },
   "dependencies": {
     "@tenantscript/control-plane": "workspace:*"
