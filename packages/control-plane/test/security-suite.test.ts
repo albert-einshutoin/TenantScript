@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   createControlPlaneApi,
+  createDurableObjectDailyUsageCounter,
+  createInMemoryDailyUsageCounter,
   createInMemoryExecutionLogStore,
   createStaticTokenIdentityResolver,
+  type DailyUsageRecord,
   type ApprovalContinuationRequest,
   type ApprovalRecord,
   type ArtifactStore,
@@ -183,6 +186,65 @@ describe("control-plane security suite", () => {
     expect(continuationCalls).toHaveLength(1);
     expect(continuationCalls[0]?.approval.resumeHook).toBe("onInvoiceApprovalDecided");
     expect(JSON.stringify(continuationCalls)).not.toContain("exfiltrateApprovalDecision");
+  });
+
+  it("serializes concurrent usage increments so budget counters cannot be raced", async () => {
+    const counter = createInMemoryDailyUsageCounter();
+
+    await Promise.all(
+      Array.from({ length: 50 }, () =>
+        counter.recordExecution({
+          tenantId: "tenant_1",
+          pluginId: "plugin_1",
+          cpuMs: 2,
+          at: new Date("2026-06-13T01:00:00.000Z")
+        })
+      )
+    );
+
+    await expect(
+      counter.getDailyUsage({
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        at: new Date("2026-06-13T23:00:00.000Z")
+      })
+    ).resolves.toMatchObject({ executions: 50, cpuMs: 100 });
+  });
+
+  it("keeps durable usage storage across counter reinitialization", async () => {
+    const records = new Map<string, DailyUsageRecord>();
+    const storage = {
+      get: (key: string) => records.get(key),
+      put: (key: string, record: DailyUsageRecord) => {
+        records.set(key, record);
+      }
+    };
+
+    await createDurableObjectDailyUsageCounter(storage).recordExecution({
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      cpuMs: 12,
+      at: new Date("2026-06-13T01:00:00.000Z")
+    });
+
+    await expect(
+      createDurableObjectDailyUsageCounter(storage).getDailyUsage({
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        at: new Date("2026-06-13T02:00:00.000Z")
+      })
+    ).resolves.toMatchObject({ executions: 1, cpuMs: 12 });
+  });
+
+  it("rejects negative cpuMs usage that would reduce budget counters", async () => {
+    await expect(
+      createInMemoryDailyUsageCounter().recordExecution({
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        cpuMs: -1,
+        at: new Date("2026-06-13T01:00:00.000Z")
+      })
+    ).rejects.toThrow("cpuMs must be a non-negative finite number");
   });
 });
 

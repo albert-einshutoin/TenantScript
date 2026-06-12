@@ -44,6 +44,7 @@ export function createDurableObjectDailyUsageCounter(
   return {
     recordExecution: (request) =>
       withUsageLock(locks, usageKey(request), async () => {
+        validateCpuMs(request.cpuMs);
         const key = usageKey(request);
         const current = (await storage.get(key)) ?? emptyUsageRecord(request);
         const updated = {
@@ -102,4 +103,10 @@ function usageKey(key: DailyUsageKey): string {
 
 function usageDate(at: Date): string {
   return at.toISOString().slice(0, 10);
+}
+
+function validateCpuMs(cpuMs: number): void {
+  if (!Number.isFinite(cpuMs) || cpuMs < 0) {
+    throw new Error("cpuMs must be a non-negative finite number");
+  }
 }

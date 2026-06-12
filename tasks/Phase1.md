@@ -110,7 +110,7 @@
   - GREEN: 実行前チェック + disable + 通知イベント
   - DoD: 超過系テスト green。**復旧手順(re-enable)もテスト**
 
-- [ ] **P1-T18**(S)budget 攻撃テスト
+- [x] **P1-T18**(S)budget 攻撃テスト
   - RED: 並行実行による budget 競り抜け / カウンタ初期化の悪用 — 防止されること
   - DoD: security suite に追加され green
 
