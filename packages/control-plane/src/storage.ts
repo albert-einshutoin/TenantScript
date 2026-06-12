@@ -1,6 +1,8 @@
 import type { Installation } from "@tenantscript/host-sdk";
 import type { TenantScriptManifest } from "@tenantscript/manifest";
 import type {
+  ApprovalDecision,
+  ApprovalRecord,
   CapabilityCallRecord,
   ExecutionRecord,
   ExecutionSearchQuery,
@@ -94,6 +96,8 @@ export function createD1ControlPlaneStore(db: D1DatabaseLike) {
     setInstallationEnabled: createInstallationEnabledUpdater(db),
     updateInstallationPriority: createInstallationPriorityUpdater(db),
     updateInstallationVersion: createInstallationVersionUpdater(db),
+    findApprovalById: createApprovalByIdFinder(db),
+    decideApproval: createApprovalDecisionUpdater(db),
     writeExecution: createExecutionWriter(db),
     searchExecutions: createExecutionSearcher(db),
     resolveInstallationsForHook: createInstallationResolver(db)
@@ -328,6 +332,54 @@ function createInstallationVersionUpdater(db: D1DatabaseLike) {
   };
 }
 
+function createApprovalByIdFinder(db: D1DatabaseLike) {
+  return async (id: string) => {
+    const row = await db
+      .prepare(
+        [
+          "SELECT id, tenant_id, plugin_id, role, subject_json, resume_hook, state,",
+          "expires_at, created_at, decided_by, decision_reason, decided_at",
+          "FROM approvals WHERE id = ?"
+        ].join(" ")
+      )
+      .bind(id)
+      .first<ApprovalRow>();
+
+    return row === null ? null : approvalFromRow(row);
+  };
+}
+
+function createApprovalDecisionUpdater(db: D1DatabaseLike) {
+  return async (request: {
+    id: string;
+    decision: ApprovalDecision;
+    decidedBy: string;
+    decisionReason?: string;
+    decidedAt: Date;
+  }) => {
+    await db
+      .prepare(
+        [
+          "UPDATE approvals SET state = ?, decided_by = ?, decision_reason = ?, decided_at = ?",
+          "WHERE id = ?"
+        ].join(" ")
+      )
+      .bind(
+        request.decision,
+        request.decidedBy,
+        request.decisionReason ?? null,
+        request.decidedAt.toISOString(),
+        request.id
+      )
+      .run();
+    const updated = await createApprovalByIdFinder(db)(request.id);
+    if (updated === null) {
+      throw new Error(`approval ${request.id} was not found after decision update`);
+    }
+    return updated;
+  };
+}
+
 function createExecutionWriter(db: D1DatabaseLike) {
   return async (record: ExecutionRecord) => {
     await db
@@ -473,6 +525,21 @@ interface InstallationRow {
   grants_json: string;
 }
 
+interface ApprovalRow {
+  id: string;
+  tenant_id: string;
+  plugin_id: string;
+  role: string;
+  subject_json: string;
+  resume_hook: string;
+  state: ApprovalRecord["state"];
+  expires_at: string;
+  created_at: string;
+  decided_by: string | null;
+  decision_reason: string | null;
+  decided_at: string | null;
+}
+
 interface ResolvedInstallationRow {
   installation_id: string;
   tenant_id: string;
@@ -528,6 +595,23 @@ function installationFromRow(row: InstallationRow): InstallationRecord {
     priority: row.priority,
     config: JSON.parse(row.config_json) as Record<string, unknown>,
     grants: JSON.parse(row.grants_json) as Record<string, unknown>
+  };
+}
+
+function approvalFromRow(row: ApprovalRow): ApprovalRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    pluginId: row.plugin_id,
+    role: row.role,
+    subject: JSON.parse(row.subject_json) as Record<string, unknown>,
+    resumeHook: row.resume_hook,
+    state: row.state,
+    expiresAt: new Date(row.expires_at),
+    createdAt: new Date(row.created_at),
+    ...(row.decided_by === null ? {} : { decidedBy: row.decided_by }),
+    ...(row.decision_reason === null ? {} : { decisionReason: row.decision_reason }),
+    ...(row.decided_at === null ? {} : { decidedAt: new Date(row.decided_at) })
   };
 }
 

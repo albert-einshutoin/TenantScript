@@ -104,6 +104,32 @@ describe("rollback drill measurement", () => {
 
     expect(stderr).toEqual(["invalid rollback-drill timestamp: --deployed-at"]);
   });
+
+  it("returns a usage error for invalid rollback-drill thresholds", async () => {
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        [
+          "rollback-drill",
+          "--deployed-at",
+          "2026-06-13T00:00:00.000Z",
+          "--detected-at",
+          "2026-06-13T00:01:15.000Z",
+          "--rollback-started-at",
+          "2026-06-13T00:02:00.000Z",
+          "--completed-at",
+          "2026-06-13T00:03:20.000Z",
+          "--threshold-ms",
+          "0"
+        ],
+        unusedRollbackClient,
+        captureIo([], stderr)
+      )
+    ).resolves.toBe(2);
+
+    expect(stderr).toEqual(["invalid rollback-drill integer: --threshold-ms"]);
+  });
 });
 
 const unusedRollbackClient: RollbackClient = {

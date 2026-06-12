@@ -3,6 +3,7 @@ import {
   ControlPlaneApiError,
   createControlPlaneApi,
   toControlPlaneErrorResponse,
+  type ApprovalRecord,
   type ArtifactStore,
   type AppRecord,
   type ControlPlaneStore,
@@ -567,6 +568,97 @@ describe("createControlPlaneApi installation CRUD", () => {
       })
     ).rejects.toMatchObject({ status: 404, code: "plugin_version_not_found" });
   });
+
+  it("decides pending approvals and records an audit execution", async () => {
+    const store = new InMemoryControlPlaneStore();
+    const api = createApiWithVersion(configurableManifest, store);
+    store.seedApproval({
+      id: "approval_1",
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      role: "manager",
+      subject: { invoiceId: "inv_1" },
+      resumeHook: "onInvoiceApprovalDecided",
+      state: "pending",
+      expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+      createdAt: new Date("2026-06-13T01:00:00.000Z")
+    });
+
+    await expect(
+      api.decideApproval({
+        id: "approval_1",
+        tenantId: "tenant_1",
+        decision: "approved",
+        actor: "manager@example.com",
+        reason: "invoice is valid",
+        auditId: "audit_approval_1",
+        decidedAt: new Date("2026-06-13T01:15:00.000Z")
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "approval_1",
+        state: "approved",
+        decidedBy: "manager@example.com",
+        decisionReason: "invoice is valid",
+        decidedAt: new Date("2026-06-13T01:15:00.000Z")
+      })
+    );
+    expect(store.executions).toEqual([
+      expect.objectContaining({
+        id: "audit_approval_1",
+        hookName: "approval.decision",
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        capabilityCalls: [{ name: "approvals.decide", status: "success" }]
+      })
+    ]);
+  });
+
+  it("rejects missing, cross-tenant, and already decided approvals", async () => {
+    const store = new InMemoryControlPlaneStore();
+    const api = createApiWithVersion(configurableManifest, store);
+    store.seedApproval({
+      id: "approval_decided",
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      role: "manager",
+      subject: { invoiceId: "inv_1" },
+      resumeHook: "onInvoiceApprovalDecided",
+      state: "approved",
+      expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+      createdAt: new Date("2026-06-13T01:00:00.000Z"),
+      decidedBy: "manager@example.com",
+      decidedAt: new Date("2026-06-13T01:15:00.000Z")
+    });
+
+    await expect(
+      api.decideApproval({
+        id: "missing",
+        tenantId: "tenant_1",
+        decision: "approved",
+        actor: "manager@example.com",
+        auditId: "audit_missing"
+      })
+    ).rejects.toMatchObject({ status: 404, code: "approval_not_found" });
+    await expect(
+      api.decideApproval({
+        id: "approval_decided",
+        tenantId: "tenant_2",
+        decision: "approved",
+        actor: "manager@example.com",
+        auditId: "audit_cross_tenant"
+      })
+    ).rejects.toMatchObject({ status: 404, code: "approval_not_found" });
+    await expect(
+      api.decideApproval({
+        id: "approval_decided",
+        tenantId: "tenant_1",
+        decision: "rejected",
+        actor: "manager@example.com",
+        auditId: "audit_double"
+      })
+    ).rejects.toMatchObject({ status: 409, code: "approval_already_decided" });
+  });
 });
 
 function createApiWithVersion(
@@ -605,6 +697,7 @@ class InMemoryControlPlaneStore implements ControlPlaneStore {
   private readonly plugins = new Map<string, PluginRecord>();
   private readonly versions = new Map<string, PluginVersionRecord>();
   private readonly installations = new Map<string, InstallationRecord>();
+  private readonly approvals = new Map<string, ApprovalRecord>();
   readonly executions: ExecutionRecord[] = [];
 
   createApp(record: AppRecord) {
@@ -729,6 +822,30 @@ class InMemoryControlPlaneStore implements ControlPlaneStore {
   writeExecution(record: ExecutionRecord) {
     this.executions.push(record);
     return Promise.resolve(record);
+  }
+
+  seedApproval(record: ApprovalRecord) {
+    this.approvals.set(record.id, record);
+  }
+
+  findApprovalById(id: string) {
+    return Promise.resolve(this.approvals.get(id) ?? null);
+  }
+
+  decideApproval(request: {
+    id: string;
+    decision: "approved" | "rejected";
+    decidedBy: string;
+    decisionReason?: string;
+    decidedAt: Date;
+  }) {
+    const approval = this.approvals.get(request.id);
+    if (approval === undefined) {
+      throw new Error(`approval ${request.id} was not seeded`);
+    }
+    const updated = { ...approval, state: request.decision, ...request };
+    this.approvals.set(request.id, updated);
+    return Promise.resolve(updated);
   }
 
   private requireInstallation(id: string) {

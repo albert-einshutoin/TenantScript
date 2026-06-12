@@ -63,7 +63,7 @@
   - GREEN: Cloudflare Workflows で通知・リマインド・期限切れを管理
   - DoD: 状態遷移(pending → approved/rejected/expired)の unit テスト green + Tier 2 結線テスト
 
-- [ ] **P1-T10**(M)decision API + CLI
+- [x] **P1-T10**(M)decision API + CLI
   - RED: approve/reject で state 遷移 / 二重決定は拒否 / 決定者と理由が audit に残る
   - GREEN: decision エンドポイント + `ext approvals approve|reject`
   - DoD: 決定・二重決定拒否・audit のテスト green

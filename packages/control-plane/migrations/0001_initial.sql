@@ -43,6 +43,24 @@ CREATE TABLE IF NOT EXISTS installations (
 CREATE INDEX IF NOT EXISTS idx_installations_tenant_enabled
   ON installations(tenant_id, enabled, priority);
 
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  plugin_id TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  subject_json TEXT NOT NULL,
+  resume_hook TEXT NOT NULL,
+  state TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  decided_by TEXT,
+  decision_reason TEXT,
+  decided_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_approvals_tenant_state
+  ON approvals(tenant_id, state, expires_at);
+
 CREATE TABLE IF NOT EXISTS executions (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,

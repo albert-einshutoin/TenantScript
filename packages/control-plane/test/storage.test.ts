@@ -240,6 +240,52 @@ describe("createD1ControlPlaneStore", () => {
       store.updateInstallationVersion({ id: "missing", pluginVersionId: "version_0" })
     ).rejects.toThrow("installation missing was not found after version update");
   });
+
+  it("finds and decides approvals", async () => {
+    const approvalRow = {
+      id: "approval_1",
+      tenant_id: "tenant_1",
+      plugin_id: "plugin_1",
+      role: "manager",
+      subject_json: JSON.stringify({ invoiceId: "inv_1" }),
+      resume_hook: "onInvoiceApprovalDecided",
+      state: "pending",
+      expires_at: "2026-06-14T01:00:00.000Z",
+      created_at: "2026-06-13T01:00:00.000Z",
+      decided_by: null,
+      decision_reason: null,
+      decided_at: null
+    };
+    const store = createD1ControlPlaneStore(new FakeD1Database([], [], [], [], [approvalRow]));
+
+    await expect(store.findApprovalById("approval_1")).resolves.toEqual({
+      id: "approval_1",
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      role: "manager",
+      subject: { invoiceId: "inv_1" },
+      resumeHook: "onInvoiceApprovalDecided",
+      state: "pending",
+      expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+      createdAt: new Date("2026-06-13T01:00:00.000Z")
+    });
+    await expect(
+      store.decideApproval({
+        id: "approval_1",
+        decision: "approved",
+        decidedBy: "manager@example.com",
+        decisionReason: "valid invoice",
+        decidedAt: new Date("2026-06-13T01:15:00.000Z")
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        state: "approved",
+        decidedBy: "manager@example.com",
+        decisionReason: "valid invoice",
+        decidedAt: new Date("2026-06-13T01:15:00.000Z")
+      })
+    );
+  });
 });
 
 describe("createR2ArtifactStore", () => {
@@ -296,7 +342,8 @@ class FakeD1Database implements D1DatabaseLike {
     private readonly executionRows: unknown[] = [],
     private readonly installationRows: unknown[] = [],
     private readonly pluginRows: unknown[] = [],
-    private readonly pluginVersionRows: unknown[] = []
+    private readonly pluginVersionRows: unknown[] = [],
+    private readonly approvalRows: unknown[] = []
   ) {}
 
   prepare(query: string): D1PreparedStatementLike {
@@ -325,6 +372,14 @@ class FakeD1Database implements D1DatabaseLike {
       if (row !== undefined) {
         row.plugin_version_id = values[0];
       }
+    } else if (query.includes("UPDATE approvals SET state")) {
+      const row = this.findApprovalRow(values[4]);
+      if (row !== undefined) {
+        row.state = values[0];
+        row.decided_by = values[1];
+        row.decision_reason = values[2];
+        row.decided_at = values[3];
+      }
     }
     this.runCount += 1;
   }
@@ -335,6 +390,9 @@ class FakeD1Database implements D1DatabaseLike {
     }
     if (query.includes("FROM plugin_versions")) {
       return { results: this.pluginVersionRows };
+    }
+    if (query.includes("FROM approvals")) {
+      return { results: this.approvalRows };
     }
     return { results: this.executionRows };
   }
@@ -360,11 +418,20 @@ class FakeD1Database implements D1DatabaseLike {
     if (query.includes("FROM installations")) {
       return this.findInstallationRow(values[0]) ?? null;
     }
+    if (query.includes("FROM approvals")) {
+      return this.findApprovalRow(values[0]) ?? null;
+    }
     return null;
   }
 
   private findInstallationRow(id: unknown): Record<string, unknown> | undefined {
     return this.installationRows.find((row) => isRecord(row) && row.id === id) as
+      | Record<string, unknown>
+      | undefined;
+  }
+
+  private findApprovalRow(id: unknown): Record<string, unknown> | undefined {
+    return this.approvalRows.find((row) => isRecord(row) && row.id === id) as
       | Record<string, unknown>
       | undefined;
   }

@@ -41,6 +41,14 @@ export interface ControlPlaneStore {
     id: string;
     pluginVersionId: string;
   }) => Promise<InstallationRecord>;
+  findApprovalById: (id: string) => Promise<ApprovalRecord | null>;
+  decideApproval: (request: {
+    id: string;
+    decision: ApprovalDecision;
+    decidedBy: string;
+    decisionReason?: string;
+    decidedAt: Date;
+  }) => Promise<ApprovalRecord>;
   writeExecution: (record: ControlPlaneExecutionRecord) => Promise<ControlPlaneExecutionRecord>;
 }
 
@@ -68,6 +76,7 @@ export interface ControlPlaneApi {
     request: UpdateInstallationPriorityRequest
   ) => Promise<InstallationRecord>;
   rollbackInstallation: (request: RollbackInstallationRequest) => Promise<RollbackResult>;
+  decideApproval: (request: DecideApprovalRequest) => Promise<ApprovalRecord>;
 }
 
 export interface CreateAppRequest {
@@ -136,6 +145,34 @@ export interface RollbackInstallationRequest {
   actor: string;
   reason?: string;
   createdAt?: Date;
+}
+
+export type ApprovalDecision = "approved" | "rejected";
+export type ApprovalState = "pending" | ApprovalDecision | "expired";
+
+export interface ApprovalRecord {
+  id: string;
+  tenantId: string;
+  pluginId: string;
+  role: string;
+  subject: Record<string, unknown>;
+  resumeHook: string;
+  state: ApprovalState;
+  expiresAt: Date;
+  createdAt: Date;
+  decidedBy?: string;
+  decisionReason?: string;
+  decidedAt?: Date;
+}
+
+export interface DecideApprovalRequest {
+  id: string;
+  tenantId: string;
+  decision: ApprovalDecision;
+  actor: string;
+  auditId: string;
+  reason?: string;
+  decidedAt?: Date;
 }
 
 export interface RollbackAuditRecord {
@@ -234,7 +271,8 @@ export function createControlPlaneApi(params: {
     updateInstallationConfig: (request) => updateInstallationConfig(params.store, request),
     setInstallationEnabled: (request) => setInstallationEnabled(params.store, request),
     updateInstallationPriority: (request) => updateInstallationPriority(params.store, request),
-    rollbackInstallation: (request) => rollbackInstallation(params.store, request)
+    rollbackInstallation: (request) => rollbackInstallation(params.store, request),
+    decideApproval: (request) => decideApproval(params.store, request)
   };
 }
 
@@ -380,6 +418,32 @@ async function rollbackInstallation(
   return { installation: updated, audit };
 }
 
+async function decideApproval(
+  store: ControlPlaneStore,
+  request: DecideApprovalRequest
+): Promise<ApprovalRecord> {
+  const approval = await requireApproval(store, request.id, request.tenantId);
+  if (approval.state !== "pending") {
+    throw apiError(
+      409,
+      "approval_already_decided",
+      `approval ${request.id} is already ${approval.state}`
+    );
+  }
+
+  const decidedAt = request.decidedAt ?? new Date();
+  const updated = await store.decideApproval({
+    id: request.id,
+    decision: request.decision,
+    decidedBy: request.actor,
+    ...(request.reason === undefined ? {} : { decisionReason: request.reason }),
+    decidedAt
+  });
+  await store.writeExecution(approvalDecisionAuditRecord({ request, approval, decidedAt }));
+
+  return updated;
+}
+
 async function requirePlugin(
   store: ControlPlaneStore,
   appId: string,
@@ -450,6 +514,19 @@ async function requireInstallation(
   }
 
   return installation;
+}
+
+async function requireApproval(
+  store: ControlPlaneStore,
+  id: string,
+  tenantId: string
+): Promise<ApprovalRecord> {
+  const approval = await store.findApprovalById(id);
+  if (approval === null || approval.tenantId !== tenantId) {
+    throw notFound("approval_not_found", "approval", id);
+  }
+
+  return approval;
 }
 
 function parseVersionManifest(input: unknown, version: string): TenantScriptManifest {
@@ -548,6 +625,30 @@ function rollbackAuditRecord(params: {
 function rollbackAuditMessage(request: RollbackInstallationRequest, fromVersion: string): string {
   const reason = request.reason === undefined ? "" : `: ${request.reason}`;
   return `rolled back from ${fromVersion} by ${request.actor}${reason}`;
+}
+
+function approvalDecisionAuditRecord(params: {
+  request: DecideApprovalRequest;
+  approval: ApprovalRecord;
+  decidedAt: Date;
+}): ControlPlaneExecutionRecord {
+  return {
+    id: params.request.auditId,
+    tenantId: params.approval.tenantId,
+    pluginId: params.approval.pluginId,
+    hookName: "approval.decision",
+    version: "",
+    status: "success",
+    durationMs: 0,
+    error: approvalDecisionAuditMessage(params.request),
+    capabilityCalls: [{ name: "approvals.decide", status: "success" }],
+    createdAt: params.decidedAt
+  };
+}
+
+function approvalDecisionAuditMessage(request: DecideApprovalRequest): string {
+  const reason = request.reason === undefined ? "" : `: ${request.reason}`;
+  return `${request.decision} by ${request.actor}${reason}`;
 }
 
 function deepEqual(left: unknown, right: unknown): boolean {
