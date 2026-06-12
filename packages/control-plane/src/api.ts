@@ -37,6 +37,11 @@ export interface ControlPlaneStore {
     id: string;
     priority: number;
   }) => Promise<InstallationRecord>;
+  updateInstallationVersion: (request: {
+    id: string;
+    pluginVersionId: string;
+  }) => Promise<InstallationRecord>;
+  writeExecution: (record: ControlPlaneExecutionRecord) => Promise<ControlPlaneExecutionRecord>;
 }
 
 export interface ArtifactStore {
@@ -62,6 +67,7 @@ export interface ControlPlaneApi {
   updateInstallationPriority: (
     request: UpdateInstallationPriorityRequest
   ) => Promise<InstallationRecord>;
+  rollbackInstallation: (request: RollbackInstallationRequest) => Promise<RollbackResult>;
 }
 
 export interface CreateAppRequest {
@@ -119,6 +125,48 @@ export interface SetInstallationEnabledRequest {
 export interface UpdateInstallationPriorityRequest {
   id: string;
   priority: number;
+}
+
+export interface RollbackInstallationRequest {
+  auditId: string;
+  appId: string;
+  installationId: string;
+  pluginKey: string;
+  targetVersion: string;
+  actor: string;
+  reason?: string;
+  createdAt?: Date;
+}
+
+export interface RollbackAuditRecord {
+  id: string;
+  tenantId: string;
+  pluginId: string;
+  hookName: "installation.rollback";
+  version: string;
+  status: "success";
+  durationMs: 0;
+  error: string;
+  capabilityCalls: readonly [{ name: "rollback"; status: "success" }];
+  createdAt: Date;
+}
+
+export interface ControlPlaneExecutionRecord {
+  id: string;
+  tenantId: string;
+  pluginId: string;
+  hookName: string;
+  version: string;
+  status: "success" | "error" | "timeout" | "egress_denied" | "budget_exceeded";
+  durationMs: number;
+  error?: string;
+  capabilityCalls: readonly { name: string; status: "success" | "denied" | "error" }[];
+  createdAt: Date;
+}
+
+export interface RollbackResult {
+  installation: InstallationRecord;
+  audit: RollbackAuditRecord;
 }
 
 export type ControlPlaneErrorStatus = 400 | 404 | 409 | 500;
@@ -185,7 +233,8 @@ export function createControlPlaneApi(params: {
     installPlugin: (request) => installPlugin(params.store, request),
     updateInstallationConfig: (request) => updateInstallationConfig(params.store, request),
     setInstallationEnabled: (request) => setInstallationEnabled(params.store, request),
-    updateInstallationPriority: (request) => updateInstallationPriority(params.store, request)
+    updateInstallationPriority: (request) => updateInstallationPriority(params.store, request),
+    rollbackInstallation: (request) => rollbackInstallation(params.store, request)
   };
 }
 
@@ -303,6 +352,32 @@ async function updateInstallationPriority(
 ): Promise<InstallationRecord> {
   await requireInstallation(store, request.id);
   return store.updateInstallationPriority(request);
+}
+
+async function rollbackInstallation(
+  store: ControlPlaneStore,
+  request: RollbackInstallationRequest
+): Promise<RollbackResult> {
+  const installation = await requireInstallation(store, request.installationId);
+  const currentVersion = await requirePluginVersionById(store, installation.pluginVersionId);
+  const plugin = await requirePlugin(store, request.appId, request.pluginKey);
+  if (currentVersion.pluginId !== plugin.id) {
+    throw notFound("installation_not_found", "installation", request.installationId);
+  }
+  const targetVersion = await requirePluginVersion(store, plugin.id, request.targetVersion);
+  const updated = await store.updateInstallationVersion({
+    id: request.installationId,
+    pluginVersionId: targetVersion.id
+  });
+  const audit = rollbackAuditRecord({
+    request,
+    installation,
+    plugin,
+    fromVersion: currentVersion.version
+  });
+  await store.writeExecution(audit);
+
+  return { installation: updated, audit };
 }
 
 async function requirePlugin(
@@ -448,6 +523,31 @@ function apiError(
   message: string
 ): ControlPlaneApiError {
   return new ControlPlaneApiError(status, code, message);
+}
+
+function rollbackAuditRecord(params: {
+  request: RollbackInstallationRequest;
+  installation: InstallationRecord;
+  plugin: PluginRecord;
+  fromVersion: string;
+}): RollbackAuditRecord {
+  return {
+    id: params.request.auditId,
+    tenantId: params.installation.tenantId,
+    pluginId: params.plugin.id,
+    hookName: "installation.rollback",
+    version: params.request.targetVersion,
+    status: "success",
+    durationMs: 0,
+    error: rollbackAuditMessage(params.request, params.fromVersion),
+    capabilityCalls: [{ name: "rollback", status: "success" }],
+    createdAt: params.request.createdAt ?? new Date()
+  };
+}
+
+function rollbackAuditMessage(request: RollbackInstallationRequest, fromVersion: string): string {
+  const reason = request.reason === undefined ? "" : `: ${request.reason}`;
+  return `rolled back from ${fromVersion} by ${request.actor}${reason}`;
 }
 
 function deepEqual(left: unknown, right: unknown): boolean {

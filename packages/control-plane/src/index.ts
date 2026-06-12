@@ -72,6 +72,7 @@ export {
   type ControlPlaneErrorEnvelope,
   type ControlPlaneErrorResponse,
   type ControlPlaneErrorStatus,
+  type ControlPlaneExecutionRecord,
   type ControlPlaneStore,
   type CreateAppRequest,
   type CreateTenantRequest,
@@ -79,6 +80,9 @@ export {
   type ListPluginVersionsRequest,
   type RegisterPluginRequest,
   type RegisterPluginVersionRequest,
+  type RollbackAuditRecord,
+  type RollbackInstallationRequest,
+  type RollbackResult,
   type SetInstallationEnabledRequest,
   type UpdateInstallationConfigRequest,
   type UpdateInstallationPriorityRequest

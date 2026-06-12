@@ -76,6 +76,16 @@ importers:
         specifier: workspace:*
         version: link:../test-config
 
+  packages/cli:
+    dependencies:
+      '@tenantscript/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+    devDependencies:
+      '@tenantscript/test-config':
+        specifier: workspace:*
+        version: link:../test-config
+
   packages/control-plane:
     dependencies:
       '@tenantscript/host-sdk':

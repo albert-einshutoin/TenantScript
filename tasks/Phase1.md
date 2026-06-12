@@ -41,7 +41,7 @@
   - GREEN: 解決ロジックを control-plane に実装(D-006)
   - DoD: pin・解決・不存在のテスト green
 
-- [ ] **P1-T06**(M)rollback API + CLI
+- [x] **P1-T06**(M)rollback API + CLI
   - RED: rollback 実行 → 次回実行から旧 version が使われる / rollback 自体が audit log に残る
   - GREEN: rollback エンドポイント + `ext rollback` コマンド
   - DoD: API/CLI 双方のテスト green

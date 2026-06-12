@@ -1,0 +1,27 @@
+{
+  "name": "@tenantscript/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "ext": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@tenantscript/control-plane": "workspace:*"
+  },
+  "devDependencies": {
+    "@tenantscript/test-config": "workspace:*"
+  }
+}

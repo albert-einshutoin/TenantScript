@@ -6,6 +6,7 @@ import {
   type ArtifactStore,
   type AppRecord,
   type ControlPlaneStore,
+  type ExecutionRecord,
   type InstallationRecord,
   type PluginRecord,
   type TenantRecord,
@@ -466,10 +467,112 @@ describe("createControlPlaneApi installation CRUD", () => {
       code: "plugin_version_not_found"
     });
   });
+
+  it("rolls an installation back to an existing plugin version and writes an audit execution", async () => {
+    const store = new InMemoryControlPlaneStore();
+    const api = createApiWithVersion(configurableManifest, store);
+    store.seedPluginVersion({
+      id: "version_0",
+      pluginId: "plugin_1",
+      version: "0.9.0",
+      artifactHash: "hash_0",
+      manifest: { ...configurableManifest, version: "0.9.0" }
+    });
+    await api.installPlugin({
+      id: "inst_1",
+      appId: "app_1",
+      tenantId: "tenant_1",
+      pluginKey: "large-invoice-notify",
+      version: "1.0.0",
+      config: { notifyChannel: "C123" },
+      grants: { "slack.send": { channel: "C123" } },
+      priority: 20
+    });
+
+    const rollback = await api.rollbackInstallation({
+      auditId: "audit_rollback_1",
+      appId: "app_1",
+      installationId: "inst_1",
+      pluginKey: "large-invoice-notify",
+      targetVersion: "0.9.0",
+      actor: "ops@example.com",
+      reason: "bad production deploy"
+    });
+
+    expect(rollback.installation).toMatchObject({
+      id: "inst_1",
+      pluginVersionId: "version_0"
+    });
+    expect(rollback.audit).toMatchObject({
+      id: "audit_rollback_1",
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      hookName: "installation.rollback",
+      version: "0.9.0",
+      status: "success",
+      error: "rolled back from 1.0.0 by ops@example.com: bad production deploy"
+    });
+    await expect(
+      api.updateInstallationConfig({
+        id: "inst_1",
+        config: { notifyChannel: "C456" }
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        pluginVersionId: "version_0",
+        grants: { "slack.send": { channel: "C456" } }
+      })
+    );
+    expect(store.executions).toEqual([
+      expect.objectContaining({
+        id: "audit_rollback_1",
+        hookName: "installation.rollback",
+        version: "0.9.0"
+      })
+    ]);
+  });
+
+  it("rejects rollback when the installation or target version is missing", async () => {
+    const store = new InMemoryControlPlaneStore();
+    const api = createApiWithVersion(configurableManifest, store);
+    await api.installPlugin({
+      id: "inst_1",
+      appId: "app_1",
+      tenantId: "tenant_1",
+      pluginKey: "large-invoice-notify",
+      version: "1.0.0",
+      config: { notifyChannel: "C123" },
+      grants: { "slack.send": { channel: "C123" } },
+      priority: 20
+    });
+
+    await expect(
+      api.rollbackInstallation({
+        auditId: "audit_rollback_missing_installation",
+        appId: "app_1",
+        installationId: "missing_installation",
+        pluginKey: "large-invoice-notify",
+        targetVersion: "1.0.0",
+        actor: "ops@example.com"
+      })
+    ).rejects.toMatchObject({ status: 404, code: "installation_not_found" });
+    await expect(
+      api.rollbackInstallation({
+        auditId: "audit_rollback_missing_version",
+        appId: "app_1",
+        installationId: "inst_1",
+        pluginKey: "large-invoice-notify",
+        targetVersion: "0.8.0",
+        actor: "ops@example.com"
+      })
+    ).rejects.toMatchObject({ status: 404, code: "plugin_version_not_found" });
+  });
 });
 
-function createApiWithVersion(manifestInput: TenantScriptManifest) {
-  const store = new InMemoryControlPlaneStore();
+function createApiWithVersion(
+  manifestInput: TenantScriptManifest,
+  store = new InMemoryControlPlaneStore()
+) {
   const api = createControlPlaneApi({
     store,
     artifacts: new InMemoryArtifactStore()
@@ -502,6 +605,7 @@ class InMemoryControlPlaneStore implements ControlPlaneStore {
   private readonly plugins = new Map<string, PluginRecord>();
   private readonly versions = new Map<string, PluginVersionRecord>();
   private readonly installations = new Map<string, InstallationRecord>();
+  readonly executions: ExecutionRecord[] = [];
 
   createApp(record: AppRecord) {
     this.seedApp(record);
@@ -613,6 +717,18 @@ class InMemoryControlPlaneStore implements ControlPlaneStore {
     const updated = { ...installation, priority: request.priority };
     this.installations.set(request.id, updated);
     return Promise.resolve(updated);
+  }
+
+  updateInstallationVersion(request: { id: string; pluginVersionId: string }) {
+    const installation = this.requireInstallation(request.id);
+    const updated = { ...installation, pluginVersionId: request.pluginVersionId };
+    this.installations.set(request.id, updated);
+    return Promise.resolve(updated);
+  }
+
+  writeExecution(record: ExecutionRecord) {
+    this.executions.push(record);
+    return Promise.resolve(record);
   }
 
   private requireInstallation(id: string) {

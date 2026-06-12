@@ -93,6 +93,7 @@ export function createD1ControlPlaneStore(db: D1DatabaseLike) {
     updateInstallationConfig: createInstallationConfigUpdater(db),
     setInstallationEnabled: createInstallationEnabledUpdater(db),
     updateInstallationPriority: createInstallationPriorityUpdater(db),
+    updateInstallationVersion: createInstallationVersionUpdater(db),
     writeExecution: createExecutionWriter(db),
     searchExecutions: createExecutionSearcher(db),
     resolveInstallationsForHook: createInstallationResolver(db)
@@ -308,6 +309,20 @@ function createInstallationPriorityUpdater(db: D1DatabaseLike) {
     const updated = await createInstallationByIdFinder(db)(request.id);
     if (updated === null) {
       throw new Error(`installation ${request.id} was not found after priority update`);
+    }
+    return updated;
+  };
+}
+
+function createInstallationVersionUpdater(db: D1DatabaseLike) {
+  return async (request: { id: string; pluginVersionId: string }) => {
+    await db
+      .prepare("UPDATE installations SET plugin_version_id = ? WHERE id = ?")
+      .bind(request.pluginVersionId, request.id)
+      .run();
+    const updated = await createInstallationByIdFinder(db)(request.id);
+    if (updated === null) {
+      throw new Error(`installation ${request.id} was not found after version update`);
     }
     return updated;
   };

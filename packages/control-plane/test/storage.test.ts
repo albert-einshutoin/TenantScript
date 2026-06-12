@@ -219,6 +219,9 @@ describe("createD1ControlPlaneStore", () => {
     await expect(store.updateInstallationPriority({ id: "inst_1", priority: 1 })).resolves.toEqual(
       expect.objectContaining({ priority: 1 })
     );
+    await expect(
+      store.updateInstallationVersion({ id: "inst_1", pluginVersionId: "version_0" })
+    ).resolves.toEqual(expect.objectContaining({ pluginVersionId: "version_0" }));
   });
 
   it("rejects installation updates when the row disappears", async () => {
@@ -233,6 +236,9 @@ describe("createD1ControlPlaneStore", () => {
     await expect(store.updateInstallationPriority({ id: "missing", priority: 1 })).rejects.toThrow(
       "installation missing was not found after priority update"
     );
+    await expect(
+      store.updateInstallationVersion({ id: "missing", pluginVersionId: "version_0" })
+    ).rejects.toThrow("installation missing was not found after version update");
   });
 });
 
@@ -313,6 +319,11 @@ class FakeD1Database implements D1DatabaseLike {
       const row = this.findInstallationRow(values[1]);
       if (row !== undefined) {
         row.priority = values[0];
+      }
+    } else if (query.includes("UPDATE installations SET plugin_version_id")) {
+      const row = this.findInstallationRow(values[1]);
+      if (row !== undefined) {
+        row.plugin_version_id = values[0];
       }
     }
     this.runCount += 1;
