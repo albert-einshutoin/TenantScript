@@ -76,3 +76,17 @@ CREATE TABLE IF NOT EXISTS executions (
 
 CREATE INDEX IF NOT EXISTS idx_executions_search
   ON executions(tenant_id, plugin_id, hook_name, status, created_at);
+
+CREATE TABLE IF NOT EXISTS slack_connections (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  workspace_name TEXT,
+  bot_user_id TEXT,
+  secret_ref_json TEXT NOT NULL,
+  connected_at TEXT NOT NULL,
+  UNIQUE(tenant_id, workspace_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_slack_connections_tenant
+  ON slack_connections(tenant_id, workspace_id);

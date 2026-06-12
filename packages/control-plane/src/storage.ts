@@ -8,6 +8,7 @@ import type {
   ExecutionSearchQuery,
   ExecutionStatus
 } from "./index.js";
+import type { SlackConnectionRecord, SlackConnectionStore } from "./slack-connection-store.js";
 
 export interface D1DatabaseLike {
   prepare: (query: string) => D1PreparedStatementLike;
@@ -507,6 +508,45 @@ export function createR2ArtifactStore(bucket: R2BucketLike) {
   };
 }
 
+export function createD1SlackConnectionStore(db: D1DatabaseLike): SlackConnectionStore {
+  return {
+    upsertSlackConnection: async (record) => {
+      await db
+        .prepare(
+          [
+            "INSERT OR REPLACE INTO slack_connections",
+            "(id, tenant_id, workspace_id, workspace_name, bot_user_id, secret_ref_json, connected_at)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?)"
+          ].join(" ")
+        )
+        .bind(
+          record.id,
+          record.tenantId,
+          record.workspaceId,
+          record.workspaceName ?? null,
+          record.botUserId ?? null,
+          JSON.stringify(record.secretRef),
+          record.connectedAt.toISOString()
+        )
+        .run();
+      return record;
+    },
+    findSlackConnection: async (query) => {
+      const row = await db
+        .prepare(
+          [
+            "SELECT id, tenant_id, workspace_id, workspace_name, bot_user_id, secret_ref_json, connected_at",
+            "FROM slack_connections WHERE tenant_id = ? AND workspace_id = ?"
+          ].join(" ")
+        )
+        .bind(query.tenantId, query.workspaceId)
+        .first<SlackConnectionRow>();
+
+      return row === null ? null : slackConnectionFromRow(row);
+    }
+  };
+}
+
 interface ExecutionRow {
   id: string;
   tenant_id: string;
@@ -581,6 +621,16 @@ interface ResolvedInstallationRow {
   version: string | null;
   manifest_json: string | null;
   plugin_id: string | null;
+}
+
+interface SlackConnectionRow {
+  id: string;
+  tenant_id: string;
+  workspace_id: string;
+  workspace_name: string | null;
+  bot_user_id: string | null;
+  secret_ref_json: string;
+  connected_at: string;
 }
 
 function appFromRow(row: AppRow): AppRecord {
@@ -675,6 +725,18 @@ function resolvedInstallationFromRow(row: ResolvedInstallationRow): ResolvedInst
     config: JSON.parse(row.config_json) as Record<string, unknown>,
     grants: JSON.parse(row.grants_json) as Record<string, unknown>,
     manifest
+  };
+}
+
+function slackConnectionFromRow(row: SlackConnectionRow): SlackConnectionRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    workspaceId: row.workspace_id,
+    ...(row.workspace_name === null ? {} : { workspaceName: row.workspace_name }),
+    ...(row.bot_user_id === null ? {} : { botUserId: row.bot_user_id }),
+    secretRef: JSON.parse(row.secret_ref_json) as SlackConnectionRecord["secretRef"],
+    connectedAt: new Date(row.connected_at)
   };
 }
 

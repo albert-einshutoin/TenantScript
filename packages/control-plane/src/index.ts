@@ -82,6 +82,7 @@ export {
   type ControlPlaneErrorStatus,
   type ControlPlaneExecutionRecord,
   type ControlPlaneStore,
+  type ConnectSlackWorkspaceRequest,
   type CreateAppRequest,
   type CreateTenantRequest,
   type DecideApprovalRequest,
@@ -94,6 +95,8 @@ export {
   type RollbackInstallationRequest,
   type RollbackResult,
   type SetInstallationEnabledRequest,
+  type SlackOAuthClient,
+  type SlackOAuthTokenResponse,
   type UpdateInstallationConfigRequest,
   type UpdateInstallationPriorityRequest
 } from "./api.js";
@@ -127,6 +130,7 @@ export {
 export {
   ArtifactAlreadyExistsError,
   createD1ControlPlaneStore,
+  createD1SlackConnectionStore,
   createR2ArtifactStore,
   type AppRecord,
   type D1DatabaseLike,
@@ -138,3 +142,19 @@ export {
   type ResolvedInstallation,
   type TenantRecord
 } from "./storage.js";
+
+export {
+  createDurableObjectSecretStore,
+  createInMemorySecretStore,
+  type PutSecretRequest,
+  type SecretRef,
+  type SecretStore,
+  type SecretStoreStorage
+} from "./secret-store.js";
+
+export {
+  createInMemorySlackConnectionStore,
+  type InspectableSlackConnectionStore,
+  type SlackConnectionRecord,
+  type SlackConnectionStore
+} from "./slack-connection-store.js";

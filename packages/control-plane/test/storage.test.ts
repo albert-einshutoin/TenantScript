@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ArtifactAlreadyExistsError,
   createD1ControlPlaneStore,
+  createD1SlackConnectionStore,
   createR2ArtifactStore,
   type D1DatabaseLike,
   type D1PreparedStatementLike,
@@ -299,6 +300,44 @@ describe("createD1ControlPlaneStore", () => {
       })
     );
   });
+
+  it("stores Slack connection metadata in D1 without raw tokens", async () => {
+    const rawToken = "xoxb-token-that-must-not-enter-d1";
+    const db = new FakeD1Database();
+    const store = createD1SlackConnectionStore(db);
+
+    await expect(
+      store.upsertSlackConnection({
+        id: "slack:tenant_1:T123",
+        tenantId: "tenant_1",
+        workspaceId: "T123",
+        workspaceName: "Acme Workspace",
+        botUserId: "B123",
+        secretRef: {
+          provider: "slack",
+          tenantId: "tenant_1",
+          secretId: "slack:T123"
+        },
+        connectedAt: new Date("2026-06-13T01:00:00.000Z")
+      })
+    ).resolves.toMatchObject({ id: "slack:tenant_1:T123" });
+    await expect(
+      store.findSlackConnection({ tenantId: "tenant_1", workspaceId: "T123" })
+    ).resolves.toEqual({
+      id: "slack:tenant_1:T123",
+      tenantId: "tenant_1",
+      workspaceId: "T123",
+      workspaceName: "Acme Workspace",
+      botUserId: "B123",
+      secretRef: {
+        provider: "slack",
+        tenantId: "tenant_1",
+        secretId: "slack:T123"
+      },
+      connectedAt: new Date("2026-06-13T01:00:00.000Z")
+    });
+    expect(JSON.stringify(db.dumpRows())).not.toContain(rawToken);
+  });
 });
 
 describe("createR2ArtifactStore", () => {
@@ -356,7 +395,8 @@ class FakeD1Database implements D1DatabaseLike {
     private readonly installationRows: unknown[] = [],
     private readonly pluginRows: unknown[] = [],
     private readonly pluginVersionRows: unknown[] = [],
-    private readonly approvalRows: unknown[] = []
+    private readonly approvalRows: unknown[] = [],
+    private readonly slackConnectionRows: unknown[] = []
   ) {}
 
   prepare(query: string): D1PreparedStatementLike {
@@ -393,6 +433,22 @@ class FakeD1Database implements D1DatabaseLike {
         row.decision_reason = values[2];
         row.decided_at = values[3];
       }
+    } else if (query.includes("INSERT OR REPLACE INTO slack_connections")) {
+      const existing = this.findSlackConnectionRow(values[1], values[2]);
+      const row = {
+        id: values[0],
+        tenant_id: values[1],
+        workspace_id: values[2],
+        workspace_name: values[3],
+        bot_user_id: values[4],
+        secret_ref_json: values[5],
+        connected_at: values[6]
+      };
+      if (existing === undefined) {
+        this.slackConnectionRows.push(row);
+      } else {
+        Object.assign(existing, row);
+      }
     }
     this.runCount += 1;
   }
@@ -406,6 +462,9 @@ class FakeD1Database implements D1DatabaseLike {
     }
     if (query.includes("FROM approvals")) {
       return { results: this.approvalRows };
+    }
+    if (query.includes("FROM slack_connections")) {
+      return { results: this.slackConnectionRows };
     }
     return { results: this.executionRows };
   }
@@ -434,7 +493,21 @@ class FakeD1Database implements D1DatabaseLike {
     if (query.includes("FROM approvals")) {
       return this.findApprovalRow(values[0]) ?? null;
     }
+    if (query.includes("FROM slack_connections")) {
+      return this.findSlackConnectionRow(values[0], values[1]) ?? null;
+    }
     return null;
+  }
+
+  dumpRows() {
+    return {
+      executions: this.executionRows,
+      installations: this.installationRows,
+      plugins: this.pluginRows,
+      pluginVersions: this.pluginVersionRows,
+      approvals: this.approvalRows,
+      slackConnections: this.slackConnectionRows
+    };
   }
 
   private findInstallationRow(id: unknown): Record<string, unknown> | undefined {
@@ -447,6 +520,15 @@ class FakeD1Database implements D1DatabaseLike {
     return this.approvalRows.find((row) => isRecord(row) && row.id === id) as
       | Record<string, unknown>
       | undefined;
+  }
+
+  private findSlackConnectionRow(
+    tenantId: unknown,
+    workspaceId: unknown
+  ): Record<string, unknown> | undefined {
+    return this.slackConnectionRows.find(
+      (row) => isRecord(row) && row.tenant_id === tenantId && row.workspace_id === workspaceId
+    ) as Record<string, unknown> | undefined;
   }
 }
 

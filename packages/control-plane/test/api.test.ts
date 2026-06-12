@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   ControlPlaneApiError,
+  createInMemorySlackConnectionStore,
   createControlPlaneApi,
+  createInMemorySecretStore,
   toControlPlaneErrorResponse,
   type ApprovalContinuationRequest,
   type ApprovalRecord,
@@ -261,6 +263,68 @@ describe("createControlPlaneApi app and tenant management", () => {
       status: 404,
       code: "app_not_found"
     } satisfies Partial<ControlPlaneApiError>);
+  });
+});
+
+describe("createControlPlaneApi Slack OAuth connection", () => {
+  it("stores OAuth tokens only in the secret store and keeps public surfaces token-free", async () => {
+    const rawToken = "xoxb-secret-oauth-token";
+    const store = new InMemoryControlPlaneStore();
+    const secretStore = createInMemorySecretStore();
+    const slackConnections = createInMemorySlackConnectionStore();
+    const api = createControlPlaneApi({
+      store,
+      artifacts: new InMemoryArtifactStore(),
+      secretStore,
+      slackConnections,
+      slackOAuth: {
+        exchangeCode: (request) => {
+          expect(request).toEqual({
+            code: "oauth_code_1",
+            redirectUri: "https://app.example.com/oauth/slack/callback"
+          });
+          return Promise.resolve({
+            accessToken: rawToken,
+            workspaceId: "T123",
+            workspaceName: "Acme Workspace",
+            botUserId: "B123"
+          });
+        }
+      }
+    });
+    store.seedApp({ id: "app_1", name: "Example SaaS" });
+    store.seedTenant({ id: "tenant_1", appId: "app_1", name: "Acme" });
+
+    const connection = await api.connectSlackWorkspace({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      code: "oauth_code_1",
+      redirectUri: "https://app.example.com/oauth/slack/callback",
+      connectedAt: new Date("2026-06-13T01:00:00.000Z")
+    });
+
+    expect(connection).toEqual({
+      id: "slack:tenant_1:T123",
+      tenantId: "tenant_1",
+      workspaceId: "T123",
+      workspaceName: "Acme Workspace",
+      botUserId: "B123",
+      secretRef: {
+        provider: "slack",
+        tenantId: "tenant_1",
+        secretId: "slack:T123"
+      },
+      connectedAt: new Date("2026-06-13T01:00:00.000Z")
+    });
+    await expect(secretStore.getSecret(connection.secretRef)).resolves.toBe(rawToken);
+
+    const publicSurfaces = JSON.stringify({
+      connection,
+      controlPlaneStore: store.dumpSerializableRecords(),
+      slackConnections: slackConnections.listConnections(),
+      executions: store.executions
+    });
+    expect(publicSurfaces).not.toContain(rawToken);
   });
 });
 
@@ -928,6 +992,17 @@ class InMemoryControlPlaneStore implements ControlPlaneStore {
     const updated = { ...approval, state: request.decision, ...request };
     this.approvals.set(request.id, updated);
     return Promise.resolve(updated);
+  }
+
+  dumpSerializableRecords() {
+    return {
+      apps: [...this.apps.values()],
+      tenants: [...this.tenants.values()],
+      plugins: [...this.plugins.values()],
+      versions: [...this.versions.values()],
+      installations: [...this.installations.values()],
+      approvals: [...this.approvals.values()]
+    };
   }
 
   private requireInstallation(id: string) {

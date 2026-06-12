@@ -9,6 +9,8 @@ import type {
 } from "./storage.js";
 import { resolveApprovalDecisionTransition } from "./approval-state.js";
 import type { ApprovalDecision, ApprovalState } from "./approval-state.js";
+import type { SecretRef, SecretStore } from "./secret-store.js";
+import type { SlackConnectionRecord, SlackConnectionStore } from "./slack-connection-store.js";
 
 export type { ApprovalDecision, ApprovalState } from "./approval-state.js";
 
@@ -81,6 +83,20 @@ export interface IdentityResolver {
   ) => Promise<AuthenticatedIdentity | null> | AuthenticatedIdentity | null;
 }
 
+export interface SlackOAuthTokenResponse {
+  accessToken: string;
+  workspaceId: string;
+  workspaceName?: string;
+  botUserId?: string;
+}
+
+export interface SlackOAuthClient {
+  exchangeCode: (request: {
+    code: string;
+    redirectUri: string;
+  }) => Promise<SlackOAuthTokenResponse> | SlackOAuthTokenResponse;
+}
+
 export interface ControlPlaneApi {
   createApp: (request: CreateAppRequest) => Promise<AppRecord>;
   createTenant: (request: CreateTenantRequest) => Promise<TenantRecord>;
@@ -97,6 +113,7 @@ export interface ControlPlaneApi {
   updateInstallationPriority: (
     request: UpdateInstallationPriorityRequest
   ) => Promise<InstallationRecord>;
+  connectSlackWorkspace: (request: ConnectSlackWorkspaceRequest) => Promise<SlackConnectionRecord>;
   rollbackInstallation: (request: RollbackInstallationRequest) => Promise<RollbackResult>;
   decideApproval: (request: DecideApprovalRequest) => Promise<ApprovalRecord>;
 }
@@ -156,6 +173,14 @@ export interface SetInstallationEnabledRequest {
 export interface UpdateInstallationPriorityRequest {
   id: string;
   priority: number;
+}
+
+export interface ConnectSlackWorkspaceRequest {
+  appId: string;
+  tenantId: string;
+  code: string;
+  redirectUri: string;
+  connectedAt?: Date;
 }
 
 export interface RollbackInstallationRequest {
@@ -296,6 +321,9 @@ export function createControlPlaneApi(params: {
   artifacts: ArtifactStore;
   continuationRunner?: ContinuationRunner;
   identityResolver?: IdentityResolver;
+  secretStore?: SecretStore;
+  slackConnections?: SlackConnectionStore;
+  slackOAuth?: SlackOAuthClient;
 }): ControlPlaneApi {
   return {
     createApp: (request) => params.store.createApp(request),
@@ -308,6 +336,12 @@ export function createControlPlaneApi(params: {
     updateInstallationConfig: (request) => updateInstallationConfig(params.store, request),
     setInstallationEnabled: (request) => setInstallationEnabled(params.store, request),
     updateInstallationPriority: (request) => updateInstallationPriority(params.store, request),
+    connectSlackWorkspace: (request) =>
+      connectSlackWorkspace(params.store, request, {
+        secretStore: params.secretStore,
+        slackConnections: params.slackConnections,
+        slackOAuth: params.slackOAuth
+      }),
     rollbackInstallation: (request) => rollbackInstallation(params.store, request),
     decideApproval: (request) =>
       decideApproval(params.store, request, {
@@ -439,6 +473,43 @@ async function updateInstallationPriority(
 ): Promise<InstallationRecord> {
   await requireInstallation(store, request.id);
   return store.updateInstallationPriority(request);
+}
+
+async function connectSlackWorkspace(
+  store: ControlPlaneStore,
+  request: ConnectSlackWorkspaceRequest,
+  params: {
+    secretStore: SecretStore | undefined;
+    slackConnections: SlackConnectionStore | undefined;
+    slackOAuth: SlackOAuthClient | undefined;
+  }
+): Promise<SlackConnectionRecord> {
+  await requireTenantInApp(store, request.tenantId, request.appId);
+  const secretStore = requireSlackSecretStore(params.secretStore);
+  const slackConnections = requireSlackConnectionStore(params.slackConnections);
+  const slackOAuth = requireSlackOAuthClient(params.slackOAuth);
+  const token = await slackOAuth.exchangeCode({
+    code: request.code,
+    redirectUri: request.redirectUri
+  });
+  const secretRef = slackSecretRef({
+    tenantId: request.tenantId,
+    workspaceId: token.workspaceId
+  });
+  await secretStore.putSecret({
+    ref: secretRef,
+    value: token.accessToken
+  });
+
+  return slackConnections.upsertSlackConnection({
+    id: slackConnectionId(request.tenantId, token.workspaceId),
+    tenantId: request.tenantId,
+    workspaceId: token.workspaceId,
+    ...(token.workspaceName === undefined ? {} : { workspaceName: token.workspaceName }),
+    ...(token.botUserId === undefined ? {} : { botUserId: token.botUserId }),
+    secretRef,
+    connectedAt: request.connectedAt ?? new Date()
+  });
 }
 
 async function rollbackInstallation(
@@ -664,6 +735,41 @@ function apiError(
   message: string
 ): ControlPlaneApiError {
   return new ControlPlaneApiError(status, code, message);
+}
+
+function requireSlackSecretStore(secretStore: SecretStore | undefined): SecretStore {
+  if (secretStore === undefined) {
+    throw new Error("Slack OAuth secret store is not configured");
+  }
+  return secretStore;
+}
+
+function requireSlackConnectionStore(
+  slackConnections: SlackConnectionStore | undefined
+): SlackConnectionStore {
+  if (slackConnections === undefined) {
+    throw new Error("Slack connection store is not configured");
+  }
+  return slackConnections;
+}
+
+function requireSlackOAuthClient(slackOAuth: SlackOAuthClient | undefined): SlackOAuthClient {
+  if (slackOAuth === undefined) {
+    throw new Error("Slack OAuth client is not configured");
+  }
+  return slackOAuth;
+}
+
+function slackSecretRef(params: { tenantId: string; workspaceId: string }): SecretRef {
+  return {
+    provider: "slack",
+    tenantId: params.tenantId,
+    secretId: `slack:${params.workspaceId}`
+  };
+}
+
+function slackConnectionId(tenantId: string, workspaceId: string): string {
+  return stableId("slack", tenantId, workspaceId);
 }
 
 async function authorizeApprovalDecision(
