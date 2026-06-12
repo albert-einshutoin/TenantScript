@@ -121,16 +121,54 @@ export interface UpdateInstallationPriorityRequest {
   priority: number;
 }
 
+export type ControlPlaneErrorStatus = 400 | 404 | 409 | 500;
+
+export interface ControlPlaneErrorEnvelope {
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+export interface ControlPlaneErrorResponse {
+  status: ControlPlaneErrorStatus;
+  body: ControlPlaneErrorEnvelope;
+}
+
 export class ControlPlaneApiError extends Error {
   override readonly name = "ControlPlaneApiError";
 
   constructor(
-    readonly status: 400 | 404 | 409,
+    readonly status: Exclude<ControlPlaneErrorStatus, 500>,
     readonly code: string,
     message: string
   ) {
     super(message);
   }
+}
+
+export function toControlPlaneErrorResponse(error: unknown): ControlPlaneErrorResponse {
+  if (error instanceof ControlPlaneApiError) {
+    return {
+      status: error.status,
+      body: {
+        error: {
+          code: error.code,
+          message: error.message
+        }
+      }
+    };
+  }
+
+  return {
+    status: 500,
+    body: {
+      error: {
+        code: "internal_error",
+        message: "internal control-plane error"
+      }
+    }
+  };
 }
 
 export function createControlPlaneApi(params: {
@@ -189,7 +227,7 @@ async function registerPluginVersion(
   });
 
   if (existing !== null) {
-    throw new ControlPlaneApiError(
+    throw apiError(
       409,
       "plugin_version_already_exists",
       `plugin version ${request.pluginKey}@${request.version} already exists`
@@ -274,7 +312,7 @@ async function requirePlugin(
 ): Promise<PluginRecord> {
   const plugin = await store.findPluginByKey({ appId, key });
   if (plugin === null) {
-    throw new ControlPlaneApiError(404, "plugin_not_found", `plugin ${key} was not found`);
+    throw notFound("plugin_not_found", "plugin", key);
   }
 
   return plugin;
@@ -283,7 +321,7 @@ async function requirePlugin(
 async function requireApp(store: ControlPlaneStore, appId: string): Promise<AppRecord> {
   const app = await store.findAppById(appId);
   if (app === null) {
-    throw new ControlPlaneApiError(404, "app_not_found", `app ${appId} was not found`);
+    throw notFound("app_not_found", "app", appId);
   }
 
   return app;
@@ -296,7 +334,7 @@ async function requireTenantInApp(
 ): Promise<TenantRecord> {
   const tenant = await store.findTenantById(tenantId);
   if (tenant === null || tenant.appId !== appId) {
-    throw new ControlPlaneApiError(404, "tenant_not_found", `tenant ${tenantId} was not found`);
+    throw notFound("tenant_not_found", "tenant", tenantId);
   }
 
   return tenant;
@@ -309,11 +347,7 @@ async function requirePluginVersion(
 ): Promise<PluginVersionRecord> {
   const pluginVersion = await store.findPluginVersion({ pluginId, version });
   if (pluginVersion === null) {
-    throw new ControlPlaneApiError(
-      404,
-      "plugin_version_not_found",
-      `plugin version ${version} was not found`
-    );
+    throw notFound("plugin_version_not_found", "plugin version", version);
   }
 
   return pluginVersion;
@@ -325,11 +359,7 @@ async function requirePluginVersionById(
 ): Promise<PluginVersionRecord> {
   const pluginVersion = await store.findPluginVersionById(pluginVersionId);
   if (pluginVersion === null) {
-    throw new ControlPlaneApiError(
-      404,
-      "plugin_version_not_found",
-      `plugin version ${pluginVersionId} was not found`
-    );
+    throw notFound("plugin_version_not_found", "plugin version", pluginVersionId);
   }
 
   return pluginVersion;
@@ -341,11 +371,7 @@ async function requireInstallation(
 ): Promise<InstallationRecord> {
   const installation = await store.findInstallationById(id);
   if (installation === null) {
-    throw new ControlPlaneApiError(
-      404,
-      "installation_not_found",
-      `installation ${id} was not found`
-    );
+    throw notFound("installation_not_found", "installation", id);
   }
 
   return installation;
@@ -354,12 +380,11 @@ async function requireInstallation(
 function parseVersionManifest(input: unknown, version: string): TenantScriptManifest {
   const parsed = parseManifest(input);
   if (!parsed.ok) {
-    throw new ControlPlaneApiError(400, "invalid_manifest", "manifest validation failed");
+    throw badRequest("invalid_manifest", "manifest validation failed");
   }
 
   if (parsed.value.version !== version) {
-    throw new ControlPlaneApiError(
-      400,
+    throw badRequest(
       "version_mismatch",
       `manifest version ${parsed.value.version} does not match ${version}`
     );
@@ -376,8 +401,7 @@ function validateInstallationGrants(
   const config = validateInstallationConfig(manifest, configInput);
   const resolvedGrants = resolveRequiredGrants(manifest, config);
   if (!deepEqual(resolvedGrants, grantInput)) {
-    throw new ControlPlaneApiError(
-      400,
+    throw badRequest(
       "invalid_grants",
       "installation grants do not match manifest capability requirements"
     );
@@ -392,7 +416,7 @@ function validateInstallationConfig(
 ): InstallationConfig {
   const config = validateConfig(manifest.configSchema, configInput);
   if (!config.ok) {
-    throw new ControlPlaneApiError(400, "invalid_config", "installation config validation failed");
+    throw badRequest("invalid_config", "installation config validation failed");
   }
 
   return config.value;
@@ -404,10 +428,26 @@ function resolveRequiredGrants(
 ): GrantMap {
   const grants = resolveGrants(manifest.capabilities, config);
   if (!grants.ok) {
-    throw new ControlPlaneApiError(400, "invalid_grants", "manifest capability grants are invalid");
+    throw badRequest("invalid_grants", "manifest capability grants are invalid");
   }
 
   return grants.value;
+}
+
+function badRequest(code: string, message: string): ControlPlaneApiError {
+  return apiError(400, code, message);
+}
+
+function notFound(code: string, resource: string, id: string): ControlPlaneApiError {
+  return apiError(404, code, `${resource} ${id} was not found`);
+}
+
+function apiError(
+  status: Exclude<ControlPlaneErrorStatus, 500>,
+  code: string,
+  message: string
+): ControlPlaneApiError {
+  return new ControlPlaneApiError(status, code, message);
 }
 
 function deepEqual(left: unknown, right: unknown): boolean {

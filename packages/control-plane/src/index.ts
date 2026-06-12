@@ -66,8 +66,12 @@ function cloneExecution(record: ExecutionRecord): ExecutionRecord {
 export {
   ControlPlaneApiError,
   createControlPlaneApi,
+  toControlPlaneErrorResponse,
   type ArtifactStore,
   type ControlPlaneApi,
+  type ControlPlaneErrorEnvelope,
+  type ControlPlaneErrorResponse,
+  type ControlPlaneErrorStatus,
   type ControlPlaneStore,
   type CreateAppRequest,
   type CreateTenantRequest,

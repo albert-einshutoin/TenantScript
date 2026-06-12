@@ -31,7 +31,7 @@
   - GREEN: app/tenant エンドポイント
   - DoD: スコープテスト green(security suite にも追加)
 
-- [ ] **P1-T04**(S)チャンク A refactor
+- [x] **P1-T04**(S)チャンク A refactor
   - DoD: API エラー形状の統一(エラー envelope)、重複排除。lint/型/テスト green
 
 ## チャンク B: versioning & rollback(T05–T07)

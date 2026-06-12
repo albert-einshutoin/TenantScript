@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ControlPlaneApiError,
   createControlPlaneApi,
+  toControlPlaneErrorResponse,
   type ArtifactStore,
   type AppRecord,
   type ControlPlaneStore,
@@ -186,6 +187,41 @@ describe("createControlPlaneApi plugin/version registration", () => {
       status: 404,
       code: "app_not_found"
     } satisfies Partial<ControlPlaneApiError>);
+  });
+});
+
+describe("control-plane API error envelope", () => {
+  it("formats API errors into a stable envelope", async () => {
+    const api = createControlPlaneApi({
+      store: new InMemoryControlPlaneStore(),
+      artifacts: new InMemoryArtifactStore()
+    });
+
+    const error = await captureError(
+      api.registerPlugin({ appId: "missing_app", key: "large-invoice-notify" })
+    );
+
+    expect(toControlPlaneErrorResponse(error)).toEqual({
+      status: 404,
+      body: {
+        error: {
+          code: "app_not_found",
+          message: "app missing_app was not found"
+        }
+      }
+    });
+  });
+
+  it("formats unknown errors without leaking implementation details", () => {
+    expect(toControlPlaneErrorResponse(new Error("database token leaked"))).toEqual({
+      status: 500,
+      body: {
+        error: {
+          code: "internal_error",
+          message: "internal control-plane error"
+        }
+      }
+    });
   });
 });
 
@@ -448,6 +484,15 @@ function createApiWithVersion(manifestInput: TenantScriptManifest) {
     manifest: manifestInput
   });
   return api;
+}
+
+async function captureError(promise: Promise<unknown>) {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("expected promise to reject");
 }
 
 class InMemoryControlPlaneStore implements ControlPlaneStore {
