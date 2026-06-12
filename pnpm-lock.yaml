@@ -59,6 +59,9 @@ importers:
       '@tenantscript/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      '@tenantscript/proxy':
+        specifier: workspace:*
+        version: link:../../packages/proxy
     devDependencies:
       '@tenantscript/test-config':
         specifier: workspace:*
