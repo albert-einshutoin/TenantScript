@@ -44,22 +44,22 @@
 
 ## チャンク B: manifest package(T05–T08)
 
-- [ ] **P0-T05**(M)ManifestSchema(Zod)
+- [x] **P0-T05**(M)ManifestSchema(Zod)
   - RED: valid manifest 1種 + invalid fixtures 8種以上(不正 semver range / capability キー形式違反 / cpuMs 負数 / timeoutMs 欠落 / egress mode 不正 / hooks 空 / 未知トップレベルキー / version 形式違反)のパース結果テスト
   - GREEN: `parseManifest()` を実装。エラーは人間が読めるパス付きメッセージ
   - DoD: fixtures 全 green、カバレッジ 90%+(このパッケージは検証の要なので高め)
 
-- [ ] **P0-T06**(M)configSchema 検証
+- [x] **P0-T06**(M)configSchema 検証
   - RED: required 欠落で install 検証が落ちる / default が補完される / 型不一致が拒否される、の3系統
   - GREEN: `validateConfig(manifest.configSchema, config)` を実装(D-013)
   - DoD: 正常・異常・default 補完のテスト green
 
-- [ ] **P0-T07**(S)$config.* 参照解決
+- [x] **P0-T07**(S)$config.* 参照解決
   - RED: grant 内 `$config.notifyChannel` が installation config の実値に解決される / 未定義参照はエラー
   - GREEN: `resolveGrants(manifest.capabilities, config)` を実装
   - DoD: 解決後の grant が具体値のみになることをテストで保証
 
-- [ ] **P0-T08**(S)チャンク B refactor + 堅牢化
+- [x] **P0-T08**(S)チャンク B refactor + 堅牢化
   - RED: fast-check による property-based テスト(ランダム入力でパーサが throw ではなく構造化エラーを返す)
   - GREEN: 発見された境界バグの修正、重複排除
   - DoD: property テスト 1000 ケース green、lint/型/テスト green のまま
