@@ -83,15 +83,15 @@
   - RED: 「前 minor → 最新」のアップグレードが、データ(D1/R2/DO)を保持したまま通る自動テスト
   - DoD: upgrade テストが CI 常設、ガイド公開
 
-- [ ] **P3-T16**(S)performance regression CI
+- [ ] **P3-T16**(S)performance regression CI(**Tier 2**: 実 Cloudflare、nightly)
   - 内容: Phase 0 ベンチハーネスを CI 化し、p95 warm の劣化(>20%)で fail
-  - DoD: nightly で実行、ダッシュボード化
+  - DoD: Tier 2 nightly で実行、ダッシュボード化
 
 ## チャンク E: self-host & docs(T17–T20)
 
 - [ ] **P3-T17**(M)`ext setup`(セットアップウィザード)
-  - RED: クリーンな Cloudflare アカウントに対し、D1/R2/DO/Workflows/AE の作成と初期 migration が一括で通る(dry-run テスト)
-  - DoD: 新規アカウントでの setup E2E green
+  - RED: クリーンな Cloudflare アカウントに対し、D1/R2/DO/Workflows/AE の作成と初期 migration が一括で通る(dry-run は Tier 1、実アカウント E2E は **Tier 2**)
+  - DoD: 新規アカウントでの setup E2E green(Tier 2)
 
 - [ ] **P3-T18**(S)`ext doctor`(自己診断)
   - RED: binding 欠落・migration 未適用・権限不足を検知して人間が読める修復手順を出す

@@ -29,7 +29,7 @@
 | E2E | example-saas 経由の workerd E2E、Admin UI は Playwright | |
 | ローカル実行 | wrangler / Miniflare | |
 | Lint / Format | ESLint + Prettier | PostToolUse hook と整合 |
-| CI | GitHub Actions | typecheck → lint → test → coverage gate(80%) |
+| CI | GitHub Actions(2層: Tier 1 accountless / Tier 2 live) | Tier 1: typecheck → lint → test → audit → coverage(全 PR)。Tier 2: 実機・ベンチ(nightly) |
 | バンドル | esbuild | plugin bundle(決定論的 hash)、CLI |
 | UI | React + Vite | Admin UI(Phase 1〜) |
 | 計測 | Workers Analytics Engine | usage meter |
@@ -94,7 +94,7 @@ tenantscript/
 ## タスク表記
 
 - ID: `P<phase>-T<番号>`。サイズ: **S**(〜半日)/ **M**(〜1日)/ **L**(2〜3日。L は原則着手前にさらに分割)
-- 各タスクは RED(最初に書くテスト)→ GREEN(実装内容)→ DoD(完了条件)を持つ
+- 各タスクは RED(最初に書くテスト。設定系タスクは検証手順で代替)→ GREEN(実装内容)→ DoD(完了条件)を持つ
 - チェックボックスで進捗管理する
 - タスク番号は**追加順のラベル**であり、ファイル内の記載順が推奨実行順(セルフレビュー反映 v1.1 で追加されたタスクは末尾番号を持つことがある)
 
@@ -102,7 +102,7 @@ tenantscript/
 
 | Phase | 目的 | 期間目安 | Exit Gate(要約) | ファイル |
 |---|---|---|---|---|
-| 0 | Prototype — 安全に tenant plugin を実行できる証明 | 2〜4週 | E2E デモ成立、p95 warm < 50ms、secret/egress 逸脱ゼロ、runtime 選定 ADR | [Phase0.md](Phase0.md) |
+| 0 | Prototype — 安全に tenant plugin を実行できる証明 | 2〜4週 | E2E デモ成立、p95 実測 + Go/No-Go 判断完了、secret/egress 逸脱ゼロ、runtime 選定 ADR、LICENSE 整備 | [Phase0.md](Phase0.md) |
 | 1 | MVP — 本番運用形(version / rollback / approval / budget / proxy / CLI / UI最小) | 1〜2ヶ月 | design partner 1社で plugin 3つ×4週稼働、rollback MTTR < 5分 | [Phase1.md](Phase1.md) |
 | 2 | Private Beta — 複数 app / tenant、RBAC、信頼性、community 開始 | 2〜3ヶ月 | host app 3社、active installation 20+、重大 incident 0 | [Phase2.md](Phase2.md) |
 | 3 | v1.0 — production-ready OSS | 3〜6ヶ月 | adopter 5社、外部 contributor PR 10件、advisory 運用実績 | [Phase3.md](Phase3.md) |

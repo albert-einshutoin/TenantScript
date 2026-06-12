@@ -121,8 +121,9 @@
   - GREEN: field filtering 付き read capability
   - DoD: フィルタ・越境拒否テスト green
 
-- [ ] **P1-T20**(L→着手時分割)Slack OAuth 接続フロー
-  - RED: OAuth callback → token が secret store に保存され、**API レスポンスやログに token が一切現れない**
+- [ ] **P1-T20**(L→着手時分割)Slack OAuth 接続フロー + 最小 secret store
+  - 設計: 最小 secret store をここで定義する — token は専用 Durable Object に保管し、読み出しは capability broker のみに限定(secret の値を返す API エンドポイントを作らない)。envelope encryption / rotation は Phase 3(P3-T05/T06)で強化する
+  - RED: OAuth callback → token が secret store に保存され、**API レスポンス・ログ・D1 のどこにも token が現れない**(全層スキャンテスト)
   - GREEN: Slack OAuth app、tenant 単位の workspace 接続、token 保管(broker 内)
   - DoD: 接続フロー integration テスト + token 非露出テスト green
 

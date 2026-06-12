@@ -111,14 +111,14 @@
 - [ ] **P0-T17**(M)limits enforcement
   - RED: 無限ループ plugin が timeoutMs で強制終了し、execution に `timeout` が記録される / subrequest 上限超過が拒否される
   - GREEN: limits 設定の適用(選定 runtime の custom limits / loader 側ガード)
-  - DoD: timeout・subrequest 上限のテスト green
+  - DoD: wall-clock timeout と subrequest 上限(loader 側ガード)は Tier 1 でテスト green。**cpuMs 等の platform enforcement はローカル workerd で本番同等に検証できないため、Tier 2 で実機挙動を確認**し結果を ADR-001 に追記
 
 - [ ] **P0-T18**(M)egress deny-by-default
   - RED(攻撃テスト): plugin 内の `fetch()` が失敗し、execution log に `egress_denied` が記録される / リダイレクトや DNS 回し等の迂回も塞がる(既知パターンを列挙)
   - GREEN: globalOutbound 遮断(D-005)
   - DoD: 迂回パターン含む全攻撃テスト green
 
-## チャンク E: capability broker + control plane 最小(T19–T23)
+## チャンク E: capability broker + control plane 最小(T19–T23, T30)
 
 - [ ] **P0-T19**(M)capability 呼び出しブリッジ
   - RED: grant 済み capability は通る / 未 grant は CapabilityDeniedError / 引数が grant の scope(channel 制限等)で検証される
@@ -145,9 +145,15 @@
   - GREEN: execution 記録 + 検索 API(最小)
   - DoD: 書き込み・検索テスト green
 
+- [ ] **P0-T30**(S)installation resolver(D1-backed)(v1.2 追加: 最終レビュー反映)
+  - 背景: P0-T11 の planner は in-memory store、P0-T21 は D1 スキーマ。両者を繋ぐ「D1 から hook 対象 installation を解決する」実装がどのタスクにも無く、T24 の E2E が暗黙の前提にしていた
+  - RED: D1 の installations から hook 対象の active な plugin version・grant・config が解決され、T11 の store interface として planner に渡る / disabled・tenant 不一致は除外される
+  - GREEN: host-sdk の installation store interface の D1 実装(control-plane 内)
+  - DoD: workerd integration テスト green(前提: T11、T21)
+
 ## チャンク F: E2E・検証・品質(T24–T28)
 
-- [ ] **P0-T24**(L→分割)E2E: example-saas デモ(event + transform の2経路)
+- [ ] **P0-T24**(L→分割)E2E: example-saas デモ(event + transform の2経路)(前提: P0-T30)
   - RED: (1)「invoice.created(event)発火 → installation 解決 → plugin 実行 → モック Slack 受信 → execution log 記録」、(2)「webhook.outbound(transform)発火 → 変換チェーン適用 → 変換後 payload 検証」の2本の E2E を先に書く(**transform 経路は T25 ベンチの前提** — この配線を作るタスクは他にない)
   - GREEN: example-saas(最小 host app)+ サンプル plugin 2種(large-invoice-notify / payload-transformer)を接続
   - DoD: 両経路の E2E green。手動デモ手順を `apps/example-saas/README.md` に記載
