@@ -85,6 +85,33 @@ describe("ext init", () => {
     );
   });
 
+  it("supports policy hook scaffolds", async () => {
+    const root = await createTempDir();
+    const target = join(root, "invoice-policy");
+
+    await expect(
+      runExtCli(
+        [
+          "init",
+          "--name",
+          "invoice-policy",
+          "--dir",
+          target,
+          "--hook",
+          "invoice.approve",
+          "--type",
+          "policy"
+        ],
+        rollbackOnlyClient,
+        captureIo([], [])
+      )
+    ).resolves.toBe(0);
+
+    await expect(readFile(join(target, "src", "index.ts"), "utf8")).resolves.toContain(
+      '"invoice.approve": async (_payload, _context) => ({ decision: "allow" })'
+    );
+  });
+
   it("refuses to write into a non-empty directory", async () => {
     const root = await createTempDir();
     const target = join(root, "existing-plugin");

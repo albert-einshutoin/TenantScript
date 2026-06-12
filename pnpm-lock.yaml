@@ -84,6 +84,9 @@ importers:
       '@tenantscript/control-plane':
         specifier: workspace:*
         version: link:../control-plane
+      '@tenantscript/loader':
+        specifier: workspace:*
+        version: link:../loader
     devDependencies:
       '@tenantscript/test-config':
         specifier: workspace:*

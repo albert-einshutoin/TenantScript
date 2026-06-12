@@ -1,5 +1,6 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { bundlePlugin, runScopedHandler } from "@tenantscript/loader";
 import type {
   ApprovalRecord,
   DecideApprovalRequest,
@@ -60,6 +61,12 @@ export async function runExtCli(
   const [command, ...args] = argv;
   if (command === "init") {
     return await runInit(args, io);
+  }
+  if (command === "build") {
+    return await runBuild(args, io);
+  }
+  if (command === "dev") {
+    return await runDev(args, io);
   }
   if (command === "rollback-drill") {
     return runRollbackDrill(args, io);
@@ -190,6 +197,68 @@ async function runInit(args: readonly string[], io: CliIo): Promise<number> {
   }
 }
 
+async function runBuild(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseBuildArgs(args);
+  if (!parsed.ok) {
+    io.stderr(parsed.error);
+    return 2;
+  }
+
+  try {
+    const bundle = await bundlePlugin(parsed.request.entry);
+    await mkdir(dirname(parsed.request.out), { recursive: true });
+    await writeFile(parsed.request.out, bundle.code);
+    io.stdout(
+      JSON.stringify({
+        entry: parsed.request.entry,
+        out: parsed.request.out,
+        sha256: bundle.sha256,
+        bytes: bundle.code.length
+      })
+    );
+    return 0;
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "plugin build failed");
+    return 1;
+  }
+}
+
+async function runDev(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseDevArgs(args);
+  if (!parsed.ok) {
+    io.stderr(parsed.error);
+    return 2;
+  }
+
+  try {
+    const bundle = await bundlePlugin(parsed.request.entry);
+    const result = await runScopedHandler({
+      bundleCode: bundle.code,
+      handlerName: parsed.request.hookName,
+      payload: parsed.request.payload,
+      context: {
+        capability: (name, input) =>
+          Promise.resolve({
+            ok: true,
+            name,
+            input
+          })
+      }
+    });
+    io.stdout(
+      JSON.stringify({
+        hookName: parsed.request.hookName,
+        value: result.value,
+        logs: result.logs
+      })
+    );
+    return 0;
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "plugin dev invocation failed");
+    return 1;
+  }
+}
+
 async function runApprovalDecision(
   args: readonly string[],
   client: Partial<ApprovalDecisionClient>,
@@ -236,6 +305,17 @@ interface InitResult {
   files: readonly string[];
 }
 
+interface BuildRequest {
+  entry: string;
+  out: string;
+}
+
+interface DevRequest {
+  entry: string;
+  hookName: string;
+  payload: unknown;
+}
+
 function parseInitArgs(
   args: readonly string[]
 ): { ok: true; request: InitRequest } | { ok: false; error: string } {
@@ -272,6 +352,67 @@ function parseInitArgs(
       hookType
     }
   };
+}
+
+function parseBuildArgs(
+  args: readonly string[]
+): { ok: true; request: BuildRequest } | { ok: false; error: string } {
+  const flags = readFlags(args);
+  const entry = flags.entry;
+  if (entry === undefined) {
+    return { ok: false, error: "missing required build option: --entry" };
+  }
+  const out = flags.out ?? "dist/plugin.cjs";
+  return {
+    ok: true,
+    request: {
+      entry: resolve(entry),
+      out: resolve(out)
+    }
+  };
+}
+
+function parseDevArgs(
+  args: readonly string[]
+): { ok: true; request: DevRequest } | { ok: false; error: string } {
+  const flags = readFlags(args);
+  const entry = flags.entry;
+  if (entry === undefined) {
+    return { ok: false, error: "missing required dev option: --entry" };
+  }
+  const hookName = flags.hook;
+  if (hookName === undefined) {
+    return { ok: false, error: "missing required dev option: --hook" };
+  }
+  if (!/^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/.test(hookName)) {
+    return {
+      ok: false,
+      error: "invalid dev option: --hook must be dot-separated lowercase segments"
+    };
+  }
+  const payload = parseJsonPayload(flags.payload ?? "{}");
+  if (!payload.ok) {
+    return { ok: false, error: payload.error };
+  }
+
+  return {
+    ok: true,
+    request: {
+      entry: resolve(entry),
+      hookName,
+      payload: payload.value
+    }
+  };
+}
+
+function parseJsonPayload(
+  value: string
+): { ok: true; value: unknown } | { ok: false; error: string } {
+  try {
+    return { ok: true, value: JSON.parse(value) as unknown };
+  } catch {
+    return { ok: false, error: "invalid dev option: --payload must be JSON" };
+  }
 }
 
 function parseHookType(value: string): InitRequest["hookType"] | undefined {

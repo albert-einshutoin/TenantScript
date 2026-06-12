@@ -20,7 +20,8 @@
     "rollback:drill": "node scripts/rollback-drill.mjs"
   },
   "dependencies": {
-    "@tenantscript/control-plane": "workspace:*"
+    "@tenantscript/control-plane": "workspace:*",
+    "@tenantscript/loader": "workspace:*"
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*"

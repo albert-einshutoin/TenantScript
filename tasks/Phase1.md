@@ -165,7 +165,7 @@
   - GREEN: plugin scaffold 生成(manifest + handler + テスト雛形 — **雛形にもテストを含める**)
   - DoD: scaffold → build → test が一発で green
 
-- [ ] **P1-T26**(M)`ext dev` + `ext build`
+- [x] **P1-T26**(M)`ext dev` + `ext build`
   - RED: build の決定論 hash(P0-T15 再利用)/ dev でローカル実行(Miniflare)し、モック capability が繋がる
   - GREEN: dev サーバ + build コマンド
   - DoD: dev/build のテスト green
