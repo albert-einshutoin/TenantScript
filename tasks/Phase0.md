@@ -98,12 +98,12 @@
   - コンティンジェンシー: Worker Loader API が beta 非公開・制約過大なら WfP dispatch namespace を既定とする。WfP の有料プラン条件が self-host 採用の障壁になる場合はその影響を ADR に明記。両方不可の場合のみ service binding ベースの静的 dispatch(機能縮退)を検討
   - DoD: **ADR-001** に実測値と選定理由(+ 棄却した代替と採用条件)を記録。プロダクトドキュメント §15 Open Questions の該当行を解消としてマーク
 
-- [ ] **P0-T15**(M)plugin bundle + version hash
+- [x] **P0-T15**(M)plugin bundle + version hash
   - RED: 同一入力 → 同一 hash(決定論性)/ 内容変更で hash 変化 / 外部 import の解決
   - GREEN: esbuild バンドラ + SHA-256 content hash
   - DoD: 決定論テスト green(タイムスタンプ等の非決定要素を排除)
 
-- [ ] **P0-T16**(M)isolate 実行 + scoped bindings のみ注入
+- [x] **P0-T16**(M)isolate 実行 + scoped bindings のみ注入
   - RED(攻撃テスト): plugin コードから `process.env` / グローバル binding / 他 plugin の名前空間が見えないことを先にテスト
   - GREEN: 選定 runtime で plugin module をロードし、ctx 経由の値のみ渡す
   - DoD: 露出試行テスト全 green(= 全攻撃失敗)
@@ -113,7 +113,7 @@
   - GREEN: limits 設定の適用(選定 runtime の custom limits / loader 側ガード)
   - DoD: wall-clock timeout と subrequest 上限(loader 側ガード)は Tier 1 でテスト green。**cpuMs 等の platform enforcement はローカル workerd で本番同等に検証できないため、Tier 2 で実機挙動を確認**し結果を ADR-001 に追記
 
-- [ ] **P0-T18**(M)egress deny-by-default
+- [x] **P0-T18**(M)egress deny-by-default
   - RED(攻撃テスト): plugin 内の `fetch()` が失敗し、execution log に `egress_denied` が記録される / リダイレクトや DNS 回し等の迂回も塞がる(既知パターンを列挙)
   - GREEN: globalOutbound 遮断(D-005)
   - DoD: 迂回パターン含む全攻撃テスト green

@@ -17,5 +17,8 @@
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.1"
   }
 }

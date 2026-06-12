@@ -1,0 +1,185 @@
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { bundlePlugin, runScopedHandler } from "../src/index.js";
+
+describe("bundlePlugin", () => {
+  it("produces deterministic hashes for the same input", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tenantscript-loader-"));
+    const entry = join(dir, "plugin.ts");
+    await writeFile(
+      entry,
+      [
+        "const channel = 'C123';",
+        "export const handlers = {",
+        "  'invoice.created': () => ({ channel })",
+        "};"
+      ].join("\n")
+    );
+
+    const first = await bundlePlugin(entry);
+    const second = await bundlePlugin(entry);
+
+    expect(first.sha256).toBe(second.sha256);
+    expect(first.code).toBe(second.code);
+  });
+
+  it("changes the hash when bundle content changes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tenantscript-loader-"));
+    const entry = join(dir, "plugin.ts");
+    await writeFile(entry, "export const handlers = { 'invoice.created': () => 'v1' };");
+    const first = await bundlePlugin(entry);
+
+    await writeFile(entry, "export const handlers = { 'invoice.created': () => 'v2' };");
+    const second = await bundlePlugin(entry);
+
+    expect(first.sha256).not.toBe(second.sha256);
+  });
+
+  it("resolves external relative imports into the bundle", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tenantscript-loader-"));
+    const entry = join(dir, "plugin.ts");
+    const helper = join(dir, "helper.ts");
+    await writeFile(helper, "export const message = 'from-helper';");
+    await writeFile(
+      entry,
+      "import { message } from './helper'; export const handlers = { 'invoice.created': () => message };"
+    );
+
+    const bundle = await bundlePlugin(entry);
+
+    expect(bundle.code).toContain("from-helper");
+  });
+});
+
+describe("runScopedHandler", () => {
+  it("injects only scoped context and hides process/global bindings", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async (_payload, context) => ({
+          canUseCapability: await context.capability("slack.send", { channel: "C123" }),
+          processVisible: typeof process !== "undefined",
+          secretBindingVisible: typeof SECRET_BINDING !== "undefined"
+        })
+      };
+    `);
+
+    const result = await runScopedHandler({
+      bundleCode: bundle,
+      handlerName: "invoice.created",
+      payload: {},
+      context: {
+        capability: vi.fn().mockResolvedValue("ok")
+      }
+    });
+
+    expect(result.value).toEqual({
+      canUseCapability: "ok",
+      processVisible: false,
+      secretBindingVisible: false
+    });
+  });
+
+  it("denies outbound fetch by default and records egress_denied", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async () => {
+          await fetch("https://example.com/webhook");
+        }
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toThrow("egress denied: https://example.com/webhook");
+  });
+
+  it("keeps egress denial logs for audit", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async () => {
+          try {
+            await fetch("https://example.com/webhook");
+          } catch (_error) {
+            return "handled";
+          }
+        }
+      };
+    `);
+
+    const result = await runScopedHandler({
+      bundleCode: bundle,
+      handlerName: "invoice.created",
+      payload: {},
+      context: { capability: vi.fn() }
+    });
+
+    expect(result).toEqual({
+      value: "handled",
+      logs: [{ reason: "egress_denied", url: "https://example.com/webhook" }]
+    });
+  });
+
+  it("records URL object egress attempts", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async () => {
+          try {
+            await fetch(new URL("https://example.com/url-object"));
+          } catch (_error) {
+            return "handled";
+          }
+        }
+      };
+    `);
+
+    const result = await runScopedHandler({
+      bundleCode: bundle,
+      handlerName: "invoice.created",
+      payload: {},
+      context: { capability: vi.fn() }
+    });
+
+    expect(result.logs).toEqual([
+      { reason: "egress_denied", url: "https://example.com/url-object" }
+    ]);
+  });
+
+  it("rejects bundles without a handlers object", async () => {
+    await expect(
+      runScopedHandler({
+        bundleCode: "exports.notHandlers = {};",
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toThrow("plugin bundle must export a handlers object");
+  });
+
+  it("rejects missing handlers", async () => {
+    await expect(
+      runScopedHandler({
+        bundleCode: "exports.handlers = {};",
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toThrow("plugin bundle does not export handler invoice.created");
+  });
+});
+
+async function bundleFromSource(source: string) {
+  const dir = await mkdtemp(join(tmpdir(), "tenantscript-loader-"));
+  const entry = join(dir, "plugin.cjs");
+  await writeFile(entry, source);
+  const bundled = await bundlePlugin(entry);
+  const code = await readFile(entry, "utf8");
+  expect(bundled.sha256).toMatch(/^[a-f0-9]{64}$/);
+  return code;
+}
