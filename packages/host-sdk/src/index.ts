@@ -5,6 +5,8 @@ export const hookTypes = ["event", "transform", "policy"] as const;
 export type HookType = (typeof hookTypes)[number];
 export type FailurePolicy = "fail-open" | "skip" | "deny";
 export type ExecutionMode = "parallel" | "serial";
+export const hookFailureKinds = ["handler_error", "timeout", "budget_exceeded"] as const;
+export type HookFailureKind = (typeof hookFailureKinds)[number];
 
 export type EventHookDefinition<TPayload> = {
   type: "event";
@@ -64,6 +66,26 @@ export interface ExecutionPlan {
   mode: ExecutionMode;
   steps: readonly ExecutionStep[];
 }
+
+export interface HookRetryPolicy {
+  hookType: HookType;
+  failurePolicy: FailurePolicy;
+  retry: boolean;
+  maxAttempts: number;
+}
+
+export type HookRetryRunResult<TResult> =
+  | {
+      ok: true;
+      value: TResult;
+      attempts: number;
+    }
+  | {
+      ok: false;
+      error: unknown;
+      attempts: number;
+      failurePolicy: FailurePolicy;
+    };
 
 export function defineHooks<TPayload>(
   hooks: readonly HookDefinition<TPayload>[]
@@ -143,6 +165,56 @@ export async function runTransformChain<TPayload>(
     payload = await execute(step, payload);
   }
   return payload;
+}
+
+export function retryPolicyForHookType(hookType: HookType): HookRetryPolicy {
+  return {
+    hookType,
+    failurePolicy: defaultFailurePolicyFor(hookType),
+    retry: hookType === "event",
+    maxAttempts: hookType === "event" ? 2 : 1
+  };
+}
+
+export function shouldRetryHookFailure(params: {
+  hookType: HookType;
+  failure: HookFailureKind;
+  attempt: number;
+}): boolean {
+  const policy = retryPolicyForHookType(params.hookType);
+  return policy.retry && params.attempt < policy.maxAttempts;
+}
+
+export async function runWithRetryPolicy<TResult>(params: {
+  hookType: HookType;
+  execute: (attempt: number) => Promise<TResult> | TResult;
+  failureKind?: HookFailureKind;
+}): Promise<HookRetryRunResult<TResult>> {
+  const policy = retryPolicyForHookType(params.hookType);
+  const failure = params.failureKind ?? "handler_error";
+
+  for (let attempt = 1; attempt <= policy.maxAttempts; attempt += 1) {
+    try {
+      return {
+        ok: true,
+        value: await params.execute(attempt),
+        attempts: attempt
+      };
+    } catch (error) {
+      if (shouldRetryHookFailure({ hookType: params.hookType, failure, attempt })) {
+        continue;
+      }
+
+      return {
+        ok: false,
+        error,
+        attempts: attempt,
+        failurePolicy: policy.failurePolicy
+      };
+    }
+  }
+
+  throw new Error(`retry policy exhausted without a result for ${params.hookType}`);
 }
 
 function defaultFailurePolicyFor(type: HookType): FailurePolicy {

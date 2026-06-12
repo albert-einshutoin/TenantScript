@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   defineHooks,
+  hookFailureKinds,
+  retryPolicyForHookType,
+  shouldRetryHookFailure,
   planExecution,
   runHook,
   runTransformChain,
+  runWithRetryPolicy,
+  type HookType,
   type HookDefinition,
   type HooksDefinition,
   type Installation
@@ -85,6 +90,69 @@ describe("runHook", () => {
     }));
 
     expect(result).toEqual({ ok: true, value: { accepted: true } });
+  });
+});
+
+describe("retry policy", () => {
+  it.each([
+    { hookType: "event", failurePolicy: "fail-open", retry: true },
+    { hookType: "transform", failurePolicy: "skip", retry: false },
+    { hookType: "policy", failurePolicy: "deny", retry: false }
+  ] as const)("maps $hookType hooks to retry=$retry", ({ hookType, failurePolicy, retry }) => {
+    expect(retryPolicyForHookType(hookType)).toEqual({
+      hookType,
+      failurePolicy,
+      maxAttempts: retry ? 2 : 1,
+      retry
+    });
+  });
+
+  it.each(
+    (["event", "transform", "policy"] satisfies HookType[]).flatMap((hookType) =>
+      hookFailureKinds.map((failure) => ({
+        hookType,
+        failure,
+        retry: hookType === "event"
+      }))
+    )
+  )("decides retry for $hookType $failure failures", ({ hookType, failure, retry }) => {
+    expect(shouldRetryHookFailure({ hookType, failure, attempt: 1 })).toBe(retry);
+  });
+
+  it("stops event retries after the at-least-once retry attempt", () => {
+    expect(
+      shouldRetryHookFailure({ hookType: "event", failure: "handler_error", attempt: 2 })
+    ).toBe(false);
+  });
+
+  it("retries event failures once and returns the successful retry result", async () => {
+    const execute = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockResolvedValueOnce("delivered");
+
+    await expect(runWithRetryPolicy({ hookType: "event", execute })).resolves.toEqual({
+      ok: true,
+      value: "delivered",
+      attempts: 2
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { hookType: "transform", failurePolicy: "skip" },
+    { hookType: "policy", failurePolicy: "deny" }
+  ] as const)("does not retry $hookType failures", async ({ hookType, failurePolicy }) => {
+    const error = new Error("blocking failure");
+    const execute = vi.fn<() => Promise<string>>().mockRejectedValue(error);
+
+    await expect(runWithRetryPolicy({ hookType, execute })).resolves.toEqual({
+      ok: false,
+      error,
+      attempts: 1,
+      failurePolicy
+    });
+    expect(execute).toHaveBeenCalledOnce();
   });
 });
 

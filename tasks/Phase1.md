@@ -93,7 +93,7 @@
   - GREEN: Durable Object journal + broker 統合
   - DoD: retry 二重送信防止テスト green
 
-- [ ] **P1-T15**(S)retry policy
+- [x] **P1-T15**(S)retry policy
   - RED: event hook は at-least-once retry(journal 併用)/ transform・policy は retry しない(failure policy に従う)
   - GREEN: hook 型別 retry 実装
   - DoD: hook 型 × 失敗ケースのマトリクステスト green
