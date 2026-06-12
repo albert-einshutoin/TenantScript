@@ -79,7 +79,7 @@
   - GREEN: トークン → role クレームの静的マッピングと、decision API / approval queue での検証
   - DoD: role 検証テスト green(security suite に追加)。Phase 2 RBAC への移行パスをコードコメントで明記
 
-- [ ] **P1-T12**(S)approval 攻撃テスト
+- [x] **P1-T12**(S)approval 攻撃テスト
   - RED: 権限のない role による決定 / 他 tenant の approval への決定 / resumeHook の偽装呼び出し — 全て拒否されること
   - DoD: security suite に追加され green
 

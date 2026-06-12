@@ -2,6 +2,7 @@ export interface CapabilityGrant {
   channel?: string | readonly string[];
   fields?: readonly string[];
   roles?: string | readonly string[];
+  resumeHooks?: string | readonly string[];
 }
 
 export type CapabilityGrants = Record<string, CapabilityGrant>;
@@ -156,6 +157,12 @@ function assertScope(name: string, grant: CapabilityGrant, input: unknown): void
     if (allowedRoles.length > 0 && !allowedRoles.includes(request.role)) {
       throw new CapabilityDeniedError(
         `approvals.request role ${request.role} is outside granted scope`
+      );
+    }
+    const allowedResumeHooks = grant.resumeHooks === undefined ? [] : [grant.resumeHooks].flat();
+    if (allowedResumeHooks.length > 0 && !allowedResumeHooks.includes(request.resumeHook)) {
+      throw new CapabilityDeniedError(
+        `approvals.request resumeHook ${request.resumeHook} is outside granted scope`
       );
     }
   }

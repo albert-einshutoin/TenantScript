@@ -4,7 +4,8 @@ import {
   createApprovalsRequestProvider,
   createCapabilityBroker,
   createMockSlackSendProvider,
-  createPluginCapabilityContext
+  createPluginCapabilityContext,
+  type ApprovalRecord
 } from "../src/index.js";
 
 describe("capabilities security suite", () => {
@@ -69,6 +70,39 @@ describe("capabilities security suite", () => {
         expiresAt: "2026-06-14T01:00:00.000Z"
       })
     ).rejects.toThrow("approvals.request role viewer is outside granted scope");
+    expect(store.createApproval).not.toHaveBeenCalled();
+  });
+
+  it("denies approval requests that spoof an ungranted resume hook", async () => {
+    const store = {
+      createApproval: vi.fn((record: ApprovalRecord) => record)
+    };
+    const broker = createCapabilityBroker({
+      grants: {
+        "approvals.request": {
+          roles: ["manager"],
+          resumeHooks: ["onInvoiceApprovalDecided"]
+        }
+      },
+      providers: {
+        "approvals.request": createApprovalsRequestProvider({
+          store,
+          generateId: () => "approval_1",
+          now: () => new Date("2026-06-13T01:00:00.000Z")
+        })
+      }
+    });
+
+    await expect(
+      broker.call("approvals.request", {
+        role: "manager",
+        subject: { invoiceId: "inv_1" },
+        resumeHook: "exfiltrateApprovalDecision",
+        expiresAt: "2026-06-14T01:00:00.000Z"
+      })
+    ).rejects.toThrow(
+      "approvals.request resumeHook exfiltrateApprovalDecision is outside granted scope"
+    );
     expect(store.createApproval).not.toHaveBeenCalled();
   });
 });

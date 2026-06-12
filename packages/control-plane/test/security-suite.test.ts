@@ -3,8 +3,10 @@ import {
   createControlPlaneApi,
   createInMemoryExecutionLogStore,
   createStaticTokenIdentityResolver,
+  type ApprovalContinuationRequest,
   type ApprovalRecord,
   type ArtifactStore,
+  type ContinuationRunner,
   type ControlPlaneStore
 } from "../src/index.js";
 
@@ -93,6 +95,94 @@ describe("control-plane security suite", () => {
         role: "manager"
       })
     ).rejects.toMatchObject({ status: 403, code: "approval_role_forbidden" });
+  });
+
+  it("rejects approval decisions scoped to another tenant", async () => {
+    const approval = {
+      id: "approval_1",
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      role: "manager",
+      subject: { invoiceId: "inv_1" },
+      resumeHook: "onInvoiceApprovalDecided",
+      state: "pending",
+      expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+      createdAt: new Date("2026-06-13T01:00:00.000Z")
+    } satisfies ApprovalRecord;
+    const api = createControlPlaneApi({
+      store: createDecisionStore(approval),
+      artifacts: noopArtifacts,
+      identityResolver: createStaticTokenIdentityResolver({
+        "manager-token": { subject: "user_manager", role: "manager" }
+      })
+    });
+
+    await expect(
+      api.decideApproval({
+        id: "approval_1",
+        tenantId: "tenant_2",
+        decision: "approved",
+        actor: "manager@example.com",
+        auditId: "audit_cross_tenant",
+        authToken: "manager-token"
+      })
+    ).rejects.toMatchObject({ status: 404, code: "approval_not_found" });
+  });
+
+  it("does not run a resume hook spoofed on the decision request body", async () => {
+    const approval = {
+      id: "approval_1",
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      role: "manager",
+      subject: { invoiceId: "inv_1" },
+      resumeHook: "onInvoiceApprovalDecided",
+      state: "pending",
+      expiresAt: new Date("2026-06-14T01:00:00.000Z"),
+      createdAt: new Date("2026-06-13T01:00:00.000Z")
+    } satisfies ApprovalRecord;
+    const continuationCalls: ApprovalContinuationRequest[] = [];
+    const continuationRunner: ContinuationRunner = {
+      runApprovalContinuation: (request) => {
+        continuationCalls.push(request);
+        return Promise.resolve({
+          id: "exec_resume_1",
+          tenantId: request.approval.tenantId,
+          pluginId: request.approval.pluginId,
+          hookName: request.approval.resumeHook,
+          version: "1.0.0",
+          status: "success",
+          durationMs: 1,
+          capabilityCalls: [],
+          createdAt: request.decidedAt
+        });
+      }
+    };
+    const api = createControlPlaneApi({
+      store: createDecisionStore(approval),
+      artifacts: noopArtifacts,
+      continuationRunner,
+      identityResolver: createStaticTokenIdentityResolver({
+        "manager-token": { subject: "user_manager", role: "manager" }
+      })
+    });
+    const forgedRequest = {
+      id: "approval_1",
+      tenantId: "tenant_1",
+      decision: "approved",
+      actor: "manager@example.com",
+      auditId: "audit_1",
+      authToken: "manager-token",
+      resumeHook: "exfiltrateApprovalDecision"
+    } as Parameters<typeof api.decideApproval>[0] & { resumeHook: string };
+
+    await expect(api.decideApproval(forgedRequest)).resolves.toMatchObject({
+      state: "approved"
+    });
+
+    expect(continuationCalls).toHaveLength(1);
+    expect(continuationCalls[0]?.approval.resumeHook).toBe("onInvoiceApprovalDecided");
+    expect(JSON.stringify(continuationCalls)).not.toContain("exfiltrateApprovalDecision");
   });
 });
 
