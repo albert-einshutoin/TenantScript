@@ -100,7 +100,7 @@
 
 ## チャンク E: budget cap(T16–T18)
 
-- [ ] **P1-T16**(M)usage カウンタ(DO)
+- [x] **P1-T16**(M)usage カウンタ(DO)
   - RED: tenant×plugin の daily executions / cpuMs が加算され、日付境界でリセットされる
   - GREEN: DO ベースのカウンタ(D-010)
   - DoD: 加算・境界・並行加算(競合)テスト green

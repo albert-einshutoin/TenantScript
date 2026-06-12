@@ -105,6 +105,16 @@ export {
 } from "./approval-state.js";
 
 export {
+  createDurableObjectDailyUsageCounter,
+  createInMemoryDailyUsageCounter,
+  type DailyUsageCounter,
+  type DailyUsageCounterStorage,
+  type DailyUsageKey,
+  type DailyUsageRecord,
+  type RecordExecutionUsageRequest
+} from "./usage-counter.js";
+
+export {
   ArtifactAlreadyExistsError,
   createD1ControlPlaneStore,
   createR2ArtifactStore,
