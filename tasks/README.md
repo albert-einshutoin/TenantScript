@@ -71,20 +71,32 @@ tenantscript/
 - **adversarial security test を一級市民にする**: secret 露出・egress 逸脱・grant 昇格・tenant 越境の「攻撃テスト」は機能テストと同格で、各 Phase に常設チャンクを置く(本プロダクトの価値は security そのもの)
 - AAA パターン、振る舞いが読めるテスト名(`returns empty array when no markets match query` 形式)
 - flaky なタイムアウト待ちを書かない。決定論的な待機のみ
+- TDD は「振る舞い」に適用する。インフラ・設定系タスク(scaffold、CI、リリース作業)は RED の代わりに**検証手順(verification checklist)**を DoD に定義する(形式的な設定テストで TDD を装わない)
 
 ## 品質ゲート(全 Phase 共通、CI で強制)
 
 - typecheck / lint / test 全 green
-- カバレッジ 80% 以上(package 単位)
+- カバレッジ 80% 以上(package 単位。**計測は Day 1 から、ゲート強制は Phase 0 チャンク B 完了時から段階導入** — 空に近い package での閾値ノイズを避ける)
+- 依存脆弱性スキャン(pnpm audit 相当)green
 - adversarial security suite green
 - 各チャンク末尾の refactor タスク完了(コードレビュー込み)
 - 1タスク = 1コミット以上。コミットは `<type>: <description>` 形式
+
+## CI 2層戦略(OSS の fork PR 問題への対応)
+
+| Tier | 実行環境 | 対象 | トリガー |
+|---|---|---|---|
+| **Tier 1: accountless** | workerd ローカル(vitest-pool-workers / Miniflare)。Cloudflare アカウント不要 | unit / integration / security suite / UI テスト | 全 PR 必須(**fork PR でも完走する**) |
+| **Tier 2: live** | 実 Cloudflare アカウント(secrets 必要、実行コスト発生) | Worker Loader / WfP dispatch 実機、Workflows 実機、負荷・レイテンシベンチ | nightly + maintainer ブランチのみ |
+
+テストは原則 Tier 1 で書く。Tier 2 でしか検証できないものは最小化し、該当タスクの DoD に「Tier 2」と明記する。Tier 2 の実行コストは記録して予算管理する。
 
 ## タスク表記
 
 - ID: `P<phase>-T<番号>`。サイズ: **S**(〜半日)/ **M**(〜1日)/ **L**(2〜3日。L は原則着手前にさらに分割)
 - 各タスクは RED(最初に書くテスト)→ GREEN(実装内容)→ DoD(完了条件)を持つ
 - チェックボックスで進捗管理する
+- タスク番号は**追加順のラベル**であり、ファイル内の記載順が推奨実行順(セルフレビュー反映 v1.1 で追加されたタスクは末尾番号を持つことがある)
 
 ## フェーズ一覧
 

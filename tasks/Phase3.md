@@ -57,8 +57,9 @@
   - DoD: 公開済み。模擬報告で手順を1回リハーサル
 
 - [ ] **P3-T10**(L→分割)外部 security review
-  - 内容: レビュアー手配(コミュニティ/専門家)、スコープ定義(loader / broker / egress / RBAC)、指摘のトリアージと修正
-  - DoD: CRITICAL/HIGH ゼロ。指摘→修正→regression テスト追加まで完了
+  - 資金経路(無予算前提で3経路): (1) OSTIF 等の OSS セキュリティ監査支援プログラムへ応募、(2) Cloudflare の OSS スポンサー経由での支援打診、(3) 確保できない場合は構造化コミュニティレビューにフォールバック(threat model を公開し、攻撃面ごとに ADOPTERS 企業のセキュリティチームへ依頼 + 謝辞掲載)
+  - 内容: スコープ定義(loader / broker / egress / RBAC)、指摘のトリアージと修正
+  - DoD: いずれかの経路でレビューが実施され、CRITICAL/HIGH ゼロ。指摘→修正→regression テスト追加まで完了
 
 - [ ] **P3-T11**(M)fuzzing
   - RED: manifest パーサ・hook payload・config への fuzz(構造化 fuzz)でクラッシュ・hang・カタストロフィック backtracking ゼロ

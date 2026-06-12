@@ -5,26 +5,29 @@
 **Exit Gate(プロダクトドキュメント §12 準拠):**
 
 - [ ] E2E デモ成立: example-saas の `invoice.created` → installed plugin → モック Slack 通知
-- [ ] blocking hook(transform)の p95 added latency が warm < 50ms(実測値を docs/benchmarks/ に記録)
+- [ ] blocking hook(transform)の p95 added latency(warm)が実測され docs/benchmarks/ に記録されている。目標 50ms に対する **Go/No-Go 判断が完了**している(未達の場合は原因分析と対策方針を含む)
 - [ ] adversarial security suite green(raw secret 露出・egress 逸脱・grant 外 capability の既知経路ゼロ)
 - [ ] ADR-001 確定: Dynamic Worker Loader vs Workers for Platforms の選定
 - [ ] 全 package カバレッジ 80%+、CI green
+- [ ] LICENSE と OSS 基本整備が完了し、リポジトリ public 化のタイミングが決定されている(P0-T29)
 
 **スコープ外(Phase 1 に送る):** approval、rollback、budget cap、proxy mode、CLI、Admin UI、実 Slack OAuth。
 
+**並行トラック:** P0-T14(runtime スパイク)は最大の不確実性であり、T01 の scaffold を待たずに **Day 1 から prototype branch で開始する**(最大リスクを最初に潰す)。
+
 ---
 
-## チャンク A: 基盤(T01–T04)
+## チャンク A: 基盤(T01–T04, T29)
 
-- [ ] **P0-T01**(M)monorepo scaffold
-  - RED: 各 package の placeholder テスト(`expect(true)`ではなく、共有 tsconfig の strict 設定を検証する設定テスト)が `pnpm -r test` で実行されることを先に確認
+- [ ] **P0-T01**(M)monorepo scaffold(設定系タスク: RED の代わりに検証手順)
+  - 検証手順: `pnpm -r typecheck && pnpm -r lint && pnpm -r test` が green / strict 違反コードを一時的に置くと typecheck が fail することを確認
   - GREEN: pnpm workspaces、`packages/{manifest,plugin-sdk,host-sdk,loader,capabilities,control-plane}` と `apps/example-saas` の骨組み、共有 tsconfig(strict)、Vitest、ESLint + Prettier
-  - DoD: `pnpm -r typecheck && pnpm -r lint && pnpm -r test` が green
+  - DoD: 検証手順を全て通過
 
-- [ ] **P0-T02**(S)CI パイプライン
-  - RED: わざと型エラーを入れた PR で CI が fail することを確認(その後 revert)
-  - GREEN: GitHub Actions で typecheck → lint → test → coverage(80% gate)
-  - DoD: main への push と PR で CI が走り、coverage 閾値違反で fail する
+- [ ] **P0-T02**(M)CI パイプライン(2層構成)
+  - 検証手順: わざと型エラー・既知脆弱性のある依存を入れた PR で CI が fail することを確認(その後 revert)
+  - GREEN: GitHub Actions で Tier 1(accountless: typecheck → lint → test → pnpm audit → coverage 計測)を全 PR 必須に。Tier 2(live: 実 Cloudflare、nightly + maintainer ブランチのみ)の枠組みと secrets 運用を用意
+  - DoD: **fork PR でも Tier 1 が完走する**。coverage は計測のみ(ゲート強制はチャンク B 完了時に有効化)
 
 - [ ] **P0-T03**(M)vitest-pool-workers セットアップ
   - RED: workerd 内で D1 に insert → select する smoke テストを先に書く(fail を確認)
@@ -34,6 +37,10 @@
 - [ ] **P0-T04**(S)ADR 運用開始
   - GREEN: `docs/adr/` を作成し、ADR-000(TypeScript 選定、D-017 の実装版)を記録。テンプレートを置く
   - DoD: ADR テンプレと ADR-000 がコミットされている
+
+- [ ] **P0-T29**(S)OSS 基本整備(v1.1 追加: セルフレビュー反映)
+  - 内容: ライセンス選定を ADR-002 として記録(Apache-2.0 / MIT を比較。インフラ系 OSS の特許条項を考慮)し、LICENSE ファイルと全 package.json の license フィールドを設定。npm の @tenantscript scope を確保。リポジトリ public 化のタイミング(推奨: Phase 0 ゲート通過後)を決定して ADR に記録
+  - DoD: LICENSE がコミットされ、npm scope が確保され、public 化判断が記録されている
 
 ## チャンク B: manifest package(T05–T08)
 
@@ -86,9 +93,10 @@
 
 ## チャンク D: loader / sandbox(T14–T18)
 
-- [ ] **P0-T14**(L→分割可)runtime 比較スパイク(timebox: 2日)
-  - 内容: Worker Loader API(Dynamic Workers)と Workers for Platforms dispatch namespace で同じ最小 plugin を動かし、cold/warm latency・limits 設定・egress 制御・ローカル開発体験を比較
-  - DoD: **ADR-001** に実測値と選定理由を記録(以降のタスクは選定した方式で進める)。プロダクトドキュメント §15 Open Questions の該当行を解消としてマーク
+- [ ] **P0-T14**(L→分割可)runtime 比較スパイク(timebox: 2日、**Day 1 開始の並行トラック** — T01〜T13 に依存しない)
+  - 内容: Worker Loader API(Dynamic Workers)と Workers for Platforms dispatch namespace で同じ最小 plugin を動かし、cold/warm latency・limits 設定・egress 制御・ローカル開発体験・**料金プラン条件(self-host 採用者の負担)**を比較
+  - コンティンジェンシー: Worker Loader API が beta 非公開・制約過大なら WfP dispatch namespace を既定とする。WfP の有料プラン条件が self-host 採用の障壁になる場合はその影響を ADR に明記。両方不可の場合のみ service binding ベースの静的 dispatch(機能縮退)を検討
+  - DoD: **ADR-001** に実測値と選定理由(+ 棄却した代替と採用条件)を記録。プロダクトドキュメント §15 Open Questions の該当行を解消としてマーク
 
 - [ ] **P0-T15**(M)plugin bundle + version hash
   - RED: 同一入力 → 同一 hash(決定論性)/ 内容変更で hash 変化 / 外部 import の解決
@@ -139,14 +147,14 @@
 
 ## チャンク F: E2E・検証・品質(T24–T28)
 
-- [ ] **P0-T24**(M)E2E: example-saas デモ
-  - RED: 「invoice.created 発火 → installation 解決 → plugin 実行 → モック Slack 受信 → execution log 記録」を 1 本の E2E テストとして先に書く
-  - GREEN: example-saas(最小 host app)+ サンプル plugin(large-invoice-notify)を接続
-  - DoD: E2E green。手動デモ手順を `apps/example-saas/README.md` に記載
+- [ ] **P0-T24**(L→分割)E2E: example-saas デモ(event + transform の2経路)
+  - RED: (1)「invoice.created(event)発火 → installation 解決 → plugin 実行 → モック Slack 受信 → execution log 記録」、(2)「webhook.outbound(transform)発火 → 変換チェーン適用 → 変換後 payload 検証」の2本の E2E を先に書く(**transform 経路は T25 ベンチの前提** — この配線を作るタスクは他にない)
+  - GREEN: example-saas(最小 host app)+ サンプル plugin 2種(large-invoice-notify / payload-transformer)を接続
+  - DoD: 両経路の E2E green。手動デモ手順を `apps/example-saas/README.md` に記載
 
-- [ ] **P0-T25**(M)レイテンシベンチ
-  - 内容: transform hook(webhook.outbound)1段の added latency を warm/cold で計測するハーネス
-  - DoD: p95 warm < 50ms / cold < 300ms の実測を `docs/benchmarks/phase0.md` に記録。未達なら原因分析を issue 化(gate 判断材料)
+- [ ] **P0-T25**(M)レイテンシベンチ(**Tier 2**: 実 Cloudflare で計測)
+  - 内容: transform hook(webhook.outbound)1段の added latency を warm/cold で計測するハーネス(T24 の transform 経路を使用)
+  - DoD: p95 warm / cold の実測を `docs/benchmarks/phase0.md` に記録し、目標(warm < 50ms / cold < 300ms)に対する **Go/No-Go 判断を完了**する。未達なら原因分析と対策方針を issue 化
 
 - [ ] **P0-T26**(M)adversarial security suite v1(常設化)
   - 内容: T16/T18/T20 の攻撃テストを `security-suite` として独立実行可能に集約し、CI の必須ジョブにする。追加攻撃: 他 tenant の installation/config/log への越境参照
@@ -156,6 +164,6 @@
   - 内容: パッケージ境界・命名・重複の見直し(コードレビュー込み)。800行超ファイル・50行超関数の分割
   - DoD: lint/型/テスト green のまま完了。レビュー指摘の CRITICAL/HIGH ゼロ
 
-- [ ] **P0-T28**(S)Phase 0 ゲートレビュー
-  - 内容: Exit Gate チェックリスト消化、ADR-001 確定、ベンチ結果レビュー、**Phase 1 タスクの再分割**(ローリングウェーブ)
-  - DoD: Exit Gate 全項目にチェック。Phase1.md が最新化されている
+- [ ] **P0-T28**(S)Phase 0 ゲートレビュー + design partner 募集開始
+  - 内容: Exit Gate チェックリスト消化、ADR-001 確定、ベンチ結果レビュー、**Phase 1 タスクの再分割**(ローリングウェーブ)。design partner 候補(FinOps / AI agent SaaS / developer-facing SaaS)のリスト化と声かけを開始(P1-T42 の前提 — 募集はリードタイムが長いため Phase 1 開発と並走させる)
+  - DoD: Exit Gate 全項目にチェック。Phase1.md が最新化され、partner 候補リストが存在する

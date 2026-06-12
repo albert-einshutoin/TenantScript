@@ -1,7 +1,7 @@
 # Cloudflare-native SaaS Extension Control Plane
 
 **Product Strategy & MVP Spec**  
-**推奨名称:** Cloudflare-native Extension Control Plane for B2B SaaS(旧称: SaaS Extension Runtime)  
+**推奨名称:** Cloudflare-native Extension Control Plane for B2B SaaS(working title: TenantScript、旧称: SaaS Extension Runtime)  
 **作成日:** 2026-06-11  
 **更新日:** 2026-06-12 — v0.4: 実装言語決定(D-017: TypeScript)、開発計画は[tasks/](../tasks/README.md)参照。v0.3: pure OSS戦略(D-008改訂)、proxy mode(D-015)、AI coding agent前提(D-016)。v0.2: レビュー指摘反映(実行モデル、config、failure policy、KPIほか)  
 **ステータス:** Working Draft — OSSプロジェクトのMVP定義に使えるレベル

@@ -16,17 +16,18 @@
 
 ## チャンク A: multi-app / multi-tenant 強化(T01–T04)
 
-- [ ] **P2-T01**(M)D1 の app 単位シャーディング
-  - RED: app 作成時に専用 D1 が割り当てられ、app 間でクエリが物理分離される(10GB 上限対策)
-  - DoD: シャーディング下で全 integration テスト green
+- [ ] **P2-T01**(L→分割)D1 の app 単位シャーディング(セットアップ時プロビジョニング)
+  - 注意: D1 binding は wrangler 設定の静的宣言であり、実行時の動的プロビジョニングは素直にできない。`ext setup` 時の事前プロビジョニング + ルーティング層(app → D1 解決)として設計し、**先行スパイクで binding 戦略(複数 binding / D1 HTTP API)を検証してから実装する**
+  - RED: app ごとに別 D1 へ書き込まれ、app 間でクエリが物理分離される(10GB 上限対策)
+  - DoD: スパイク結果が ADR 化され、シャーディング下で全 integration テスト green
 
-- [ ] **P2-T02**(M)tenant 越境の網羅テスト
+- [ ] **P2-T02**(L→分割)tenant 越境の網羅テスト
   - RED: 全エンドポイント × 越境アクセスのマトリクステストを自動生成(エンドポイント追加時にテスト漏れすると fail する仕組み)
   - DoD: マトリクス green、security suite に常設
 
-- [ ] **P2-T03**(M)並行実行の負荷テスト
-  - 内容: 同一 tenant / 複数 tenant での同時 hook 実行(目標値は partner 実績から設定)。p95 レイテンシの劣化を計測
-  - DoD: 負荷シナリオが CI(nightly)に入り、閾値超過で fail
+- [ ] **P2-T03**(M)並行実行の負荷テスト(**Tier 2**: 実 Cloudflare、nightly)
+  - 内容: 同一 tenant / 複数 tenant での同時 hook 実行(目標値は partner 実績から設定)。p95 レイテンシの劣化を計測。**実行コストを記録して予算管理する**
+  - DoD: 負荷シナリオが Tier 2 CI(nightly)に入り、閾値超過で fail
 
 - [ ] **P2-T04**(S)2つ目の example host app
   - 内容: 異なるドメイン(例: HR 系)の example app を追加し、hook schema が app 固有であることを実証

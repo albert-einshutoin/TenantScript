@@ -4,7 +4,7 @@
 
 **Exit Gate:**
 
-- [ ] design partner 1社の本番 hook で plugin 3つ以上が4週間連続稼働
+- [ ] design partner 1社の本番 hook で plugin 3つ以上が4週間連続稼働(稼働クロックは **P1-T42 の先行オンボーディングから開始**し、残りの開発と並走させる — 全タスク完了後に4週間待つ計画ではない)
 - [ ] SE の顧客別実装リードタイムがベースライン比 50% 短縮(partner と合意した計測方法で)
 - [ ] rollback MTTR 5分未満(drill で実測)
 - [ ] proxy mode 単体で価値を実感できる(partner ヒアリング)
@@ -50,7 +50,7 @@
   - 内容: 「壊れた version を deploy → 検知 → rollback 完了」までの手順書と計測スクリプト
   - DoD: drill 実施で MTTR < 5分を記録(`docs/benchmarks/` に追記)
 
-## チャンク C: approvals(T08–T13)
+## チャンク C: approvals(T08–T13, T41)
 
 - [ ] **P1-T08**(M)approvals.request capability
   - RED: plugin から request → Approval レコードが作成され、**handler はそこで正常終了する**(suspend しないこと自体をテスト、D-011)
@@ -58,9 +58,10 @@
   - DoD: 作成・即時終了・grant 外 role 拒否のテスト green
 
 - [ ] **P1-T09**(M)approval lifecycle(Workflows)
-  - RED: 期限切れで expired に遷移 / リマインド予定が生成される(時間は Workflows のテスト機構でモック)
+  - 設計: workflow エンジンを interface(seam)で包み、状態遷移ロジックはエンジン非依存の unit テストで検証する。実 Workflows の結線は **Tier 2**(nightly)で検証する(Workflows のローカルテスト機構の存在を前提にしない)
+  - RED: 期限切れで expired に遷移 / リマインド予定が生成される(時間はモッククロック)
   - GREEN: Cloudflare Workflows で通知・リマインド・期限切れを管理
-  - DoD: 状態遷移(pending → approved/rejected/expired)テスト green
+  - DoD: 状態遷移(pending → approved/rejected/expired)の unit テスト green + Tier 2 結線テスト
 
 - [ ] **P1-T10**(M)decision API + CLI
   - RED: approve/reject で state 遷移 / 二重決定は拒否 / 決定者と理由が audit に残る
@@ -71,6 +72,12 @@
   - RED: approve 決定 → resumeHook が**新しい execution として**起動し、decision payload(approved/rejected、subject)を受け取る
   - GREEN: decision → loader 起動の接続(D-011 の完成)
   - DoD: E2E(request → decision → continuation)green
+
+- [ ] **P1-T41**(M)最小 identity / role マッピング(v1.1 追加: セルフレビュー反映)
+  - 背景: approval queue(T36)は「manager role」を前提とするが、RBAC は Phase 2(P2-T05)。MVP では API トークン発行時に role クレームを静的に埋め込む最小 identity で成立させる
+  - RED: manager クレーム付きトークンのみ approve できる / viewer トークンは 403 / role の自己申告(リクエストボディでの role 指定)が無視される
+  - GREEN: トークン → role クレームの静的マッピングと、decision API / approval queue での検証
+  - DoD: role 検証テスト green(security suite に追加)。Phase 2 RBAC への移行パスをコードコメントで明記
 
 - [ ] **P1-T12**(S)approval 攻撃テスト
   - RED: 権限のない role による決定 / 他 tenant の approval への決定 / resumeHook の偽装呼び出し — 全て拒否されること
@@ -99,8 +106,8 @@
   - DoD: 加算・境界・並行加算(競合)テスト green
 
 - [ ] **P1-T17**(M)超過時 auto-disable
-  - RED: budget 超過の次の実行が拒否され、execution に `budget_exceeded` が記録され、installation が disabled になり、管理者通知イベントが発行される
-  - GREEN: 実行前チェック + disable + 通知
+  - RED: budget 超過の次の実行が拒否され、execution に `budget_exceeded` が記録され、installation が disabled になり、管理者通知イベントが発行される(MVP の通知は **webhook イベント発行のみ**。メール等の配送チャネルは作らない)
+  - GREEN: 実行前チェック + disable + 通知イベント
   - DoD: 超過系テスト green。**復旧手順(re-enable)もテスト**
 
 - [ ] **P1-T18**(S)budget 攻撃テスト
@@ -140,6 +147,12 @@
   - 内容: 「Stripe/GitHub いずれかの実 webhook を 15分で変換する」チュートリアル + E2E 化
   - DoD: チュートリアル手順がそのまま CI の E2E として動く(docs のコード断片をテストから参照)
 
+## チャンク G2: design partner 先行オンボーディング(T42)— v1.1 追加
+
+- [ ] **P1-T42**(M)partner 先行オンボーディング(前提: チャンク B(rollback)+ G(proxy)完了)
+  - 内容: P0-T28 の候補リストから 1社を確定し、proxy mode + rollback の最小構成で本番(または本番相当)導入。**4週間稼働クロックをここから開始**し、週次フィードバックループを設定。「SE リードタイム 50% 短縮」ゲートのベースライン計測方法もここで合意する
+  - DoD: partner 環境で最初の plugin が稼働し、稼働開始日・計測方法・週次レビュー日程が記録されている
+
 ## チャンク H: CLI(T25–T29)
 
 - [ ] **P1-T25**(S)`ext init`
@@ -167,7 +180,7 @@
   - GREEN: deploy コマンド(control-plane API 接続)
   - DoD: dry-run・実 deploy のテスト green
 
-## チャンク I: usage meter(T30–T31)
+## チャンク I: usage meter(T30–T31)— Exit Gate 非依存。逼迫時は Phase 2 冒頭へスリップ可
 
 - [ ] **P1-T30**(M)Analytics Engine 書き込み
   - RED: execution ごとに executions / cpuMs / subrequests / workflowRuns のデータポイントが記録される
@@ -182,10 +195,11 @@
 ## チャンク J: Admin UI 最小(T32–T36)
 
 > UI はコンポーネントテスト(Vitest + Testing Library)+ Playwright E2E。スタイルは admin 用途に徹し、装飾より hierarchy と状態表示を優先する。
+> スリップ判断: T35(executions 検索画面)は CLI で代替できるため逼迫時はスリップ可。T33(permission)と T34(rollback)は Exit Gate(rollback drill、partner 運用)に直結するためスリップ不可。
 
 - [ ] **P1-T32**(M)UI 基盤
   - GREEN: React + Vite + ルーティング + API クライアント(zod で型共有)+ Playwright 設定
-  - DoD: 起動・ログイン(最小トークン認証)・E2E smoke green
+  - DoD: 起動・ログイン(最小トークン認証、P1-T41 の role クレーム対応)・E2E smoke green。**design partner 環境への手動デプロイ手順書を含む**(セットアップウィザードは Phase 3 のため)
 
 - [ ] **P1-T33**(M)installations + permission 画面
   - RED(E2E): install フローで manifest 要求 capability が表示され、grant を確認して有効化できる / config フォームが configSchema から生成され required 検証が効く
@@ -199,8 +213,8 @@
   - RED(E2E): tenant/plugin/hook/status でフィルタし、詳細で capability call 列とエラーを見られる
   - DoD: E2E green
 
-- [ ] **P1-T36**(M)approval queue 画面
-  - RED(E2E): manager role に承認待ちが表示され、approve/reject でき、結果が audit に残る
+- [ ] **P1-T36**(M)approval queue 画面(前提: P1-T41)
+  - RED(E2E): manager role のトークン(P1-T41)でログインすると承認待ちが表示され、approve/reject でき、結果が audit に残る / viewer トークンでは操作できない
   - DoD: E2E green(P1-T10 の UI 版)
 
 ## チャンク K: 品質・ドキュメント・ゲート(T37–T40)
@@ -217,6 +231,6 @@
   - 内容: quickstart 2本(proxy mode / SDK 統合)、SDK リファレンス骨子、トラブルシュート(rollback 手順)
   - DoD: 新規参加者がドキュメントだけで E2E デモを再現できる(レビュアー1名で検証)
 
-- [ ] **P1-T40**(S)Phase 1 ゲートレビュー + design partner 開始
-  - 内容: Exit Gate 消化、partner 1社へのオンボーディング、フィードバックループ(週次)設定、**Phase 2 タスクの再分割**
+- [ ] **P1-T40**(S)Phase 1 ゲートレビュー
+  - 内容: Exit Gate 消化(partner 稼働4週間は P1-T42 起点で判定)、partner フィードバックの棚卸し、**Phase 2 タスクの再分割**
   - DoD: Exit Gate 全項目チェック、Phase2.md 最新化
