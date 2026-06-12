@@ -237,9 +237,9 @@ describe("ext rollback", () => {
       }
     };
 
-    await expect(runExtCli(["deploy"], client)).resolves.toBe(2);
+    await expect(runExtCli(["unknown"], client)).resolves.toBe(2);
 
-    expect(error).toHaveBeenCalledWith("unknown command: deploy");
+    expect(error).toHaveBeenCalledWith("unknown command: unknown");
   });
 
   it("returns a command failure when the rollback client fails", async () => {

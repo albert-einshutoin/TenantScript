@@ -5,6 +5,8 @@ import { parseManifest } from "@tenantscript/manifest";
 import type {
   ApprovalRecord,
   DecideApprovalRequest,
+  RegisterPluginRequest,
+  RegisterPluginVersionRequest,
   RollbackInstallationRequest,
   RollbackResult
 } from "@tenantscript/control-plane";
@@ -15,6 +17,19 @@ export interface RollbackClient {
 
 export interface ApprovalDecisionClient {
   decideApproval: (request: DecideApprovalRequest) => Promise<ApprovalRecord>;
+}
+
+export interface DeployClient {
+  registerPlugin: (
+    request: RegisterPluginRequest
+  ) => Promise<{ id: string; appId: string; key: string }>;
+  registerPluginVersion: (request: RegisterPluginVersionRequest) => Promise<{
+    id: string;
+    pluginId: string;
+    version: string;
+    artifactHash: string;
+    manifest: unknown;
+  }>;
 }
 
 export interface CliIo {
@@ -56,7 +71,7 @@ export interface RollbackDrillMeasurement {
 
 export async function runExtCli(
   argv: readonly string[],
-  client: RollbackClient & Partial<ApprovalDecisionClient>,
+  client: RollbackClient & Partial<ApprovalDecisionClient> & Partial<DeployClient>,
   io: CliIo = consoleIo
 ): Promise<number> {
   const [command, ...args] = argv;
@@ -77,6 +92,9 @@ export async function runExtCli(
   }
   if (command === "manifest") {
     return await runManifest(args, io);
+  }
+  if (command === "deploy") {
+    return await runDeploy(args, client, io);
   }
   if (command === "rollback-drill") {
     return runRollbackDrill(args, io);
@@ -382,6 +400,83 @@ async function runManifest(args: readonly string[], io: CliIo): Promise<number> 
   }
 }
 
+async function runDeploy(
+  args: readonly string[],
+  client: Partial<DeployClient>,
+  io: CliIo
+): Promise<number> {
+  const parsed = parseDeployArgs(args);
+  if (!parsed.ok) {
+    io.stderr(parsed.error);
+    return 2;
+  }
+
+  try {
+    const manifestInput = JSON.parse(await readFile(parsed.request.manifest, "utf8")) as unknown;
+    const manifest = parseManifest(manifestInput);
+    if (!manifest.ok) {
+      io.stdout(JSON.stringify({ ok: false, errors: manifest.errors }));
+      return 1;
+    }
+    if (manifest.value.version !== parsed.request.version) {
+      io.stderr(
+        `manifest version ${manifest.value.version} does not match ${parsed.request.version}`
+      );
+      return 2;
+    }
+
+    const bundle = await bundlePlugin(parsed.request.entry);
+    if (parsed.request.dryRun) {
+      io.stdout(
+        JSON.stringify({
+          dryRun: true,
+          appId: parsed.request.appId,
+          pluginKey: parsed.request.pluginKey,
+          version: parsed.request.version,
+          artifactHash: bundle.sha256,
+          bytes: bundle.code.length,
+          manifest: {
+            name: manifest.value.name,
+            version: manifest.value.version,
+            hooks: manifest.value.hooks.map((hook) => hook.name)
+          }
+        })
+      );
+      return 0;
+    }
+
+    if (client.registerPlugin === undefined || client.registerPluginVersion === undefined) {
+      io.stderr("deploy client is not configured");
+      return 1;
+    }
+    const plugin = await client.registerPlugin({
+      appId: parsed.request.appId,
+      key: parsed.request.pluginKey
+    });
+    const version = await client.registerPluginVersion({
+      appId: parsed.request.appId,
+      pluginKey: parsed.request.pluginKey,
+      version: parsed.request.version,
+      manifest: manifest.value,
+      artifactHash: bundle.sha256,
+      artifact: bundle.code
+    });
+    io.stdout(
+      JSON.stringify({
+        dryRun: false,
+        pluginId: plugin.id,
+        pluginVersionId: version.id,
+        version: version.version,
+        artifactHash: version.artifactHash
+      })
+    );
+    return 0;
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "deploy failed");
+    return 1;
+  }
+}
+
 async function runApprovalDecision(
   args: readonly string[],
   client: Partial<ApprovalDecisionClient>,
@@ -462,6 +557,15 @@ interface SchemaDiffRequest {
 
 interface ManifestLintRequest {
   manifest: string;
+}
+
+interface DeployRequest {
+  appId: string;
+  pluginKey: string;
+  version: string;
+  entry: string;
+  manifest: string;
+  dryRun: boolean;
 }
 
 interface HookSchema {
@@ -611,6 +715,43 @@ function parseManifestLintArgs(
     return { ok: false, error: "missing required manifest lint option: --manifest" };
   }
   return { ok: true, request: { manifest: resolve(manifest) } };
+}
+
+function parseDeployArgs(
+  args: readonly string[]
+): { ok: true; request: DeployRequest } | { ok: false; error: string } {
+  const flags = readFlags(args);
+  const appId = flags.app;
+  if (appId === undefined) {
+    return { ok: false, error: "missing required deploy option: --app" };
+  }
+  const pluginKey = flags.plugin;
+  if (pluginKey === undefined) {
+    return { ok: false, error: "missing required deploy option: --plugin" };
+  }
+  const version = flags.version;
+  if (version === undefined) {
+    return { ok: false, error: "missing required deploy option: --version" };
+  }
+  const entry = flags.entry;
+  if (entry === undefined) {
+    return { ok: false, error: "missing required deploy option: --entry" };
+  }
+  const manifest = flags.manifest;
+  if (manifest === undefined) {
+    return { ok: false, error: "missing required deploy option: --manifest" };
+  }
+  return {
+    ok: true,
+    request: {
+      appId,
+      pluginKey,
+      version,
+      entry: resolve(entry),
+      manifest: resolve(manifest),
+      dryRun: flags["dry-run"] === "true"
+    }
+  };
 }
 
 function parseJsonPayload(

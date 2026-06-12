@@ -180,7 +180,7 @@
   - GREEN: semver 互換判定 + CI 組み込み手順
   - DoD: breaking/非 breaking のマトリクステスト green
 
-- [ ] **P1-T29**(S)`ext deploy`
+- [x] **P1-T29**(S)`ext deploy`
   - RED: deploy → version 登録 → (オプション)installation の段階的切替、が dry-run で検証できる
   - GREEN: deploy コマンド(control-plane API 接続)
   - DoD: dry-run・実 deploy のテスト green
