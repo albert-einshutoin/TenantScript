@@ -153,7 +153,7 @@
 
 ## チャンク F: E2E・検証・品質(T24–T28)
 
-- [ ] **P0-T24**(L→分割)E2E: example-saas デモ(event + transform の2経路)(前提: P0-T30)
+- [x] **P0-T24**(L→分割)E2E: example-saas デモ(event + transform の2経路)(前提: P0-T30)
   - RED: (1)「invoice.created(event)発火 → installation 解決 → plugin 実行 → モック Slack 受信 → execution log 記録」、(2)「webhook.outbound(transform)発火 → 変換チェーン適用 → 変換後 payload 検証」の2本の E2E を先に書く(**transform 経路は T25 ベンチの前提** — この配線を作るタスクは他にない)
   - GREEN: example-saas(最小 host app)+ サンプル plugin 2種(large-invoice-notify / payload-transformer)を接続
   - DoD: 両経路の E2E green。手動デモ手順を `apps/example-saas/README.md` に記載

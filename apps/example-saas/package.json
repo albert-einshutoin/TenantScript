@@ -12,5 +12,12 @@
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*"
+  },
+  "dependencies": {
+    "@tenantscript/capabilities": "workspace:*",
+    "@tenantscript/control-plane": "workspace:*",
+    "@tenantscript/host-sdk": "workspace:*",
+    "@tenantscript/manifest": "workspace:*",
+    "@tenantscript/plugin-sdk": "workspace:*"
   }
 }

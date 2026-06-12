@@ -43,6 +43,22 @@ importers:
         version: 4.100.0(@cloudflare/workers-types@4.20260612.1)
 
   apps/example-saas:
+    dependencies:
+      '@tenantscript/capabilities':
+        specifier: workspace:*
+        version: link:../../packages/capabilities
+      '@tenantscript/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/control-plane
+      '@tenantscript/host-sdk':
+        specifier: workspace:*
+        version: link:../../packages/host-sdk
+      '@tenantscript/manifest':
+        specifier: workspace:*
+        version: link:../../packages/manifest
+      '@tenantscript/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
     devDependencies:
       '@tenantscript/test-config':
         specifier: workspace:*
