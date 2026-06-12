@@ -8,6 +8,32 @@ export interface CapabilityGrant {
 export type CapabilityGrants = Record<string, CapabilityGrant>;
 export type CapabilityProvider = (input: unknown) => unknown;
 
+export interface CapabilityCallJournalEntry {
+  executionId: string;
+  callIndex: number;
+  capability: string;
+  inputHash: string;
+  result: unknown;
+  completedAt: Date;
+}
+
+export interface CapabilityCallJournal {
+  readCapabilityCall: (query: {
+    executionId: string;
+    callIndex: number;
+  }) => Promise<CapabilityCallJournalEntry | null> | CapabilityCallJournalEntry | null;
+  writeCapabilityCall: (
+    entry: CapabilityCallJournalEntry
+  ) => Promise<CapabilityCallJournalEntry> | CapabilityCallJournalEntry;
+}
+
+export interface CapabilityCallJournalStorage {
+  get: (
+    key: string
+  ) => Promise<CapabilityCallJournalEntry | undefined> | CapabilityCallJournalEntry | undefined;
+  put: (key: string, entry: CapabilityCallJournalEntry) => Promise<void> | void;
+}
+
 export interface CapabilityBroker {
   call: (name: string, input: unknown) => Promise<unknown>;
 }
@@ -48,12 +74,27 @@ export class CapabilityDeniedError extends Error {
   override readonly name = "CapabilityDeniedError";
 }
 
+export class CapabilityJournalConflictError extends Error {
+  override readonly name = "CapabilityJournalConflictError";
+}
+
 export function createCapabilityBroker(params: {
   grants: CapabilityGrants;
   providers: Record<string, CapabilityProvider>;
+  executionId?: string;
+  journal?: CapabilityCallJournal;
+  now?: () => Date;
 }): CapabilityBroker {
+  if (params.journal !== undefined && params.executionId === undefined) {
+    throw new Error("capability journal requires an executionId");
+  }
+
+  let callIndex = 0;
+
   return {
     call: async (name, input) => {
+      const currentCallIndex = callIndex;
+      callIndex += 1;
       const grant = params.grants[name];
       if (grant === undefined) {
         throw new CapabilityDeniedError(`capability ${name} is not granted`);
@@ -66,7 +107,52 @@ export function createCapabilityBroker(params: {
         throw new CapabilityDeniedError(`capability ${name} has no provider`);
       }
 
-      return await provider(input);
+      const inputHash = stableJson(input);
+      const journaled = await readJournaledCapabilityCall({
+        journal: params.journal,
+        executionId: params.executionId,
+        callIndex: currentCallIndex,
+        capability: name,
+        inputHash
+      });
+      if (journaled !== null) {
+        return journaled.result;
+      }
+
+      const result = await provider(input);
+      await params.journal?.writeCapabilityCall({
+        executionId: params.executionId ?? "",
+        callIndex: currentCallIndex,
+        capability: name,
+        inputHash,
+        result,
+        completedAt: params.now?.() ?? new Date()
+      });
+
+      return result;
+    }
+  };
+}
+
+export function createInMemoryCapabilityCallJournal(): CapabilityCallJournal {
+  const entries = new Map<string, CapabilityCallJournalEntry>();
+
+  return createDurableObjectCapabilityCallJournal({
+    get: (key) => entries.get(key),
+    put: (key, entry) => {
+      entries.set(key, entry);
+    }
+  });
+}
+
+export function createDurableObjectCapabilityCallJournal(
+  storage: CapabilityCallJournalStorage
+): CapabilityCallJournal {
+  return {
+    readCapabilityCall: async (query) => (await storage.get(journalKey(query))) ?? null,
+    writeCapabilityCall: async (entry) => {
+      await storage.put(journalKey(entry), entry);
+      return entry;
     }
   };
 }
@@ -140,6 +226,34 @@ export function createMockSlackSendProvider(params: {
   };
 }
 
+async function readJournaledCapabilityCall(params: {
+  journal: CapabilityCallJournal | undefined;
+  executionId: string | undefined;
+  callIndex: number;
+  capability: string;
+  inputHash: string;
+}): Promise<CapabilityCallJournalEntry | null> {
+  if (params.journal === undefined || params.executionId === undefined) {
+    return null;
+  }
+
+  const entry = await params.journal.readCapabilityCall({
+    executionId: params.executionId,
+    callIndex: params.callIndex
+  });
+  if (entry === null) {
+    return null;
+  }
+
+  if (entry.capability !== params.capability || entry.inputHash !== params.inputHash) {
+    throw new CapabilityJournalConflictError(
+      `capability journal conflict for ${params.executionId}:${String(params.callIndex)}`
+    );
+  }
+
+  return entry;
+}
+
 function assertScope(name: string, grant: CapabilityGrant, input: unknown): void {
   if (name === "slack.send") {
     const message = parseSlackSendInput(input);
@@ -166,6 +280,39 @@ function assertScope(name: string, grant: CapabilityGrant, input: unknown): void
       );
     }
   }
+}
+
+function journalKey(params: { executionId: string; callIndex: number }): string {
+  return `${params.executionId}:${String(params.callIndex)}`;
+}
+
+function stableJson(value: unknown): string {
+  if (value === undefined) {
+    return "undefined";
+  }
+  if (typeof value === "bigint") {
+    return `bigint:${value.toString()}`;
+  }
+  if (typeof value === "symbol") {
+    return `symbol:${value.description ?? ""}`;
+  }
+  if (typeof value === "function") {
+    return `function:${value.name}`;
+  }
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+    .join(",")}}`;
 }
 
 function parseSlackSendInput(input: unknown): { channel: string; text: string } {

@@ -88,7 +88,7 @@
 
 ## チャンク D: 冪等性 journal(T14–T15)
 
-- [ ] **P1-T14**(M)capability call journal(DO)
+- [x] **P1-T14**(M)capability call journal(DO)
   - RED: 同一 execution の retry で、journal 済み capability call が**実行されずに**前回結果を返す(モック Slack の受信が1回であることを検証、D-014)
   - GREEN: Durable Object journal + broker 統合
   - DoD: retry 二重送信防止テスト green

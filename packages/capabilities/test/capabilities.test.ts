@@ -3,9 +3,12 @@ import {
   CapabilityDeniedError,
   createApprovalsRequestProvider,
   createCapabilityBroker,
+  createDurableObjectCapabilityCallJournal,
+  createInMemoryCapabilityCallJournal,
   createMockSlackSendProvider,
   createPluginCapabilityContext,
-  type ApprovalRecord
+  type ApprovalRecord,
+  type CapabilityCallJournalEntry
 } from "../src/index.js";
 
 describe("createCapabilityBroker", () => {
@@ -20,6 +23,60 @@ describe("createCapabilityBroker", () => {
       ok: true
     });
     expect(provider).toHaveBeenCalledWith({ channel: "C123", text: "hello" });
+  });
+
+  it("replays journaled capability results for the same execution retry", async () => {
+    const deliver = vi.fn();
+    const journal = createInMemoryCapabilityCallJournal();
+    const createBrokerForRetry = () =>
+      createCapabilityBroker({
+        executionId: "exec_retry_1",
+        journal,
+        grants: { "slack.send": { channel: "C123" } },
+        providers: {
+          "slack.send": createMockSlackSendProvider({
+            token: "xoxb-secret-token",
+            deliver
+          })
+        }
+      });
+
+    const first = await createBrokerForRetry().call("slack.send", {
+      channel: "C123",
+      text: "hello"
+    });
+    const retry = await createBrokerForRetry().call("slack.send", {
+      channel: "C123",
+      text: "hello"
+    });
+
+    expect(retry).toEqual(first);
+    expect(deliver).toHaveBeenCalledOnce();
+    expect(deliver).toHaveBeenCalledWith({ channel: "C123", text: "hello" });
+  });
+
+  it("stores journal entries through Durable Object compatible storage", async () => {
+    const entries = new Map<string, CapabilityCallJournalEntry>();
+    const journal = createDurableObjectCapabilityCallJournal({
+      get: (key) => entries.get(key),
+      put: (key, entry) => {
+        entries.set(key, entry);
+      }
+    });
+
+    await expect(
+      journal.writeCapabilityCall({
+        executionId: "exec_1",
+        callIndex: 0,
+        capability: "slack.send",
+        inputHash: "hash_1",
+        result: { ok: true },
+        completedAt: new Date("2026-06-13T01:00:00.000Z")
+      })
+    ).resolves.toMatchObject({ executionId: "exec_1", callIndex: 0 });
+    await expect(
+      journal.readCapabilityCall({ executionId: "exec_1", callIndex: 0 })
+    ).resolves.toMatchObject({ capability: "slack.send", result: { ok: true } });
   });
 
   it("rejects ungranted capabilities", async () => {
