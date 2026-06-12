@@ -3,7 +3,7 @@
 **Product Strategy & MVP Spec**  
 **推奨名称:** Cloudflare-native Extension Control Plane for B2B SaaS(旧称: SaaS Extension Runtime)  
 **作成日:** 2026-06-11  
-**更新日:** 2026-06-12 — v0.3: pure OSS戦略へ転換(D-008改訂、収益化を目的としない)。proxy mode導入パス(D-015)、AI coding agent前提の設計(D-016)、持続可能性モデルを追加。v0.2でレビュー指摘(実行モデル、config、failure policy、KPI、Personas、競合分析ほか)を反映済み  
+**更新日:** 2026-06-12 — v0.4: 実装言語決定(D-017: TypeScript)、開発計画は[tasks/](../tasks/README.md)参照。v0.3: pure OSS戦略(D-008改訂)、proxy mode(D-015)、AI coding agent前提(D-016)。v0.2: レビュー指摘反映(実行モデル、config、failure policy、KPIほか)  
 **ステータス:** Working Draft — OSSプロジェクトのMVP定義に使えるレベル
 
 ---
@@ -69,6 +69,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / D1 / R2 / Durable Objects /
 | D-014 | capability callをexecution journalで冪等化する | retry時の二重送信(Slack二重通知など)を防ぐ。journalはDurable Objectに記録し、replay時は完了済みcallをskipする。 |
 | D-015 | Proxy modeを導入の入口にする | SDK統合(本体へのhook工事)は最大の採用障壁。outbound webhookの向き先を変えるだけで使えるzero-integrationモードを用意し、webhook transformation / notification rulesを工事なしで体験させてからSDK統合に誘導する。 |
 | D-016 | AI coding agentを前提に設計する | pluginの書き手は人間のSEだけでなくAIになる。typed SDK、manifest validation、capability sandbox、local replayはAI生成コードの安全装置として機能する。docs / llms.txt / scaffoldをagent-friendlyに整備し、配布チャネルとしても扱う。 |
+| D-017 | 実装言語はTypeScriptに統一する | Workers runtime(V8 isolate)のネイティブ言語であり、Dynamic Worker Loader / D1 / R2 / DO / Workflowsのbindingsが第一級。plugin author(SE / AI agent)とhost SDK導入先の主要言語でもある。SDK / loader / control plane / CLI / UIを単一言語にしてOSS貢献障壁を下げる(D-008と整合)。Rust/WASMはPhase 4のportability検討時に再評価。GoはWorkers第一級サポートがなくD-009と矛盾するため不採用。 |
 
 ---
 
