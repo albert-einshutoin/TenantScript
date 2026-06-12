@@ -170,7 +170,7 @@
   - GREEN: dev サーバ + build コマンド
   - DoD: dev/build のテスト green
 
-- [ ] **P1-T27**(M)`ext replay`
+- [x] **P1-T27**(M)`ext replay`
   - RED: 本番 execution の event sample を取得し、新 version でローカル再実行 → 差分(結果・capability call 列)が表示される
   - GREEN: replay 実装(execution log から sample 取得)
   - DoD: replay の比較テスト green

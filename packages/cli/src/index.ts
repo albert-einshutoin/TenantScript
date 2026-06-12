@@ -1,4 +1,4 @@
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { bundlePlugin, runScopedHandler } from "@tenantscript/loader";
 import type {
@@ -67,6 +67,9 @@ export async function runExtCli(
   }
   if (command === "dev") {
     return await runDev(args, io);
+  }
+  if (command === "replay") {
+    return await runReplay(args, io);
   }
   if (command === "rollback-drill") {
     return runRollbackDrill(args, io);
@@ -259,6 +262,61 @@ async function runDev(args: readonly string[], io: CliIo): Promise<number> {
   }
 }
 
+async function runReplay(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseReplayArgs(args);
+  if (!parsed.ok) {
+    io.stderr(parsed.error);
+    return 2;
+  }
+
+  let sample: ReplaySample;
+  try {
+    sample = await readReplaySample(parsed.request.sample);
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "invalid replay sample");
+    return error instanceof ReplaySampleError ? 2 : 1;
+  }
+
+  try {
+    const capabilityCalls: { name: string; status: "success" | "denied" | "error" }[] = [];
+    const bundle = await bundlePlugin(parsed.request.entry);
+    const result = await runScopedHandler({
+      bundleCode: bundle.code,
+      handlerName: sample.execution.hookName,
+      payload: sample.payload,
+      context: {
+        capability: (name, input) => {
+          capabilityCalls.push({ name, status: "success" });
+          return Promise.resolve(sample.capabilityResponses[name] ?? { ok: true, name, input });
+        }
+      }
+    });
+
+    io.stdout(
+      JSON.stringify({
+        executionId: sample.execution.id,
+        hookName: sample.execution.hookName,
+        previous: {
+          value: sample.value,
+          capabilityCalls: sample.execution.capabilityCalls
+        },
+        replay: {
+          value: result.value,
+          capabilityCalls
+        },
+        diff: {
+          valueChanged: !jsonEqual(sample.value, result.value),
+          capabilityCallsChanged: !jsonEqual(sample.execution.capabilityCalls, capabilityCalls)
+        }
+      })
+    );
+    return 0;
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "plugin replay failed");
+    return 1;
+  }
+}
+
 async function runApprovalDecision(
   args: readonly string[],
   client: Partial<ApprovalDecisionClient>,
@@ -315,6 +373,24 @@ interface DevRequest {
   hookName: string;
   payload: unknown;
 }
+
+interface ReplayRequest {
+  entry: string;
+  sample: string;
+}
+
+interface ReplaySample {
+  execution: {
+    id: string;
+    hookName: string;
+    capabilityCalls: readonly { name: string; status: "success" | "denied" | "error" }[];
+  };
+  payload: unknown;
+  value: unknown;
+  capabilityResponses: Record<string, unknown>;
+}
+
+class ReplaySampleError extends Error {}
 
 function parseInitArgs(
   args: readonly string[]
@@ -405,6 +481,27 @@ function parseDevArgs(
   };
 }
 
+function parseReplayArgs(
+  args: readonly string[]
+): { ok: true; request: ReplayRequest } | { ok: false; error: string } {
+  const flags = readFlags(args);
+  const entry = flags.entry;
+  if (entry === undefined) {
+    return { ok: false, error: "missing required replay option: --entry" };
+  }
+  const sample = flags.sample;
+  if (sample === undefined) {
+    return { ok: false, error: "missing required replay option: --sample" };
+  }
+  return {
+    ok: true,
+    request: {
+      entry: resolve(entry),
+      sample: resolve(sample)
+    }
+  };
+}
+
 function parseJsonPayload(
   value: string
 ): { ok: true; value: unknown } | { ok: false; error: string } {
@@ -413,6 +510,61 @@ function parseJsonPayload(
   } catch {
     return { ok: false, error: "invalid dev option: --payload must be JSON" };
   }
+}
+
+async function readReplaySample(path: string): Promise<ReplaySample> {
+  const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
+  if (!isRecord(parsed)) {
+    throw new ReplaySampleError("invalid replay sample: execution.hookName is required");
+  }
+  const execution = parsed.execution;
+  if (!isRecord(execution) || typeof execution.hookName !== "string") {
+    throw new ReplaySampleError("invalid replay sample: execution.hookName is required");
+  }
+  if (typeof execution.id !== "string") {
+    throw new ReplaySampleError("invalid replay sample: execution.id is required");
+  }
+
+  return {
+    execution: {
+      id: execution.id,
+      hookName: execution.hookName,
+      capabilityCalls: parseReplayCapabilityCalls(execution.capabilityCalls)
+    },
+    payload: parsed.payload,
+    value: parsed.value,
+    capabilityResponses: isRecord(parsed.capabilityResponses) ? parsed.capabilityResponses : {}
+  };
+}
+
+function parseReplayCapabilityCalls(
+  value: unknown
+): readonly { name: string; status: "success" | "denied" | "error" }[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((entry) => {
+    if (
+      !isRecord(entry) ||
+      typeof entry.name !== "string" ||
+      !isCapabilityCallStatus(entry.status)
+    ) {
+      return [];
+    }
+    return [{ name: entry.name, status: entry.status }];
+  });
+}
+
+function isCapabilityCallStatus(value: unknown): value is "success" | "denied" | "error" {
+  return value === "success" || value === "denied" || value === "error";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function jsonEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function parseHookType(value: string): InitRequest["hookType"] | undefined {
