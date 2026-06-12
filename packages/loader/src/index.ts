@@ -94,27 +94,57 @@ export async function runScopedHandler(params: {
   const limits = normalizeLimits(params.limits);
   const guardedContext = createGuardedContext(params.context, limits, logs);
   const sandbox = createSandbox(guardedContext, limits, logs);
-  const script = new vm.Script(params.bundleCode, {
-    filename: "tenant-plugin.cjs"
+
+  evaluateBundle(params.bundleCode, sandbox, limits);
+  assertHandlerExists(sandbox.module.exports, params.handlerName);
+  prepareInvocationSandbox({
+    sandbox,
+    handlerName: params.handlerName,
+    payload: params.payload,
+    context: guardedContext
   });
 
-  script.runInContext(sandbox, { timeout: limits.timeoutMs });
+  const handlerResult = invokeHandlerInSandbox(sandbox, params.handlerName, limits);
+  return {
+    value: await withWallClockTimeout(handlerResult, limits.timeoutMs, params.handlerName),
+    logs
+  };
+}
 
-  const exportedModule = sandbox.module.exports;
+function evaluateBundle(bundleCode: string, sandbox: Sandbox, limits: RuntimeLimitState): void {
+  const script = new vm.Script(bundleCode, {
+    filename: "tenant-plugin.cjs"
+  });
+  script.runInContext(sandbox, { timeout: limits.timeoutMs });
+}
+
+function assertHandlerExists(exportedModule: unknown, handlerName: string): void {
   const handlers = isRecord(exportedModule) ? exportedModule.handlers : undefined;
   if (!isRecord(handlers)) {
     throw new Error("plugin bundle must export a handlers object");
   }
 
-  const handler = handlers[params.handlerName];
-  if (!isHandlerFunction(handler)) {
-    throw new Error(`plugin bundle does not export handler ${params.handlerName}`);
+  if (!isHandlerFunction(handlers[handlerName])) {
+    throw new Error(`plugin bundle does not export handler ${handlerName}`);
   }
+}
 
-  sandbox.__tenant_handler_name = params.handlerName;
-  sandbox.__tenant_payload = params.payload;
-  sandbox.__tenant_context = guardedContext;
+function prepareInvocationSandbox(params: {
+  sandbox: Sandbox;
+  handlerName: string;
+  payload: unknown;
+  context: ScopedRuntimeContext;
+}): void {
+  params.sandbox.__tenant_handler_name = params.handlerName;
+  params.sandbox.__tenant_payload = params.payload;
+  params.sandbox.__tenant_context = params.context;
+}
 
+function invokeHandlerInSandbox(
+  sandbox: Sandbox,
+  handlerName: string,
+  limits: RuntimeLimitState
+): Promise<unknown> {
   const invocation = new vm.Script(
     [
       "Promise.resolve(",
@@ -124,24 +154,18 @@ export async function runScopedHandler(params: {
     { filename: "tenant-plugin-handler.cjs" }
   );
 
-  let handlerResult: Promise<unknown>;
   try {
-    handlerResult = invocation.runInContext(sandbox, {
+    return invocation.runInContext(sandbox, {
       timeout: limits.timeoutMs
     }) as Promise<unknown>;
   } catch (error) {
     if (isVmTimeout(error)) {
       throw new ScopedRuntimeTimeoutError(
-        `handler ${params.handlerName} exceeded ${String(limits.timeoutMs)}ms`
+        `handler ${handlerName} exceeded ${String(limits.timeoutMs)}ms`
       );
     }
     throw error;
   }
-
-  return {
-    value: await withWallClockTimeout(handlerResult, limits.timeoutMs, params.handlerName),
-    logs
-  };
 }
 
 function createSandbox(

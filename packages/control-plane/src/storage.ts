@@ -78,134 +78,166 @@ export class ArtifactAlreadyExistsError extends Error {
 
 export function createD1ControlPlaneStore(db: D1DatabaseLike) {
   return {
-    createApp: async (record: AppRecord) => {
-      await db
-        .prepare("INSERT INTO apps (id, name) VALUES (?, ?)")
-        .bind(record.id, record.name)
-        .run();
-      return record;
-    },
-    createTenant: async (record: TenantRecord) => {
-      await db
-        .prepare("INSERT INTO tenants (id, app_id, name) VALUES (?, ?, ?)")
-        .bind(record.id, record.appId, record.name)
-        .run();
-      return record;
-    },
-    createPlugin: async (record: PluginRecord) => {
-      await db
-        .prepare("INSERT INTO plugins (id, app_id, key) VALUES (?, ?, ?)")
-        .bind(record.id, record.appId, record.key)
-        .run();
-      return record;
-    },
-    createPluginVersion: async (record: PluginVersionRecord) => {
-      await db
-        .prepare(
-          [
-            "INSERT INTO plugin_versions",
-            "(id, plugin_id, version, artifact_hash, manifest_json)",
-            "VALUES (?, ?, ?, ?, ?)"
-          ].join(" ")
-        )
-        .bind(
-          record.id,
-          record.pluginId,
-          record.version,
-          record.artifactHash,
-          JSON.stringify(record.manifest)
-        )
-        .run();
-      return record;
-    },
-    createInstallation: async (record: InstallationRecord) => {
-      await db
-        .prepare(
-          [
-            "INSERT INTO installations",
-            "(id, tenant_id, plugin_version_id, enabled, priority, config_json, grants_json)",
-            "VALUES (?, ?, ?, ?, ?, ?, ?)"
-          ].join(" ")
-        )
-        .bind(
-          record.id,
-          record.tenantId,
-          record.pluginVersionId,
-          record.enabled ? 1 : 0,
-          record.priority,
-          JSON.stringify(record.config),
-          JSON.stringify(record.grants)
-        )
-        .run();
-      return record;
-    },
-    writeExecution: async (record: ExecutionRecord) => {
-      await db
-        .prepare(
-          [
-            "INSERT INTO executions",
-            "(id, tenant_id, plugin_id, hook_name, version, status, duration_ms, error, capability_calls_json, created_at)",
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-          ].join(" ")
-        )
-        .bind(
-          record.id,
-          record.tenantId,
-          record.pluginId,
-          record.hookName,
-          record.version,
-          record.status,
-          record.durationMs,
-          record.error ?? null,
-          JSON.stringify(record.capabilityCalls),
-          record.createdAt.toISOString()
-        )
-        .run();
-      return record;
-    },
-    searchExecutions: async (query: ExecutionSearchQuery) => {
-      const rows = await db
-        .prepare(
-          [
-            "SELECT id, tenant_id, plugin_id, hook_name, version, status, duration_ms, error,",
-            "capability_calls_json, created_at FROM executions",
-            "WHERE (?1 IS NULL OR tenant_id = ?1)",
-            "AND (?2 IS NULL OR plugin_id = ?2)",
-            "AND (?3 IS NULL OR hook_name = ?3)",
-            "AND (?4 IS NULL OR status = ?4)",
-            "ORDER BY created_at ASC"
-          ].join(" ")
-        )
-        .bind(
-          query.tenantId ?? null,
-          query.pluginId ?? null,
-          query.hookName ?? null,
-          query.status ?? null
-        )
-        .all();
+    createApp: createAppWriter(db),
+    createTenant: createTenantWriter(db),
+    createPlugin: createPluginWriter(db),
+    createPluginVersion: createPluginVersionWriter(db),
+    createInstallation: createInstallationWriter(db),
+    writeExecution: createExecutionWriter(db),
+    searchExecutions: createExecutionSearcher(db),
+    resolveInstallationsForHook: createInstallationResolver(db)
+  };
+}
 
-      return (rows.results as ExecutionRow[]).map(executionFromRow);
-    },
-    resolveInstallationsForHook: async (params: { tenantId: string; hookName: string }) => {
-      const rows = await db
-        .prepare(
-          [
-            "SELECT i.id AS installation_id, i.tenant_id, i.plugin_version_id, i.enabled, i.priority,",
-            "i.config_json, i.grants_json, pv.version, pv.manifest_json, p.id AS plugin_id",
-            "FROM installations i",
-            "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
-            "JOIN plugins p ON p.id = pv.plugin_id",
-            "WHERE i.tenant_id = ? AND i.enabled = 1",
-            "ORDER BY i.priority ASC"
-          ].join(" ")
-        )
-        .bind(params.tenantId)
-        .all();
+function createAppWriter(db: D1DatabaseLike) {
+  return async (record: AppRecord) => {
+    await db
+      .prepare("INSERT INTO apps (id, name) VALUES (?, ?)")
+      .bind(record.id, record.name)
+      .run();
+    return record;
+  };
+}
 
-      return (rows.results as ResolvedInstallationRow[])
-        .map(resolvedInstallationFromRow)
-        .filter((installation) => installation.hooks.includes(params.hookName));
-    }
+function createTenantWriter(db: D1DatabaseLike) {
+  return async (record: TenantRecord) => {
+    await db
+      .prepare("INSERT INTO tenants (id, app_id, name) VALUES (?, ?, ?)")
+      .bind(record.id, record.appId, record.name)
+      .run();
+    return record;
+  };
+}
+
+function createPluginWriter(db: D1DatabaseLike) {
+  return async (record: PluginRecord) => {
+    await db
+      .prepare("INSERT INTO plugins (id, app_id, key) VALUES (?, ?, ?)")
+      .bind(record.id, record.appId, record.key)
+      .run();
+    return record;
+  };
+}
+
+function createPluginVersionWriter(db: D1DatabaseLike) {
+  return async (record: PluginVersionRecord) => {
+    await db
+      .prepare(
+        [
+          "INSERT INTO plugin_versions",
+          "(id, plugin_id, version, artifact_hash, manifest_json)",
+          "VALUES (?, ?, ?, ?, ?)"
+        ].join(" ")
+      )
+      .bind(
+        record.id,
+        record.pluginId,
+        record.version,
+        record.artifactHash,
+        JSON.stringify(record.manifest)
+      )
+      .run();
+    return record;
+  };
+}
+
+function createInstallationWriter(db: D1DatabaseLike) {
+  return async (record: InstallationRecord) => {
+    await db
+      .prepare(
+        [
+          "INSERT INTO installations",
+          "(id, tenant_id, plugin_version_id, enabled, priority, config_json, grants_json)",
+          "VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ].join(" ")
+      )
+      .bind(
+        record.id,
+        record.tenantId,
+        record.pluginVersionId,
+        record.enabled ? 1 : 0,
+        record.priority,
+        JSON.stringify(record.config),
+        JSON.stringify(record.grants)
+      )
+      .run();
+    return record;
+  };
+}
+
+function createExecutionWriter(db: D1DatabaseLike) {
+  return async (record: ExecutionRecord) => {
+    await db
+      .prepare(
+        [
+          "INSERT INTO executions",
+          "(id, tenant_id, plugin_id, hook_name, version, status, duration_ms, error, capability_calls_json, created_at)",
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ].join(" ")
+      )
+      .bind(
+        record.id,
+        record.tenantId,
+        record.pluginId,
+        record.hookName,
+        record.version,
+        record.status,
+        record.durationMs,
+        record.error ?? null,
+        JSON.stringify(record.capabilityCalls),
+        record.createdAt.toISOString()
+      )
+      .run();
+    return record;
+  };
+}
+
+function createExecutionSearcher(db: D1DatabaseLike) {
+  return async (query: ExecutionSearchQuery) => {
+    const rows = await db
+      .prepare(
+        [
+          "SELECT id, tenant_id, plugin_id, hook_name, version, status, duration_ms, error,",
+          "capability_calls_json, created_at FROM executions",
+          "WHERE (?1 IS NULL OR tenant_id = ?1)",
+          "AND (?2 IS NULL OR plugin_id = ?2)",
+          "AND (?3 IS NULL OR hook_name = ?3)",
+          "AND (?4 IS NULL OR status = ?4)",
+          "ORDER BY created_at ASC"
+        ].join(" ")
+      )
+      .bind(
+        query.tenantId ?? null,
+        query.pluginId ?? null,
+        query.hookName ?? null,
+        query.status ?? null
+      )
+      .all();
+
+    return (rows.results as ExecutionRow[]).map(executionFromRow);
+  };
+}
+
+function createInstallationResolver(db: D1DatabaseLike) {
+  return async (params: { tenantId: string; hookName: string }) => {
+    const rows = await db
+      .prepare(
+        [
+          "SELECT i.id AS installation_id, i.tenant_id, i.plugin_version_id, i.enabled, i.priority,",
+          "i.config_json, i.grants_json, pv.version, pv.manifest_json, p.id AS plugin_id",
+          "FROM installations i",
+          "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
+          "JOIN plugins p ON p.id = pv.plugin_id",
+          "WHERE i.tenant_id = ? AND i.enabled = 1",
+          "ORDER BY i.priority ASC"
+        ].join(" ")
+      )
+      .bind(params.tenantId)
+      .all();
+
+    return (rows.results as ResolvedInstallationRow[])
+      .map(resolvedInstallationFromRow)
+      .filter((installation) => installation.hooks.includes(params.hookName));
   };
 }
 

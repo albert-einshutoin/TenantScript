@@ -86,51 +86,81 @@ export function createExampleSaasDemo(options: ExampleSaasDemoOptions = {}): Exa
   return {
     slackMessages,
     executionLog,
-    emitInvoiceCreated: async (payload) => {
-      const plan = planExecution({
-        hookName: "invoice.created",
-        hookType: "event",
-        installations
-      });
-
-      await Promise.all(
-        plan.steps.map((step) =>
-          dispatchAndRecord({
-            step,
-            hookName: "invoice.created",
-            payload,
-            plugin: plugins[step.installationId],
-            capabilityBroker,
-            executionLog
-          })
-        )
-      );
-    },
-    transformWebhookOutbound: async (payload) => {
-      const plan = planExecution({
-        hookName: "webhook.outbound",
-        hookType: "transform",
-        installations
-      });
-
-      return runTransformChain(plan, payload, async (step, currentPayload) => {
-        const result = await dispatchAndRecord({
-          step,
-          hookName: "webhook.outbound",
-          payload: currentPayload,
-          plugin: plugins[step.installationId],
-          capabilityBroker,
-          executionLog
-        });
-
-        if (!result.ok) {
-          return currentPayload;
-        }
-
-        return result.value as WebhookPayload;
-      });
-    }
+    emitInvoiceCreated: (payload) =>
+      emitInvoiceCreated({
+        payload,
+        installations,
+        plugins,
+        capabilityBroker,
+        executionLog
+      }),
+    transformWebhookOutbound: (payload) =>
+      transformWebhookOutbound({
+        payload,
+        installations,
+        plugins,
+        capabilityBroker,
+        executionLog
+      })
   };
+}
+
+async function emitInvoiceCreated(params: {
+  payload: InvoiceCreatedPayload;
+  installations: readonly Installation[];
+  plugins: Record<string, TenantScriptPlugin>;
+  capabilityBroker: CapabilityBroker;
+  executionLog: ExecutionLogStore;
+}): Promise<void> {
+  const plan = planExecution({
+    hookName: "invoice.created",
+    hookType: "event",
+    installations: params.installations
+  });
+
+  await Promise.all(
+    plan.steps.map((step) =>
+      dispatchAndRecord({
+        step,
+        hookName: "invoice.created",
+        payload: params.payload,
+        plugin: params.plugins[step.installationId],
+        capabilityBroker: params.capabilityBroker,
+        executionLog: params.executionLog
+      })
+    )
+  );
+}
+
+async function transformWebhookOutbound(params: {
+  payload: WebhookPayload;
+  installations: readonly Installation[];
+  plugins: Record<string, TenantScriptPlugin>;
+  capabilityBroker: CapabilityBroker;
+  executionLog: ExecutionLogStore;
+}): Promise<WebhookPayload> {
+  const plan = planExecution({
+    hookName: "webhook.outbound",
+    hookType: "transform",
+    installations: params.installations
+  });
+
+  return runTransformChain(plan, params.payload, async (step, currentPayload) => {
+    const result = await dispatchAndRecord({
+      step,
+      hookName: "webhook.outbound",
+      payload: currentPayload,
+      plugin: params.plugins[step.installationId],
+      capabilityBroker: params.capabilityBroker,
+      executionLog: params.executionLog
+    });
+
+    if (!result.ok) {
+      return currentPayload;
+    }
+
+    return result.value as WebhookPayload;
+  });
 }
 
 function createPlugins(options: ExampleSaasDemoOptions): Record<string, TenantScriptPlugin> {

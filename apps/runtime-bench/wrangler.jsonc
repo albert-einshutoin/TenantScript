@@ -1,0 +1,16 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tenantscript-phase0-runtime-bench",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-12",
+  "workers_dev": true,
+  "worker_loaders": [
+    {
+      "binding": "LOADER"
+    }
+  ],
+  "limits": {
+    "cpu_ms": 30000,
+    "subrequests": 1000
+  }
+}

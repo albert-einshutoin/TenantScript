@@ -41,6 +41,7 @@
 - [ ] **P0-T29**(S)OSS 基本整備(v1.1 追加: セルフレビュー反映)
   - 内容: ライセンス選定を ADR-002 として記録(Apache-2.0 / MIT を比較。インフラ系 OSS の特許条項を考慮)し、LICENSE ファイルと全 package.json の license フィールドを設定。npm の @tenantscript scope を確保。リポジトリ public 化のタイミング(推奨: Phase 0 ゲート通過後)を決定して ADR に記録
   - DoD: LICENSE がコミットされ、npm scope が確保され、public 化判断が記録されている
+  - 2026-06-12 メモ: GitHub repo は PUBLIC、LICENSE/ADR-002/license metadata は完了。npm は `npm whoami` が E401 のため scope 確保未完了
 
 ## チャンク B: manifest package(T05–T08)
 
@@ -97,6 +98,7 @@
   - 内容: Worker Loader API(Dynamic Workers)と Workers for Platforms dispatch namespace で同じ最小 plugin を動かし、cold/warm latency・limits 設定・egress 制御・ローカル開発体験・**料金プラン条件(self-host 採用者の負担)**を比較
   - コンティンジェンシー: Worker Loader API が beta 非公開・制約過大なら WfP dispatch namespace を既定とする。WfP の有料プラン条件が self-host 採用の障壁になる場合はその影響を ADR に明記。両方不可の場合のみ service binding ベースの静的 dispatch(機能縮退)を検討
   - DoD: **ADR-001** に実測値と選定理由(+ 棄却した代替と採用条件)を記録。プロダクトドキュメント §15 Open Questions の該当行を解消としてマーク
+  - 2026-06-12 メモ: `apps/runtime-bench` dry-run は通過。live deploy は Cloudflare API code 10195(paid plan required)で停止。`docs/adr/001-runtime-primitive.md` にブロック証跡を記録
 
 - [x] **P0-T15**(M)plugin bundle + version hash
   - RED: 同一入力 → 同一 hash(決定論性)/ 内容変更で hash 変化 / 外部 import の解決
@@ -161,12 +163,13 @@
 - [ ] **P0-T25**(M)レイテンシベンチ(**Tier 2**: 実 Cloudflare で計測)
   - 内容: transform hook(webhook.outbound)1段の added latency を warm/cold で計測するハーネス(T24 の transform 経路を使用)
   - DoD: p95 warm / cold の実測を `docs/benchmarks/phase0.md` に記録し、目標(warm < 50ms / cold < 300ms)に対する **Go/No-Go 判断を完了**する。未達なら原因分析と対策方針を issue 化
+  - 2026-06-12 メモ: benchmark harness は追加済み。実測は Cloudflare paid plan blocker 解消後に実行する
 
 - [x] **P0-T26**(M)adversarial security suite v1(常設化)
   - 内容: T16/T18/T20 の攻撃テストを `security-suite` として独立実行可能に集約し、CI の必須ジョブにする。追加攻撃: 他 tenant の installation/config/log への越境参照
   - DoD: `pnpm test:security` が CI 必須ジョブとして green
 
-- [ ] **P0-T27**(S)Phase 0 refactor pass
+- [x] **P0-T27**(S)Phase 0 refactor pass
   - 内容: パッケージ境界・命名・重複の見直し(コードレビュー込み)。800行超ファイル・50行超関数の分割
   - DoD: lint/型/テスト green のまま完了。レビュー指摘の CRITICAL/HIGH ゼロ
 
