@@ -64,6 +64,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/test-config
 
+  apps/runtime-bench:
+    devDependencies:
+      '@tenantscript/test-config':
+        specifier: workspace:*
+        version: link:../../packages/test-config
+
   packages/capabilities:
     devDependencies:
       '@tenantscript/test-config':
