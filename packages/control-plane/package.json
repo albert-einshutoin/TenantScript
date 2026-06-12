@@ -12,10 +12,14 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test": "vitest run && vitest run --config vitest.workers.config.ts",
+    "test:coverage": "vitest run --coverage && vitest run --config vitest.workers.config.ts"
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*"
+  },
+  "dependencies": {
+    "@tenantscript/host-sdk": "workspace:*",
+    "@tenantscript/manifest": "workspace:*"
   }
 }

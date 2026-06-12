@@ -29,7 +29,7 @@
   - GREEN: GitHub Actions で Tier 1(accountless: typecheck → lint → test → pnpm audit → coverage 計測)を全 PR 必須に。Tier 2(live: 実 Cloudflare、nightly + maintainer ブランチのみ)の枠組みと secrets 運用を用意
   - DoD: **fork PR でも Tier 1 が完走する**。coverage は計測のみ(ゲート強制はチャンク B 完了時に有効化)
 
-- [ ] **P0-T03**(M)vitest-pool-workers セットアップ
+- [x] **P0-T03**(M)vitest-pool-workers セットアップ
   - RED: workerd 内で D1 に insert → select する smoke テストを先に書く(fail を確認)
   - GREEN: `@cloudflare/vitest-pool-workers` 設定、テスト用 wrangler config(D1 / R2 / DO バインディング)
   - DoD: integration テストが workerd 内で実行され、D1/R2/DO に触れる
@@ -130,12 +130,12 @@
   - GREEN: broker 側で token を保持し、plugin には結果のみ返す(D-004)
   - DoD: 機能テスト + 露出テスト green
 
-- [ ] **P0-T21**(M)D1 schema v1 + migrations
+- [x] **P0-T21**(M)D1 schema v1 + migrations
   - RED: migration 適用後に apps / tenants / plugins / plugin_versions / installations / executions の CRUD smoke が通る(workerd 内)
   - GREEN: スキーマ定義 + wrangler migrations
   - DoD: integration テスト green、migration はべき等
 
-- [ ] **P0-T22**(S)R2 artifact store
+- [x] **P0-T22**(S)R2 artifact store
   - RED: put → get by hash の round-trip / **同一 hash への上書きが拒否される**(immutability)
   - GREEN: artifact put/get + immutable ガード
   - DoD: round-trip・immutability テスト green
@@ -145,7 +145,7 @@
   - GREEN: execution 記録 + 検索 API(最小)
   - DoD: 書き込み・検索テスト green
 
-- [ ] **P0-T30**(S)installation resolver(D1-backed)(v1.2 追加: 最終レビュー反映)
+- [x] **P0-T30**(S)installation resolver(D1-backed)(v1.2 追加: 最終レビュー反映)
   - 背景: P0-T11 の planner は in-memory store、P0-T21 は D1 スキーマ。両者を繋ぐ「D1 から hook 対象 installation を解決する」実装がどのタスクにも無く、T24 の E2E が暗黙の前提にしていた
   - RED: D1 の installations から hook 対象の active な plugin version・grant・config が解決され、T11 の store interface として planner に渡る / disabled・tenant 不一致は除外される
   - GREEN: host-sdk の installation store interface の D1 実装(control-plane 内)

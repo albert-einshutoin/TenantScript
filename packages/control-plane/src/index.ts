@@ -62,3 +62,18 @@ function cloneExecution(record: ExecutionRecord): ExecutionRecord {
     createdAt: new Date(record.createdAt)
   };
 }
+
+export {
+  ArtifactAlreadyExistsError,
+  createD1ControlPlaneStore,
+  createR2ArtifactStore,
+  type AppRecord,
+  type D1DatabaseLike,
+  type D1PreparedStatementLike,
+  type InstallationRecord,
+  type PluginRecord,
+  type PluginVersionRecord,
+  type R2BucketLike,
+  type ResolvedInstallation,
+  type TenantRecord
+} from "./storage.js";
