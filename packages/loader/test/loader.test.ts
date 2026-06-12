@@ -2,7 +2,12 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { bundlePlugin, runScopedHandler } from "../src/index.js";
+import {
+  ScopedRuntimeLimitError,
+  ScopedRuntimeTimeoutError,
+  bundlePlugin,
+  runScopedHandler
+} from "../src/index.js";
 
 describe("bundlePlugin", () => {
   it("produces deterministic hashes for the same input", async () => {
@@ -122,7 +127,7 @@ describe("runScopedHandler", () => {
 
     expect(result).toEqual({
       value: "handled",
-      logs: [{ reason: "egress_denied", url: "https://example.com/webhook" }]
+      logs: [{ reason: "egress_denied", target: "https://example.com/webhook" }]
     });
   });
 
@@ -147,8 +152,85 @@ describe("runScopedHandler", () => {
     });
 
     expect(result.logs).toEqual([
-      { reason: "egress_denied", url: "https://example.com/url-object" }
+      { reason: "egress_denied", target: "https://example.com/url-object" }
     ]);
+  });
+
+  it("terminates synchronous infinite-loop handlers with a timeout status", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": () => {
+          while (true) {}
+        }
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() },
+        limits: { timeoutMs: 10 }
+      })
+    ).rejects.toMatchObject({
+      name: "ScopedRuntimeTimeoutError",
+      executionStatus: "timeout"
+    } satisfies Partial<ScopedRuntimeTimeoutError>);
+  });
+
+  it("rejects capability calls after the subrequest limit is exceeded", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async (_payload, context) => {
+          await context.capability("slack.send", { channel: "C123", text: "one" });
+          await context.capability("slack.send", { channel: "C123", text: "two" });
+        }
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn().mockResolvedValue({ ok: true }) },
+        limits: { maxSubrequests: 1 }
+      })
+    ).rejects.toThrow(ScopedRuntimeLimitError);
+  });
+
+  it("records subrequest limit violations for audit", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async (_payload, context) => {
+          await context.capability("slack.send", { channel: "C123", text: "one" });
+          await context.capability("slack.send", { channel: "C123", text: "two" });
+        }
+      };
+    `);
+
+    const capability = vi.fn().mockResolvedValue({ ok: true });
+    let error: unknown;
+
+    try {
+      await runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability },
+        limits: { maxSubrequests: 1 }
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(ScopedRuntimeLimitError);
+    expect(error).toMatchObject({
+      executionStatus: "budget_exceeded",
+      logs: [{ reason: "subrequest_limit_exceeded", target: "capability:slack.send" }]
+    });
+    expect(capability).toHaveBeenCalledOnce();
   });
 
   it("rejects bundles without a handlers object", async () => {

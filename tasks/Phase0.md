@@ -108,7 +108,7 @@
   - GREEN: 選定 runtime で plugin module をロードし、ctx 経由の値のみ渡す
   - DoD: 露出試行テスト全 green(= 全攻撃失敗)
 
-- [ ] **P0-T17**(M)limits enforcement
+- [x] **P0-T17**(M)limits enforcement
   - RED: 無限ループ plugin が timeoutMs で強制終了し、execution に `timeout` が記録される / subrequest 上限超過が拒否される
   - GREEN: limits 設定の適用(選定 runtime の custom limits / loader 側ガード)
   - DoD: wall-clock timeout と subrequest 上限(loader 側ガード)は Tier 1 でテスト green。**cpuMs 等の platform enforcement はローカル workerd で本番同等に検証できないため、Tier 2 で実機挙動を確認**し結果を ADR-001 に追記
@@ -162,7 +162,7 @@
   - 内容: transform hook(webhook.outbound)1段の added latency を warm/cold で計測するハーネス(T24 の transform 経路を使用)
   - DoD: p95 warm / cold の実測を `docs/benchmarks/phase0.md` に記録し、目標(warm < 50ms / cold < 300ms)に対する **Go/No-Go 判断を完了**する。未達なら原因分析と対策方針を issue 化
 
-- [ ] **P0-T26**(M)adversarial security suite v1(常設化)
+- [x] **P0-T26**(M)adversarial security suite v1(常設化)
   - 内容: T16/T18/T20 の攻撃テストを `security-suite` として独立実行可能に集約し、CI の必須ジョブにする。追加攻撃: 他 tenant の installation/config/log への越境参照
   - DoD: `pnpm test:security` が CI 必須ジョブとして green
 

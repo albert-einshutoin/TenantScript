@@ -25,5 +25,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test:coverage
+      - run: pnpm test:security
       - run: pnpm audit --audit-level moderate
       - run: pnpm format

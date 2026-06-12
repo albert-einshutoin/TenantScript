@@ -10,6 +10,7 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage",
+    "test:security": "pnpm --filter @tenantscript/loader test:security && pnpm --filter @tenantscript/capabilities test:security && pnpm --filter @tenantscript/control-plane test:security",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm format"
