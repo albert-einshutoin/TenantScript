@@ -97,6 +97,26 @@ export async function bundlePlugin(entryPoint: string): Promise<PluginBundle> {
   };
 }
 
+/**
+ * Runs a bundled plugin handler in a hardened `node:vm` context.
+ *
+ * Trust boundary: this path backs first-party local tooling only
+ * (`tenantscript plugin dev` / `plugin replay`), where a plugin author runs
+ * their own code against mock capabilities. Untrusted multi-tenant execution
+ * runs on the production Cloudflare Dynamic Workers isolate, where CPU/wall-clock
+ * and egress limits are enforced by the platform — see
+ * `docs/adr/001-runtime-primitive.md`.
+ *
+ * `limits.timeoutMs` enforcement is therefore best-effort here:
+ * - synchronous loops are interrupted by the vm script `timeout`;
+ * - async handlers that yield to the macrotask queue are caught by
+ *   `withWallClockTimeout`;
+ * - an async handler that monopolizes the microtask queue
+ *   (e.g. `while (true) await Promise.resolve()`) CANNOT be interrupted
+ *   in-process and will hang this dev process. Hard, interruptible enforcement
+ *   requires a worker/isolate and is tracked in
+ *   https://github.com/albert-einshutoin/TenantScript/issues/6.
+ */
 export async function runScopedHandler(params: {
   bundleCode: string;
   handlerName: string;
@@ -280,6 +300,11 @@ function normalizeLimits(limits: ScopedRuntimeLimits | undefined): RuntimeLimitS
   };
 }
 
+// Best-effort wall-clock guard for async handlers. The `setTimeout` below is a
+// macrotask, so it only fires once the microtask queue drains. A handler that
+// starves the microtask queue (`while (true) await Promise.resolve()`) is NOT
+// caught here — that requires worker/isolate termination (see runScopedHandler
+// docs and issue #6).
 async function withWallClockTimeout(
   result: Promise<unknown>,
   timeoutMs: number,
