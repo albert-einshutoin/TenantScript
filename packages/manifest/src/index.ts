@@ -18,7 +18,11 @@ const configFieldSchema = z
     type: z.enum(["string", "number", "boolean"]),
     default: z.union([z.string(), z.number(), z.boolean()]).optional()
   })
-  .strict();
+  .strict()
+  .refine((field) => field.default === undefined || typeof field.default === field.type, {
+    message: "default value must match the declared config type",
+    path: ["default"]
+  });
 
 export const configSchemaSpec = z
   .object({

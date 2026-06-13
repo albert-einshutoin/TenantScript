@@ -52,6 +52,16 @@ describe("parseManifest", () => {
       "hooks.0.timeoutMs"
     ],
     ["invalid egress mode", { egress: { mode: "open" } }, "egress.mode"],
+    [
+      "config default not matching declared type",
+      {
+        configSchema: {
+          properties: { dryRun: { type: "boolean", default: "nope" } },
+          required: []
+        }
+      },
+      "configSchema.properties.dryRun.default"
+    ],
     ["empty hooks", { hooks: [] }, "hooks"],
     ["unknown top-level key", { unknown: true }, ""],
     ["invalid version format", { version: "v1" }, "version"]
@@ -105,6 +115,21 @@ describe("validateConfig", () => {
         path: "notifyChannel",
         message: "expected string, received number"
       });
+    }
+  });
+
+  it("rejects schemas whose default does not match the declared type", () => {
+    const result = validateConfig(
+      {
+        properties: { retries: { type: "number", default: "not-a-number" } },
+        required: []
+      },
+      {}
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((error) => error.path === "properties.retries.default")).toBe(true);
     }
   });
 });
