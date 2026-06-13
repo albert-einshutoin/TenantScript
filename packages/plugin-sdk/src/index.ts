@@ -99,7 +99,7 @@ function validateHookReturn(
       error: {
         name: "HookReturnContractError",
         hookName,
-        message: "policy hooks must return allow, deny, or modify"
+        message: "policy hooks must return allow, deny, or modify with a payload"
       }
     };
   }
@@ -118,5 +118,9 @@ function isPolicyDecision(
   }
 
   const decision = value.decision;
-  return decision === "allow" || decision === "deny" || decision === "modify";
+  if (decision === "allow" || decision === "deny") {
+    return true;
+  }
+
+  return decision === "modify" && "payload" in value;
 }

@@ -123,9 +123,46 @@ describe("definePlugin", () => {
       error: {
         name: "HookReturnContractError",
         hookName: "invoice.approve",
-        message: "policy hooks must return allow, deny, or modify"
+        message: "policy hooks must return allow, deny, or modify with a payload"
       }
     });
+  });
+
+  it("rejects modify policy decisions without a payload", async () => {
+    const plugin = definePlugin({
+      manifest,
+      handlers: {
+        "invoice.approve": () => ({ decision: "modify" })
+      }
+    });
+
+    const result = await plugin.dispatch({
+      hookName: "invoice.approve",
+      payload: {},
+      context
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        name: "HookReturnContractError",
+        hookName: "invoice.approve",
+        message: "policy hooks must return allow, deny, or modify with a payload"
+      }
+    });
+  });
+
+  it("accepts a modify decision whose payload is explicitly null", async () => {
+    const plugin = definePlugin({
+      manifest,
+      handlers: {
+        "invoice.approve": () => ({ decision: "modify", payload: null })
+      }
+    });
+
+    await expect(
+      plugin.dispatch({ hookName: "invoice.approve", payload: {}, context })
+    ).resolves.toEqual({ ok: true, value: { decision: "modify", payload: null } });
   });
 
   it("accepts policy allow, deny, and modify decisions", async () => {
