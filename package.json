@@ -1,0 +1,36 @@
+{
+  "name": "tenantscript",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "test:security": "pnpm --filter @tenantscript/loader test:security && pnpm --filter @tenantscript/capabilities test:security && pnpm --filter @tenantscript/control-plane test:security && pnpm --filter @tenantscript/proxy test:security",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm format"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.15",
+    "@cloudflare/workers-types": "^4.20260612.1",
+    "@eslint/js": "^9.29.0",
+    "@types/node": "^25.9.3",
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^9.29.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.34.0",
+    "vitest": "^4.1.8",
+    "wrangler": "^4.100.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild@<0.28.1": ">=0.28.1"
+    }
+  }
+}

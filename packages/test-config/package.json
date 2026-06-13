@@ -1,0 +1,19 @@
+{
+  "name": "@tenantscript/test-config",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage --passWithNoTests"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.8"
+  }
+}
