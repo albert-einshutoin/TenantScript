@@ -15,10 +15,11 @@ runtime limits, security suite, and runtime benchmark harness.
   `docs/adr/001-runtime-primitive.md` and `docs/benchmarks/phase0.md`.
 - MEDIUM: npm `@tenantscript` scope cannot be secured from this environment because npm auth is
   missing (`npm whoami` returns E401).
-- MEDIUM: the local `node:vm` loader (`packages/loader/src/index.ts`) cannot interrupt async
-  handlers that monopolize the microtask queue, so `limits.timeoutMs` is best-effort on that
-  path. It backs only first-party `plugin dev`/`replay`; untrusted execution is enforced by the
-  production Cloudflare isolate (ADR-001). Hard interruptible enforcement is tracked in issue #6.
+- RESOLVED: the local loader (`packages/loader/src/index.ts`) now runs the hardened `node:vm`
+  context inside a terminable worker thread, so `limits.timeoutMs` can interrupt async handlers
+  that monopolize the microtask queue. This keeps the first-party `plugin dev`/`replay` path
+  aligned with the timeout contract while production tenant execution remains enforced by the
+  Cloudflare isolate boundary (ADR-001).
 
 ## Refactor Pass
 

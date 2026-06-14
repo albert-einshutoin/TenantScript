@@ -180,6 +180,33 @@ describe("runScopedHandler", () => {
     } satisfies Partial<ScopedRuntimeTimeoutError>);
   });
 
+  it("terminates async handlers that starve the microtask queue", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async () => {
+          while (true) {
+            await Promise.resolve();
+          }
+        }
+      };
+    `);
+    const startedAt = Date.now();
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() },
+        limits: { timeoutMs: 25 }
+      })
+    ).rejects.toMatchObject({
+      name: "ScopedRuntimeTimeoutError",
+      executionStatus: "timeout"
+    } satisfies Partial<ScopedRuntimeTimeoutError>);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
+
   it("rejects capability calls after the subrequest limit is exceeded", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {
@@ -232,6 +259,48 @@ describe("runScopedHandler", () => {
       logs: [{ reason: "subrequest_limit_exceeded", target: "capability:slack.send" }]
     });
     expect(capability).toHaveBeenCalledOnce();
+  });
+
+  it("propagates capability failures across the worker boundary", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async (_payload, context) => {
+          await context.capability("slack.send", { channel: "C123", text: "fail" });
+        }
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: {
+          capability: vi.fn().mockRejectedValue(new Error("capability failed"))
+        }
+      })
+    ).rejects.toThrow("capability failed");
+  });
+
+  it("serializes non-error capability failures across the worker boundary", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": async (_payload, context) => {
+          await context.capability("slack.send", { channel: "C123", text: "fail" });
+        }
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: {
+          capability: vi.fn().mockRejectedValue("capability failed")
+        }
+      })
+    ).rejects.toThrow("capability failed");
   });
 
   it("rejects bundles without a handlers object", async () => {
