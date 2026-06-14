@@ -1,9 +1,10 @@
-# Design Partner Candidate List
+# Design Partner Profile Template
 
 Date: 2026-06-14
 
-This list supports the Phase 0 gate review and P1-T42 partner onboarding. It is a working shortlist
-of candidate profiles, not a commitment that any named company has agreed to participate.
+This template supports Phase 0 design partner outreach and P1-T42 partner onboarding preparation.
+It is **not** the P0-T28 candidate list evidence by itself: P0-T28 remains incomplete until real
+candidate companies, contact owners, outreach status, and next actions are recorded.
 
 ## Selection Criteria
 
@@ -15,7 +16,7 @@ of candidate profiles, not a commitment that any named company has agreed to par
 - Can run at least one plugin through proxy mode or host SDK integration during the first week.
 - Has a manager or admin persona who can evaluate approval, rollback, and audit logs.
 
-## Candidate Profiles
+## Candidate Profile Templates
 
 | ID            | Segment                  | Best-fit trigger                                                              | First plugin                                                                | Success signal                                                      | Owner action                                                     |
 | ------------- | ------------------------ | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -48,3 +49,16 @@ of candidate profiles, not a commitment that any named company has agreed to par
 - Production or production-equivalent start date.
 - Weekly review cadence.
 - Rollback drill date and MTTR.
+
+## Real Candidate List Requirements
+
+Before P0-T28 can be marked complete, create a separate candidate list with one row per actual
+company or team:
+
+- Candidate name.
+- Contact owner.
+- Outreach status.
+- Segment and matched profile ID.
+- First plugin hypothesis.
+- Baseline measurement owner.
+- Next action and due date.
