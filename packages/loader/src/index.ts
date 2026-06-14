@@ -70,9 +70,12 @@ interface SerializedRuntimeError {
 }
 
 type RuntimeWorkerMessage =
+  | { type: "started" }
   | { type: "result"; value: unknown; logs: readonly ScopedRuntimeLog[] }
   | { type: "error"; error: SerializedRuntimeError }
   | { type: "capability"; id: number; name: string; input: unknown };
+
+const RUNTIME_STARTUP_TIMEOUT_MS = 5_000;
 
 export async function bundlePlugin(entryPoint: string): Promise<PluginBundle> {
   const result = await build({
@@ -171,12 +174,21 @@ function runHandlerInWorker(params: {
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    let handlerTimeout: ReturnType<typeof setTimeout> | undefined;
+    const startupTimeout = setTimeout(() => {
+      finishReject(
+        new Error(`runtime worker did not start within ${String(RUNTIME_STARTUP_TIMEOUT_MS)}ms`)
+      );
+    }, RUNTIME_STARTUP_TIMEOUT_MS);
     const cleanup = () => {
       if (settled) {
         return false;
       }
       settled = true;
-      clearTimeout(timeout);
+      clearTimeout(startupTimeout);
+      if (handlerTimeout !== undefined) {
+        clearTimeout(handlerTimeout);
+      }
       void worker.terminate();
       return true;
     };
@@ -190,14 +202,6 @@ function runHandlerInWorker(params: {
         reject(error);
       }
     };
-
-    const timeout = setTimeout(() => {
-      finishReject(
-        new ScopedRuntimeTimeoutError(
-          `handler ${params.handlerName} exceeded ${String(params.limits.timeoutMs)}ms`
-        )
-      );
-    }, params.limits.timeoutMs);
 
     const handleCapabilityRequest = async (
       message: Extract<RuntimeWorkerMessage, { type: "capability" }>
@@ -221,6 +225,18 @@ function runHandlerInWorker(params: {
     worker.on("message", (rawMessage: unknown) => {
       if (!isRuntimeWorkerMessage(rawMessage)) {
         finishReject(new Error("runtime worker sent an invalid message"));
+        return;
+      }
+
+      if (rawMessage.type === "started") {
+        clearTimeout(startupTimeout);
+        handlerTimeout = setTimeout(() => {
+          finishReject(
+            new ScopedRuntimeTimeoutError(
+              `handler ${params.handlerName} exceeded ${String(params.limits.timeoutMs)}ms`
+            )
+          );
+        }, params.limits.timeoutMs);
         return;
       }
 
@@ -287,7 +303,7 @@ function isRuntimeWorkerMessage(value: unknown): value is RuntimeWorkerMessage {
     return isSerializedRuntimeError(value.error);
   }
 
-  return value.type === "result" && Array.isArray(value.logs);
+  return value.type === "started" || (value.type === "result" && Array.isArray(value.logs));
 }
 
 function isSerializedRuntimeError(value: unknown): value is SerializedRuntimeError {
@@ -386,6 +402,7 @@ async function run() {
     capability: (name, input) => callParentCapability(limits, name, input)
   };
 
+  parentPort.postMessage({ type: "started" });
   const result = invokeHandlerInSandbox(sandbox, limits);
   return await withWallClockTimeout(result, limits.timeoutMs, workerData.handlerName);
 }

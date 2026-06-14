@@ -180,6 +180,27 @@ describe("runScopedHandler", () => {
     } satisfies Partial<ScopedRuntimeTimeoutError>);
   });
 
+  it("does not charge worker startup time to the handler timeout budget", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": () => "ok"
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() },
+        limits: { timeoutMs: 25 }
+      })
+    ).resolves.toEqual({
+      value: "ok",
+      logs: []
+    });
+  });
+
   it("terminates async handlers that starve the microtask queue", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {
