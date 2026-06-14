@@ -176,3 +176,4 @@
 - [ ] **P0-T28**(S)Phase 0 ゲートレビュー + design partner 募集開始
   - 内容: Exit Gate チェックリスト消化、ADR-001 確定、ベンチ結果レビュー、**Phase 1 タスクの再分割**(ローリングウェーブ)。design partner 候補(FinOps / AI agent SaaS / developer-facing SaaS)のリスト化と声かけを開始(P1-T42 の前提 — 募集はリードタイムが長いため Phase 1 開発と並走させる)
   - DoD: Exit Gate 全項目にチェック。Phase1.md が最新化され、partner 候補リストが存在する
+  - 2026-06-14 メモ: candidate profile template は `docs/partners/design-partner-profile-template.md` に追加済み。ただし実 company / contact owner / outreach status を持つ candidate list は未作成であり、この template 単体では P0-T28 DoD を満たさない。P0-T28 は #2 / #3 / #4 の blocker 解消と実候補リスト作成後に gate review として完了判定する
