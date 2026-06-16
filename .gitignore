@@ -2,6 +2,8 @@ node_modules/
 dist/
 coverage/
 packages/*/coverage/
+test-results/
+playwright-report/
 .wrangler/
 .DS_Store
 .env

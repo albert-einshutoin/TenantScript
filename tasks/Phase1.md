@@ -202,7 +202,7 @@
 > UI はコンポーネントテスト(Vitest + Testing Library)+ Playwright E2E。スタイルは admin 用途に徹し、装飾より hierarchy と状態表示を優先する。
 > スリップ判断: T35(executions 検索画面)は CLI で代替できるため逼迫時はスリップ可。T33(permission)と T34(rollback)は Exit Gate(rollback drill、partner 運用)に直結するためスリップ不可。
 
-- [ ] **P1-T32**(M)UI 基盤
+- [x] **P1-T32**(M)UI 基盤
   - GREEN: React + Vite + ルーティング + API クライアント(zod で型共有)+ Playwright 設定
   - DoD: 起動・ログイン(最小トークン認証、P1-T41 の role クレーム対応)・E2E smoke green。**design partner 環境への手動デプロイ手順書を含む**(セットアップウィザードは Phase 3 のため)
 
