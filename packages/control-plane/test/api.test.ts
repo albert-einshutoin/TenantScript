@@ -3,6 +3,7 @@ import {
   ControlPlaneApiError,
   createInMemorySlackConnectionStore,
   createControlPlaneApi,
+  createInMemoryUsageMeter,
   createInMemorySecretStore,
   toControlPlaneErrorResponse,
   type ApprovalContinuationRequest,
@@ -263,6 +264,46 @@ describe("createControlPlaneApi app and tenant management", () => {
       status: 404,
       code: "app_not_found"
     } satisfies Partial<ControlPlaneApiError>);
+  });
+});
+
+describe("createControlPlaneApi usage meter", () => {
+  it("records execution usage and returns tenant/plugin daily summaries", async () => {
+    const usageMeter = createInMemoryUsageMeter();
+    const api = createControlPlaneApi({
+      store: new InMemoryControlPlaneStore(),
+      artifacts: new InMemoryArtifactStore(),
+      usageMeter
+    });
+
+    await expect(
+      api.recordExecutionUsage({
+        executionId: "exec_1",
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        hookName: "invoice.created",
+        status: "success",
+        cpuMs: 15,
+        subrequests: 3,
+        workflowRuns: 1,
+        at: new Date("2026-06-14T12:00:00.000Z")
+      })
+    ).resolves.toMatchObject({
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      date: "2026-06-14",
+      executions: 1,
+      cpuMs: 15,
+      subrequests: 3,
+      workflowRuns: 1
+    });
+    await expect(
+      api.getDailyUsageSummary({
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        date: "2026-06-14"
+      })
+    ).resolves.toMatchObject({ executions: 1, cpuMs: 15, subrequests: 3, workflowRuns: 1 });
   });
 });
 

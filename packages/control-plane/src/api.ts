@@ -11,6 +11,12 @@ import { resolveApprovalDecisionTransition } from "./approval-state.js";
 import type { ApprovalDecision, ApprovalState } from "./approval-state.js";
 import type { SecretRef, SecretStore } from "./secret-store.js";
 import type { SlackConnectionRecord, SlackConnectionStore } from "./slack-connection-store.js";
+import type {
+  DailyUsageSummary,
+  GetDailyUsageSummaryRequest,
+  RecordUsageMetricRequest,
+  UsageMeter
+} from "./usage-meter.js";
 
 export type { ApprovalDecision, ApprovalState } from "./approval-state.js";
 
@@ -116,6 +122,8 @@ export interface ControlPlaneApi {
   connectSlackWorkspace: (request: ConnectSlackWorkspaceRequest) => Promise<SlackConnectionRecord>;
   rollbackInstallation: (request: RollbackInstallationRequest) => Promise<RollbackResult>;
   decideApproval: (request: DecideApprovalRequest) => Promise<ApprovalRecord>;
+  recordExecutionUsage: (request: RecordUsageMetricRequest) => Promise<DailyUsageSummary>;
+  getDailyUsageSummary: (request: GetDailyUsageSummaryRequest) => Promise<DailyUsageSummary>;
 }
 
 export interface CreateAppRequest {
@@ -324,6 +332,7 @@ export function createControlPlaneApi(params: {
   secretStore?: SecretStore;
   slackConnections?: SlackConnectionStore;
   slackOAuth?: SlackOAuthClient;
+  usageMeter?: UsageMeter;
 }): ControlPlaneApi {
   return {
     createApp: (request) => params.store.createApp(request),
@@ -347,7 +356,11 @@ export function createControlPlaneApi(params: {
       decideApproval(params.store, request, {
         continuationRunner: params.continuationRunner,
         identityResolver: params.identityResolver
-      })
+      }),
+    recordExecutionUsage: (request) =>
+      requireUsageMeter(params.usageMeter).recordExecutionUsage(request),
+    getDailyUsageSummary: (request) =>
+      requireUsageMeter(params.usageMeter).getDailyUsageSummary(request)
   };
 }
 
@@ -758,6 +771,13 @@ function requireSlackOAuthClient(slackOAuth: SlackOAuthClient | undefined): Slac
     throw new Error("Slack OAuth client is not configured");
   }
   return slackOAuth;
+}
+
+function requireUsageMeter(usageMeter: UsageMeter | undefined): UsageMeter {
+  if (usageMeter === undefined) {
+    throw new Error("usage meter is not configured");
+  }
+  return usageMeter;
 }
 
 function slackSecretRef(params: { tenantId: string; workspaceId: string }): SecretRef {

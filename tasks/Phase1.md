@@ -187,12 +187,12 @@
 
 ## チャンク I: usage meter(T30–T31)— Exit Gate 非依存。逼迫時は Phase 2 冒頭へスリップ可
 
-- [ ] **P1-T30**(M)Analytics Engine 書き込み
+- [x] **P1-T30**(M)Analytics Engine 書き込み
   - RED: execution ごとに executions / cpuMs / subrequests / workflowRuns のデータポイントが記録される
   - GREEN: 計測書き込み(課金ではなく adopter 自身の COGS 可視化用)
   - DoD: 書き込みテスト green(AE はローカルでは抽象化し、契約テストで担保)
 
-- [ ] **P1-T31**(S)集計 API
+- [x] **P1-T31**(S)集計 API
   - RED: tenant/plugin 別の日次集計が取得できる
   - GREEN: 集計エンドポイント
   - DoD: 集計テスト green
