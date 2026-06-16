@@ -118,6 +118,19 @@ export {
 } from "./usage-counter.js";
 
 export {
+  createInMemoryDailyUsageSummaryStore,
+  createInMemoryUsageMeter,
+  createUsageMeter,
+  type AnalyticsEngineDataPoint,
+  type AnalyticsEngineDatasetLike,
+  type DailyUsageSummary,
+  type DailyUsageSummaryStore,
+  type GetDailyUsageSummaryRequest,
+  type RecordUsageMetricRequest,
+  type UsageMeter
+} from "./usage-meter.js";
+
+export {
   enforceBudgetBeforeExecution,
   reEnableBudgetDisabledInstallation,
   type BudgetExceededNotification,
