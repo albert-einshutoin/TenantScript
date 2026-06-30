@@ -223,16 +223,20 @@ await extensions.run("invoice.created", { tenantId, payload });
 {
   "name": "large-invoice-approval",
   "version": "1.0.3",
-  "hooks": {
-    "invoice.created": "^1"
-  },
+  "hooks": [
+    { "name": "invoice.created", "type": "event", "timeoutMs": 250 },
+    { "name": "onInvoiceApprovalDecided", "type": "event", "timeoutMs": 250 }
+  ],
   "configSchema": {
-    "thresholdAmount": { "type": "number", "default": 100000 },
-    "notifyChannel": { "type": "string", "required": true }
+    "properties": {
+      "thresholdAmount": { "type": "number", "default": 100000 },
+      "notifyChannel": { "type": "string" }
+    },
+    "required": ["notifyChannel"]
   },
   "capabilities": {
     "slack.send": {
-      "channels": ["$config.notifyChannel"]
+      "channel": "$config.notifyChannel"
     },
     "approvals.request": {
       "roles": ["manager"]
@@ -246,13 +250,12 @@ await extensions.run("invoice.created", { tenantId, payload });
   },
   "limits": {
     "cpuMs": 20,
-    "subrequests": 5,
     "timeoutMs": 1000
   }
 }
 ```
 
-hooksはpayload schemaの互換range(semver)を宣言する。capability grantは`$config.*`参照でinstallation configに束縛でき、テナントごとに許可範囲を変えられる。承認はcontinuation hookモデル(D-011)なので、handlerが人間の承認を待ってtimeoutMsを超えることはない。
+hooksはpluginが実装するhandler名、hook型、timeoutMsを宣言する。`onInvoiceApprovalDecided`は§7の承認決定後に別executionとして起動されるcontinuation hook(D-011)である。capability grantは`$config.*`参照でinstallation configに束縛でき、テナントごとに許可範囲を変えられる。handlerは人間の承認を待ってsuspendしないため、各hookのtimeoutMsは通常のevent handler向けの上限である。
 
 ### Hook schemaの進化
 
