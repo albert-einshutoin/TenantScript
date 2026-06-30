@@ -1,8 +1,8 @@
 # ADR-002: OSS License and Publication Policy
 
-## Status
-
-Accepted
+Date: 2026-06-12
+Deciders: TenantScript maintainers
+Status: Accepted
 
 ## Context
 

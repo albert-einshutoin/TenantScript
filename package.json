@@ -11,6 +11,7 @@
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage",
     "test:security": "pnpm --filter @tenantscript/loader test:security && pnpm --filter @tenantscript/capabilities test:security && pnpm --filter @tenantscript/control-plane test:security && pnpm --filter @tenantscript/proxy test:security",
+    "docs:check": "node scripts/check-adr-metadata.mjs",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm format"
