@@ -1,8 +1,8 @@
 # ADR-000: TypeScript Runtime and Repository Language
 
-## Status
-
-Accepted
+Date: 2026-06-12
+Deciders: TenantScript maintainers
+Status: Accepted
 
 ## Context
 
