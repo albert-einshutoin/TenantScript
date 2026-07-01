@@ -6,15 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultAdrDir = join(root, "docs/adr");
-
-const ALLOWED_STATUSES = [
-  "Proposed",
-  "Accepted",
-  "Blocked",
-  "Rejected",
-  "Deprecated",
-  "Superseded",
-];
+// Template path stays under the repo so temp dirs used by tests still share one status enum.
+const templatePath = join(defaultAdrDir, "000-template.md");
 
 const REQUIRED_SECTIONS = ["Context", "Decision", "Consequences"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -49,6 +42,18 @@ function parseMetadataBlock(content) {
   }
 
   return { metadata, bodyStart: index };
+}
+
+function readAllowedStatuses() {
+  const template = readFileSync(templatePath, "utf8");
+  const { metadata } = parseMetadataBlock(template);
+  const allowed = metadata["Allowed statuses"];
+
+  if (!allowed) {
+    throw new Error(`${templatePath}: missing Allowed statuses metadata`);
+  }
+
+  return allowed.split(",").map((status) => status.trim());
 }
 
 function hasSection(content, sectionName) {
@@ -115,6 +120,7 @@ function validateAdrFile(filePath, allowedStatuses, { isTemplate = false } = {})
 function main() {
   const customDir = process.argv[2];
   const adrDir = customDir ? resolve(customDir) : defaultAdrDir;
+  const allowedStatuses = readAllowedStatuses();
 
   const adrFiles = readdirSync(adrDir)
     .filter((name) => name.endsWith(".md"))
@@ -124,7 +130,7 @@ function main() {
   const errors = [];
   for (const filePath of adrFiles) {
     const isTemplate = basename(filePath) === "000-template.md";
-    errors.push(...validateAdrFile(filePath, ALLOWED_STATUSES, { isTemplate }));
+    errors.push(...validateAdrFile(filePath, allowedStatuses, { isTemplate }));
   }
 
   if (errors.length > 0) {
