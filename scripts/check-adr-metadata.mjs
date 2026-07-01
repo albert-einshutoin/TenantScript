@@ -1,13 +1,22 @@
 #!/usr/bin/env node
 
 import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const adrDir = join(root, "docs/adr");
-const templatePath = join(adrDir, "000-template.md");
+const defaultAdrDir = join(root, "docs/adr");
 
+const ALLOWED_STATUSES = [
+  "Proposed",
+  "Accepted",
+  "Blocked",
+  "Rejected",
+  "Deprecated",
+  "Superseded",
+];
+
+const REQUIRED_SECTIONS = ["Context", "Decision", "Consequences"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function parseMetadataBlock(content) {
@@ -42,16 +51,9 @@ function parseMetadataBlock(content) {
   return { metadata, bodyStart: index };
 }
 
-function readAllowedStatuses() {
-  const template = readFileSync(templatePath, "utf8");
-  const { metadata } = parseMetadataBlock(template);
-  const allowed = metadata["Allowed statuses"];
-
-  if (!allowed) {
-    throw new Error(`${templatePath}: missing Allowed statuses metadata`);
-  }
-
-  return allowed.split(",").map((status) => status.trim());
+function hasSection(content, sectionName) {
+  const pattern = new RegExp(`^## ${sectionName}$`, "m");
+  return pattern.test(content);
 }
 
 function validateAdrFile(filePath, allowedStatuses, { isTemplate = false } = {}) {
@@ -98,11 +100,22 @@ function validateAdrFile(filePath, allowedStatuses, { isTemplate = false } = {})
     errors.push(`${relativePath}: legacy "## Status" section must be replaced with metadata block`);
   }
 
+  // Blocked ADRs may document blockers instead of a final decision record.
+  if (!isTemplate && metadata.Status && metadata.Status !== "Blocked") {
+    for (const section of REQUIRED_SECTIONS) {
+      if (!hasSection(content, section)) {
+        errors.push(`${relativePath}: missing ## ${section} section`);
+      }
+    }
+  }
+
   return errors;
 }
 
 function main() {
-  const allowedStatuses = readAllowedStatuses();
+  const customDir = process.argv[2];
+  const adrDir = customDir ? resolve(customDir) : defaultAdrDir;
+
   const adrFiles = readdirSync(adrDir)
     .filter((name) => name.endsWith(".md"))
     .map((name) => join(adrDir, name))
@@ -110,8 +123,8 @@ function main() {
 
   const errors = [];
   for (const filePath of adrFiles) {
-    const isTemplate = filePath === templatePath;
-    errors.push(...validateAdrFile(filePath, allowedStatuses, { isTemplate }));
+    const isTemplate = basename(filePath) === "000-template.md";
+    errors.push(...validateAdrFile(filePath, ALLOWED_STATUSES, { isTemplate }));
   }
 
   if (errors.length > 0) {
@@ -123,7 +136,8 @@ function main() {
     return;
   }
 
-  console.log(`ADR metadata check passed (${adrFiles.length} files).`);
+  const label = customDir ? adrDir : "docs/adr";
+  console.log(`ADR metadata check passed (${adrFiles.length} files in ${label}).`);
 }
 
 main();
