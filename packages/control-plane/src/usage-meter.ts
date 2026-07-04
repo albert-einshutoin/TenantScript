@@ -104,10 +104,23 @@ function analyticsDataPoint(
   date: string
 ): AnalyticsEngineDataPoint {
   return {
-    indexes: [request.tenantId, request.pluginId],
-    blobs: [request.executionId, request.hookName, request.status, date],
+    indexes: [analyticsBillingIndex(request)],
+    blobs: [
+      request.tenantId,
+      request.pluginId,
+      request.executionId,
+      request.hookName,
+      request.status,
+      date
+    ],
     doubles: [1, request.cpuMs, request.subrequests, request.workflowRuns]
   };
+}
+
+function analyticsBillingIndex(request: RecordUsageMetricRequest): string {
+  // Workers Analytics Engine records only one index per data point; combining tenant/plugin
+  // preserves sampling by the billing dimension while raw IDs remain queryable in blobs.
+  return `${request.tenantId}:${request.pluginId}`;
 }
 
 async function withSummaryLock<T>(

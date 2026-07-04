@@ -36,13 +36,13 @@ describe("execution usage meter", () => {
 
     expect(analytics.points).toEqual([
       {
-        indexes: ["tenant_1", "plugin_1"],
-        blobs: ["exec_1", "invoice.created", "success", "2026-06-14"],
+        indexes: ["tenant_1:plugin_1"],
+        blobs: ["tenant_1", "plugin_1", "exec_1", "invoice.created", "success", "2026-06-14"],
         doubles: [1, 17, 2, 1]
       },
       {
-        indexes: ["tenant_1", "plugin_1"],
-        blobs: ["exec_2", "invoice.created", "error", "2026-06-14"],
+        indexes: ["tenant_1:plugin_1"],
+        blobs: ["tenant_1", "plugin_1", "exec_2", "invoice.created", "error", "2026-06-14"],
         doubles: [1, 4, 1, 0]
       }
     ]);
