@@ -94,3 +94,40 @@ Waiting on external dependency.
     assert.equal(result.status, 0, result.stderr);
   });
 });
+
+test("ignores README.md index without ADR metadata", () => {
+  withTempAdrDir((dir) => {
+    writeFileSync(
+      join(dir, "README.md"),
+      `# Architecture Decision Records
+
+Index of ADRs in this directory.
+`
+    );
+    writeFileSync(
+      join(dir, "004-valid.md"),
+      `# ADR-004: Valid
+
+Date: 2026-01-01
+Deciders: team
+Status: Accepted
+
+## Context
+
+We need a decision.
+
+## Decision
+
+We chose option A.
+
+## Consequences
+
+Option A is now the standard.
+`
+    );
+
+    const result = runLinter(dir);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /1 files/);
+  });
+});

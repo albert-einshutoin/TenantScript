@@ -117,7 +117,7 @@ function main() {
   const adrDir = customDir ? resolve(customDir) : defaultAdrDir;
 
   const adrFiles = readdirSync(adrDir)
-    .filter((name) => name.endsWith(".md"))
+    .filter((name) => name.endsWith(".md") && name !== "README.md")
     .map((name) => join(adrDir, name))
     .sort();
 
