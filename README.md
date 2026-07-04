@@ -15,11 +15,10 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - **Pure OSS**: 収益化を目的としない。self-hostが唯一の運用形態(ドキュメント D-008)。
 - **Markdownがsource of truth**: docx等が必要な場合は都度mdからエクスポートする(例: pandoc)。
 - **GitHub Flow**: `main` を唯一の長期ブランチとし、作業は短命の `feature/*` ブランチから Pull Request で統合する。`develop` / `release/*` / `hotfix/*` は使わない。
-- **ステータス**: Phase 0 の中核実装はほぼ完了し、Phase 0 Exit Gate の証跡回収中。Phase 1 MVP は control-plane / rollback / approval / budget / proxy / CLI まで着手済みで、Admin UI・Analytics Engine・partner onboarding・security suite v2・ドキュメント整備・Phase 1 gate review が未完了。
+- **ステータス**: Phase 0 の中核実装はほぼ完了し、Phase 0 Exit Gate の証跡回収中。Phase 1 MVP は control-plane / rollback / approval / budget / proxy / CLI / usage meter まで着手済みで、Admin UI・partner onboarding・security suite v2・ドキュメント整備・Phase 1 gate review が未完了。
 
 ## 現在のブロッカー
 
 - [#2](https://github.com/albert-einshutoin/TenantScript/issues/2): fork PR で Tier 1(accountless) が完走することの検証
 - [#3](https://github.com/albert-einshutoin/TenantScript/issues/3): npm `@tenantscript` scope の確保
 - [#4](https://github.com/albert-einshutoin/TenantScript/issues/4): Cloudflare paid Workers account での live runtime benchmark
-- [#5](https://github.com/albert-einshutoin/TenantScript/issues/5): Phase 0 gate review
