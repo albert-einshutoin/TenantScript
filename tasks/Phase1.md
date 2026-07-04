@@ -187,12 +187,12 @@
 
 ## チャンク I: usage meter(T30–T31)— Exit Gate 非依存。逼迫時は Phase 2 冒頭へスリップ可
 
-- [ ] **P1-T30**(M)Analytics Engine 書き込み
+- [x] **P1-T30**(M)Analytics Engine 書き込み
   - RED: execution ごとに executions / cpuMs / subrequests / workflowRuns のデータポイントが記録される
   - GREEN: 計測書き込み(課金ではなく adopter 自身の COGS 可視化用)
   - DoD: 書き込みテスト green(AE はローカルでは抽象化し、契約テストで担保)
 
-- [ ] **P1-T31**(S)集計 API
+- [x] **P1-T31**(S)集計 API
   - RED: tenant/plugin 別の日次集計が取得できる
   - GREEN: 集計エンドポイント
   - DoD: 集計テスト green
@@ -202,7 +202,7 @@
 > UI はコンポーネントテスト(Vitest + Testing Library)+ Playwright E2E。スタイルは admin 用途に徹し、装飾より hierarchy と状態表示を優先する。
 > スリップ判断: T35(executions 検索画面)は CLI で代替できるため逼迫時はスリップ可。T33(permission)と T34(rollback)は Exit Gate(rollback drill、partner 運用)に直結するためスリップ不可。
 
-- [ ] **P1-T32**(M)UI 基盤
+- [x] **P1-T32**(M)UI 基盤
   - GREEN: React + Vite + ルーティング + API クライアント(zod で型共有)+ Playwright 設定
   - DoD: 起動・ログイン(最小トークン認証、P1-T41 の role クレーム対応)・E2E smoke green。**design partner 環境への手動デプロイ手順書を含む**(セットアップウィザードは Phase 3 のため)
 

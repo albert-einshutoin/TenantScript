@@ -9,7 +9,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm lint:adr && pnpm -r lint",
     "lint:adr": "node scripts/check-adr-metadata.mjs",
-    "test": "pnpm lint:adr && pnpm test:adr && pnpm -r test",
+    "test": "pnpm test:adr && pnpm -r test",
     "test:adr": "node --test scripts/check-adr-metadata.test.mjs",
     "test:coverage": "pnpm -r test:coverage",
     "test:security": "pnpm --filter @tenantscript/loader test:security && pnpm --filter @tenantscript/capabilities test:security && pnpm --filter @tenantscript/control-plane test:security && pnpm --filter @tenantscript/proxy test:security",

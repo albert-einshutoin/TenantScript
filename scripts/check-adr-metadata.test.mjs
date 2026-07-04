@@ -12,7 +12,7 @@ const repoRoot = join(dirname(scriptPath), "..");
 function runLinter(adrDir) {
   return spawnSync(process.execPath, [scriptPath, adrDir], {
     cwd: repoRoot,
-    encoding: "utf8",
+    encoding: "utf8"
   });
 }
 
