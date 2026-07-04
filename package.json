@@ -7,10 +7,13 @@
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "lint": "pnpm lint:adr && pnpm -r lint",
+    "lint:adr": "node scripts/check-adr-metadata.mjs",
+    "test": "pnpm test:adr && pnpm -r test",
+    "test:adr": "node --test scripts/check-adr-metadata.test.mjs",
     "test:coverage": "pnpm -r test:coverage",
     "test:security": "pnpm --filter @tenantscript/loader test:security && pnpm --filter @tenantscript/capabilities test:security && pnpm --filter @tenantscript/control-plane test:security && pnpm --filter @tenantscript/proxy test:security",
+    "docs:check": "pnpm lint:adr",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm format"
@@ -31,7 +34,8 @@
   "pnpm": {
     "overrides": {
       "esbuild@<0.28.1": ">=0.28.1",
-      "ws@>=8.0.0 <8.21.0": ">=8.21.0"
+      "undici@>=7.0.0 <7.28.0": "7.28.0",
+      "ws@>=8.0.0 <8.21.0": "8.21.0"
     }
   }
 }
