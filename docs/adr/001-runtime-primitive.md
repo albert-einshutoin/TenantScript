@@ -1,8 +1,14 @@
 # ADR-001: Runtime Primitive Selection
 
-## Status
+Date: 2026-06-12
+Deciders: TenantScript maintainers
+Status: Blocked
 
-Blocked pending paid Cloudflare Workers plan and live benchmark run.
+## Blockers
+
+Live benchmark evidence is blocked pending a paid Cloudflare Workers plan and a completed live
+benchmark run. Dynamic Workers require the Workers Paid plan; the current account cannot deploy
+`apps/runtime-bench` until that prerequisite is met.
 
 ## Context
 

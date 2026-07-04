@@ -3,9 +3,12 @@ dist/
 coverage/
 packages/*/coverage/
 test-results/
+**/test-results/
 playwright-report/
+**/playwright-report/
 .wrangler/
 .DS_Store
 .env
 .env.*
 !.env.example
+.takt/

@@ -1,8 +1,9 @@
 # ADR-NNN: Title
 
-## Status
-
-Proposed
+Date: YYYY-MM-DD
+Deciders: TenantScript maintainers
+Status: Proposed
+Allowed statuses: Proposed, Accepted, Blocked, Rejected, Deprecated, Superseded
 
 ## Context
 
