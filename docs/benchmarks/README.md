@@ -4,10 +4,10 @@ Phase gate evidence and operator drill results for TenantScript.
 
 ## Index
 
-| Phase | Topic | Status | Doc |
-| --- | --- | --- | --- |
-| 0 | Runtime latency | **blocked** — live measurements require a Cloudflare paid Workers plan (see [phase0.md](phase0.md)) | [Phase 0 runtime latency](phase0.md) |
-| 1 | Rollback drill | completed | [Phase 1 rollback drill](phase1-rollback-drill.md) |
+| Phase | Topic           | Status                                                                                              | Doc                                                |
+| ----- | --------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 0     | Runtime latency | **blocked** — live measurements require a Cloudflare paid Workers plan (see [phase0.md](phase0.md)) | [Phase 0 runtime latency](phase0.md)               |
+| 1     | Rollback drill  | completed                                                                                           | [Phase 1 rollback drill](phase1-rollback-drill.md) |
 
 ## Phase 0 runtime latency
 
