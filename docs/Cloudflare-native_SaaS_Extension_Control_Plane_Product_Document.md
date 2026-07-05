@@ -239,7 +239,8 @@ await extensions.run("invoice.created", { tenantId, payload });
       "channel": "$config.notifyChannel"
     },
     "approvals.request": {
-      "roles": ["manager"]
+      "roles": ["manager"],
+      "resumeHooks": ["onInvoiceApprovalDecided"]
     },
     "invoice.read": {
       "fields": ["id", "amount", "customerId", "status"]
@@ -255,7 +256,7 @@ await extensions.run("invoice.created", { tenantId, payload });
 }
 ```
 
-hooksはpluginが実装するhandler名、hook型、timeoutMsを宣言する。`onInvoiceApprovalDecided`は§7の承認決定後に別executionとして起動されるcontinuation hook(D-011)である。capability grantは`$config.*`参照でinstallation configに束縛でき、テナントごとに許可範囲を変えられる。handlerは人間の承認を待ってsuspendしないため、各hookのtimeoutMsは通常のevent handler向けの上限である。
+hooksはpluginが実装するhandler名、hook型、timeoutMsを宣言する。`onInvoiceApprovalDecided`は§7の承認決定後に別executionとして起動されるcontinuation hook(D-011)である。`approvals.request.resumeHooks`は承認後に再開できるhandlerを明示的に束縛し、manifest例をcopyしたpluginが任意のcontinuation hookへ広げないために宣言している。capability grantは`$config.*`参照でinstallation configに束縛でき、テナントごとに許可範囲を変えられる。handlerは人間の承認を待ってsuspendしないため、各hookのtimeoutMsは通常のevent handler向けの上限である。
 
 ### Hook schemaの進化
 

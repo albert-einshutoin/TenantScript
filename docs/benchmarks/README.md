@@ -4,10 +4,10 @@ Phase gate evidence and operator drill results for TenantScript.
 
 ## Index
 
-| Phase | Topic | Status | Doc |
-| --- | --- | --- | --- |
-| 0 | Runtime latency | **blocked** — live measurements require a Cloudflare paid Workers plan (see [phase0.md](phase0.md)) | [Phase 0 runtime latency](phase0.md) |
-| 1 | Rollback drill | completed | [Phase 1 rollback drill](phase1-rollback-drill.md) |
+| Phase | Topic           | Status                                                                                              | Doc                                                |
+| ----- | --------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| 0     | Runtime latency | **blocked** — live measurements require a Cloudflare paid Workers plan (see [phase0.md](phase0.md)) | [Phase 0 runtime latency](phase0.md)               |
+| 1     | Rollback drill  | completed                                                                                           | [Phase 1 rollback drill](phase1-rollback-drill.md) |
 
 ## Phase 0 runtime latency
 
@@ -23,15 +23,15 @@ When you add a new benchmark document, update this README index and include the 
 
 ### Required fields
 
-| Field | Where | Notes |
-| --- | --- | --- |
-| **phase** | Index table | Gate phase number (e.g. `0`, `1`). |
-| **topic** | Index table | Short label for the measurement (e.g. `Runtime latency`). |
-| **status** | Index table | One of `completed`, `blocked`, or `in progress`. If blocked, state the blocker (e.g. Cloudflare paid Workers plan). |
-| **doc link** | Index table | Link to the benchmark markdown file in `docs/benchmarks/`. |
-| **measurement command** | Benchmark doc | Copy-pasteable `sh` command that reproduces the measurement. Use repo scripts and local fixtures only. |
-| **result shape** | Benchmark doc | Fenced output (text or JSON) showing what a successful run produces. |
-| **Go/No-Go decision** | Benchmark doc | Thresholds and pass/fail decision where a phase gate applies; omit only when no gate exists yet. |
+| Field                   | Where         | Notes                                                                                                               |
+| ----------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **phase**               | Index table   | Gate phase number (e.g. `0`, `1`).                                                                                  |
+| **topic**               | Index table   | Short label for the measurement (e.g. `Runtime latency`).                                                           |
+| **status**              | Index table   | One of `completed`, `blocked`, or `in progress`. If blocked, state the blocker (e.g. Cloudflare paid Workers plan). |
+| **doc link**            | Index table   | Link to the benchmark markdown file in `docs/benchmarks/`.                                                          |
+| **measurement command** | Benchmark doc | Copy-pasteable `sh` command that reproduces the measurement. Use repo scripts and local fixtures only.              |
+| **result shape**        | Benchmark doc | Fenced output (text or JSON) showing what a successful run produces.                                                |
+| **Go/No-Go decision**   | Benchmark doc | Thresholds and pass/fail decision where a phase gate applies; omit only when no gate exists yet.                    |
 
 ### Evidence expectations
 
