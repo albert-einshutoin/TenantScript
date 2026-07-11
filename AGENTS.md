@@ -30,9 +30,9 @@ Guidance for coding agents working in TenantScript. Keep this file short enough 
 Before opening a PR, run the checks relevant to the change. For normal code changes, use:
 
 ```sh
-pnpm -r typecheck
-pnpm -r lint
-pnpm -r test
+pnpm typecheck
+pnpm lint
+pnpm test
 ```
 
 For security-sensitive loader, capability, control-plane, or proxy changes, also run:
