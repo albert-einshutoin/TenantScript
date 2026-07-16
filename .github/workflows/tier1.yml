@@ -25,5 +25,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm test:coverage
       - run: pnpm test:security
-      - run: pnpm audit --audit-level moderate
+      # npm retired the audit endpoint used by pnpm 10, so scan the committed lockfile directly.
+      # Pinning OSV-Scanner keeps this accountless and reproducible for fork pull requests.
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
       - run: pnpm format
