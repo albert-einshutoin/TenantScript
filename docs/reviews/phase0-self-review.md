@@ -40,5 +40,5 @@ Run after the refactor pass:
 pnpm verify
 pnpm test:coverage
 pnpm test:security
-pnpm audit --audit-level moderate
+osv-scanner scan --lockfile=pnpm-lock.yaml
 ```
