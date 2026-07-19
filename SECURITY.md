@@ -17,6 +17,8 @@ Security fixes are developed against `main`. Once versioned releases exist, this
 
 Use [GitHub Security Advisories through Private Vulnerability Reporting](https://github.com/albert-einshutoin/TenantScript/security/advisories/new) for suspected vulnerabilities. Do not open a public issue, discussion, or pull request before maintainers have coordinated disclosure.
 
+Maintainers follow the [security advisory response runbook](docs/security/advisory-response-runbook.md) for intake, triage, regression testing, private fixes, advisory decisions, and sanitized closeout evidence.
+
 Include only the minimum information needed to reproduce and assess the problem:
 
 - affected component and commit or version;

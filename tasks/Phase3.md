@@ -52,7 +52,7 @@
   - 内容: 信頼境界図、攻撃面の列挙、各 mitigation と対応テストの対応表(security suite と1対1で紐付け)
   - DoD: `docs/security/threat-model.md` 公開。suite に対応漏れの攻撃面がない
 
-- [ ] **P3-T09**(S)SECURITY.md + advisory process
+- [x] **P3-T09**(S)SECURITY.md + advisory process
   - 内容: 報告窓口、SLA(初回応答・修正目標)、GitHub Security Advisories の運用手順、埋め込み式の謝辞ポリシー
   - DoD: 公開済み。模擬報告で手順を1回リハーサル
 
