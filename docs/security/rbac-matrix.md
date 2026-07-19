@@ -40,3 +40,5 @@ The table is checked against the exported runtime fixture by `packages/control-p
 5. Monitor authorization denials and audit events before removing the old claim from the identity provider.
 
 The runtime compatibility alias prevents an immediate lockout during this migration. It does not grant an unknown claim or widen app/tenant scope. Removal of the alias must be a separately announced breaking change after service-token migration in P2-T07.
+
+Migration `0008_rbac_approval_trigger.sql` must be applied with the RBAC Worker release. It replaces the Phase 1 database trigger that accepted only the literal `manager` claim. The replacement accepts `owner`, `admin`, `tenant-admin`, and the compatibility `manager` claim for legacy manager-required approvals, while continuing to reject operator, viewer, unknown, cross-app, cross-tenant, expired, and duplicate decisions inside D1 itself.

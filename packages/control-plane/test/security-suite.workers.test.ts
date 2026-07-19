@@ -284,6 +284,59 @@ describe("D1 tenant boundary security suite", () => {
       testEnv.DB.prepare("SELECT COUNT(*) AS count FROM service_tokens").first()
     ).resolves.toEqual({ count: 0 });
   });
+
+  it("keeps the approval trigger fail-closed against a forged operator audit", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.createApp({ id: "app_approval", name: "Approval App" });
+    await store.createTenant({
+      id: "tenant_approval",
+      appId: "app_approval",
+      name: "Approval Tenant"
+    });
+    await store.createPlugin({
+      id: "plugin_approval",
+      appId: "app_approval",
+      key: "approval-plugin"
+    });
+    await store.createApproval({
+      id: "approval_forged",
+      tenantId: "tenant_approval",
+      pluginId: "plugin_approval",
+      role: "manager",
+      subject: {},
+      resumeHook: "approval.decided",
+      state: "pending",
+      expiresAt: new Date("2026-07-21T00:00:00.000Z"),
+      createdAt: new Date("2026-07-19T00:00:00.000Z")
+    });
+
+    await expect(
+      testEnv.DB.prepare(
+        `INSERT INTO approval_audit_events
+          (id, approval_id, tenant_id, app_id, plugin_id, actor, actor_role,
+           decision, reason, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+        .bind(
+          "audit_forged_operator",
+          "approval_forged",
+          "tenant_approval",
+          "app_approval",
+          "plugin_approval",
+          "operator-subject",
+          "operator",
+          "approved",
+          null,
+          "2026-07-20T00:00:00.000Z"
+        )
+        .run()
+    ).rejects.toThrow();
+    await expect(
+      testEnv.DB.prepare("SELECT state, decided_by FROM approvals WHERE id = ?")
+        .bind("approval_forged")
+        .first()
+    ).resolves.toEqual({ state: "pending", decided_by: null });
+  });
 });
 
 async function seedTenant(
