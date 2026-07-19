@@ -1,7 +1,12 @@
 import { z } from "zod";
-import type { AdminDashboardSection, AuthenticatedIdentity } from "@tenantscript/control-plane";
+import {
+  RBAC_ROLES,
+  type AdminDashboardSection,
+  type AuthenticatedIdentity,
+  type SupportedRbacRole
+} from "@tenantscript/control-plane";
 
-export type AdminRole = "manager" | "viewer";
+export type AdminRole = SupportedRbacRole;
 
 export interface AdminSession extends AuthenticatedIdentity {
   role: AdminRole;
@@ -242,7 +247,7 @@ export class AdminApiError extends Error {
   }
 }
 
-const roleSchema = z.enum(["manager", "viewer"]);
+const roleSchema = z.enum([...RBAC_ROLES, "manager"]);
 
 const sessionSchema = z.object({
   subject: z.string().min(1),

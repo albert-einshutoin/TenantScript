@@ -5,6 +5,7 @@ import {
   AdminApiError,
   createDemoAdminApiClient,
   type AdminApiClient,
+  type AdminRole,
   type DashboardSnapshot,
   type InstallationPermissionReview
 } from "./api-client.js";
@@ -274,33 +275,36 @@ describe("Admin UI auth foundation", () => {
     ["admin", true],
     ["operator", false],
     ["tenant-admin", true]
-  ])("applies RBAC installation controls for %s", async (role, canManage) => {
-    const baseClient = createDemoAdminApiClient();
-    const client: AdminApiClient = {
-      ...baseClient,
-      resolveSession: () =>
-        Promise.resolve({
-          subject: `${role}-subject`,
-          role,
-          appId: "app_demo",
-          tenantId: "tenant_demo"
-        })
-    };
-    render(<App client={client} />);
+  ] as const satisfies readonly (readonly [AdminRole, boolean])[])(
+    "applies RBAC installation controls for %s",
+    async (role, canManage) => {
+      const baseClient = createDemoAdminApiClient();
+      const client: AdminApiClient = {
+        ...baseClient,
+        resolveSession: () =>
+          Promise.resolve({
+            subject: `${role}-subject`,
+            role,
+            appId: "app_demo",
+            tenantId: "tenant_demo"
+          })
+      };
+      render(<App client={client} />);
 
-    fireEvent.change(screen.getByLabelText("Token"), { target: { value: `${role}-token` } });
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    await screen.findByText(`${role}-subject`);
-    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+      fireEvent.change(screen.getByLabelText("Token"), { target: { value: `${role}-token` } });
+      fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+      await screen.findByText(`${role}-subject`);
+      fireEvent.click(screen.getByRole("button", { name: "Installations" }));
 
-    if (canManage) {
-      expect(screen.getByRole("button", { name: "Manage large-invoice-notify" })).toBeEnabled();
-    } else {
-      expect(
-        screen.queryByRole("button", { name: "Manage large-invoice-notify" })
-      ).not.toBeInTheDocument();
+      if (canManage) {
+        expect(screen.getByRole("button", { name: "Manage large-invoice-notify" })).toBeEnabled();
+      } else {
+        expect(
+          screen.queryByRole("button", { name: "Manage large-invoice-notify" })
+        ).not.toBeInTheDocument();
+      }
     }
-  });
+  );
 
   it("confirms the exact rollback scope, prevents duplicate submission, and shows audit evidence", async () => {
     const baseClient = createDemoAdminApiClient();
