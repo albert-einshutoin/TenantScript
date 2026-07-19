@@ -206,6 +206,16 @@ export {
 } from "./audit-log.js";
 
 export {
+  createD1R2ExecutionArchiveStore,
+  type ArchiveExpiredExecutionsRequest,
+  type ExecutionArchiveManifest,
+  type ExecutionArchiveScope,
+  type ExecutionArchiveSearchQuery,
+  type ExecutionArchiveStore,
+  type ExecutionArchiveStoreOptions
+} from "./execution-archive.js";
+
+export {
   createDurableObjectSecretStore,
   createInMemorySecretStore,
   type PutSecretRequest,
