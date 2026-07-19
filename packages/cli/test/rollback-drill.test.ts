@@ -1,7 +1,32 @@
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { measureRollbackDrill, runExtCli, type CliIo, type RollbackClient } from "../src/index.js";
 
 describe("rollback drill measurement", () => {
+  it("runs from a source checkout without built workspace artifacts", () => {
+    const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const result = spawnSync(
+      process.execPath,
+      [
+        "scripts/rollback-drill.mjs",
+        "--deployed-at",
+        "2026-06-13T00:00:00.000Z",
+        "--detected-at",
+        "2026-06-13T00:01:15.000Z",
+        "--rollback-started-at",
+        "2026-06-13T00:02:00.000Z",
+        "--completed-at",
+        "2026-06-13T00:03:20.000Z"
+      ],
+      { cwd: packageRoot, encoding: "utf8" }
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ mttrMs: 200_000, passed: true });
+  });
+
   it("measures MTTR from broken deploy to rollback completion", () => {
     expect(
       measureRollbackDrill({
