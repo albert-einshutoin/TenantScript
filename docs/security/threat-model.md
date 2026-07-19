@@ -68,7 +68,7 @@ The following controls are unverified or incomplete and must not be represented 
 - Cloudflare live isolate CPU enforcement, Dynamic Worker latency, and paid-plan behavior remain blocked on the Tier 2 evidence tracked in [Issue #4](https://github.com/albert-einshutoin/TenantScript/issues/4).
 - The current secret store does not yet provide the Phase 3 envelope-encryption and rotation design tracked in [Issue #31](https://github.com/albert-einshutoin/TenantScript/issues/31).
 - Phase 1 static roles are not the scoped RBAC and revocable service-token model tracked in [Issue #24](https://github.com/albert-einshutoin/TenantScript/issues/24).
-- An independent external or structured community security review and a private advisory drill are not complete; they remain in [Issue #32](https://github.com/albert-einshutoin/TenantScript/issues/32).
+- A [public synthetic advisory tabletop](advisory-drills/README.md) has exercised the response lifecycle, but no live private advisory, reporter/embargo communication, or independent external/structured community security review is complete. External review remains in [Issue #32](https://github.com/albert-einshutoin/TenantScript/issues/32).
 - Nightly fuzzing checks parser crashes and structured rejection; it does not prove semantic authorization correctness or cover arbitrary plugin JavaScript execution.
 
 ## Out of scope

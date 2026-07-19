@@ -6,7 +6,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-const scriptPath = join(dirname(fileURLToPath(import.meta.url)), "check-security-advisory-drills.mjs");
+const scriptPath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "check-security-advisory-drills.mjs"
+);
 
 function withRepo(run) {
   const repoRoot = mkdtempSync(join(tmpdir(), "advisory-drill-"));
@@ -84,14 +87,7 @@ function writeDrill(repoRoot, drill) {
 }
 
 function validDrill() {
-  const names = [
-    "intake",
-    "triage",
-    "regression-test",
-    "fix",
-    "advisory-decision",
-    "closeout"
-  ];
+  const names = ["intake", "triage", "regression-test", "fix", "advisory-decision", "closeout"];
 
   return {
     schemaVersion: 1,

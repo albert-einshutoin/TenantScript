@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "TS-DRILL-2026-001",
+  "kind": "tabletop",
+  "visibility": "public-synthetic",
+  "scenario": "A malformed installation configuration value reaches validateConfig as undefined and causes an unstructured TypeError instead of a bounded validation result.",
+  "severity": "low",
+  "startedAt": "2026-07-19T20:49:58.000Z",
+  "completedAt": "2026-07-19T20:57:07.000Z",
+  "advisoryDecision": "not-required",
+  "decisionRationale": "The scenario affected availability only for a direct malformed pre-v1 library call, exposed no tenant data or authority boundary, and had no supported registry release requiring coordinated downstream remediation. The public synthetic fix still required a regression test and full security review.",
+  "stages": [
+    {
+      "name": "intake",
+      "at": "2026-07-19T20:49:58.000Z",
+      "evidence": "packages/manifest/test/fuzz.test.ts"
+    },
+    {
+      "name": "triage",
+      "at": "2026-07-19T20:50:08.000Z",
+      "evidence": "docs/security/threat-model.md"
+    },
+    {
+      "name": "regression-test",
+      "at": "2026-07-19T20:50:08.000Z",
+      "evidence": "packages/manifest/test/fuzz.test.ts"
+    },
+    {
+      "name": "fix",
+      "at": "2026-07-19T20:52:12.000Z",
+      "evidence": "packages/manifest/src/index.ts"
+    },
+    {
+      "name": "advisory-decision",
+      "at": "2026-07-19T20:54:18.000Z",
+      "evidence": "https://github.com/albert-einshutoin/TenantScript/pull/124"
+    },
+    {
+      "name": "closeout",
+      "at": "2026-07-19T20:56:28.000Z",
+      "evidence": "https://github.com/albert-einshutoin/TenantScript/pull/124"
+    }
+  ],
+  "remainingLimitations": [
+    "No GitHub private advisory or private fork was created because this was a public synthetic tabletop.",
+    "No external reporter communication or embargo coordination was exercised.",
+    "The external or structured community security review required by Issue #32 remains incomplete."
+  ]
+}

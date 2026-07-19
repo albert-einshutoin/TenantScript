@@ -47,7 +47,9 @@ function validateDrill(relativePath) {
   try {
     drill = JSON.parse(readFileSync(join(repoRoot, relativePath), "utf8"));
   } catch (error) {
-    errors.push(`${relativePath}: invalid JSON: ${error instanceof Error ? error.message : "error"}`);
+    errors.push(
+      `${relativePath}: invalid JSON: ${error instanceof Error ? error.message : "error"}`
+    );
     return;
   }
 
