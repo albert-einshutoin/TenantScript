@@ -690,6 +690,22 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByText("approved")).toHaveClass("ok");
   });
 
+  it("keeps approval state pending when the audited decision fails", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const decideApproval = vi.fn().mockRejectedValue(new Error("D1 customer secret"));
+    render(<App client={{ ...baseClient, decideApproval }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Approval queue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm approval" }));
+
+    await expect(screen.findByText("Approval decision unavailable")).resolves.toBeInTheDocument();
+    expect(screen.getByText("pending")).toHaveClass("warning");
+    expect(screen.queryByLabelText("Approval decision result")).not.toBeInTheDocument();
+    expect(screen.queryByText("D1 customer secret")).not.toBeInTheDocument();
+  });
+
   it("searches executions server-side and opens a value-free capability detail", async () => {
     const baseClient = createDemoAdminApiClient();
     const searchExecutions = vi.fn().mockResolvedValue({
