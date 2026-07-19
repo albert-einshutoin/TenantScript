@@ -96,7 +96,7 @@ describe("D1 admin installation detail adapter", () => {
 });
 
 describe("D1 admin installation command adapter", () => {
-  it("uses a revision CAS batch and writes only structured before/after audit values", async () => {
+  it("uses one audit INSERT for the revision CAS and writes only structured before/after values", async () => {
     const db = commandDatabase([{ ...commandRow(), revision: 0 }]);
     const store = createD1AdminInstallationCommandStore(db, { auditId: () => "audit_1" });
 
@@ -117,14 +117,14 @@ describe("D1 admin installation command adapter", () => {
       revision: 1,
       changed: true
     });
-    expect(db.batches).toHaveLength(1);
+    expect(db.runs).toHaveLength(1);
     expect(db.bindings.flat()).not.toContain("secret-config");
     expect(db.bindings.flat()).not.toContain("secret-grant");
     expect(db.bindings.flat()).toContain('{"enabled":true,"priority":10,"revision":0}');
     expect(db.bindings.flat()).toContain('{"enabled":false,"priority":10,"revision":1}');
   });
 
-  it("does not create a batch for no-op or already-stale revisions", async () => {
+  it("does not write for no-op or already-stale revisions", async () => {
     const db = commandDatabase([
       { ...commandRow(), revision: 2 },
       { ...commandRow(), revision: 2 }
@@ -150,7 +150,7 @@ describe("D1 admin installation command adapter", () => {
         priority: 4
       })
     ).resolves.toEqual({ outcome: "conflict", id: "inst_1", revision: 2 });
-    expect(db.batches).toEqual([]);
+    expect(db.runs).toEqual([]);
   });
 
   it("maps an audit uniqueness failure after a raced CAS to a conflict", async () => {
@@ -160,7 +160,7 @@ describe("D1 admin installation command adapter", () => {
         { ...commandRow(), revision: 1 }
       ],
       {
-        batchError: new Error("UNIQUE constraint failed: admin_audit_events.installation_id")
+        runError: new Error("UNIQUE constraint failed: admin_audit_events.installation_id")
       }
     );
     const store = createD1AdminInstallationCommandStore(db);
@@ -212,32 +212,29 @@ function commandRow() {
 
 function commandDatabase(
   rows: readonly ReturnType<typeof commandRow>[],
-  options: { batchError?: Error } = {}
-): D1DatabaseLike & { bindings: unknown[][]; batches: unknown[][] } & {
-  batch: (statements: readonly D1PreparedStatementLike[]) => Promise<readonly unknown[]>;
-} {
+  options: { runError?: Error } = {}
+): D1DatabaseLike & { bindings: unknown[][]; runs: unknown[][] } {
   const bindings: unknown[][] = [];
-  const batches: unknown[][] = [];
+  const runs: unknown[][] = [];
   let rowIndex = 0;
   return {
     bindings,
-    batches,
+    runs,
     prepare: () => {
       const statement: D1PreparedStatementLike = {
         bind: (...values) => {
           bindings.push(values);
           return statement;
         },
-        run: () => Promise.resolve(undefined),
+        run: () => {
+          runs.push([]);
+          if (options.runError !== undefined) return Promise.reject(options.runError);
+          return Promise.resolve(undefined);
+        },
         all: () => Promise.resolve({ results: [] }),
         first: <T>() => Promise.resolve((rows[rowIndex++] ?? null) as unknown as T | null)
       };
       return statement;
-    },
-    batch: (statements) => {
-      batches.push([...statements]);
-      if (options.batchError !== undefined) return Promise.reject(options.batchError);
-      return Promise.resolve([]);
     }
   };
 }

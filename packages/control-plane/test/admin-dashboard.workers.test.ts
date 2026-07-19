@@ -188,16 +188,17 @@ describe("D1 Admin dashboard read model", () => {
   it("does not update an installation when the paired audit insert fails, and makes no-op commands audit-free", async () => {
     await seedDashboard();
     await testEnv.DB.prepare(
-      "INSERT INTO admin_audit_events (id, installation_id, tenant_id, plugin_id, revision, actor, action, before_json, after_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO admin_audit_events (id, installation_id, tenant_id, app_id, plugin_id, revision, actor, action, before_json, after_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
       .bind(
         "conflicting_audit",
         "tenant_1_installation_a",
         "tenant_1",
+        "app_1",
         "tenant_1_plugin",
         0,
         "actor",
-        "installation.command",
+        "installation.seed",
         "{}",
         "{}",
         "2026-07-19T00:00:00.000Z"

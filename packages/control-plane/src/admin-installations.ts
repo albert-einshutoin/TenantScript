@@ -1,4 +1,4 @@
-import type { D1DatabaseLike, D1PreparedStatementLike } from "./storage.js";
+import type { D1DatabaseLike } from "./storage.js";
 
 export interface AdminInstallationDetail {
   id: string;
@@ -67,6 +67,8 @@ export type AdminInstallationCommandResult =
 export interface D1AdminInstallationCommandStoreOptions {
   /** Test seam for a deterministic D1 constraint failure; production IDs use Web Crypto. */
   auditId?: () => string;
+  /** Test seam for exercising an existing writer between the command pre-read and audit INSERT. */
+  beforeWrite?: () => unknown;
 }
 
 export function createD1AdminInstallationDetailStore(
@@ -79,14 +81,13 @@ export function createD1AdminInstallationCommandStore(
   db: D1DatabaseLike,
   options: D1AdminInstallationCommandStoreOptions = {}
 ): AdminInstallationCommandStore {
-  const transactionalDb = asBatchDatabase(db);
   return {
-    updateInstallation: (request) => updateInstallation(transactionalDb, request, options)
+    updateInstallation: (request) => updateInstallation(db, request, options)
   };
 }
 
 async function updateInstallation(
-  db: D1BatchDatabase,
+  db: D1DatabaseLike,
   request: {
     appId: string;
     tenantId: string;
@@ -125,51 +126,33 @@ async function updateInstallation(
 
   const auditId = options.auditId?.() ?? `installation-command-${crypto.randomUUID()}`;
   const nextRevision = before.revision + 1;
+  await options.beforeWrite?.();
   try {
-    // The audit's (installation_id, revision) foreign key requires the CAS-updated revision, and
-    // its unique key rejects a raced duplicate. Either failure rolls the full D1 batch back.
-    await db.batch([
-      db
-        .prepare(
-          [
-            "UPDATE installations SET enabled = ?1, priority = ?2, revision = revision + 1",
-            "WHERE id = ?3 AND revision = ?4 AND EXISTS (",
-            "SELECT 1 FROM tenants t",
-            "JOIN plugin_versions pv ON pv.id = installations.plugin_version_id",
-            "JOIN plugins p ON p.id = pv.plugin_id",
-            "WHERE t.id = installations.tenant_id AND t.id = ?5 AND t.app_id = ?6 AND p.app_id = t.app_id",
-            ")"
-          ].join(" ")
-        )
-        .bind(
-          after.enabled ? 1 : 0,
-          after.priority,
-          request.id,
-          request.expectedRevision,
-          request.tenantId,
-          request.appId
-        ),
-      db
-        .prepare(
-          [
-            "INSERT INTO admin_audit_events",
-            "(id, installation_id, tenant_id, plugin_id, revision, actor, action, before_json, after_json, created_at)",
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-          ].join(" ")
-        )
-        .bind(
-          auditId,
-          requiredString(current.id, "invalid installation row"),
-          requiredString(current.tenant_id, "invalid installation row"),
-          requiredString(current.plugin_id, "invalid installation row"),
-          nextRevision,
-          request.actor,
-          "installation.command",
-          JSON.stringify(before),
-          JSON.stringify({ ...after, revision: nextRevision }),
-          new Date().toISOString()
-        )
-    ]);
+    // The migration trigger performs the conditional installation update inside this INSERT.
+    // Keeping both effects in one D1 statement means a stale CAS aborts the audit too, so no
+    // interleaving writer can leave a success response backed by a false audit event.
+    await db
+      .prepare(
+        [
+          "INSERT INTO admin_audit_events",
+          "(id, installation_id, tenant_id, app_id, plugin_id, revision, actor, action, before_json, after_json, created_at)",
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ].join(" ")
+      )
+      .bind(
+        auditId,
+        requiredString(current.id, "invalid installation row"),
+        requiredString(current.tenant_id, "invalid installation row"),
+        request.appId,
+        requiredString(current.plugin_id, "invalid installation row"),
+        nextRevision,
+        request.actor,
+        "installation.command",
+        JSON.stringify(before),
+        JSON.stringify({ ...after, revision: nextRevision }),
+        new Date().toISOString()
+      )
+      .run();
   } catch (error) {
     const latest = await readCommandRow(db, request);
     if (latest !== null && commandState(latest).revision !== request.expectedRevision) {
@@ -220,18 +203,6 @@ function commandState(row: InstallationCommandRow): {
     priority: requiredSafeInteger(row.priority, "invalid installation row"),
     revision: requiredSafeInteger(row.revision, "invalid installation row")
   };
-}
-
-interface D1BatchDatabase extends D1DatabaseLike {
-  batch: (statements: readonly D1PreparedStatementLike[]) => Promise<readonly unknown[]>;
-}
-
-function asBatchDatabase(db: D1DatabaseLike): D1BatchDatabase {
-  const candidate = db as Partial<D1BatchDatabase>;
-  if (typeof candidate.batch !== "function") {
-    throw new Error("D1 batch is required for installation command audit atomicity");
-  }
-  return candidate as D1BatchDatabase;
 }
 
 async function readInstallation(
