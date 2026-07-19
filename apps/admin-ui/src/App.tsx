@@ -4,8 +4,10 @@ import {
   AdminApiError,
   type AdminApiClient,
   type AdminSession,
+  type DashboardSectionPage,
   type DashboardSnapshot
 } from "./api-client.js";
+import type { AdminDashboardSection } from "@tenantscript/control-plane";
 import { type AdminRoute, useHashRoute } from "./router.js";
 
 const defaultClient = createUnavailableAdminApiClient();
@@ -22,6 +24,7 @@ export function App({ client = defaultClient }: { client?: AdminApiClient }) {
           client={client}
           session={session}
           onLogout={() => {
+            client.clearSession();
             setSession(null);
           }}
         />
@@ -102,6 +105,7 @@ function AdminShell({
   const [route, setRoute] = useHashRoute();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadingSection, setLoadingSection] = useState<AdminDashboardSection | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -121,6 +125,29 @@ function AdminShell({
       active = false;
     };
   }, [client, session]);
+
+  const loadMore = useCallback(
+    (section: AdminDashboardSection) => {
+      const cursor = snapshot?.cursors[section];
+      if (cursor === undefined || loadingSection !== null) {
+        return;
+      }
+      setLoadingSection(section);
+      setError(null);
+      void client
+        .getDashboardSection(section, cursor)
+        .then((page) => {
+          setSnapshot((current) => (current === null ? current : appendPage(current, page)));
+        })
+        .catch(() => {
+          setError("Could not load more dashboard results");
+        })
+        .finally(() => {
+          setLoadingSection(null);
+        });
+    },
+    [client, loadingSection, snapshot]
+  );
 
   return (
     <section className="admin-layout">
@@ -165,7 +192,13 @@ function AdminShell({
         {snapshot === null ? (
           <div className="loading-panel">Loading</div>
         ) : (
-          <RoutePanel route={route} session={session} snapshot={snapshot} />
+          <RoutePanel
+            route={route}
+            session={session}
+            snapshot={snapshot}
+            loadingSection={loadingSection}
+            onLoadMore={loadMore}
+          />
         )}
       </div>
     </section>
@@ -183,37 +216,74 @@ const routeItems: readonly { route: AdminRoute; label: string }[] = [
 function RoutePanel({
   route,
   session,
-  snapshot
+  snapshot,
+  loadingSection,
+  onLoadMore
 }: {
   route: AdminRoute;
   session: AdminSession;
   snapshot: DashboardSnapshot;
+  loadingSection: AdminDashboardSection | null;
+  onLoadMore: (section: AdminDashboardSection) => void;
 }) {
   switch (route) {
     case "overview":
       return <OverviewPanel snapshot={snapshot} />;
     case "installations":
-      return <InstallationsPanel snapshot={snapshot} />;
+      return (
+        <InstallationsPanel
+          snapshot={snapshot}
+          loading={loadingSection === "installations"}
+          onLoadMore={() => {
+            onLoadMore("installations");
+          }}
+        />
+      );
     case "versions":
-      return <VersionsPanel snapshot={snapshot} />;
+      return (
+        <VersionsPanel
+          snapshot={snapshot}
+          loading={loadingSection === "pluginVersions"}
+          onLoadMore={() => {
+            onLoadMore("pluginVersions");
+          }}
+        />
+      );
     case "approvals":
-      return <ApprovalsPanel snapshot={snapshot} canDecide={session.role === "manager"} />;
+      return (
+        <ApprovalsPanel
+          snapshot={snapshot}
+          canDecide={session.role === "manager"}
+          loading={loadingSection === "approvals"}
+          onLoadMore={() => {
+            onLoadMore("approvals");
+          }}
+        />
+      );
     case "executions":
-      return <ExecutionsPanel snapshot={snapshot} />;
+      return (
+        <ExecutionsPanel
+          snapshot={snapshot}
+          loading={loadingSection === "executions"}
+          onLoadMore={() => {
+            onLoadMore("executions");
+          }}
+        />
+      );
   }
 }
 
 function OverviewPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
   const pendingApprovals = snapshot.approvals.filter((approval) => approval.state === "pending");
-  const usage = snapshot.usage[0];
+  const usage = snapshot.usage;
 
   return (
     <div className="panel-stack">
       <section className="metric-grid" aria-label="Operations summary">
         <Metric label="Active installations" value={String(snapshot.installations.length)} />
         <Metric label="Pending approvals" value={String(pendingApprovals.length)} tone="warning" />
-        <Metric label="Executions today" value={String(usage?.executions ?? 0)} />
-        <Metric label="CPU ms today" value={String(usage?.cpuMs ?? 0)} />
+        <Metric label="Executions today" value={String(usage.executions)} />
+        <Metric label="Runtime ms today" value={String(usage.runtimeMs)} />
       </section>
       <section className="data-panel">
         <PanelHeader title="Recent executions" detail="Last 24 hours" />
@@ -223,7 +293,15 @@ function OverviewPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
   );
 }
 
-function InstallationsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
+function InstallationsPanel({
+  snapshot,
+  loading,
+  onLoadMore
+}: {
+  snapshot: DashboardSnapshot;
+  loading: boolean;
+  onLoadMore: () => void;
+}) {
   return (
     <section className="data-panel">
       <PanelHeader title="Installations" detail="Tenant scoped plugins" />
@@ -232,7 +310,6 @@ function InstallationsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
           <thead>
             <tr>
               <th>Plugin</th>
-              <th>Tenant</th>
               <th>Version</th>
               <th>Priority</th>
               <th>Status</th>
@@ -242,7 +319,6 @@ function InstallationsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
             {snapshot.installations.map((installation) => (
               <tr key={installation.id}>
                 <td>{installation.pluginKey}</td>
-                <td>{installation.tenantId}</td>
                 <td>{installation.version}</td>
                 <td>{installation.priority}</td>
                 <td>
@@ -253,11 +329,25 @@ function InstallationsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
           </tbody>
         </table>
       </div>
+      <LoadMoreButton
+        section="installations"
+        cursor={snapshot.cursors.installations}
+        loading={loading}
+        onClick={onLoadMore}
+      />
     </section>
   );
 }
 
-function VersionsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
+function VersionsPanel({
+  snapshot,
+  loading,
+  onLoadMore
+}: {
+  snapshot: DashboardSnapshot;
+  loading: boolean;
+  onLoadMore: () => void;
+}) {
   return (
     <section className="data-panel">
       <PanelHeader title="Versions" detail="Pinned artifacts" />
@@ -281,16 +371,26 @@ function VersionsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
           </tbody>
         </table>
       </div>
+      <LoadMoreButton
+        section="versions"
+        cursor={snapshot.cursors.pluginVersions}
+        loading={loading}
+        onClick={onLoadMore}
+      />
     </section>
   );
 }
 
 function ApprovalsPanel({
   snapshot,
-  canDecide
+  canDecide,
+  loading,
+  onLoadMore
 }: {
   snapshot: DashboardSnapshot;
   canDecide: boolean;
+  loading: boolean;
+  onLoadMore: () => void;
 }) {
   return (
     <section className="data-panel">
@@ -314,15 +414,35 @@ function ApprovalsPanel({
           </article>
         ))}
       </div>
+      <LoadMoreButton
+        section="approvals"
+        cursor={snapshot.cursors.approvals}
+        loading={loading}
+        onClick={onLoadMore}
+      />
     </section>
   );
 }
 
-function ExecutionsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
+function ExecutionsPanel({
+  snapshot,
+  loading,
+  onLoadMore
+}: {
+  snapshot: DashboardSnapshot;
+  loading: boolean;
+  onLoadMore: () => void;
+}) {
   return (
     <section className="data-panel">
       <PanelHeader title="Executions" detail="Hook activity" />
       <ExecutionTable snapshot={snapshot} />
+      <LoadMoreButton
+        section="executions"
+        cursor={snapshot.cursors.executions}
+        loading={loading}
+        onClick={onLoadMore}
+      />
     </section>
   );
 }
@@ -350,9 +470,9 @@ function ExecutionTable({ snapshot }: { snapshot: DashboardSnapshot }) {
               </td>
               <td>{execution.durationMs}ms</td>
               <td>
-                {execution.capabilityCalls.length === 0
+                {execution.capabilityNames.length === 0
                   ? "none"
-                  : execution.capabilityCalls.map((call) => call.name).join(", ")}
+                  : execution.capabilityNames.join(", ")}
               </td>
             </tr>
           ))}
@@ -360,6 +480,47 @@ function ExecutionTable({ snapshot }: { snapshot: DashboardSnapshot }) {
       </table>
     </div>
   );
+}
+
+function LoadMoreButton({
+  section,
+  cursor,
+  loading,
+  onClick
+}: {
+  section: string;
+  cursor: string | undefined;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  if (cursor === undefined) {
+    return null;
+  }
+  return (
+    <button type="button" className="secondary-button" disabled={loading} onClick={onClick}>
+      {loading ? `Loading more ${section}` : `Load more ${section}`}
+    </button>
+  );
+}
+
+function appendPage(snapshot: DashboardSnapshot, page: DashboardSectionPage): DashboardSnapshot {
+  const cursors: DashboardSnapshot["cursors"] =
+    page.nextCursor === undefined
+      ? Object.fromEntries(
+          Object.entries(snapshot.cursors).filter(([section]) => section !== page.section)
+        )
+      : { ...snapshot.cursors, [page.section]: page.nextCursor };
+
+  switch (page.section) {
+    case "installations":
+      return { ...snapshot, installations: [...snapshot.installations, ...page.items], cursors };
+    case "pluginVersions":
+      return { ...snapshot, pluginVersions: [...snapshot.pluginVersions, ...page.items], cursors };
+    case "approvals":
+      return { ...snapshot, approvals: [...snapshot.approvals, ...page.items], cursors };
+    case "executions":
+      return { ...snapshot, executions: [...snapshot.executions, ...page.items], cursors };
+  }
 }
 
 function Metric({

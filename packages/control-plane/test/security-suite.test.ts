@@ -1,11 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  createAdminCursorCodec,
   createControlPlaneApi,
   createControlPlaneHttpHandler,
   createDurableObjectDailyUsageCounter,
   createInMemoryDailyUsageCounter,
   createInMemoryExecutionLogStore,
   createStaticTokenIdentityResolver,
+  type AdminDashboardStore,
   type DailyUsageRecord,
   type ApprovalContinuationRequest,
   type ApprovalRecord,
@@ -95,6 +97,74 @@ describe("control-plane security suite", () => {
     expect(store.searchExecutions({ tenantId: "tenant_1" }).map((record) => record.id)).toEqual([
       "exec_tenant_1"
     ]);
+  });
+
+  it("derives dashboard scope from identity and rejects cursor replay across tenants", async () => {
+    const readSection = vi.fn<AdminDashboardStore["readSection"]>().mockImplementation((request) =>
+      Promise.resolve(
+        request.section === "installations"
+          ? {
+              section: "installations",
+              items: [
+                {
+                  id: "inst_safe",
+                  pluginKey: "safe-plugin",
+                  version: "1.0.0",
+                  enabled: true,
+                  priority: 10
+                }
+              ],
+              nextPosition: "inst_safe"
+            }
+          : { section: request.section, items: [] }
+      )
+    );
+    const dashboardStore: AdminDashboardStore = {
+      readSection,
+      readUsageSummary: () => Promise.resolve({ date: "2026-07-19", executions: 1, runtimeMs: 12 })
+    };
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({
+        tenant1: {
+          subject: "user_1",
+          role: "manager",
+          appId: "app_1",
+          tenantId: "tenant_1"
+        },
+        tenant2: {
+          subject: "user_2",
+          role: "viewer",
+          appId: "app_2",
+          tenantId: "tenant_2"
+        }
+      }),
+      dashboardStore,
+      cursorCodec: createAdminCursorCodec("security-suite-dashboard-cursor-secret-32-bytes"),
+      allowedOrigins: ["https://admin.example.com"]
+    });
+    const initial = await handler(
+      dashboardRequest(
+        "tenant1",
+        "https://api.example.com/v1/admin/dashboard?appId=app_2&tenantId=tenant_2"
+      )
+    );
+    const body: {
+      installations: { nextCursor: string };
+    } = await initial.json();
+
+    expect(initial.status).toBe(200);
+    expect(readSection).toHaveBeenCalledWith(
+      expect.objectContaining({ appId: "app_1", tenantId: "tenant_1" })
+    );
+
+    const replay = await handler(
+      dashboardRequest(
+        "tenant2",
+        `https://api.example.com/v1/admin/dashboard/installations?cursor=${encodeURIComponent(body.installations.nextCursor)}`
+      )
+    );
+    expect(replay.status).toBe(400);
+    await expect(replay.json()).resolves.toMatchObject({ error: { code: "invalid_cursor" } });
   });
 
   it("allows only token roles that match the approval role and ignores body role claims", async () => {
@@ -302,6 +372,15 @@ describe("control-plane security suite", () => {
 const noopArtifacts: ArtifactStore = {
   putArtifact: (hash) => Promise.resolve({ hash })
 };
+
+function dashboardRequest(token: string, url: string): Request {
+  return new Request(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Origin: "https://admin.example.com"
+    }
+  });
+}
 
 function createDecisionStore(initialApproval: ApprovalRecord): ControlPlaneStore {
   let approval = initialApproval;

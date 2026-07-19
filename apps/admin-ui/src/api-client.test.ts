@@ -8,14 +8,17 @@ import {
 
 describe("Admin API environment selection", () => {
   it("connects the production client to the configured Control Plane", async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json({
-        subject: "ops-manager",
-        role: "manager",
-        appId: "app_acme",
-        tenantId: "tenant_acme"
-      })
-    );
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          subject: "ops-manager",
+          role: "manager",
+          appId: "app_acme",
+          tenantId: "tenant_acme"
+        })
+      )
+      .mockResolvedValueOnce(Response.json(dashboardPayload()));
     const client = createAdminApiClient({
       isDevelopment: false,
       demoMode: false,
@@ -23,11 +26,21 @@ describe("Admin API environment selection", () => {
       fetcher
     });
 
-    await expect(client.resolveSession({ token: "production-token" })).resolves.toMatchObject({
+    const session = await client.resolveSession({ token: "production-token" });
+    expect(session).toMatchObject({
       subject: "ops-manager",
       tenantId: "tenant_acme"
     });
-    expect(fetcher).toHaveBeenCalledOnce();
+    await expect(client.getDashboard(session)).resolves.toMatchObject({
+      usage: { executions: 1, runtimeMs: 12 }
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const [dashboardUrl, dashboardInit] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(dashboardUrl)).toBe("https://api.example.com/v1/admin/dashboard");
+    expect(new Headers(dashboardInit?.headers).get("authorization")).toBe(
+      "Bearer production-token"
+    );
+    expect(requestUrl(dashboardUrl)).not.toContain("production-token");
   });
 
   it("never enables fixture credentials in a production build", async () => {
@@ -50,7 +63,232 @@ describe("Admin API environment selection", () => {
       })
     ).toThrow("control-plane URL must use https except for loopback development");
   });
+
+  it("loads a signed section page and clears credentials on logout", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          subject: "ops-manager",
+          role: "manager",
+          appId: "app_acme",
+          tenantId: "tenant_acme"
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "installations",
+          items: [
+            {
+              id: "inst_2",
+              pluginKey: "second-plugin",
+              version: "2.0.0",
+              enabled: true,
+              priority: 20
+            }
+          ]
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.getDashboardSection("installations", "signed.cursor")
+    ).resolves.toMatchObject({ section: "installations", items: [{ id: "inst_2" }] });
+    expect(requestUrl(fetcher.mock.calls[1]?.[0])).toContain(
+      "/v1/admin/dashboard/installations?cursor=signed.cursor"
+    );
+
+    client.clearSession();
+    await expect(client.getDashboardSection("installations", "signed.cursor")).rejects.toEqual(
+      new AdminApiError(401, "session_required", "Admin session required")
+    );
+  });
+
+  it("rejects dashboard responses that expose storage-only fields", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          subject: "ops-manager",
+          role: "manager",
+          appId: "app_acme",
+          tenantId: "tenant_acme"
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          ...dashboardPayload(),
+          installations: {
+            items: [
+              {
+                id: "inst_1",
+                pluginKey: "plugin",
+                version: "1.0.0",
+                enabled: true,
+                priority: 10,
+                config: { secret: "must-not-cross-wire" }
+              }
+            ]
+          }
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    const session = await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getDashboard(session)).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
+  it("maps every paginated dashboard section DTO", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "pluginVersions",
+          items: [{ id: "v1", pluginId: "p1", version: "1.0.0", artifactHash: "hash" }],
+          nextCursor: "next.version"
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "approvals",
+          items: [
+            {
+              id: "a1",
+              pluginId: "p1",
+              role: "manager",
+              resumeHook: "approval.decided",
+              state: "approved",
+              expiresAt: "2026-07-20T00:00:00.000Z",
+              createdAt: "2026-07-19T00:00:00.000Z"
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "executions",
+          items: [
+            {
+              id: "e1",
+              pluginId: "p1",
+              hookName: "invoice.created",
+              version: "1.0.0",
+              status: "success",
+              durationMs: 12,
+              capabilityNames: [],
+              createdAt: "2026-07-19T00:00:00.000Z"
+            }
+          ]
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getDashboardSection("pluginVersions", "cursor")).resolves.toMatchObject({
+      section: "pluginVersions",
+      nextCursor: "next.version"
+    });
+    await expect(client.getDashboardSection("approvals", "cursor")).resolves.toMatchObject({
+      section: "approvals",
+      items: [{ createdAt: new Date("2026-07-19T00:00:00.000Z") }]
+    });
+    await expect(client.getDashboardSection("executions", "cursor")).resolves.toMatchObject({
+      section: "executions",
+      items: [{ capabilityNames: [] }]
+    });
+  });
+
+  it("preserves typed dashboard errors and redacts network failures", async () => {
+    const forbidden = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher: vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(sessionPayload()))
+        .mockResolvedValueOnce(
+          Response.json(
+            { error: { code: "admin_scope_forbidden", message: "tenant scope required" } },
+            { status: 403 }
+          )
+        )
+    });
+    const session = await forbidden.resolveSession({ token: "secret-token" });
+    await expect(forbidden.getDashboard(session)).rejects.toEqual(
+      new AdminApiError(403, "admin_scope_forbidden", "tenant scope required")
+    );
+
+    const network = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher: vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(sessionPayload()))
+        .mockRejectedValueOnce(new Error("provider secret"))
+    });
+    const networkSession = await network.resolveSession({ token: "secret-token" });
+    await expect(network.getDashboard(networkSession)).rejects.toEqual(
+      new AdminApiError(0, "network_error", "control-plane is unreachable")
+    );
+  });
 });
+
+function dashboardPayload() {
+  return {
+    installations: {
+      items: [
+        {
+          id: "inst_1",
+          pluginKey: "safe-plugin",
+          version: "1.0.0",
+          enabled: true,
+          priority: 10
+        }
+      ],
+      nextCursor: "signed.cursor"
+    },
+    pluginVersions: { items: [] },
+    approvals: { items: [] },
+    executions: { items: [] },
+    usage: { date: "2026-07-19", executions: 1, runtimeMs: 12 }
+  };
+}
+
+function sessionPayload() {
+  return {
+    subject: "ops-manager",
+    role: "manager",
+    appId: "app_acme",
+    tenantId: "tenant_acme"
+  };
+}
+
+function requestUrl(input: Parameters<typeof fetch>[0] | undefined): string {
+  if (input === undefined) {
+    return "";
+  }
+  return typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+}
 
 describe("Admin HTTP session client", () => {
   it("sends the token only in Authorization and returns identity without the credential", async () => {

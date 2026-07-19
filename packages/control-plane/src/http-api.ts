@@ -1,4 +1,10 @@
 import type { AuthenticatedIdentity, IdentityResolver } from "./api.js";
+import type {
+  AdminCursorCodec,
+  AdminDashboardSection,
+  AdminDashboardSectionPage,
+  AdminDashboardStore
+} from "./admin-dashboard.js";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -10,7 +16,10 @@ export interface TenantScopedAdminIdentity extends AuthenticatedIdentity {
 
 export interface ControlPlaneHttpHandlerOptions {
   identityResolver?: IdentityResolver;
+  dashboardStore?: AdminDashboardStore;
+  cursorCodec?: AdminCursorCodec;
   allowedOrigins?: readonly string[];
+  now?: () => Date;
 }
 
 export type ControlPlaneHttpHandler = (request: Request) => Promise<Response>;
@@ -34,8 +43,9 @@ export function createControlPlaneHttpHandler(
     }
 
     const corsHeaders = origin === null ? undefined : corsResponseHeaders(origin);
-    const path = new URL(request.url).pathname;
-    if (path !== "/v1/session") {
+    const url = new URL(request.url);
+    const route = adminRoute(url.pathname);
+    if (route === null) {
       return errorResponse(404, "route_not_found", "route not found", corsHeaders);
     }
 
@@ -52,8 +62,27 @@ export function createControlPlaneHttpHandler(
       });
     }
 
-    return resolveSession(request, options.identityResolver, corsHeaders);
+    if (route === "session") {
+      return resolveSession(request, options.identityResolver, corsHeaders);
+    }
+    return resolveDashboard(request, route, url, options, corsHeaders);
   };
+}
+
+type AdminRoute = "session" | "dashboard" | AdminDashboardSection;
+
+function adminRoute(path: string): AdminRoute | null {
+  if (path === "/v1/session") {
+    return "session";
+  }
+  if (path === "/v1/admin/dashboard") {
+    return "dashboard";
+  }
+  const section = path.slice("/v1/admin/dashboard/".length);
+  if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
+    return section;
+  }
+  return null;
 }
 
 async function resolveSession(
@@ -105,6 +134,209 @@ async function resolveSession(
     // Provider errors may contain tokens or upstream details, so HTTP responses stay redacted.
     return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
   }
+}
+
+async function resolveDashboard(
+  request: Request,
+  route: Exclude<AdminRoute, "session">,
+  url: URL,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.dashboardStore === undefined) {
+    return errorResponse(
+      503,
+      "dashboard_store_unavailable",
+      "dashboard store unavailable",
+      corsHeaders
+    );
+  }
+  if (options.cursorCodec === undefined) {
+    return errorResponse(
+      503,
+      "cursor_service_unavailable",
+      "dashboard cursor service unavailable",
+      corsHeaders
+    );
+  }
+  const dashboardStore = options.dashboardStore;
+  const cursorCodec = options.cursorCodec;
+
+  const limit = dashboardLimit(url.searchParams.get("limit"));
+  if (limit === null) {
+    return errorResponse(400, "invalid_limit", "limit must be a positive integer", corsHeaders);
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) {
+    return identity;
+  }
+
+  try {
+    if (route === "dashboard") {
+      const sections: readonly AdminDashboardSection[] = [
+        "installations",
+        "pluginVersions",
+        "approvals",
+        "executions"
+      ];
+      const [pages, usage] = await Promise.all([
+        Promise.all(
+          sections.map((section) =>
+            dashboardStore.readSection({
+              appId: identity.appId,
+              tenantId: identity.tenantId,
+              section,
+              limit
+            })
+          )
+        ),
+        dashboardStore.readUsageSummary({
+          appId: identity.appId,
+          tenantId: identity.tenantId,
+          date: (options.now?.() ?? new Date()).toISOString().slice(0, 10)
+        })
+      ]);
+      const serialized = await Promise.all(
+        pages.map((page) => serializeSectionPage(page, identity, cursorCodec))
+      );
+      return jsonResponse(
+        200,
+        {
+          installations: requireSerializedSection(serialized, "installations"),
+          pluginVersions: requireSerializedSection(serialized, "pluginVersions"),
+          approvals: requireSerializedSection(serialized, "approvals"),
+          executions: requireSerializedSection(serialized, "executions"),
+          usage
+        },
+        corsHeaders
+      );
+    }
+
+    const cursor = url.searchParams.get("cursor");
+    let position: string | undefined;
+    if (cursor !== null) {
+      const payload = await cursorCodec.decode(cursor);
+      if (
+        payload.appId !== identity.appId ||
+        payload.tenantId !== identity.tenantId ||
+        payload.section !== route
+      ) {
+        return errorResponse(400, "invalid_cursor", "invalid dashboard cursor", corsHeaders);
+      }
+      position = payload.position;
+    }
+    const page = await dashboardStore.readSection({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      section: route,
+      limit,
+      ...(position === undefined ? {} : { position })
+    });
+    return jsonResponse(200, await serializeSectionPage(page, identity, cursorCodec), corsHeaders);
+  } catch (error) {
+    if (error instanceof Error && error.message === "invalid Admin dashboard cursor") {
+      return errorResponse(400, "invalid_cursor", "invalid dashboard cursor", corsHeaders);
+    }
+    // Store and cursor-provider failures can include SQL, bindings, or customer data.
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function resolveAdminIdentity(
+  request: Request,
+  identityResolver: IdentityResolver | undefined,
+  corsHeaders: Record<string, string> | undefined
+): Promise<TenantScopedAdminIdentity | Response> {
+  if (identityResolver === undefined) {
+    return errorResponse(
+      503,
+      "identity_resolver_unavailable",
+      "identity service unavailable",
+      corsHeaders
+    );
+  }
+  const token = bearerToken(request.headers.get("Authorization"));
+  if (token === null) {
+    return unauthorizedResponse(corsHeaders);
+  }
+  try {
+    const identity = await identityResolver.resolveToken(token);
+    if (identity === null) {
+      return unauthorizedResponse(corsHeaders);
+    }
+    if (!isTenantScopedAdminIdentity(identity)) {
+      return errorResponse(
+        403,
+        "admin_scope_forbidden",
+        "tenant-scoped admin access required",
+        corsHeaders
+      );
+    }
+    return identity;
+  } catch {
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function serializeSectionPage(
+  page: AdminDashboardSectionPage,
+  identity: TenantScopedAdminIdentity,
+  cursorCodec: AdminCursorCodec
+) {
+  const nextCursor =
+    page.nextPosition === undefined
+      ? undefined
+      : await cursorCodec.encode({
+          appId: identity.appId,
+          tenantId: identity.tenantId,
+          section: page.section,
+          position: page.nextPosition
+        });
+  return {
+    section: page.section,
+    items: page.items,
+    ...(nextCursor === undefined ? {} : { nextCursor })
+  };
+}
+
+function requireSerializedSection(
+  pages: readonly SerializedSectionPage[],
+  section: AdminDashboardSection
+): Omit<SerializedSectionPage, "section"> {
+  const page = pages.find((candidate) => candidate.section === section);
+  if (page === undefined) {
+    throw new Error(`dashboard section ${section} was not returned`);
+  }
+  return {
+    items: page.items,
+    ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor })
+  };
+}
+
+interface SerializedSectionPage {
+  section: AdminDashboardSection;
+  items: readonly unknown[];
+  nextCursor?: string;
+}
+
+function dashboardLimit(value: string | null): number | null {
+  if (value === null) {
+    return 20;
+  }
+  if (!/^\d+$/u.test(value)) {
+    return null;
+  }
+  const parsed = Number(value);
+  return parsed > 0 ? Math.min(parsed, 50) : null;
+}
+
+function isDashboardSection(value: string): value is AdminDashboardSection {
+  return (
+    value === "installations" ||
+    value === "pluginVersions" ||
+    value === "approvals" ||
+    value === "executions"
+  );
 }
 
 function bearerToken(authorization: string | null): string | null {

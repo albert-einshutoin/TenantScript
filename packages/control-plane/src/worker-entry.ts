@@ -1,9 +1,13 @@
 import { createStaticTokenIdentityResolver, type AuthenticatedIdentity } from "./api.js";
+import { createAdminCursorCodec, createD1AdminDashboardStore } from "./admin-dashboard.js";
 import { createControlPlaneHttpHandler } from "./http-api.js";
+import type { D1DatabaseLike } from "./storage.js";
 
 interface ControlPlaneWorkerEnv {
   ADMIN_ALLOWED_ORIGINS?: string;
+  ADMIN_CURSOR_SECRET?: string;
   ADMIN_IDENTITIES_JSON?: string;
+  DB?: D1DatabaseLike;
 }
 
 export class ProbeDurableObject {
@@ -21,12 +25,19 @@ export default {
   fetch(request: Request, env: ControlPlaneWorkerEnv) {
     const identities = parseIdentityConfiguration(env.ADMIN_IDENTITIES_JSON);
     const allowedOrigins = parseAllowedOrigins(env.ADMIN_ALLOWED_ORIGINS);
+    const dashboardStore = env.DB === undefined ? undefined : createD1AdminDashboardStore(env.DB);
     let handler;
     try {
+      const cursorCodec =
+        env.ADMIN_CURSOR_SECRET === undefined
+          ? undefined
+          : createAdminCursorCodec(env.ADMIN_CURSOR_SECRET);
       handler = createControlPlaneHttpHandler({
         ...(identities === undefined
           ? {}
           : { identityResolver: createStaticTokenIdentityResolver(identities) }),
+        ...(dashboardStore === undefined ? {} : { dashboardStore }),
+        ...(cursorCodec === undefined ? {} : { cursorCodec }),
         allowedOrigins
       });
     } catch {

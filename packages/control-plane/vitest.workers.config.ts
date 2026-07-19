@@ -28,6 +28,7 @@ export default defineConfig({
         },
         bindings: {
           ADMIN_ALLOWED_ORIGINS: '["https://admin.example.com"]',
+          ADMIN_CURSOR_SECRET: "cursor-secret-must-be-at-least-32-bytes-long",
           ADMIN_IDENTITIES_JSON:
             '{"worker-manager-token":{"subject":"worker-manager","role":"manager","appId":"app_worker","tenantId":"tenant_worker"}}',
           TEST_MIGRATIONS: await readD1Migrations(path.join(dirname, "migrations"))

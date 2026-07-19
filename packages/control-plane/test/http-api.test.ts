@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { createAdminCursorCodec, type AdminDashboardStore } from "../src/admin-dashboard.js";
 import { createControlPlaneHttpHandler } from "../src/http-api.js";
 import { createStaticTokenIdentityResolver } from "../src/index.js";
 
@@ -141,6 +142,121 @@ describe("Control Plane HTTP session contract", () => {
   });
 });
 
+describe("Control Plane Admin dashboard contract", () => {
+  it("derives scope only from identity and returns redacted bounded summaries", async () => {
+    const store = dashboardStore();
+    const handler = createDashboardHandler(store);
+    const response = await handler(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: "https://api.example.com/v1/admin/dashboard?appId=app_other&tenantId=tenant_other&limit=2"
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(store.readSection).toHaveBeenCalledTimes(4);
+    expect(store.readSection).toHaveBeenCalledWith(
+      expect.objectContaining({ appId: "app_acme", tenantId: "tenant_acme", limit: 2 })
+    );
+    const body: TestDashboardBody = await response.json();
+    expect(body.installations.items).toEqual([
+      {
+        id: "inst_1",
+        pluginKey: "safe-plugin",
+        version: "1.0.0",
+        enabled: true,
+        priority: 10
+      }
+    ]);
+    expect(JSON.stringify(body)).not.toContain("secret-config");
+    expect(JSON.stringify(body)).not.toContain("customer-payload");
+    expect(JSON.stringify(body)).not.toContain("stack trace");
+    expect(body.installations.nextCursor).toEqual(expect.any(String));
+  });
+
+  it("fails closed for missing store and rejects invalid limits", async () => {
+    const missingStore = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      cursorCodec: createAdminCursorCodec("cursor-secret-must-be-at-least-32-bytes-long"),
+      allowedOrigins: [allowedOrigin]
+    });
+    const missingResponse = await missingStore(
+      sessionRequest({ token: "manager-secret-token", url: dashboardUrl() })
+    );
+    expect(missingResponse.status).toBe(503);
+    await expect(missingResponse.json()).resolves.toMatchObject({
+      error: { code: "dashboard_store_unavailable" }
+    });
+
+    const store = dashboardStore();
+    const handler = createDashboardHandler(store);
+    for (const limit of ["0", "not-a-number", "1.5"]) {
+      const response = await handler(
+        sessionRequest({ token: "manager-secret-token", url: `${dashboardUrl()}?limit=${limit}` })
+      );
+      expect(response.status).toBe(400);
+    }
+    await handler(
+      sessionRequest({ token: "manager-secret-token", url: `${dashboardUrl()}?limit=999` })
+    );
+    expect(store.readSection).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
+  });
+
+  it("rejects tampered and cross-tenant section cursors", async () => {
+    const store = dashboardStore();
+    const handler = createDashboardHandler(store);
+    const initial = await handler(
+      sessionRequest({ token: "manager-secret-token", url: dashboardUrl() })
+    );
+    const initialBody: TestDashboardBody = await initial.json();
+    const cursor = initialBody.installations.nextCursor;
+    const replacement = cursor.endsWith("a") ? "b" : "a";
+    const tampered = await handler(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: `${dashboardUrl()}/installations?cursor=${encodeURIComponent(`${cursor.slice(0, -1)}${replacement}`)}`
+      })
+    );
+    expect(tampered.status).toBe(400);
+
+    const otherTenantHandler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({
+        other: {
+          subject: "other",
+          role: "viewer",
+          appId: "app_other",
+          tenantId: "tenant_other"
+        }
+      }),
+      dashboardStore: store,
+      cursorCodec: createAdminCursorCodec("cursor-secret-must-be-at-least-32-bytes-long"),
+      allowedOrigins: [allowedOrigin]
+    });
+    const crossTenant = await otherTenantHandler(
+      sessionRequest({
+        token: "other",
+        url: `${dashboardUrl()}/installations?cursor=${encodeURIComponent(cursor)}`
+      })
+    );
+    expect(crossTenant.status).toBe(400);
+    await expect(crossTenant.json()).resolves.toMatchObject({ error: { code: "invalid_cursor" } });
+  });
+
+  it("redacts downstream store failures", async () => {
+    const store = dashboardStore();
+    store.readSection.mockRejectedValue(new Error("SQL stack trace secret-config"));
+    const response = await createDashboardHandler(store)(
+      sessionRequest({ token: "manager-secret-token", url: dashboardUrl() })
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(500);
+    expect(body).toContain("internal_error");
+    expect(body).not.toContain("SQL stack");
+    expect(body).not.toContain("secret-config");
+  });
+});
+
 function createHandler() {
   return createControlPlaneHttpHandler({
     identityResolver: createStaticTokenIdentityResolver({
@@ -153,6 +269,73 @@ function createHandler() {
     }),
     allowedOrigins: [allowedOrigin]
   });
+}
+
+function createIdentityResolver() {
+  return createStaticTokenIdentityResolver({
+    "manager-secret-token": {
+      subject: "ops-manager",
+      role: "manager",
+      appId: "app_acme",
+      tenantId: "tenant_acme"
+    }
+  });
+}
+
+function createDashboardHandler(store: AdminDashboardStore) {
+  return createControlPlaneHttpHandler({
+    identityResolver: createIdentityResolver(),
+    dashboardStore: store,
+    cursorCodec: createAdminCursorCodec("cursor-secret-must-be-at-least-32-bytes-long"),
+    allowedOrigins: [allowedOrigin],
+    now: () => new Date("2026-07-19T12:00:00.000Z")
+  });
+}
+
+function dashboardStore() {
+  const readSection = vi.fn<AdminDashboardStore["readSection"]>().mockImplementation((request) => {
+    switch (request.section) {
+      case "installations":
+        return Promise.resolve({
+          section: "installations",
+          items: [
+            {
+              id: "inst_1",
+              pluginKey: "safe-plugin",
+              version: "1.0.0",
+              enabled: true,
+              priority: 10
+            }
+          ],
+          nextPosition: "inst_1"
+        });
+      case "pluginVersions":
+        return Promise.resolve({ section: "pluginVersions", items: [] });
+      case "approvals":
+        return Promise.resolve({ section: "approvals", items: [] });
+      case "executions":
+        return Promise.resolve({ section: "executions", items: [] });
+    }
+  });
+  return {
+    readSection,
+    readUsageSummary: vi.fn<AdminDashboardStore["readUsageSummary"]>().mockResolvedValue({
+      date: "2026-07-19",
+      executions: 1,
+      runtimeMs: 12
+    })
+  } satisfies AdminDashboardStore;
+}
+
+function dashboardUrl(): string {
+  return "https://api.example.com/v1/admin/dashboard";
+}
+
+interface TestDashboardBody {
+  installations: {
+    items: unknown[];
+    nextCursor: string;
+  };
 }
 
 function sessionRequest(params: { token: string; url?: string }): Request {

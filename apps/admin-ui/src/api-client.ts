@@ -1,11 +1,5 @@
 import { z } from "zod";
-import type {
-  ApprovalRecord,
-  AuthenticatedIdentity,
-  ControlPlaneExecutionRecord,
-  InstallationRecord,
-  PluginVersionRecord
-} from "@tenantscript/control-plane";
+import type { AdminDashboardSection, AuthenticatedIdentity } from "@tenantscript/control-plane";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -19,50 +13,72 @@ export interface AdminSessionClient {
   resolveSession: (request: { token: string }) => Promise<AdminSession>;
 }
 
-export interface InstallationView extends InstallationRecord {
+export interface InstallationView {
+  id: string;
   pluginKey: string;
   version: string;
+  enabled: boolean;
+  priority: number;
   statusText: "enabled" | "disabled";
 }
 
-export type PluginVersionView = Pick<
-  PluginVersionRecord,
-  "id" | "pluginId" | "version" | "artifactHash"
-> & {
-  manifest: unknown;
-};
-
-export interface DailyUsageSummaryView {
-  tenantId: string;
+export interface PluginVersionView {
+  id: string;
   pluginId: string;
-  date: string;
-  executions: number;
-  cpuMs: number;
-  subrequests: number;
-  workflowRuns: number;
+  version: string;
+  artifactHash: string;
 }
 
-export type ApprovalView = Omit<ApprovalRecord, "decidedBy" | "decisionReason" | "decidedAt"> & {
-  decidedBy?: string | undefined;
-  decisionReason?: string | undefined;
-  decidedAt?: Date | undefined;
-};
+export interface DailyUsageSummaryView {
+  date: string;
+  executions: number;
+  runtimeMs: number;
+}
 
-export type ExecutionView = Omit<ControlPlaneExecutionRecord, "error"> & {
-  error?: string | undefined;
-};
+export interface ApprovalView {
+  id: string;
+  pluginId: string;
+  role: string;
+  resumeHook: string;
+  state: "pending" | "approved" | "rejected" | "expired";
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+export interface ExecutionView {
+  id: string;
+  pluginId: string;
+  hookName: string;
+  version: string;
+  status: "success" | "error" | "timeout" | "egress_denied" | "budget_exceeded";
+  durationMs: number;
+  capabilityNames: readonly string[];
+  createdAt: Date;
+}
 
 export interface DashboardSnapshot {
   installations: readonly InstallationView[];
   pluginVersions: readonly PluginVersionView[];
   approvals: readonly ApprovalView[];
   executions: readonly ExecutionView[];
-  usage: readonly DailyUsageSummaryView[];
+  usage: DailyUsageSummaryView;
+  cursors: Partial<Record<AdminDashboardSection, string>>;
 }
 
 export interface AdminApiClient extends AdminSessionClient {
   getDashboard: (session: AdminSession) => Promise<DashboardSnapshot>;
+  getDashboardSection: (
+    section: AdminDashboardSection,
+    cursor: string
+  ) => Promise<DashboardSectionPage>;
+  clearSession: () => void;
 }
+
+export type DashboardSectionPage =
+  | { section: "installations"; items: readonly InstallationView[]; nextCursor?: string }
+  | { section: "pluginVersions"; items: readonly PluginVersionView[]; nextCursor?: string }
+  | { section: "approvals"; items: readonly ApprovalView[]; nextCursor?: string }
+  | { section: "executions"; items: readonly ExecutionView[]; nextCursor?: string };
 
 export class AdminApiError extends Error {
   override readonly name = "AdminApiError";
@@ -92,77 +108,86 @@ const errorEnvelopeSchema = z.object({
   })
 });
 
-const installationSchema = z.object({
-  id: z.string(),
-  tenantId: z.string(),
-  pluginVersionId: z.string(),
-  enabled: z.boolean(),
-  priority: z.number(),
-  config: z.record(z.string(), z.unknown()),
-  grants: z.record(z.string(), z.unknown()),
-  pluginKey: z.string(),
-  version: z.string(),
-  statusText: z.enum(["enabled", "disabled"])
-});
+const installationSchema = z
+  .object({
+    id: z.string(),
+    pluginKey: z.string(),
+    version: z.string(),
+    enabled: z.boolean(),
+    priority: z.number()
+  })
+  .strict();
 
-const pluginVersionSchema = z.object({
-  id: z.string(),
-  pluginId: z.string(),
-  version: z.string(),
-  artifactHash: z.string(),
-  manifest: z.unknown()
-});
+const pluginVersionSchema = z
+  .object({
+    id: z.string(),
+    pluginId: z.string(),
+    version: z.string(),
+    artifactHash: z.string()
+  })
+  .strict();
 
-const approvalSchema = z.object({
-  id: z.string(),
-  tenantId: z.string(),
-  pluginId: z.string(),
-  role: z.string(),
-  subject: z.record(z.string(), z.unknown()),
-  resumeHook: z.string(),
-  state: z.enum(["pending", "approved", "rejected", "expired"]),
-  expiresAt: z.coerce.date(),
-  createdAt: z.coerce.date(),
-  decidedBy: z.string().optional(),
-  decisionReason: z.string().optional(),
-  decidedAt: z.coerce.date().optional()
-});
+const approvalSchema = z
+  .object({
+    id: z.string(),
+    pluginId: z.string(),
+    role: z.string(),
+    resumeHook: z.string(),
+    state: z.enum(["pending", "approved", "rejected", "expired"]),
+    expiresAt: z.coerce.date(),
+    createdAt: z.coerce.date()
+  })
+  .strict();
 
-const executionSchema = z.object({
-  id: z.string(),
-  tenantId: z.string(),
-  pluginId: z.string(),
-  hookName: z.string(),
-  version: z.string(),
-  status: z.enum(["success", "error", "timeout", "egress_denied", "budget_exceeded"]),
-  durationMs: z.number(),
-  error: z.string().optional(),
-  capabilityCalls: z.array(
-    z.object({
-      name: z.string(),
-      status: z.enum(["success", "denied", "error"])
+const executionSchema = z
+  .object({
+    id: z.string(),
+    pluginId: z.string(),
+    hookName: z.string(),
+    version: z.string(),
+    status: z.enum(["success", "error", "timeout", "egress_denied", "budget_exceeded"]),
+    durationMs: z.number(),
+    capabilityNames: z.array(z.string()),
+    createdAt: z.coerce.date()
+  })
+  .strict();
+
+const usageSummarySchema = z
+  .object({
+    date: z.string(),
+    executions: z.number(),
+    runtimeMs: z.number()
+  })
+  .strict();
+
+const collectionSchema = <T extends z.ZodType>(item: T) =>
+  z.object({ items: z.array(item), nextCursor: z.string().optional() }).strict();
+
+const dashboardSchema = z
+  .object({
+    installations: collectionSchema(installationSchema),
+    pluginVersions: collectionSchema(pluginVersionSchema),
+    approvals: collectionSchema(approvalSchema),
+    executions: collectionSchema(executionSchema),
+    usage: usageSummarySchema
+  })
+  .strict();
+
+const dashboardSectionSchema = z.discriminatedUnion("section", [
+  z
+    .object({ section: z.literal("installations"), ...collectionSchema(installationSchema).shape })
+    .strict(),
+  z
+    .object({
+      section: z.literal("pluginVersions"),
+      ...collectionSchema(pluginVersionSchema).shape
     })
-  ),
-  createdAt: z.coerce.date()
-});
-
-const usageSummarySchema = z.object({
-  tenantId: z.string(),
-  pluginId: z.string(),
-  date: z.string(),
-  executions: z.number(),
-  cpuMs: z.number(),
-  subrequests: z.number(),
-  workflowRuns: z.number()
-});
-
-const dashboardSchema = z.object({
-  installations: z.array(installationSchema),
-  pluginVersions: z.array(pluginVersionSchema),
-  approvals: z.array(approvalSchema),
-  executions: z.array(executionSchema),
-  usage: z.array(usageSummarySchema)
-});
+    .strict(),
+  z.object({ section: z.literal("approvals"), ...collectionSchema(approvalSchema).shape }).strict(),
+  z
+    .object({ section: z.literal("executions"), ...collectionSchema(executionSchema).shape })
+    .strict()
+]);
 
 const demoSessionList: readonly { token: string; session: AdminSession }[] = [
   {
@@ -189,28 +214,20 @@ const demoSessions = new Map<string, AdminSession>(
   demoSessionList.map(({ token, session }) => [token, session])
 );
 
-const dashboardFixture: DashboardSnapshot = dashboardSchema.parse({
+const dashboardFixture: DashboardSnapshot = {
   installations: [
     {
       id: "inst_large_invoice",
-      tenantId: "tenant_acme",
-      pluginVersionId: "version_large_invoice_1_3_0",
       enabled: true,
       priority: 10,
-      config: { notifyChannel: "C123" },
-      grants: { "slack.send": { channel: "C123" } },
       pluginKey: "large-invoice-notify",
       version: "1.3.0",
       statusText: "enabled"
     },
     {
       id: "inst_payload_transformer",
-      tenantId: "tenant_acme",
-      pluginVersionId: "version_payload_transformer_0_9_1",
       enabled: true,
       priority: 20,
-      config: {},
-      grants: {},
       pluginKey: "payload-transformer",
       version: "0.9.1",
       statusText: "enabled"
@@ -221,66 +238,51 @@ const dashboardFixture: DashboardSnapshot = dashboardSchema.parse({
       id: "version_large_invoice_1_3_0",
       pluginId: "plugin_large_invoice",
       version: "1.3.0",
-      artifactHash: "sha256:large-invoice-130",
-      manifest: { name: "large-invoice-notify", version: "1.3.0" }
+      artifactHash: "sha256:large-invoice-130"
     },
     {
       id: "version_large_invoice_1_2_2",
       pluginId: "plugin_large_invoice",
       version: "1.2.2",
-      artifactHash: "sha256:large-invoice-122",
-      manifest: { name: "large-invoice-notify", version: "1.2.2" }
+      artifactHash: "sha256:large-invoice-122"
     }
   ],
   approvals: [
     {
       id: "approval_1",
-      tenantId: "tenant_acme",
       pluginId: "plugin_large_invoice",
       role: "manager",
-      subject: { invoiceId: "inv_1001", amountCents: 275000 },
       resumeHook: "invoice.approval.decided",
       state: "pending",
-      expiresAt: "2026-06-17T00:00:00.000Z",
-      createdAt: "2026-06-16T00:00:00.000Z"
+      expiresAt: new Date("2026-06-17T00:00:00.000Z"),
+      createdAt: new Date("2026-06-16T00:00:00.000Z")
     }
   ],
   executions: [
     {
       id: "exec_1",
-      tenantId: "tenant_acme",
       pluginId: "plugin_large_invoice",
       hookName: "invoice.created",
       version: "1.3.0",
       status: "success",
       durationMs: 18,
-      capabilityCalls: [{ name: "slack.send", status: "success" }],
-      createdAt: "2026-06-16T00:05:00.000Z"
+      capabilityNames: ["slack.send"],
+      createdAt: new Date("2026-06-16T00:05:00.000Z")
     },
     {
       id: "exec_2",
-      tenantId: "tenant_acme",
       pluginId: "plugin_payload_transformer",
       hookName: "webhook.outbound",
       version: "0.9.1",
       status: "success",
       durationMs: 11,
-      capabilityCalls: [],
-      createdAt: "2026-06-16T00:06:00.000Z"
+      capabilityNames: [],
+      createdAt: new Date("2026-06-16T00:06:00.000Z")
     }
   ],
-  usage: [
-    {
-      tenantId: "tenant_acme",
-      pluginId: "plugin_large_invoice",
-      date: "2026-06-16",
-      executions: 34,
-      cpuMs: 742,
-      subrequests: 34,
-      workflowRuns: 2
-    }
-  ]
-});
+  usage: { date: "2026-06-16", executions: 34, runtimeMs: 742 },
+  cursors: {}
+};
 
 export function createDemoAdminApiClient(): AdminApiClient {
   return {
@@ -291,7 +293,10 @@ export function createDemoAdminApiClient(): AdminApiClient {
       }
       return Promise.resolve(session);
     },
-    getDashboard: () => Promise.resolve(dashboardFixture)
+    getDashboard: () => Promise.resolve(dashboardFixture),
+    getDashboardSection: () =>
+      Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
+    clearSession: () => undefined
   };
 }
 
@@ -302,7 +307,9 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     );
   return {
     resolveSession: unavailable,
-    getDashboard: unavailable
+    getDashboard: unavailable,
+    getDashboardSection: unavailable,
+    clearSession: () => undefined
   };
 }
 
@@ -326,12 +333,41 @@ export function createAdminApiClient(params: {
     allowInsecureLoopback: params.isDevelopment,
     ...(params.fetcher === undefined ? {} : { fetcher: params.fetcher })
   });
+  const dashboardUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/dashboard",
+    params.isDevelopment
+  );
+  const fetcher = params.fetcher ?? fetch;
+  let credential: string | undefined;
+
   return {
-    resolveSession: sessionClient.resolveSession,
-    getDashboard: () =>
-      Promise.reject(
-        new AdminApiError(503, "dashboard_not_configured", "Dashboard API not configured")
-      )
+    resolveSession: async (request) => {
+      const session = await sessionClient.resolveSession(request);
+      credential = request.token.trim();
+      return session;
+    },
+    getDashboard: async () => {
+      const payload = await fetchAdminJson(dashboardUrl, requireCredential(credential), fetcher);
+      const dashboard = dashboardSchema.safeParse(payload);
+      if (!dashboard.success) {
+        throw invalidResponse();
+      }
+      return dashboardSnapshot(dashboard.data);
+    },
+    getDashboardSection: async (section, cursor) => {
+      const url = new URL(`${dashboardUrl}/${section}`);
+      url.searchParams.set("cursor", cursor);
+      const payload = await fetchAdminJson(url.toString(), requireCredential(credential), fetcher);
+      const page = dashboardSectionSchema.safeParse(payload);
+      if (!page.success || page.data.section !== section) {
+        throw invalidResponse();
+      }
+      return dashboardSectionPage(page.data);
+    },
+    clearSession: () => {
+      credential = undefined;
+    }
   };
 }
 
@@ -405,6 +441,10 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 function sessionEndpoint(baseUrl: string, allowInsecureLoopback: boolean): string {
+  return apiEndpoint(baseUrl, "/v1/session", allowInsecureLoopback);
+}
+
+function apiEndpoint(baseUrl: string, path: string, allowInsecureLoopback: boolean): string {
   const base = new URL(baseUrl);
   if (
     base.protocol !== "https:" &&
@@ -415,7 +455,101 @@ function sessionEndpoint(baseUrl: string, allowInsecureLoopback: boolean): strin
   if (base.username !== "" || base.password !== "" || base.search !== "" || base.hash !== "") {
     throw new Error("control-plane URL must not contain credentials, query, or fragment");
   }
-  return new URL("/v1/session", base).toString();
+  return new URL(path, base).toString();
+}
+
+async function fetchAdminJson(
+  url: string,
+  credential: string,
+  fetcher: typeof fetch
+): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetcher(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${credential}`
+      },
+      cache: "no-store",
+      credentials: "omit"
+    });
+  } catch {
+    throw new AdminApiError(0, "network_error", "control-plane is unreachable");
+  }
+
+  const payload = await readJson(response);
+  if (!response.ok) {
+    const envelope = errorEnvelopeSchema.safeParse(payload);
+    if (envelope.success) {
+      throw new AdminApiError(
+        response.status,
+        envelope.data.error.code,
+        envelope.data.error.message
+      );
+    }
+    throw new AdminApiError(response.status, "http_error", "control-plane request failed");
+  }
+  return payload;
+}
+
+function requireCredential(credential: string | undefined): string {
+  if (credential === undefined) {
+    throw new AdminApiError(401, "session_required", "Admin session required");
+  }
+  return credential;
+}
+
+function invalidResponse(): AdminApiError {
+  return new AdminApiError(502, "invalid_response", "control-plane returned an invalid response");
+}
+
+function dashboardSnapshot(data: z.infer<typeof dashboardSchema>): DashboardSnapshot {
+  return {
+    installations: data.installations.items.map(installationView),
+    pluginVersions: data.pluginVersions.items,
+    approvals: data.approvals.items,
+    executions: data.executions.items,
+    usage: data.usage,
+    cursors: {
+      ...(data.installations.nextCursor === undefined
+        ? {}
+        : { installations: data.installations.nextCursor }),
+      ...(data.pluginVersions.nextCursor === undefined
+        ? {}
+        : { pluginVersions: data.pluginVersions.nextCursor }),
+      ...(data.approvals.nextCursor === undefined ? {} : { approvals: data.approvals.nextCursor }),
+      ...(data.executions.nextCursor === undefined
+        ? {}
+        : { executions: data.executions.nextCursor })
+    }
+  };
+}
+
+function dashboardSectionPage(data: z.infer<typeof dashboardSectionSchema>): DashboardSectionPage {
+  switch (data.section) {
+    case "installations":
+      return {
+        section: data.section,
+        items: data.items.map(installationView),
+        ...(data.nextCursor === undefined ? {} : { nextCursor: data.nextCursor })
+      };
+    case "pluginVersions":
+    case "approvals":
+    case "executions":
+      return {
+        section: data.section,
+        items: data.items,
+        ...(data.nextCursor === undefined ? {} : { nextCursor: data.nextCursor })
+      } as DashboardSectionPage;
+  }
+}
+
+function installationView(installation: z.infer<typeof installationSchema>): InstallationView {
+  return {
+    ...installation,
+    statusText: installation.enabled ? "enabled" : "disabled"
+  };
 }
 
 function isLoopbackHost(hostname: string): boolean {

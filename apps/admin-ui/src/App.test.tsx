@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import {
   createDemoAdminApiClient,
@@ -87,13 +87,77 @@ describe("Admin UI auth foundation", () => {
     const baseClient = createDemoAdminApiClient();
     const failingClient: AdminApiClient = {
       resolveSession: baseClient.resolveSession,
-      getDashboard: () => Promise.reject(new Error("offline"))
+      getDashboard: () => Promise.reject(new Error("offline")),
+      getDashboardSection: baseClient.getDashboardSection,
+      clearSession: baseClient.clearSession
     };
     render(<App client={failingClient} />);
 
     await login("manager-token");
 
     await expect(screen.findByText("Dashboard unavailable")).resolves.toBeInTheDocument();
+  });
+
+  it("loads and appends the next tenant-scoped section page", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const initial = await baseClient.getDashboard(session);
+    const getDashboardSection = vi.fn().mockResolvedValue({
+      section: "installations",
+      items: [
+        {
+          id: "inst_next",
+          pluginKey: "next-plugin",
+          version: "2.0.0",
+          enabled: true,
+          priority: 30,
+          statusText: "enabled"
+        }
+      ]
+    });
+    const client: AdminApiClient = {
+      resolveSession: baseClient.resolveSession,
+      getDashboard: () =>
+        Promise.resolve({
+          ...initial,
+          cursors: { installations: "signed.cursor" }
+        }),
+      getDashboardSection,
+      clearSession: vi.fn()
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Load more installations" }));
+
+    await expect(screen.findByText("next-plugin")).resolves.toBeInTheDocument();
+    expect(getDashboardSection).toHaveBeenCalledWith("installations", "signed.cursor");
+    expect(
+      screen.queryByRole("button", { name: "Load more installations" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a stable error when a next page cannot load", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const initial = await baseClient.getDashboard(session);
+    const client: AdminApiClient = {
+      resolveSession: baseClient.resolveSession,
+      getDashboard: () => Promise.resolve({ ...initial, cursors: { executions: "signed.cursor" } }),
+      getDashboardSection: () => Promise.reject(new Error("SQL customer payload")),
+      clearSession: baseClient.clearSession
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Executions" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Load more executions" }));
+
+    await expect(
+      screen.findByText("Could not load more dashboard results")
+    ).resolves.toBeInTheDocument();
+    expect(screen.queryByText("SQL customer payload")).not.toBeInTheDocument();
   });
 
   it("renders disabled and failing operational states", async () => {
@@ -105,7 +169,7 @@ describe("Admin UI auth foundation", () => {
     const snapshot: DashboardSnapshot = {
       ...baseSnapshot,
       approvals: [],
-      usage: [],
+      usage: { date: "2026-07-19", executions: 0, runtimeMs: 0 },
       installations: [
         {
           ...installation,
@@ -116,19 +180,20 @@ describe("Admin UI auth foundation", () => {
       executions: [
         {
           ...execution,
-          status: "error",
-          error: "handler failed"
+          status: "error"
         }
       ]
     };
     const client: AdminApiClient = {
       resolveSession: baseClient.resolveSession,
-      getDashboard: () => Promise.resolve(snapshot)
+      getDashboard: () => Promise.resolve(snapshot),
+      getDashboardSection: baseClient.getDashboardSection,
+      clearSession: baseClient.clearSession
     };
     render(<App client={client} />);
 
     await login("manager-token");
-    await screen.findByText("CPU ms today");
+    await screen.findByText("Runtime ms today");
     expect(screen.getAllByText("0").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Installations" }));
