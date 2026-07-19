@@ -73,7 +73,14 @@ describe("RBAC role x operation matrix", () => {
       const cells = RBAC_ROLES.map((role) =>
         expectedPermissions[role].includes(operation as never) ? "allow" : "deny"
       );
-      expect(docs).toContain(`| \`${operation}\` | ${cells.join(" | ")} |`);
+      const row = docs.split("\n").find((line) => line.includes(`\`${operation}\``));
+      expect(row, `missing documentation row for ${operation}`).toBeDefined();
+      expect(
+        row
+          ?.split("|")
+          .slice(1, -1)
+          .map((cell) => cell.trim())
+      ).toEqual([`\`${operation}\``, ...cells]);
     }
   });
 });
