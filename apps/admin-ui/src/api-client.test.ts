@@ -290,6 +290,32 @@ describe("Admin API environment selection", () => {
     expect(body).not.toContain("actor");
   });
 
+  it("preserves a bounded Retry-After hint without automatically retrying a mutation", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: { code: "admin_mutation_rate_limited", message: "too many admin changes" } },
+          { status: 429, headers: { "Retry-After": "17" } }
+        )
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.updateInstallationCommand({ id: "inst_1", expectedRevision: 0, enabled: false })
+    ).rejects.toEqual(
+      new AdminApiError(429, "admin_mutation_rate_limited", "too many admin changes", 17)
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("loads a value-free install preview and submits only config plus explicit capability confirmation", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

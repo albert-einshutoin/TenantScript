@@ -486,6 +486,28 @@ describe("Admin UI auth foundation", () => {
     expect(screen.queryByText(/secret-config|customer payload/)).not.toBeInTheDocument();
   });
 
+  it("shows the safe server retry window without automatically retrying a limited mutation", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const updateInstallationCommand = vi
+      .fn()
+      .mockRejectedValue(
+        new AdminApiError(429, "admin_mutation_rate_limited", "too many admin changes", 17)
+      );
+    render(<App client={{ ...baseClient, updateInstallationCommand }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+
+    await expect(
+      screen.findByText("Too many changes. Retry in 17 seconds")
+    ).resolves.toBeInTheDocument();
+    expect(updateInstallationCommand).toHaveBeenCalledTimes(1);
+  });
+
   it("refreshes the installation revision after a command conflict", async () => {
     const baseClient = createDemoAdminApiClient();
     const initial = await baseClient.getDashboard({

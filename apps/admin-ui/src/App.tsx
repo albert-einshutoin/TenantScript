@@ -709,8 +709,8 @@ function InstallationCommandPanel({
       .then(() => {
         setConfirming(false);
       })
-      .catch(() => {
-        setError("Installation update unavailable");
+      .catch((cause: unknown) => {
+        setError(adminMutationErrorMessage(cause, "Installation update unavailable"));
       });
   }, [changed, commandInFlight, enabled, installation, onCommand, parsedPriority]);
 
@@ -886,7 +886,7 @@ function VersionsPanel({
         setRollbackError(
           cause instanceof AdminApiError && cause.code === "installation_revision_conflict"
             ? "Installation changed; version history refreshed"
-            : "Rollback unavailable"
+            : adminMutationErrorMessage(cause, "Rollback unavailable")
         );
       });
   }, [onRollback, rollbackInFlight, rollbackTarget]);
@@ -1057,8 +1057,8 @@ function InstallFlowPanel({
       .then(() => {
         setConfirming(false);
       })
-      .catch(() => {
-        setSubmitError("Plugin installation unavailable");
+      .catch((cause: unknown) => {
+        setSubmitError(adminMutationErrorMessage(cause, "Plugin installation unavailable"));
       });
   }, [
     allCapabilitiesConfirmed,
@@ -1267,8 +1267,8 @@ function ApprovalsPanel({
         setConfirmation(null);
         setReason("");
       })
-      .catch(() => {
-        setDecisionError("Approval decision unavailable");
+      .catch((cause: unknown) => {
+        setDecisionError(adminMutationErrorMessage(cause, "Approval decision unavailable"));
       })
       .finally(() => {
         setSubmitting(false);
@@ -1703,6 +1703,19 @@ function statusTone(status: string): "ok" | "warning" | "critical" | "neutral" {
     return "critical";
   }
   return "neutral";
+}
+
+function adminMutationErrorMessage(cause: unknown, fallback: string): string {
+  if (
+    cause instanceof AdminApiError &&
+    cause.status === 429 &&
+    cause.retryAfterSeconds !== undefined
+  ) {
+    // Mutations are never retried automatically: waiting for an explicit user action avoids
+    // duplicate writes and naturally spreads retries instead of creating a synchronized burst.
+    return `Too many changes. Retry in ${String(cause.retryAfterSeconds)} seconds`;
+  }
+  return fallback;
 }
 
 function titleForRoute(route: AdminRoute): string {
