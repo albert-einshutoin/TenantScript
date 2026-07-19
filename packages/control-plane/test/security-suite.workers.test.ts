@@ -3,6 +3,7 @@ import { applyD1Migrations, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createControlPlaneApi,
+  createD1AdminApprovalDecisionStore,
   createD1AdminInstallFlowStore,
   createD1AdminRollbackStore,
   createD1ControlPlaneStore
@@ -161,6 +162,44 @@ describe("D1 tenant boundary security suite", () => {
     await expect(
       testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first()
     ).resolves.toEqual({ count: 0 });
+  });
+
+  it("keeps approval decisions and audits inside identity scope without subject leakage", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.createApp({ id: "app_1", name: "App 1" });
+    await store.createApp({ id: "app_2", name: "App 2" });
+    await store.createTenant({ id: "tenant_1", appId: "app_1", name: "Tenant 1" });
+    await store.createTenant({ id: "tenant_2", appId: "app_2", name: "Tenant 2" });
+    await store.createPlugin({ id: "plugin_1", appId: "app_1", key: "plugin-1" });
+    await store.createPlugin({ id: "plugin_2", appId: "app_2", key: "plugin-2" });
+    await store.createApproval({
+      id: "approval_other",
+      tenantId: "tenant_2",
+      pluginId: "plugin_2",
+      role: "manager",
+      subject: { customerSecret: "must-not-enter-audit" },
+      resumeHook: "approval.decided",
+      state: "pending",
+      expiresAt: new Date("2026-07-21T00:00:00.000Z"),
+      createdAt: new Date("2026-07-19T00:00:00.000Z")
+    });
+    const decisions = createD1AdminApprovalDecisionStore(testEnv.DB, {
+      now: () => new Date("2026-07-20T00:00:00.000Z")
+    });
+
+    await expect(
+      decisions.decide({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager",
+        actorRole: "manager",
+        approvalId: "approval_other",
+        decision: "approved"
+      })
+    ).rejects.toMatchObject({ code: "approval_not_found" });
+    const audits = await testEnv.DB.prepare("SELECT * FROM approval_audit_events").all();
+    expect(audits.results).toEqual([]);
+    expect(JSON.stringify(audits)).not.toContain("must-not-enter-audit");
   });
 
   it("does not resolve another tenant's installations, grants, or config", async () => {
