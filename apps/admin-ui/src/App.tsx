@@ -426,6 +426,18 @@ function InstallationsPanel({
                 <td>
                   <StatusPill status={installation.statusText} />
                 </td>
+                <td>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      onPermissionReview(installation.id);
+                    }}
+                    aria-label={`Permission review for ${installation.pluginKey}`}
+                  >
+                    Permission review
+                  </button>
+                </td>
                 {canManage ? (
                   <td>
                     <button
@@ -440,18 +452,6 @@ function InstallationsPanel({
                     </button>
                   </td>
                 ) : null}
-                <td>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => {
-                      onPermissionReview(installation.id);
-                    }}
-                    aria-label={`Permission review for ${installation.pluginKey}`}
-                  >
-                    Permission review
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -490,7 +490,8 @@ function InstallationCommandPanel({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const parsedPriority = Number(priority);
-  const validPriority = Number.isFinite(parsedPriority) && Number.isInteger(parsedPriority);
+  const validPriority =
+    priority.trim() !== "" && Number.isFinite(parsedPriority) && Number.isInteger(parsedPriority);
   const changed =
     validPriority && (enabled !== installation.enabled || parsedPriority !== installation.priority);
 

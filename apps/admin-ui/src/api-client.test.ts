@@ -184,6 +184,33 @@ describe("Admin API environment selection", () => {
     expect(body).not.toContain("actor");
   });
 
+  it("rejects installation command responses that include storage values", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "inst_1",
+          enabled: false,
+          priority: 4,
+          config: { channel: "must-not-render" }
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.updateInstallationCommand({ id: "inst_1", enabled: false })
+    ).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
   it("rejects installation review responses that include storage values", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

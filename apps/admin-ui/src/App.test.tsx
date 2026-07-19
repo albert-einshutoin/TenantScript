@@ -156,9 +156,20 @@ describe("Admin UI auth foundation", () => {
     await login("manager-token");
     fireEvent.click(screen.getByRole("button", { name: "Installations" }));
     fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    const priority = screen.getByLabelText("Priority");
+    fireEvent.change(priority, { target: { value: "" } });
+    expect(screen.getByRole("button", { name: "Review change" })).toBeDisabled();
+    fireEvent.change(priority, { target: { value: "4.5" } });
+    expect(screen.getByRole("button", { name: "Review change" })).toBeDisabled();
+    fireEvent.change(priority, { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
     fireEvent.click(screen.getByRole("button", { name: "Review change" }));
     expect(screen.getByRole("dialog", { name: "Confirm installation change" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+      screen.queryByRole("dialog", { name: "Confirm installation change" })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
     expect(screen.getByRole("button", { name: "Saving" })).toBeDisabled();
 
