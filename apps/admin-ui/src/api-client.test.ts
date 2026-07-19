@@ -239,6 +239,7 @@ describe("Admin API environment selection", () => {
         Response.json(
           {
             id: "installation_new",
+            versionId: "version_1",
             pluginKey: "invoice-notify",
             version: "1.0.0",
             enabled: true,
@@ -310,6 +311,45 @@ describe("Admin API environment selection", () => {
     });
     await client.resolveSession({ token: "secret-token" });
     await expect(client.getInstallPreview("version_1")).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
+  it("rejects an install response correlated to a different plugin version", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            id: "installation_new",
+            versionId: "version_other",
+            pluginKey: "invoice-notify",
+            version: "2.0.0",
+            enabled: false,
+            priority: 20,
+            revision: 0
+          },
+          { status: 201 }
+        )
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.installPlugin({
+        versionId: "version_1",
+        config: {},
+        confirmedCapabilities: [],
+        enabled: false,
+        priority: 20
+      })
+    ).rejects.toEqual(
       new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
     );
   });

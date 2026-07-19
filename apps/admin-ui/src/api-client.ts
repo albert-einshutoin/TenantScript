@@ -59,6 +59,7 @@ export interface InstallPluginRequest {
 
 export interface InstallPluginResult {
   id: string;
+  versionId: string;
   pluginKey: string;
   version: string;
   enabled: boolean;
@@ -357,6 +358,7 @@ const installPreviewSchema = z
 const installPluginResultSchema = z
   .object({
     id: z.string().min(1),
+    versionId: z.string().min(1),
     pluginKey: z.string().min(1),
     version: z.string().min(1),
     enabled: z.boolean(),
@@ -537,6 +539,7 @@ export function createDemoAdminApiClient(): AdminApiClient {
       }
       const result = {
         id: `installation_demo_${String(snapshot.installations.length + 1)}`,
+        versionId: request.versionId,
         pluginKey: version.pluginKey,
         version: version.version,
         enabled: request.enabled,
@@ -706,7 +709,9 @@ export function createAdminApiClient(params: {
         { method: "POST", body: JSON.stringify(request) }
       );
       const installed = installPluginResultSchema.safeParse(payload);
-      if (!installed.success) throw invalidResponse();
+      if (!installed.success || installed.data.versionId !== request.versionId) {
+        throw invalidResponse();
+      }
       return installed.data;
     },
     clearSession: () => {

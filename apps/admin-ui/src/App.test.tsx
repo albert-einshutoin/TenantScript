@@ -210,6 +210,7 @@ describe("Admin UI auth foundation", () => {
     });
     const installPlugin = vi.fn().mockResolvedValue({
       id: "installation_new",
+      versionId: "version_large_invoice_1_2_2",
       pluginKey: "large-invoice-notify",
       version: "1.2.2",
       enabled: true,
@@ -270,6 +271,7 @@ describe("Admin UI auth foundation", () => {
     const baseClient = createDemoAdminApiClient();
     const installPlugin = vi.fn().mockResolvedValue({
       id: "installation_empty",
+      versionId: "version_large_invoice_1_3_0",
       pluginKey: "no-permissions-plugin",
       version: "1.0.0",
       enabled: false,

@@ -49,6 +49,7 @@ describe("Control Plane Admin install flow HTTP contract", () => {
     });
     expect(await installed.json()).toEqual({
       id: "installation_new",
+      versionId: "version_1",
       pluginKey: "invoice-notify",
       version: "1.0.0",
       enabled: true,
@@ -183,6 +184,7 @@ function installFlowStore() {
     }),
     install: vi.fn<AdminInstallFlowStore["install"]>().mockResolvedValue({
       id: "installation_new",
+      versionId: "version_1",
       pluginKey: "invoice-notify",
       version: "1.0.0",
       enabled: true,

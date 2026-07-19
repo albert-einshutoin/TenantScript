@@ -41,6 +41,7 @@ export interface AdminInstallRequest {
 
 export interface AdminInstallResult {
   id: string;
+  versionId: string;
   pluginKey: string;
   version: string;
   enabled: boolean;
@@ -174,6 +175,7 @@ async function install(
   await requireBatch(db)(statements);
   return {
     id,
+    versionId: row.id,
     pluginKey: row.plugin_key,
     version: row.version,
     enabled: request.enabled,

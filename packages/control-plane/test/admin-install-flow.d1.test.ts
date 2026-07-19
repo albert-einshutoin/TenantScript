@@ -67,6 +67,7 @@ describe("D1 Admin install flow adapter", () => {
       })
     ).resolves.toEqual({
       id: "installation_new",
+      versionId: "version_1",
       pluginKey: "invoice-notify",
       version: "1.0.0",
       enabled: false,

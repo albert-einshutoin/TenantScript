@@ -409,6 +409,7 @@ describe("control-plane security suite", () => {
       readVersion: vi.fn<AdminInstallFlowStore["readVersion"]>(),
       install: vi.fn<AdminInstallFlowStore["install"]>().mockResolvedValue({
         id: "installation_new",
+        versionId: "version_1",
         pluginKey: "invoice-notify",
         version: "1.0.0",
         enabled: false,
