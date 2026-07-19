@@ -13,7 +13,7 @@ import type {
   AdminInstallationDetailStore
 } from "./admin-installations.js";
 import { AdminInstallFlowError, type AdminInstallFlowStore } from "./admin-install-flow.js";
-import type { AdminRollbackStore } from "./admin-rollbacks.js";
+import { AdminRollbackError, type AdminRollbackStore } from "./admin-rollbacks.js";
 import type { AdminMutationFamily, AdminMutationRateLimiter } from "./admin-mutation-rate-limit.js";
 
 export type AdminRole = "manager" | "viewer";
@@ -484,6 +484,15 @@ async function runRollback(
   }
   const command = await parseRollbackCommand(request, corsHeaders);
   if (command instanceof Response) return command;
+  const idempotencyKey = request.headers.get("Idempotency-Key");
+  if (!isIdempotencyKey(idempotencyKey)) {
+    return errorResponse(
+      400,
+      "invalid_idempotency_key",
+      "valid Idempotency-Key header required",
+      corsHeaders
+    );
+  }
   const rateLimitResponse = await reserveAdminMutation(
     options.adminMutationRateLimiter,
     identity,
@@ -496,6 +505,7 @@ async function runRollback(
       appId: identity.appId,
       tenantId: identity.tenantId,
       actor: identity.subject,
+      idempotencyKey,
       ...command
     });
     // Installation, target-version, and cross-scope misses intentionally share one response.
@@ -536,7 +546,10 @@ async function runRollback(
       },
       corsHeaders
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof AdminRollbackError) {
+      return errorResponse(409, error.code, "idempotency key was already used", corsHeaders);
+    }
     return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
   }
 }

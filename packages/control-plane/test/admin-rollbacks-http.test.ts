@@ -1,11 +1,30 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  AdminRollbackError,
   createControlPlaneHttpHandler,
   createStaticTokenIdentityResolver,
   type AdminRollbackStore
 } from "../src/index.js";
 
 describe("Control Plane Admin rollback HTTP contract", () => {
+  it("requires a bounded key and rejects changed key reuse without reflecting details", async () => {
+    const store = rollbackStore();
+    store.rollback.mockRejectedValueOnce(new AdminRollbackError("idempotency_key_reused"));
+    const handler = createHandler(store);
+    const missing = new Request("https://api.example.com/v1/admin/rollbacks", {
+      method: "POST",
+      headers: { Authorization: "Bearer manager", "Content-Type": "application/json" },
+      body: JSON.stringify(validBody())
+    });
+    expect((await handler(missing)).status).toBe(400);
+
+    const conflict = await handler(request("manager", validBody()));
+    expect(conflict.status).toBe(409);
+    await expect(conflict.json()).resolves.toEqual({
+      error: { code: "idempotency_key_reused", message: "idempotency key was already used" }
+    });
+  });
+
   it("derives scope and actor from the manager identity", async () => {
     const store = rollbackStore();
     const handler = createHandler(store);
@@ -17,6 +36,7 @@ describe("Control Plane Admin rollback HTTP contract", () => {
       appId: "app_acme",
       tenantId: "tenant_acme",
       actor: "manager-subject",
+      idempotencyKey: "rollback-http-key-0001",
       installationId: "installation_1",
       targetVersionId: "version_1_2_2",
       expectedRevision: 3
@@ -132,7 +152,11 @@ function validBody(): Record<string, unknown> {
 function request(token: string, body: Record<string, unknown>): Request {
   return new Request("https://api.example.com/v1/admin/rollbacks", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": "rollback-http-key-0001"
+    },
     body: JSON.stringify(body)
   });
 }

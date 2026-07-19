@@ -150,6 +150,7 @@ describe("D1 tenant boundary security suite", () => {
         appId: "app_1",
         tenantId: "tenant_1",
         actor: "manager",
+        idempotencyKey: "rollback-security-key-0001",
         installationId: "installation_1",
         targetVersionId: "version_other",
         expectedRevision: 0

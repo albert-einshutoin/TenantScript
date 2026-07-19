@@ -249,6 +249,7 @@ export {
 } from "./admin-installations.js";
 
 export {
+  AdminRollbackError,
   createD1AdminRollbackStore,
   type AdminRollbackRequest,
   type AdminRollbackResult,

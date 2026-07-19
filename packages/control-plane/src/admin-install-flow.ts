@@ -5,6 +5,7 @@ import {
   type TenantScriptManifest
 } from "@tenantscript/manifest";
 import type { D1DatabaseLike, D1PreparedStatementLike } from "./storage.js";
+import { adminIdempotencyExpiry, adminRequestFingerprint } from "./admin-idempotency.js";
 
 export interface AdminInstallPreview {
   versionId: string;
@@ -206,7 +207,7 @@ async function install(
         requestHash,
         JSON.stringify(result),
         now.toISOString(),
-        new Date(now.getTime() + installIdempotencyRetentionMs).toISOString()
+        adminIdempotencyExpiry(now)
       )
   ];
 
@@ -223,8 +224,6 @@ async function install(
     throw error;
   }
 }
-
-const installIdempotencyRetentionMs = 24 * 60 * 60 * 1000;
 
 interface InstallIdempotencyRow {
   request_hash: string;
@@ -256,7 +255,7 @@ function resolveReplay(row: InstallIdempotencyRow, requestHash: string): AdminIn
 }
 
 async function installRequestHash(request: AdminInstallRequest): Promise<string> {
-  const canonical = JSON.stringify({
+  return adminRequestFingerprint({
     versionId: request.versionId,
     config: Object.fromEntries(
       Object.entries(request.config).sort(([left], [right]) => left.localeCompare(right))
@@ -265,13 +264,15 @@ async function installRequestHash(request: AdminInstallRequest): Promise<string>
     enabled: request.enabled,
     priority: request.priority
   });
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function isAdminInstallResult(value: unknown): value is AdminInstallResult {
   if (!isRecord(value)) return false;
   return (
+    Object.keys(value).length === 7 &&
+    Object.keys(value).every((key) =>
+      ["id", "versionId", "pluginKey", "version", "enabled", "priority", "revision"].includes(key)
+    ) &&
     typeof value.id === "string" &&
     typeof value.versionId === "string" &&
     typeof value.pluginKey === "string" &&

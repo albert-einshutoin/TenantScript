@@ -60,6 +60,7 @@ describe("control-plane security suite", () => {
       appId: "app_1",
       tenantId: "tenant_1",
       actor: "manager",
+      idempotencyKey: "rollback-security-http-key-0001",
       ...valid
     });
   });
@@ -619,7 +620,8 @@ function rollbackRequest(token: string, body: Record<string, unknown>): Request 
     headers: {
       Authorization: `Bearer ${token}`,
       Origin: "https://admin.example.com",
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "Idempotency-Key": "rollback-security-http-key-0001"
     },
     body: JSON.stringify(body)
   });
