@@ -8,6 +8,56 @@ import {
 } from "./api-client.js";
 
 describe("Admin API environment selection", () => {
+  it("submits operator installation proposals to the approval endpoint without trusted scope fields", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload("operator")))
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            approvalId: "approval_install_1",
+            state: "pending",
+            pluginKey: "invoice-notify",
+            version: "1.0.0",
+            capabilities: ["slack.send"],
+            expiresAt: "2026-07-21T00:00:00.000Z"
+          },
+          { status: 201 }
+        )
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "operator-token" });
+
+    const result = await client.requestInstallation({
+      idempotencyKey: "install-request-client-key-0001",
+      versionId: "version_1",
+      config: { notifyChannel: "C123" },
+      confirmedCapabilities: ["slack.send"],
+      enabled: false,
+      priority: 20
+    });
+    expect(result.approvalId).toBe("approval_install_1");
+    expect(result.expiresAt).toBeInstanceOf(Date);
+
+    const [url, init] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/installation-requests");
+    expect(init?.method).toBe("POST");
+    expect(new Headers(init?.headers).get("idempotency-key")).toBe(
+      "install-request-client-key-0001"
+    );
+    expect(init?.body).toBe(
+      '{"versionId":"version_1","config":{"notifyChannel":"C123"},"confirmedCapabilities":["slack.send"],"enabled":false,"priority":20}'
+    );
+    const requestBody = init?.body;
+    expect(typeof requestBody).toBe("string");
+    if (typeof requestBody !== "string") throw new Error("expected JSON request body");
+    expect(requestBody).not.toContain("tenantId");
+  });
   it("keeps demo commands revisioned and idempotent like the HTTP contract", async () => {
     const client = createDemoAdminApiClient();
     await expect(
@@ -888,7 +938,16 @@ describe("Admin API environment selection", () => {
           approvalId: "approval_1",
           state: "approved",
           auditId: "approval_audit_1",
-          decidedAt: "2026-07-20T00:00:00.000Z"
+          decidedAt: "2026-07-20T00:00:00.000Z",
+          installation: {
+            id: "installation_1",
+            versionId: "version_1",
+            pluginKey: "invoice-notify",
+            version: "1.0.0",
+            enabled: true,
+            priority: 20,
+            revision: 0
+          }
         })
       );
     const client = createAdminApiClient({
@@ -909,7 +968,16 @@ describe("Admin API environment selection", () => {
       approvalId: "approval_1",
       state: "approved",
       auditId: "approval_audit_1",
-      decidedAt: new Date("2026-07-20T00:00:00.000Z")
+      decidedAt: new Date("2026-07-20T00:00:00.000Z"),
+      installation: {
+        id: "installation_1",
+        versionId: "version_1",
+        pluginKey: "invoice-notify",
+        version: "1.0.0",
+        enabled: true,
+        priority: 20,
+        revision: 0
+      }
     });
     const [url, init] = fetcher.mock.calls[1] ?? [];
     expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/approval-decisions");
@@ -943,10 +1011,10 @@ function dashboardPayload() {
   };
 }
 
-function sessionPayload() {
+function sessionPayload(role: "manager" | "operator" = "manager") {
   return {
     subject: "ops-manager",
-    role: "manager",
+    role,
     appId: "app_acme",
     tenantId: "tenant_acme"
   };

@@ -224,6 +224,12 @@ export {
 } from "./admin-install-flow.js";
 
 export {
+  createD1AdminInstallRequestStore,
+  type AdminInstallRequestResult,
+  type AdminInstallRequestStore
+} from "./admin-install-requests.js";
+
+export {
   createControlPlaneHttpHandler,
   type AdminRole,
   type ControlPlaneHttpHandler,

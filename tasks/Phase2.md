@@ -39,7 +39,7 @@
   - RED: owner / admin / operator / viewer + tenant-admin の権限マトリクステストを先に書く(操作 × role の全組合せ)
   - DoD: マトリクステスト green
 
-- [ ] **P2-T06**(M)grant 承認の権限分離
+- [x] **P2-T06**(M)grant 承認の権限分離
   - RED: capability grant の承認は admin 以上 / operator は install 申請のみ可能
   - DoD: 分離テスト green
 

@@ -21,12 +21,32 @@ beforeEach(async () => {
   await store.createApproval(approval("approval_1", "tenant_1", "plugin_1"));
   await store.createApproval(approval("approval_2", "tenant_2", "plugin_2"));
   await store.createApproval({
+    ...approval("approval_admin", "tenant_1", "plugin_1"),
+    role: "admin"
+  });
+  await store.createApproval({
     ...approval("approval_expired", "tenant_1", "plugin_1"),
     expiresAt: new Date("2026-07-19T23:59:59.000Z")
   });
 });
 
 describe("D1 Admin approval decisions", () => {
+  it.each(["owner", "admin", "tenant-admin", "manager"])(
+    "allows %s to satisfy an admin grant-approval requirement",
+    async (actorRole) => {
+      const store = createD1AdminApprovalDecisionStore(testEnv.DB, {
+        now: () => new Date("2026-07-20T00:00:00.000Z")
+      });
+
+      await expect(
+        store.decide({
+          ...request("approval_admin", "approved"),
+          actorRole
+        })
+      ).resolves.toMatchObject({ state: "approved" });
+    }
+  );
+
   it.each(["owner", "admin", "tenant-admin", "manager"])(
     "keeps the D1 trigger aligned with approval:decide for %s",
     async (actorRole) => {

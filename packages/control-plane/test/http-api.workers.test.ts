@@ -111,6 +111,60 @@ describe("Control Plane Worker Admin HTTP transport", () => {
     ).resolves.toEqual({ count: 1 });
   });
 
+  it("routes operator installation requests to the D1 approval workflow", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.createApp({ id: "app_worker", name: "Worker App" });
+    await store.createTenant({ id: "tenant_worker", appId: "app_worker", name: "Worker Tenant" });
+    await store.createPlugin({ id: "plugin_worker", appId: "app_worker", key: "worker-plugin" });
+    await store.createPluginVersion({
+      id: "version_worker",
+      pluginId: "plugin_worker",
+      version: "1.0.0",
+      artifactHash: "hash_worker",
+      manifest: {
+        name: "worker-plugin",
+        version: "1.0.0",
+        hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+        capabilities: { "slack.send": { channel: "$config.channel" } },
+        configSchema: {
+          properties: { channel: { type: "string" } },
+          required: ["channel"]
+        },
+        egress: { mode: "deny" },
+        limits: { cpuMs: 50, timeoutMs: 500 }
+      }
+    });
+
+    const response = await worker.default.fetch(
+      new Request("https://control-plane.example.com/v1/admin/installation-requests", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer worker-operator-token",
+          Origin: "https://admin.example.com",
+          "Content-Type": "application/json",
+          "Idempotency-Key": "worker-install-request-key-0001"
+        },
+        body: JSON.stringify({
+          versionId: "version_worker",
+          config: { channel: "C123" },
+          confirmedCapabilities: ["slack.send"],
+          enabled: true,
+          priority: 10
+        })
+      })
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      state: "pending",
+      pluginKey: "worker-plugin",
+      capabilities: ["slack.send"]
+    });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM installations").first()
+    ).resolves.toEqual({ count: 0 });
+  });
+
   it("atomically limits concurrent tenant-scoped mutations without extra audit writes", async () => {
     const store = createD1ControlPlaneStore(testEnv.DB);
     await store.createApp({ id: "app_worker", name: "Worker App" });

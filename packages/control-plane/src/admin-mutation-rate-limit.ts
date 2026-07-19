@@ -1,6 +1,7 @@
 export type AdminMutationFamily =
   | "installation-command"
   | "installation-create"
+  | "installation-request"
   | "rollback"
   | "approval-decision"
   | "service-token-issue"

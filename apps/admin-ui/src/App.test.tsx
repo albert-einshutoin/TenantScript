@@ -228,7 +228,7 @@ describe("Admin UI auth foundation", () => {
     expect(await screen.findByRole("heading", { name: "Install plugin" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review installation" })).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText("notifyChannel (required)"), {
+    fireEvent.change(await screen.findByLabelText("notifyChannel (required)"), {
       target: { value: "C123" }
     });
     fireEvent.change(screen.getByLabelText("threshold (optional)"), {
@@ -269,6 +269,53 @@ describe("Admin UI auth foundation", () => {
     await login("viewer-token");
     fireEvent.click(screen.getByRole("button", { name: "Versions" }));
     expect(screen.queryByRole("button", { name: /^Install / })).not.toBeInTheDocument();
+  });
+
+  it("lets operators review capabilities and submit an approval request without direct install", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const requestInstallation = vi.fn<AdminApiClient["requestInstallation"]>().mockResolvedValue({
+      approvalId: "approval_install_1",
+      state: "pending",
+      pluginKey: "large-invoice-notify",
+      version: "1.2.2",
+      capabilities: ["slack.send"],
+      expiresAt: new Date("2026-07-21T00:00:00.000Z")
+    });
+    const installPlugin = vi.fn<AdminApiClient["installPlugin"]>();
+    const client: AdminApiClient = {
+      ...baseClient,
+      resolveSession: () =>
+        Promise.resolve({
+          subject: "operator-subject",
+          role: "operator",
+          appId: "app_demo",
+          tenantId: "tenant_demo"
+        }),
+      requestInstallation,
+      installPlugin
+    };
+    render(<App client={client} />);
+
+    fireEvent.change(screen.getByLabelText("Token"), { target: { value: "operator-token" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await screen.findByText("operator-subject");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Request large-invoice-notify 1.2.2" })
+    );
+    fireEvent.change(await screen.findByLabelText("notifyChannel (required)"), {
+      target: { value: "C123" }
+    });
+    fireEvent.click(screen.getByLabelText("Confirm slack.send"));
+    fireEvent.click(screen.getByRole("button", { name: "Review installation request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit approval request" }));
+
+    await waitFor(() => {
+      expect(requestInstallation).toHaveBeenCalledTimes(1);
+    });
+    expect(installPlugin).not.toHaveBeenCalled();
+    expect(await screen.findByText("Approval request pending")).toBeInTheDocument();
+    expect(screen.getByText("approval_install_1")).toBeInTheDocument();
   });
 
   it.each([

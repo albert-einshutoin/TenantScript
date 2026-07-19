@@ -13,6 +13,7 @@ import type {
   AdminInstallationDetailStore
 } from "./admin-installations.js";
 import { AdminInstallFlowError, type AdminInstallFlowStore } from "./admin-install-flow.js";
+import type { AdminInstallRequestStore } from "./admin-install-requests.js";
 import { AdminRollbackError, type AdminRollbackStore } from "./admin-rollbacks.js";
 import type { AdminMutationFamily, AdminMutationRateLimiter } from "./admin-mutation-rate-limit.js";
 import {
@@ -41,6 +42,7 @@ export interface ControlPlaneHttpHandlerOptions {
   installationDetailStore?: AdminInstallationDetailStore;
   installationCommandStore?: AdminInstallationCommandStore;
   installFlowStore?: AdminInstallFlowStore;
+  installRequestStore?: AdminInstallRequestStore;
   rollbackStore?: AdminRollbackStore;
   executionDetailStore?: AdminExecutionDetailStore;
   approvalDecisionStore?: AdminApprovalDecisionStore;
@@ -101,6 +103,15 @@ export function createControlPlaneHttpHandler(
         });
       }
       return runInstall(request, options, corsHeaders);
+    }
+    if (route === "installRequestCreate") {
+      if (request.method !== "POST") {
+        return errorResponse(405, "method_not_allowed", "method not allowed", {
+          ...corsHeaders,
+          Allow: "POST, OPTIONS"
+        });
+      }
+      return runInstallRequest(request, options, corsHeaders);
     }
     if (route === "rollbackCreate") {
       if (request.method !== "POST") {
@@ -164,6 +175,7 @@ type AdminRoute =
   | "installationCommand"
   | "installPreview"
   | "installCreate"
+  | "installRequestCreate"
   | "rollbackCreate"
   | "executionDetail"
   | "usage"
@@ -193,6 +205,9 @@ function adminRoute(url: URL): AdminRoute | null {
   if (path === "/v1/admin/installations") {
     return "installCreate";
   }
+  if (path === "/v1/admin/installation-requests") {
+    return "installRequestCreate";
+  }
   if (path === "/v1/admin/rollbacks") {
     return "rollbackCreate";
   }
@@ -217,6 +232,72 @@ function adminRoute(url: URL): AdminRoute | null {
 
 const maximumCommandBodyBytes = 16 * 1024;
 const maximumInstallBodyBytes = 64 * 1024;
+
+async function runInstallRequest(
+  request: Request,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.installRequestStore === undefined) {
+    return errorResponse(
+      503,
+      "install_request_store_unavailable",
+      "installation request service unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(
+    identity,
+    "installation:request",
+    "installation_request_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
+  const command = await parseInstallRequest(request, corsHeaders);
+  if (command instanceof Response) return command;
+  const idempotencyKey = request.headers.get("Idempotency-Key");
+  if (!isIdempotencyKey(idempotencyKey)) {
+    return errorResponse(
+      400,
+      "invalid_idempotency_key",
+      "valid Idempotency-Key header required",
+      corsHeaders
+    );
+  }
+  const rateLimitResponse = await reserveAdminMutation(
+    options.adminMutationRateLimiter,
+    identity,
+    "installation-request",
+    corsHeaders
+  );
+  if (rateLimitResponse !== null) return rateLimitResponse;
+  try {
+    const result = await options.installRequestStore.requestInstallation({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      actor: identity.subject,
+      idempotencyKey,
+      ...command
+    });
+    return result === null
+      ? errorResponse(404, "plugin_version_not_found", "plugin version not found", corsHeaders)
+      : jsonResponse(201, result, corsHeaders);
+  } catch (error) {
+    if (error instanceof AdminInstallFlowError) {
+      return errorResponse(
+        error.code === "idempotency_key_reused" ? 409 : 400,
+        error.code,
+        error.code === "idempotency_key_reused"
+          ? "idempotency key was already used"
+          : "installation request validation failed",
+        corsHeaders
+      );
+    }
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
 
 async function runServiceTokenIssue(
   request: Request,
@@ -1194,6 +1275,7 @@ async function resolveDashboard(
     | "installationCommand"
     | "installPreview"
     | "installCreate"
+    | "installRequestCreate"
     | "rollbackCreate"
     | "approvalDecisionCreate"
     | "serviceTokenCollection"
@@ -1582,6 +1664,7 @@ function allowedMethods(route: AdminRoute): string {
   if (route === "installationCommand") return "PATCH, OPTIONS";
   if (route === "installCreate" || route === "rollbackCreate" || route === "approvalDecisionCreate")
     return "POST, OPTIONS";
+  if (route === "installRequestCreate") return "POST, OPTIONS";
   if (route === "serviceTokenCollection") return "POST, DELETE, OPTIONS";
   return "GET, OPTIONS";
 }
