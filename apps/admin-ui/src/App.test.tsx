@@ -60,6 +60,34 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByRole("heading", { name: "Admin Console" })).toBeInTheDocument();
   });
 
+  it("opens a read-only permission review from an installation row", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const client: AdminApiClient = {
+      ...baseClient,
+      getInstallationPermissionReview: vi.fn().mockResolvedValue({
+        id: "inst_large_invoice", pluginKey: "large-invoice-notify", version: "1.3.0",
+        enabled: true, priority: 10,
+        configFields: [
+          { name: "notifyChannel", type: "string", required: true, configured: true, hasDefault: false }
+        ],
+        capabilities: [
+          { name: "slack.send", scopeKeys: ["channel"], configuredBy: ["notifyChannel"], status: "granted" }
+        ]
+      })
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Permission review for large-invoice-notify" }));
+
+    await expect(screen.findByRole("heading", { name: "Permission review" })).resolves.toBeInTheDocument();
+    expect(screen.getByText("notifyChannel")).toBeInTheDocument();
+    expect(screen.getByText("slack.send")).toBeInTheDocument();
+    expect(screen.getByText("configured")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Save|Enable|Disable/i })).not.toBeInTheDocument();
+  });
+
   it("rejects invalid tokens without showing protected navigation", async () => {
     render(<App client={createDemoAdminApiClient()} />);
 
