@@ -6,6 +6,7 @@ import {
   type AdminSession,
   type DashboardSectionPage,
   type DashboardSnapshot,
+  type InstallationCommandRequest,
   type InstallationPermissionReview
 } from "./api-client.js";
 import type { AdminDashboardSection } from "@tenantscript/control-plane";
@@ -184,6 +185,33 @@ function AdminShell({
     [client]
   );
 
+  const updateInstallation = useCallback(
+    async (request: InstallationCommandRequest) => {
+      const updated = await client.updateInstallationCommand(request);
+      // Installation controls change only after the server accepts the command. This avoids
+      // showing an authorization or audit failure as a successful local state transition.
+      setSnapshot((current) =>
+        current === null
+          ? current
+          : {
+              ...current,
+              installations: current.installations.map((installation) =>
+                installation.id === updated.id
+                  ? {
+                      ...installation,
+                      enabled: updated.enabled,
+                      priority: updated.priority,
+                      statusText: updated.enabled ? "enabled" : "disabled"
+                    }
+                  : installation
+              )
+            }
+      );
+      return updated;
+    },
+    [client]
+  );
+
   return (
     <section className="admin-layout">
       <aside className="sidebar" aria-label="TenantScript Admin navigation">
@@ -237,6 +265,7 @@ function AdminShell({
             permissionLoading={permissionLoading}
             permissionError={permissionError}
             onPermissionReview={openPermissionReview}
+            onInstallationCommand={updateInstallation}
           />
         )}
       </div>
@@ -261,7 +290,8 @@ function RoutePanel({
   permissionReview,
   permissionLoading,
   permissionError,
-  onPermissionReview
+  onPermissionReview,
+  onInstallationCommand
 }: {
   route: AdminRoute;
   session: AdminSession;
@@ -272,6 +302,7 @@ function RoutePanel({
   permissionLoading: boolean;
   permissionError: string | null;
   onPermissionReview: (id: string) => void;
+  onInstallationCommand: (request: InstallationCommandRequest) => Promise<unknown>;
 }) {
   switch (route) {
     case "overview":
@@ -288,6 +319,8 @@ function RoutePanel({
           permissionLoading={permissionLoading}
           permissionError={permissionError}
           onPermissionReview={onPermissionReview}
+          canManage={session.role === "manager"}
+          onInstallationCommand={onInstallationCommand}
         />
       );
     case "versions":
@@ -351,7 +384,9 @@ function InstallationsPanel({
   permissionReview,
   permissionLoading,
   permissionError,
-  onPermissionReview
+  onPermissionReview,
+  canManage,
+  onInstallationCommand
 }: {
   snapshot: DashboardSnapshot;
   loading: boolean;
@@ -360,7 +395,13 @@ function InstallationsPanel({
   permissionLoading: boolean;
   permissionError: string | null;
   onPermissionReview: (id: string) => void;
+  canManage: boolean;
+  onInstallationCommand: (request: InstallationCommandRequest) => Promise<unknown>;
 }) {
+  const [managedInstallationId, setManagedInstallationId] = useState<string | null>(null);
+  const managedInstallation = snapshot.installations.find(
+    (installation) => installation.id === managedInstallationId
+  );
   return (
     <section className="data-panel">
       <PanelHeader title="Installations" detail="Tenant scoped plugins" />
@@ -373,6 +414,7 @@ function InstallationsPanel({
               <th>Priority</th>
               <th>Status</th>
               <th>Review</th>
+              {canManage ? <th>Manage</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -384,6 +426,20 @@ function InstallationsPanel({
                 <td>
                   <StatusPill status={installation.statusText} />
                 </td>
+                {canManage ? (
+                  <td>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        setManagedInstallationId(installation.id);
+                      }}
+                      aria-label={`Manage ${installation.pluginKey}`}
+                    >
+                      Manage
+                    </button>
+                  </td>
+                ) : null}
                 <td>
                   <button
                     type="button"
@@ -410,6 +466,87 @@ function InstallationsPanel({
       {permissionLoading ? <div className="loading-panel">Loading permission review</div> : null}
       {permissionError === null ? null : <p className="form-error">{permissionError}</p>}
       {permissionReview === null ? null : <PermissionReviewPanel review={permissionReview} />}
+      {managedInstallation === undefined ? null : (
+        <InstallationCommandPanel
+          key={managedInstallation.id}
+          installation={managedInstallation}
+          onCommand={onInstallationCommand}
+        />
+      )}
+    </section>
+  );
+}
+
+function InstallationCommandPanel({
+  installation,
+  onCommand
+}: {
+  installation: DashboardSnapshot["installations"][number];
+  onCommand: (request: InstallationCommandRequest) => Promise<unknown>;
+}) {
+  const [enabled, setEnabled] = useState(installation.enabled);
+  const [priority, setPriority] = useState(String(installation.priority));
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const parsedPriority = Number(priority);
+  const validPriority = Number.isFinite(parsedPriority) && Number.isInteger(parsedPriority);
+  const changed =
+    validPriority && (enabled !== installation.enabled || parsedPriority !== installation.priority);
+
+  const confirm = useCallback(() => {
+    if (!changed || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    void onCommand({ id: installation.id, enabled, priority: parsedPriority })
+      .then(() => {
+        setConfirming(false);
+      })
+      .catch(() => {
+        setError("Installation update unavailable");
+      })
+      .finally(() => {
+        setSubmitting(false);
+      });
+  }, [changed, enabled, installation.id, onCommand, parsedPriority, submitting]);
+
+  return (
+    <section className="data-panel" aria-label="Installation controls">
+      <PanelHeader title="Installation controls" detail={installation.pluginKey} />
+      <div className="button-row">
+        <button type="button" className="secondary-button" onClick={() => setEnabled(true)}>
+          Enable installation
+        </button>
+        <button type="button" className="secondary-button" onClick={() => setEnabled(false)}>
+          Disable installation
+        </button>
+      </div>
+      <label htmlFor="installation-priority">
+        Priority
+        <input
+          id="installation-priority"
+          inputMode="numeric"
+          value={priority}
+          onChange={(event) => setPriority(event.currentTarget.value)}
+        />
+      </label>
+      <button type="button" disabled={!changed || submitting} onClick={() => setConfirming(true)}>
+        Review change
+      </button>
+      {error === null ? null : <p className="form-error">{error}</p>}
+      {!confirming ? null : (
+        <div role="dialog" aria-modal="true" aria-label="Confirm installation change">
+          <p>
+            Change enabled to {String(enabled)} and priority to {String(parsedPriority)}?
+          </p>
+          <button type="button" onClick={confirm} disabled={submitting}>
+            {submitting ? "Saving" : "Confirm change"}
+          </button>
+          <button type="button" onClick={() => setConfirming(false)} disabled={submitting}>
+            Cancel
+          </button>
+        </div>
+      )}
     </section>
   );
 }

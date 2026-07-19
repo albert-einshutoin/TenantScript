@@ -1,6 +1,9 @@
 import { createStaticTokenIdentityResolver, type AuthenticatedIdentity } from "./api.js";
 import { createAdminCursorCodec, createD1AdminDashboardStore } from "./admin-dashboard.js";
-import { createD1AdminInstallationDetailStore } from "./admin-installations.js";
+import {
+  createD1AdminInstallationCommandStore,
+  createD1AdminInstallationDetailStore
+} from "./admin-installations.js";
 import { createControlPlaneHttpHandler } from "./http-api.js";
 import type { D1DatabaseLike } from "./storage.js";
 
@@ -29,6 +32,8 @@ export default {
     const dashboardStore = env.DB === undefined ? undefined : createD1AdminDashboardStore(env.DB);
     const installationDetailStore =
       env.DB === undefined ? undefined : createD1AdminInstallationDetailStore(env.DB);
+    const installationCommandStore =
+      env.DB === undefined ? undefined : createD1AdminInstallationCommandStore(env.DB);
     let handler;
     try {
       const cursorCodec =
@@ -41,6 +46,7 @@ export default {
           : { identityResolver: createStaticTokenIdentityResolver(identities) }),
         ...(dashboardStore === undefined ? {} : { dashboardStore }),
         ...(installationDetailStore === undefined ? {} : { installationDetailStore }),
+        ...(installationCommandStore === undefined ? {} : { installationCommandStore }),
         ...(cursorCodec === undefined ? {} : { cursorCodec }),
         allowedOrigins
       });

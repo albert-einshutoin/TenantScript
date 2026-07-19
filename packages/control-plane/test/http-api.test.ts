@@ -349,8 +349,18 @@ describe("Control Plane installation command contract", () => {
     };
     const handler = createControlPlaneHttpHandler({
       identityResolver: createStaticTokenIdentityResolver({
-        manager: { subject: "manager-subject", role: "manager", appId: "app_acme", tenantId: "tenant_acme" },
-        viewer: { subject: "viewer-subject", role: "viewer", appId: "app_acme", tenantId: "tenant_acme" }
+        manager: {
+          subject: "manager-subject",
+          role: "manager",
+          appId: "app_acme",
+          tenantId: "tenant_acme"
+        },
+        viewer: {
+          subject: "viewer-subject",
+          role: "viewer",
+          appId: "app_acme",
+          tenantId: "tenant_acme"
+        }
       }),
       installationCommandStore: commandStore,
       allowedOrigins: [allowedOrigin]
@@ -360,11 +370,7 @@ describe("Control Plane installation command contract", () => {
       commandRequest("manager", {
         id: "inst_1",
         enabled: false,
-        priority: 5,
-        tenantId: "tenant_other",
-        appId: "app_other",
-        actor: "attacker",
-        role: "manager"
+        priority: 5
       })
     );
 
@@ -397,14 +403,42 @@ describe("Control Plane installation command contract", () => {
       "Content-Type": "application/json"
     };
     const cases = [
-      new Request("https://api.example.com/v1/admin/installation-command", { method: "PATCH", headers, body: "{" }),
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PATCH",
+        headers,
+        body: "{"
+      }),
       commandRequest("manager-secret-token", { id: "inst_1" }),
       commandRequest("manager-secret-token", { id: "inst_1", priority: 1.5 }),
       commandRequest("manager-secret-token", { id: "inst_1", priority: Number.POSITIVE_INFINITY }),
-      new Request("https://api.example.com/v1/admin/installation-command", { method: "PATCH", headers: { ...headers, "Content-Type": "text/plain" }, body: JSON.stringify({ id: "inst_1", enabled: true }) }),
-      new Request("https://api.example.com/v1/admin/installation-command", { method: "PATCH", headers, body: JSON.stringify({ id: "inst_1", enabled: true, config: { secret: "no" } }) }),
-      new Request("https://api.example.com/v1/admin/installations/..", { method: "PATCH", headers, body: JSON.stringify({ id: "inst_1", enabled: true }) }),
-      new Request("https://api.example.com/v1/admin/installation-command", { method: "PATCH", headers, body: JSON.stringify({ id: "inst_1", enabled: true, padding: "x".repeat(16_384) }) })
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "text/plain" },
+        body: JSON.stringify({ id: "inst_1", enabled: true })
+      }),
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ id: "inst_1", enabled: true, config: { secret: "no" } })
+      }),
+      commandRequest("manager-secret-token", {
+        id: "inst_1",
+        enabled: true,
+        tenantId: "tenant_other",
+        appId: "app_other",
+        actor: "attacker",
+        role: "manager"
+      }),
+      new Request("https://api.example.com/v1/admin/installations/..", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ id: "inst_1", enabled: true })
+      }),
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ id: "inst_1", enabled: true, padding: "x".repeat(16_384) })
+      })
     ];
     for (const request of cases) {
       const response = await handler(request);
@@ -429,11 +463,17 @@ describe("Control Plane installation command contract", () => {
       allowedOrigins: [allowedOrigin]
     });
     for (const id of ["missing", "other-tenant", "cross-app"]) {
-      const response = await handler(commandRequest("manager-secret-token", { id, enabled: false }));
+      const response = await handler(
+        commandRequest("manager-secret-token", { id, enabled: false })
+      );
       expect(response.status).toBe(404);
-      await expect(response.json()).resolves.toMatchObject({ error: { code: "installation_not_found" } });
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "installation_not_found" }
+      });
     }
-    const noOp = await handler(commandRequest("manager-secret-token", { id: "inst_1", enabled: true, priority: 10 }));
+    const noOp = await handler(
+      commandRequest("manager-secret-token", { id: "inst_1", enabled: true, priority: 10 })
+    );
     expect(noOp.status).toBe(200);
     await expect(noOp.json()).resolves.toEqual({ id: "inst_1", enabled: true, priority: 10 });
   });

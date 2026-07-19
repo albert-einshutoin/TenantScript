@@ -156,12 +156,14 @@ describe("D1 Admin dashboard read model", () => {
       changed: true
     });
 
-    const installation = await testEnv.DB
-      .prepare("SELECT enabled, priority FROM installations WHERE id = ?")
+    const installation = await testEnv.DB.prepare(
+      "SELECT enabled, priority FROM installations WHERE id = ?"
+    )
       .bind("tenant_1_installation_a")
       .first<{ enabled: number; priority: number }>();
-    const audit = await testEnv.DB
-      .prepare("SELECT hook_name, error, capability_calls_json FROM executions WHERE id = ?")
+    const audit = await testEnv.DB.prepare(
+      "SELECT hook_name, error, capability_calls_json FROM executions WHERE id = ?"
+    )
       .bind("installation_command_audit")
       .first<{ hook_name: string; error: string; capability_calls_json: string }>();
     expect(installation).toEqual({ enabled: 0, priority: 4 });
@@ -169,7 +171,9 @@ describe("D1 Admin dashboard read model", () => {
     expect(audit?.error).toBe(
       "actor=manager-subject old_enabled=true old_priority=10 new_enabled=false new_priority=4"
     );
-    expect(audit?.capability_calls_json).toBe('[{"name":"installations.command","status":"success"}]');
+    expect(audit?.capability_calls_json).toBe(
+      '[{"name":"installations.command","status":"success"}]'
+    );
     expect(JSON.stringify(audit)).not.toContain("secret-config");
     expect(JSON.stringify(audit)).not.toContain("secret-grant");
     expect(JSON.stringify(audit)).not.toContain("manifest-secret");
@@ -177,10 +181,9 @@ describe("D1 Admin dashboard read model", () => {
 
   it("does not update an installation when the paired audit insert fails, and makes no-op commands audit-free", async () => {
     await seedDashboard();
-    await testEnv.DB
-      .prepare(
-        "INSERT INTO executions (id, tenant_id, plugin_id, hook_name, version, status, duration_ms, capability_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-      )
+    await testEnv.DB.prepare(
+      "INSERT INTO executions (id, tenant_id, plugin_id, hook_name, version, status, duration_ms, capability_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
       .bind(
         "conflicting_audit",
         "tenant_1",
@@ -206,8 +209,7 @@ describe("D1 Admin dashboard read model", () => {
       })
     ).rejects.toThrow();
     await expect(
-      testEnv.DB
-        .prepare("SELECT enabled, priority FROM installations WHERE id = ?")
+      testEnv.DB.prepare("SELECT enabled, priority FROM installations WHERE id = ?")
         .bind("tenant_1_installation_a")
         .first<{ enabled: number; priority: number }>()
     ).resolves.toEqual({ enabled: 1, priority: 10 });
@@ -220,9 +222,16 @@ describe("D1 Admin dashboard read model", () => {
       enabled: true,
       priority: 10
     });
-    expect(noOp).toEqual({ id: "tenant_1_installation_a", enabled: true, priority: 10, changed: false });
+    expect(noOp).toEqual({
+      id: "tenant_1_installation_a",
+      enabled: true,
+      priority: 10,
+      changed: false
+    });
     await expect(
-      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM executions WHERE hook_name = ?").bind("installation.command").first<{ count: number }>()
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM executions WHERE hook_name = ?")
+        .bind("installation.command")
+        .first<{ count: number }>()
     ).resolves.toEqual({ count: 0 });
   });
 

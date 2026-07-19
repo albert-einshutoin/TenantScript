@@ -72,7 +72,22 @@ export interface AdminApiClient extends AdminSessionClient {
     cursor: string
   ) => Promise<DashboardSectionPage>;
   getInstallationPermissionReview: (id: string) => Promise<InstallationPermissionReview>;
+  updateInstallationCommand: (
+    request: InstallationCommandRequest
+  ) => Promise<InstallationCommandResult>;
   clearSession: () => void;
+}
+
+export interface InstallationCommandRequest {
+  id: string;
+  enabled?: boolean;
+  priority?: number;
+}
+
+export interface InstallationCommandResult {
+  id: string;
+  enabled: boolean;
+  priority: number;
 }
 
 export interface InstallationPermissionReview {
@@ -249,6 +264,14 @@ const installationPermissionReviewSchema = z
   })
   .strict();
 
+const installationCommandResultSchema = z
+  .object({
+    id: z.string().min(1),
+    enabled: z.boolean(),
+    priority: z.number().finite().int()
+  })
+  .strict();
+
 const demoSessionList: readonly { token: string; session: AdminSession }[] = [
   {
     token: "manager-token",
@@ -369,6 +392,21 @@ export function createDemoAdminApiClient(): AdminApiClient {
         egress: { mode: "deny", allowlistedHostCount: 0 }
       });
     },
+    updateInstallationCommand: (request) => {
+      const installation = dashboardFixture.installations.find(
+        (candidate) => candidate.id === request.id
+      );
+      if (installation === undefined) {
+        return Promise.reject(
+          new AdminApiError(404, "installation_not_found", "installation not found")
+        );
+      }
+      return Promise.resolve({
+        id: installation.id,
+        enabled: request.enabled ?? installation.enabled,
+        priority: request.priority ?? installation.priority
+      });
+    },
     clearSession: () => undefined
   };
 }
@@ -383,6 +421,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     getDashboard: unavailable,
     getDashboardSection: unavailable,
     getInstallationPermissionReview: unavailable,
+    updateInstallationCommand: unavailable,
     clearSession: () => undefined
   };
 }
@@ -410,6 +449,11 @@ export function createAdminApiClient(params: {
   const dashboardUrl = apiEndpoint(
     params.controlPlaneUrl,
     "/v1/admin/dashboard",
+    params.isDevelopment
+  );
+  const installationCommandUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/installation-command",
     params.isDevelopment
   );
   const fetcher = params.fetcher ?? fetch;
@@ -446,6 +490,17 @@ export function createAdminApiClient(params: {
       const detail = installationPermissionReviewSchema.safeParse(payload);
       if (!detail.success) throw invalidResponse();
       return detail.data;
+    },
+    updateInstallationCommand: async (request) => {
+      const payload = await fetchAdminJson(
+        installationCommandUrl,
+        requireCredential(credential),
+        fetcher,
+        { method: "PATCH", body: JSON.stringify(request) }
+      );
+      const result = installationCommandResultSchema.safeParse(payload);
+      if (!result.success) throw invalidResponse();
+      return result.data;
     },
     clearSession: () => {
       credential = undefined;
@@ -543,18 +598,21 @@ function apiEndpoint(baseUrl: string, path: string, allowInsecureLoopback: boole
 async function fetchAdminJson(
   url: string,
   credential: string,
-  fetcher: typeof fetch
+  fetcher: typeof fetch,
+  init: { method: "GET" | "PATCH"; body?: string } = { method: "GET" }
 ): Promise<unknown> {
   let response: Response;
   try {
     response = await fetcher(url, {
-      method: "GET",
+      method: init.method,
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${credential}`
+        Authorization: `Bearer ${credential}`,
+        ...(init.method === "PATCH" ? { "Content-Type": "application/json" } : {})
       },
       cache: "no-store",
-      credentials: "omit"
+      credentials: "omit",
+      ...(init.body === undefined ? {} : { body: init.body })
     });
   } catch {
     throw new AdminApiError(0, "network_error", "control-plane is unreachable");

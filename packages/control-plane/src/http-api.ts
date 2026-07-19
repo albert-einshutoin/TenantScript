@@ -5,7 +5,10 @@ import type {
   AdminDashboardSectionPage,
   AdminDashboardStore
 } from "./admin-dashboard.js";
-import type { AdminInstallationDetailStore } from "./admin-installations.js";
+import type {
+  AdminInstallationCommandStore,
+  AdminInstallationDetailStore
+} from "./admin-installations.js";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -20,6 +23,7 @@ export interface ControlPlaneHttpHandlerOptions {
   dashboardStore?: AdminDashboardStore;
   cursorCodec?: AdminCursorCodec;
   installationDetailStore?: AdminInstallationDetailStore;
+  installationCommandStore?: AdminInstallationCommandStore;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -55,7 +59,16 @@ export function createControlPlaneHttpHandler(
       if (origin === null) {
         return errorResponse(403, "origin_required", "request origin is required");
       }
-      return preflightResponse(corsHeaders);
+      return preflightResponse(corsHeaders, route === "installationCommand");
+    }
+    if (route === "installationCommand") {
+      if (request.method !== "PATCH") {
+        return errorResponse(405, "method_not_allowed", "method not allowed", {
+          ...corsHeaders,
+          Allow: "PATCH, OPTIONS"
+        });
+      }
+      return runInstallationCommand(request, options, corsHeaders);
     }
     if (request.method !== "GET") {
       return errorResponse(405, "method_not_allowed", "method not allowed", {
@@ -74,7 +87,12 @@ export function createControlPlaneHttpHandler(
   };
 }
 
-type AdminRoute = "session" | "dashboard" | AdminDashboardSection | { id: string };
+type AdminRoute =
+  | "session"
+  | "dashboard"
+  | "installationCommand"
+  | AdminDashboardSection
+  | { id: string };
 
 function adminRoute(url: URL): AdminRoute | null {
   const path = url.pathname;
@@ -88,11 +106,128 @@ function adminRoute(url: URL): AdminRoute | null {
     const id = url.searchParams.get("id");
     return id === null || id.length === 0 ? null : { id };
   }
+  if (path === "/v1/admin/installation-command") {
+    return "installationCommand";
+  }
   const section = path.slice("/v1/admin/dashboard/".length);
   if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
     return section;
   }
   return null;
+}
+
+const maximumCommandBodyBytes = 16 * 1024;
+
+async function runInstallationCommand(
+  request: Request,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.installationCommandStore === undefined) {
+    return errorResponse(
+      503,
+      "installation_command_store_unavailable",
+      "installation command store unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  if (identity.role !== "manager") {
+    return errorResponse(
+      403,
+      "installation_command_forbidden",
+      "manager role required",
+      corsHeaders
+    );
+  }
+  const command = await parseInstallationCommand(request, corsHeaders);
+  if (command instanceof Response) return command;
+  try {
+    const updated = await options.installationCommandStore.updateInstallation({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      actor: identity.subject,
+      ...command
+    });
+    // A common 404 prevents installation enumeration across tenant, app, and corrupt relations.
+    if (updated === null) {
+      return errorResponse(404, "installation_not_found", "installation not found", corsHeaders);
+    }
+    return jsonResponse(
+      200,
+      { id: updated.id, enabled: updated.enabled, priority: updated.priority },
+      corsHeaders
+    );
+  } catch {
+    // Database error strings can contain SQL bindings or stored customer configuration.
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function parseInstallationCommand(
+  request: Request,
+  corsHeaders: Record<string, string> | undefined
+): Promise<{ id: string; enabled?: boolean; priority?: number } | Response> {
+  const contentType = request.headers.get("Content-Type");
+  if (
+    contentType === null ||
+    contentType.split(";", 1)[0]?.trim().toLowerCase() !== "application/json"
+  ) {
+    return errorResponse(
+      415,
+      "unsupported_media_type",
+      "application/json body required",
+      corsHeaders
+    );
+  }
+  const contentLength = request.headers.get("Content-Length");
+  if (
+    contentLength !== null &&
+    (!/^\d+$/u.test(contentLength) || Number(contentLength) > maximumCommandBodyBytes)
+  ) {
+    return errorResponse(413, "request_too_large", "request body too large", corsHeaders);
+  }
+  let text: string;
+  try {
+    text = await request.text();
+  } catch {
+    return errorResponse(400, "invalid_command", "invalid installation command", corsHeaders);
+  }
+  if (new TextEncoder().encode(text).byteLength > maximumCommandBodyBytes) {
+    return errorResponse(413, "request_too_large", "request body too large", corsHeaders);
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isInstallationCommand(parsed)) throw new Error("invalid command");
+    return parsed;
+  } catch {
+    // Never include invalid body text: it may carry a secret, a claimed tenant, or a bearer copy.
+    return errorResponse(400, "invalid_command", "invalid installation command", corsHeaders);
+  }
+}
+
+function isInstallationCommand(
+  value: unknown
+): value is { id: string; enabled?: boolean; priority?: number } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (!keys.every((key) => key === "id" || key === "enabled" || key === "priority")) return false;
+  if (!isNonEmptyString(record.id)) return false;
+  const hasEnabled = Object.hasOwn(record, "enabled");
+  const hasPriority = Object.hasOwn(record, "priority");
+  if (!hasEnabled && !hasPriority) return false;
+  if (hasEnabled && typeof record.enabled !== "boolean") return false;
+  if (
+    hasPriority &&
+    (typeof record.priority !== "number" ||
+      !Number.isFinite(record.priority) ||
+      !Number.isInteger(record.priority))
+  ) {
+    return false;
+  }
+  return true;
 }
 
 async function resolveInstallationDetail(
@@ -180,7 +315,7 @@ async function resolveSession(
 
 async function resolveDashboard(
   request: Request,
-  route: Exclude<AdminRoute, "session" | { id: string }>,
+  route: Exclude<AdminRoute, "session" | "installationCommand" | { id: string }>,
   url: URL,
   options: ControlPlaneHttpHandlerOptions,
   corsHeaders: Record<string, string> | undefined
@@ -409,13 +544,16 @@ function unauthorizedResponse(corsHeaders: Record<string, string> | undefined): 
   });
 }
 
-function preflightResponse(corsHeaders: Record<string, string> | undefined): Response {
+function preflightResponse(
+  corsHeaders: Record<string, string> | undefined,
+  isInstallationCommand: boolean
+): Response {
   return new Response(null, {
     status: 204,
     headers: {
       ...corsHeaders,
       "Access-Control-Allow-Headers": "Authorization, Content-Type",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Methods": isInstallationCommand ? "PATCH, OPTIONS" : "GET, OPTIONS",
       "Access-Control-Max-Age": "600",
       "Cache-Control": "no-store"
     }

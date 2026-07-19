@@ -143,6 +143,59 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByText(/2 allowlisted hosts/)).toBeInTheDocument();
   });
 
+  it("lets a manager confirm an installation command, waits for server success, and prevents double submission", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const updateInstallationCommand = vi.fn().mockResolvedValue({
+      id: "inst_large_invoice",
+      enabled: false,
+      priority: 10
+    });
+    const client: AdminApiClient = { ...baseClient, updateInstallationCommand };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    expect(screen.getByRole("dialog", { name: "Confirm installation change" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+    expect(screen.getByRole("button", { name: "Saving" })).toBeDisabled();
+
+    await waitFor(() => expect(updateInstallationCommand).toHaveBeenCalledTimes(1));
+    expect(updateInstallationCommand).toHaveBeenCalledWith({
+      id: "inst_large_invoice",
+      enabled: false,
+      priority: 10
+    });
+    await expect(screen.findByText("disabled")).resolves.toBeInTheDocument();
+  });
+
+  it("does not render installation controls for viewers and keeps state unchanged after command failure", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const updateInstallationCommand = vi
+      .fn()
+      .mockRejectedValue(new Error("SQL secret-config customer payload"));
+    const client: AdminApiClient = { ...baseClient, updateInstallationCommand };
+    render(<App client={client} />);
+
+    await login("viewer-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    expect(screen.queryByRole("button", { name: /Manage / })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+
+    await expect(screen.findByText("Installation update unavailable")).resolves.toBeInTheDocument();
+    expect(screen.getAllByText("enabled").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/secret-config|customer payload/)).not.toBeInTheDocument();
+  });
+
   it("redacts permission-review failures", async () => {
     const baseClient = createDemoAdminApiClient();
     const client: AdminApiClient = {
@@ -226,6 +279,7 @@ describe("Admin UI auth foundation", () => {
       getDashboard: () => Promise.reject(new Error("offline")),
       getDashboardSection: baseClient.getDashboardSection,
       getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
+      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: baseClient.clearSession
     };
     render(<App client={failingClient} />);
@@ -261,6 +315,7 @@ describe("Admin UI auth foundation", () => {
         }),
       getDashboardSection,
       getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
+      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: vi.fn()
     };
     render(<App client={client} />);
@@ -285,6 +340,7 @@ describe("Admin UI auth foundation", () => {
       getDashboard: () => Promise.resolve({ ...initial, cursors: { executions: "signed.cursor" } }),
       getDashboardSection: () => Promise.reject(new Error("SQL customer payload")),
       getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
+      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: baseClient.clearSession
     };
     render(<App client={client} />);
@@ -328,6 +384,7 @@ describe("Admin UI auth foundation", () => {
       getDashboard: () => Promise.resolve(snapshot),
       getDashboardSection: baseClient.getDashboardSection,
       getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
+      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: baseClient.clearSession
     };
     render(<App client={client} />);

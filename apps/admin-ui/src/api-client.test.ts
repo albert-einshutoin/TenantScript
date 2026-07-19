@@ -155,6 +155,32 @@ describe("Admin API environment selection", () => {
     );
   });
 
+  it("sends a fixed-route PATCH command without self-asserted scope and validates its safe response", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(Response.json({ id: "..", enabled: false, priority: 4 }));
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.updateInstallationCommand({ id: "..", enabled: false, priority: 4 })
+    ).resolves.toEqual({ id: "..", enabled: false, priority: 4 });
+    const [url, init] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/installation-command");
+    expect(init?.method).toBe("PATCH");
+    expect(new Headers(init?.headers).get("content-type")).toBe("application/json");
+    expect(init?.body).toBe('{"id":"..","enabled":false,"priority":4}');
+    expect(String(init?.body)).not.toContain("tenantId");
+    expect(String(init?.body)).not.toContain("appId");
+    expect(String(init?.body)).not.toContain("actor");
+  });
+
   it("rejects installation review responses that include storage values", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

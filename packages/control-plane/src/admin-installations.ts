@@ -1,4 +1,4 @@
-import type { D1DatabaseLike } from "./storage.js";
+import type { D1DatabaseLike, D1PreparedStatementLike } from "./storage.js";
 
 export interface AdminInstallationDetail {
   id: string;
@@ -39,10 +39,150 @@ export interface AdminInstallationDetailStore {
   }) => Promise<AdminInstallationDetail | null>;
 }
 
+export interface AdminInstallationCommandStore {
+  updateInstallation: (request: {
+    appId: string;
+    tenantId: string;
+    actor: string;
+    id: string;
+    enabled?: boolean;
+    priority?: number;
+  }) => Promise<AdminInstallationCommandResult | null>;
+}
+
+export interface AdminInstallationCommandResult {
+  id: string;
+  enabled: boolean;
+  priority: number;
+  /** Internal store-only signal: HTTP intentionally returns the same safe DTO for a no-op. */
+  changed: boolean;
+}
+
+export interface D1AdminInstallationCommandStoreOptions {
+  /** Test seam for a deterministic D1 constraint failure; production IDs use Web Crypto. */
+  auditId?: () => string;
+}
+
 export function createD1AdminInstallationDetailStore(
   db: D1DatabaseLike
 ): AdminInstallationDetailStore {
   return { readInstallation: (request) => readInstallation(db, request) };
+}
+
+export function createD1AdminInstallationCommandStore(
+  db: D1DatabaseLike,
+  options: D1AdminInstallationCommandStoreOptions = {}
+): AdminInstallationCommandStore {
+  const transactionalDb = asBatchDatabase(db);
+  return {
+    updateInstallation: (request) => updateInstallation(transactionalDb, request, options)
+  };
+}
+
+async function updateInstallation(
+  db: D1BatchDatabase,
+  request: {
+    appId: string;
+    tenantId: string;
+    actor: string;
+    id: string;
+    enabled?: boolean;
+    priority?: number;
+  },
+  options: D1AdminInstallationCommandStoreOptions
+): Promise<AdminInstallationCommandResult | null> {
+  const current = await db
+    .prepare(
+      [
+        "SELECT i.id, i.enabled, i.priority, i.tenant_id, pv.plugin_id",
+        "FROM installations i",
+        "JOIN tenants t ON t.id = i.tenant_id",
+        "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
+        "JOIN plugins p ON p.id = pv.plugin_id",
+        "WHERE t.id = ?1 AND t.app_id = ?2 AND p.app_id = t.app_id AND i.id = ?3"
+      ].join(" ")
+    )
+    .bind(request.tenantId, request.appId, request.id)
+    .first<InstallationCommandRow>();
+  if (current === null) return null;
+
+  const before = commandState(current);
+  const after = {
+    enabled: request.enabled ?? before.enabled,
+    priority: request.priority ?? before.priority
+  };
+  if (after.enabled === before.enabled && after.priority === before.priority) {
+    return { id: requiredString(current.id, "invalid installation row"), ...after, changed: false };
+  }
+
+  const auditId = options.auditId?.() ?? `installation-command-${crypto.randomUUID()}`;
+  // D1 batch executes both statements as one transaction. This keeps a successful control-plane
+  // mutation from becoming unauditable when the execution-log insert rejects (for example, a
+  // unique-ID conflict), while keeping raw config/grant/manifest data out of the audit payload.
+  await db.batch([
+    db
+      .prepare(
+        [
+          "UPDATE installations SET enabled = ?1, priority = ?2",
+          "WHERE id = ?3 AND EXISTS (",
+          "SELECT 1 FROM tenants t",
+          "JOIN plugin_versions pv ON pv.id = installations.plugin_version_id",
+          "JOIN plugins p ON p.id = pv.plugin_id",
+          "WHERE t.id = installations.tenant_id AND t.id = ?4 AND t.app_id = ?5 AND p.app_id = t.app_id",
+          ")"
+        ].join(" ")
+      )
+      .bind(after.enabled ? 1 : 0, after.priority, request.id, request.tenantId, request.appId),
+    db
+      .prepare(
+        [
+          "INSERT INTO executions",
+          "(id, tenant_id, plugin_id, hook_name, version, status, duration_ms, error, capability_calls_json, created_at)",
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ].join(" ")
+      )
+      .bind(
+        auditId,
+        requiredString(current.tenant_id, "invalid installation row"),
+        requiredString(current.plugin_id, "invalid installation row"),
+        "installation.command",
+        "",
+        "success",
+        0,
+        commandAuditMessage(request.actor, before, after),
+        '[{"name":"installations.command","status":"success"}]',
+        new Date().toISOString()
+      )
+  ]);
+  return { id: requiredString(current.id, "invalid installation row"), ...after, changed: true };
+}
+
+function commandState(row: InstallationCommandRow): { enabled: boolean; priority: number } {
+  if (row.enabled !== 0 && row.enabled !== 1) throw new Error("invalid installation row");
+  return {
+    enabled: row.enabled === 1,
+    priority: requiredNumber(row.priority, "invalid installation row")
+  };
+}
+
+function commandAuditMessage(
+  actor: string,
+  before: { enabled: boolean; priority: number },
+  after: { enabled: boolean; priority: number }
+): string {
+  return `actor=${actor} old_enabled=${String(before.enabled)} old_priority=${String(before.priority)} new_enabled=${String(after.enabled)} new_priority=${String(after.priority)}`;
+}
+
+interface D1BatchDatabase extends D1DatabaseLike {
+  batch: (statements: readonly D1PreparedStatementLike[]) => Promise<readonly unknown[]>;
+}
+
+function asBatchDatabase(db: D1DatabaseLike): D1BatchDatabase {
+  const candidate = db as Partial<D1BatchDatabase>;
+  if (typeof candidate.batch !== "function") {
+    throw new Error("D1 batch is required for installation command audit atomicity");
+  }
+  return candidate as D1BatchDatabase;
 }
 
 async function readInstallation(
@@ -213,4 +353,12 @@ interface InstallationDetailRow {
   config_json: string;
   grants_json: string;
   manifest_json: string;
+}
+
+interface InstallationCommandRow {
+  id: unknown;
+  enabled: unknown;
+  priority: unknown;
+  tenant_id: unknown;
+  plugin_id: unknown;
 }
