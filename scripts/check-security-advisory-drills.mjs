@@ -14,6 +14,15 @@ const requiredStages = [
 const severities = new Set(["low", "medium", "high", "critical"]);
 const advisoryDecisions = new Set(["draft-required", "not-required"]);
 const sensitiveFieldPattern = /(?:token|secret|credential|password|account.?id)/i;
+const sensitiveValuePatterns = [
+  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/,
+  /\bsk-[A-Za-z0-9]{20,}\b/,
+  /\bBearer\s+[A-Za-z0-9._~+/-]{12,}/i,
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+  /(?:\/Users\/|\/Volumes\/)/,
+  /dash\.cloudflare\.com\/[0-9a-f]{16,}/i
+];
 const errors = [];
 
 if (!existsSync(drillsDirectory)) {
@@ -155,6 +164,12 @@ function validateEvidence(evidence, relativePath, index) {
     return;
   }
   if (/^https:\/\//.test(evidence)) {
+    const url = new URL(evidence);
+    if (url.username !== "" || url.password !== "" || url.search !== "" || url.hash !== "") {
+      errors.push(
+        `${relativePath}: HTTPS evidence must not contain query or fragment data: ${evidence}`
+      );
+    }
     return;
   }
   if (
@@ -171,6 +186,12 @@ function validateEvidence(evidence, relativePath, index) {
 }
 
 function findSensitiveFields(value, path) {
+  if (typeof value === "string") {
+    if (sensitiveValuePatterns.some((pattern) => pattern.test(value))) {
+      errors.push(`${path}: forbidden credential-like value`);
+    }
+    return;
+  }
   if (Array.isArray(value)) {
     value.forEach((item, index) => findSensitiveFields(item, `${path}.${String(index)}`));
     return;
