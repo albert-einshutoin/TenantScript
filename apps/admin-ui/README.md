@@ -5,13 +5,18 @@ Phase 1 の最小運用 UI。P1-T32 では React + Vite の起動、最小 token
 ## Local
 
 ```bash
-pnpm --filter @tenantscript/admin-ui dev -- --port 4180
+VITE_ADMIN_DEMO_MODE=true pnpm --filter @tenantscript/admin-ui dev -- --port 4180
 ```
 
-Smoke tokens:
+Demo mode is opt-in so production builds never accept fixture credentials by default. Smoke tokens:
 
 - `manager-token`
 - `viewer-token`
+
+The real HTTP session client validates `GET /v1/session` responses and keeps the submitted Bearer
+token in memory only. Until the tenant-scoped dashboard read model is implemented, production mode
+fails closed with `Control Plane not configured` instead of mixing real authentication with fixture
+dashboard data.
 
 ## Design Partner Manual Deploy
 

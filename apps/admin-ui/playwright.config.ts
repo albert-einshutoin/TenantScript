@@ -14,6 +14,9 @@ export default defineConfig({
   ],
   webServer: {
     command: "pnpm dev --port 4180",
+    env: {
+      VITE_ADMIN_DEMO_MODE: "true"
+    },
     url: "http://127.0.0.1:4180",
     reuseExistingServer: !process.env.CI
   }

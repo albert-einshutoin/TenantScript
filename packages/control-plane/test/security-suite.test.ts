@@ -32,10 +32,18 @@ describe("control-plane security suite", () => {
       })
     );
     expect(allowed.status).toBe(204);
-    expect(allowed.headers.get("access-control-allow-origin")).toBe(
-      "https://admin.example.com"
-    );
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://admin.example.com");
     expect(allowed.headers.get("access-control-allow-headers")).toContain("Authorization");
+
+    const missingOrigin = await handler(
+      new Request("https://api.example.com/v1/session", {
+        method: "OPTIONS",
+        headers: {
+          "Access-Control-Request-Method": "GET"
+        }
+      })
+    );
+    expect(missingOrigin.status).toBe(403);
 
     const denied = await handler(
       new Request("https://api.example.com/v1/session", {

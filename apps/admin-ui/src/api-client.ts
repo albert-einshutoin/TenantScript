@@ -12,6 +12,12 @@ export type AdminRole = "manager" | "viewer";
 export interface AdminSession extends AuthenticatedIdentity {
   token: string;
   role: AdminRole;
+  appId: string;
+  tenantId: string;
+}
+
+export interface AdminSessionClient {
+  resolveSession: (request: { token: string }) => Promise<AdminSession>;
 }
 
 export interface InstallationView extends InstallationRecord {
@@ -55,17 +61,36 @@ export interface DashboardSnapshot {
   usage: readonly DailyUsageSummaryView[];
 }
 
-export interface AdminApiClient {
-  resolveSession: (request: { token: string }) => Promise<AdminSession>;
+export interface AdminApiClient extends AdminSessionClient {
   getDashboard: (session: AdminSession) => Promise<DashboardSnapshot>;
+}
+
+export class AdminApiError extends Error {
+  override readonly name = "AdminApiError";
+
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string
+  ) {
+    super(message);
+  }
 }
 
 const roleSchema = z.enum(["manager", "viewer"]);
 
 const sessionSchema = z.object({
-  token: z.string().min(1),
   subject: z.string().min(1),
-  role: roleSchema
+  role: roleSchema,
+  appId: z.string().min(1),
+  tenantId: z.string().min(1)
+});
+
+const errorEnvelopeSchema = z.object({
+  error: z.object({
+    code: z.string().min(1),
+    message: z.string().min(1)
+  })
 });
 
 const installationSchema = z.object({
@@ -141,8 +166,20 @@ const dashboardSchema = z.object({
 });
 
 const demoSessionList: readonly AdminSession[] = [
-  { token: "manager-token", subject: "ops-manager", role: "manager" },
-  { token: "viewer-token", subject: "support-viewer", role: "viewer" }
+  {
+    token: "manager-token",
+    subject: "ops-manager",
+    role: "manager",
+    appId: "app_acme",
+    tenantId: "tenant_acme"
+  },
+  {
+    token: "viewer-token",
+    subject: "support-viewer",
+    role: "viewer",
+    appId: "app_acme",
+    tenantId: "tenant_acme"
+  }
 ];
 
 const demoSessions = new Map<string, AdminSession>(
@@ -249,8 +286,97 @@ export function createDemoAdminApiClient(): AdminApiClient {
       if (session === undefined) {
         return Promise.reject(new Error("invalid_token"));
       }
-      return Promise.resolve(sessionSchema.parse(session));
+      return Promise.resolve(session);
     },
     getDashboard: () => Promise.resolve(dashboardFixture)
   };
+}
+
+export function createUnavailableAdminApiClient(): AdminApiClient {
+  const unavailable = () =>
+    Promise.reject(
+      new AdminApiError(503, "control_plane_not_configured", "Control Plane not configured")
+    );
+  return {
+    resolveSession: unavailable,
+    getDashboard: unavailable
+  };
+}
+
+export function createHttpAdminSessionClient(params: {
+  baseUrl: string;
+  fetcher?: typeof fetch;
+}): AdminSessionClient {
+  const sessionUrl = sessionEndpoint(params.baseUrl);
+  const fetcher = params.fetcher ?? fetch;
+
+  return {
+    resolveSession: async ({ token }) => {
+      const credential = token.trim();
+      if (credential.length === 0) {
+        throw new AdminApiError(401, "unauthorized", "valid bearer token required");
+      }
+
+      let response: Response;
+      try {
+        response = await fetcher(sessionUrl, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${credential}`
+          },
+          cache: "no-store",
+          credentials: "omit"
+        });
+      } catch {
+        // Browser/network errors can include implementation details. Keep the UI contract
+        // stable and avoid surfacing provider diagnostics or request metadata to users.
+        throw new AdminApiError(0, "network_error", "control-plane is unreachable");
+      }
+      const payload = await readJson(response);
+
+      if (!response.ok) {
+        const envelope = errorEnvelopeSchema.safeParse(payload);
+        if (envelope.success) {
+          throw new AdminApiError(
+            response.status,
+            envelope.data.error.code,
+            envelope.data.error.message
+          );
+        }
+        throw new AdminApiError(response.status, "http_error", "control-plane request failed");
+      }
+
+      const identity = sessionSchema.safeParse(payload);
+      if (!identity.success) {
+        throw new AdminApiError(
+          502,
+          "invalid_response",
+          "control-plane returned an invalid response"
+        );
+      }
+
+      // The server never echoes credentials; the UI keeps the submitted token in memory only.
+      return { token: credential, ...identity.data };
+    }
+  };
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
+}
+
+function sessionEndpoint(baseUrl: string): string {
+  const base = new URL(baseUrl);
+  if (base.protocol !== "https:" && base.protocol !== "http:") {
+    throw new Error("control-plane URL must use http or https");
+  }
+  if (base.username !== "" || base.password !== "" || base.search !== "" || base.hash !== "") {
+    throw new Error("control-plane URL must not contain credentials, query, or fragment");
+  }
+  return new URL("/v1/session", base).toString();
 }

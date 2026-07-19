@@ -41,9 +41,7 @@ describe("Control Plane HTTP session contract", () => {
       headers.set("Authorization", authorization);
     }
 
-    const response = await handler(
-      new Request("https://api.example.com/v1/session", { headers })
-    );
+    const response = await handler(new Request("https://api.example.com/v1/session", { headers }));
 
     expect(response.status).toBe(401);
     expect(response.headers.get("www-authenticate")).toBe("Bearer");

@@ -1,0 +1,189 @@
+import type { AuthenticatedIdentity, IdentityResolver } from "./api.js";
+
+export type AdminRole = "manager" | "viewer";
+
+export interface TenantScopedAdminIdentity extends AuthenticatedIdentity {
+  role: AdminRole;
+  appId: string;
+  tenantId: string;
+}
+
+export interface ControlPlaneHttpHandlerOptions {
+  identityResolver?: IdentityResolver;
+  allowedOrigins?: readonly string[];
+}
+
+export type ControlPlaneHttpHandler = (request: Request) => Promise<Response>;
+
+interface HttpErrorBody {
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+export function createControlPlaneHttpHandler(
+  options: ControlPlaneHttpHandlerOptions
+): ControlPlaneHttpHandler {
+  const allowedOrigins = createAllowedOriginSet(options.allowedOrigins ?? []);
+
+  return async (request) => {
+    const origin = request.headers.get("Origin");
+    if (origin !== null && !allowedOrigins.has(origin)) {
+      return errorResponse(403, "origin_forbidden", "request origin is not allowed");
+    }
+
+    const corsHeaders = origin === null ? undefined : corsResponseHeaders(origin);
+    const path = new URL(request.url).pathname;
+    if (path !== "/v1/session") {
+      return errorResponse(404, "route_not_found", "route not found", corsHeaders);
+    }
+
+    if (request.method === "OPTIONS") {
+      if (origin === null) {
+        return errorResponse(403, "origin_required", "request origin is required");
+      }
+      return preflightResponse(corsHeaders);
+    }
+    if (request.method !== "GET") {
+      return errorResponse(405, "method_not_allowed", "method not allowed", {
+        ...corsHeaders,
+        Allow: "GET"
+      });
+    }
+
+    return resolveSession(request, options.identityResolver, corsHeaders);
+  };
+}
+
+async function resolveSession(
+  request: Request,
+  identityResolver: IdentityResolver | undefined,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (identityResolver === undefined) {
+    return errorResponse(
+      503,
+      "identity_resolver_unavailable",
+      "identity service unavailable",
+      corsHeaders
+    );
+  }
+
+  const token = bearerToken(request.headers.get("Authorization"));
+  if (token === null) {
+    return unauthorizedResponse(corsHeaders);
+  }
+
+  try {
+    const identity = await identityResolver.resolveToken(token);
+    if (identity === null) {
+      return unauthorizedResponse(corsHeaders);
+    }
+    if (!isTenantScopedAdminIdentity(identity)) {
+      return errorResponse(
+        403,
+        "admin_scope_forbidden",
+        "tenant-scoped admin access required",
+        corsHeaders
+      );
+    }
+
+    // Scope comes only from the trusted token claim. Request query/body values must never
+    // select another app or tenant because every later admin read will inherit this identity.
+    return jsonResponse(
+      200,
+      {
+        subject: identity.subject,
+        role: identity.role,
+        appId: identity.appId,
+        tenantId: identity.tenantId
+      },
+      corsHeaders
+    );
+  } catch {
+    // Provider errors may contain tokens or upstream details, so HTTP responses stay redacted.
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+function bearerToken(authorization: string | null): string | null {
+  const match = authorization?.match(/^Bearer ([^\s]+)$/i);
+  return match?.[1] ?? null;
+}
+
+function isTenantScopedAdminIdentity(
+  identity: AuthenticatedIdentity
+): identity is TenantScopedAdminIdentity {
+  const candidate = identity as Partial<TenantScopedAdminIdentity>;
+  return (
+    (candidate.role === "manager" || candidate.role === "viewer") &&
+    isNonEmptyString(candidate.subject) &&
+    isNonEmptyString(candidate.appId) &&
+    isNonEmptyString(candidate.tenantId)
+  );
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function unauthorizedResponse(corsHeaders: Record<string, string> | undefined): Response {
+  return errorResponse(401, "unauthorized", "valid bearer token required", {
+    ...corsHeaders,
+    "WWW-Authenticate": "Bearer"
+  });
+}
+
+function preflightResponse(corsHeaders: Record<string, string> | undefined): Response {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      ...corsHeaders,
+      "Access-Control-Allow-Headers": "Authorization, Content-Type",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Max-Age": "600"
+    }
+  });
+}
+
+function errorResponse(
+  status: number,
+  code: string,
+  message: string,
+  headers?: Record<string, string>
+): Response {
+  const body: HttpErrorBody = { error: { code, message } };
+  return jsonResponse(status, body, headers);
+}
+
+function jsonResponse(status: number, body: unknown, headers?: Record<string, string>): Response {
+  return Response.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      ...headers
+    }
+  });
+}
+
+function corsResponseHeaders(origin: string): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": origin,
+    Vary: "Origin"
+  };
+}
+
+function createAllowedOriginSet(origins: readonly string[]): ReadonlySet<string> {
+  const normalized = origins.map((origin) => {
+    if (origin === "*") {
+      throw new Error("wildcard origins are not allowed for the Admin API");
+    }
+    const url = new URL(origin);
+    if ((url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== origin) {
+      throw new Error(`invalid Admin API origin: ${origin}`);
+    }
+    return origin;
+  });
+  return new Set(normalized);
+}
