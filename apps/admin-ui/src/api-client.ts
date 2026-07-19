@@ -51,6 +51,7 @@ export interface InstallPreview {
 }
 
 export interface InstallPluginRequest {
+  idempotencyKey: string;
   versionId: string;
   config: Record<string, string | number | boolean>;
   confirmedCapabilities: readonly string[];
@@ -980,11 +981,16 @@ export function createAdminApiClient(params: {
       return preview.data;
     },
     installPlugin: async (request) => {
+      const { idempotencyKey, ...body } = request;
       const payload = await fetchAdminJson(
         installationsUrl,
         requireCredential(credential),
         fetcher,
-        { method: "POST", body: JSON.stringify(request) }
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+          headers: { "Idempotency-Key": idempotencyKey }
+        }
       );
       const installed = installPluginResultSchema.safeParse(payload);
       if (!installed.success || installed.data.versionId !== request.versionId) {
@@ -1100,7 +1106,11 @@ async function fetchAdminJson(
   url: string,
   credential: string,
   fetcher: typeof fetch,
-  init: { method: "GET" | "PATCH" | "POST"; body?: string } = { method: "GET" }
+  init: {
+    method: "GET" | "PATCH" | "POST";
+    body?: string;
+    headers?: Record<string, string>;
+  } = { method: "GET" }
 ): Promise<unknown> {
   let response: Response;
   try {
@@ -1109,7 +1119,8 @@ async function fetchAdminJson(
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${credential}`,
-        ...(init.body === undefined ? {} : { "Content-Type": "application/json" })
+        ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...init.headers
       },
       cache: "no-store",
       credentials: "omit",
