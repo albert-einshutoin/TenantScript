@@ -1,7 +1,7 @@
 # RBAC Matrix
 
-Status: implemented role model for P2-T05  
-Last reviewed: 2026-07-20
+- Status: implemented role model for P2-T05
+- Last reviewed: 2026-07-20
 
 TenantScript authorizes named operations through one runtime matrix. Route handlers derive app and tenant scope from the authenticated identity before applying this role decision; a role never expands the identity's tenant boundary.
 
