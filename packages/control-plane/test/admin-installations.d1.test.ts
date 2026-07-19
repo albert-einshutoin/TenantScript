@@ -221,14 +221,14 @@ function commandDatabase(
         },
         run: () => Promise.resolve(undefined),
         all: () => Promise.resolve({ results: [] }),
-        first: () => Promise.resolve(rows[rowIndex++] ?? null)
+        first: <T>() => Promise.resolve((rows[rowIndex++] ?? null) as unknown as T | null)
       };
       return statement;
     },
-    batch: async (statements) => {
+    batch: (statements) => {
       batches.push([...statements]);
-      if (options.batchError !== undefined) throw options.batchError;
-      return [];
+      if (options.batchError !== undefined) return Promise.reject(options.batchError);
+      return Promise.resolve([]);
     }
   };
 }
