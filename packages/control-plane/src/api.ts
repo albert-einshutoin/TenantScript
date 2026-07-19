@@ -569,9 +569,13 @@ async function decideApproval(
     identityResolver: IdentityResolver | undefined;
   }
 ): Promise<ApprovalRecord> {
+  const identity = await resolveApprovalDecisionIdentity(params.identityResolver, request);
   const approval = await requireApproval(store, request.id, request.tenantId);
-  await authorizeApprovalDecision(params.identityResolver, request, approval);
-  const transition = resolveApprovalDecisionTransition(approval.state, request.decision);
+  authorizeApprovalRole(identity, approval);
+  // Legacy callers without an identity resolver retain their explicit actor contract. Once a
+  // resolver is configured, audit and continuation evidence must use its trusted subject.
+  const authorizedRequest = identity === null ? request : { ...request, actor: identity.subject };
+  const transition = resolveApprovalDecisionTransition(approval.state, authorizedRequest.decision);
   if (!transition.allowed) {
     throw apiError(
       409,
@@ -580,20 +584,22 @@ async function decideApproval(
     );
   }
 
-  const decidedAt = request.decidedAt ?? new Date();
+  const decidedAt = authorizedRequest.decidedAt ?? new Date();
   const updated = await store.decideApproval({
-    id: request.id,
-    decision: request.decision,
-    decidedBy: request.actor,
-    ...(request.reason === undefined ? {} : { decisionReason: request.reason }),
+    id: authorizedRequest.id,
+    decision: authorizedRequest.decision,
+    decidedBy: authorizedRequest.actor,
+    ...(authorizedRequest.reason === undefined ? {} : { decisionReason: authorizedRequest.reason }),
     decidedAt
   });
-  await store.writeExecution(approvalDecisionAuditRecord({ request, approval, decidedAt }));
+  await store.writeExecution(
+    approvalDecisionAuditRecord({ request: authorizedRequest, approval, decidedAt })
+  );
   if (params.continuationRunner !== undefined) {
     await store.writeExecution(
       await params.continuationRunner.runApprovalContinuation({
         approval,
-        payload: approvalDecisionPayload({ request, approval }),
+        payload: approvalDecisionPayload({ request: authorizedRequest, approval }),
         decidedAt
       })
     );
@@ -802,30 +808,37 @@ function slackConnectionId(tenantId: string, workspaceId: string): string {
   return stableId("slack", tenantId, workspaceId);
 }
 
-async function authorizeApprovalDecision(
+async function resolveApprovalDecisionIdentity(
   identityResolver: IdentityResolver | undefined,
-  request: DecideApprovalRequest,
-  approval: ApprovalRecord
-): Promise<void> {
+  request: DecideApprovalRequest
+): Promise<AuthenticatedIdentity | null> {
   if (identityResolver === undefined) {
-    return;
+    return null;
   }
 
   const token = request.authToken;
   const identity = token === undefined ? null : await identityResolver.resolveToken(token);
-  // request.role remains ignored so callers cannot self-assert privileges. Existing manager
-  // approvals use the central RBAC matrix; future explicit requirements remain exact.
   if (
     identity === null ||
     !canRolePerform(identity.role, "approval:decide") ||
-    (approval.role !== "manager" &&
-      normalizeRbacRole(identity.role) !== normalizeRbacRole(approval.role))
+    (identity.allowedOperations !== undefined &&
+      !identity.allowedOperations.includes("approval:decide")) ||
+    (identity.tenantId !== undefined && identity.tenantId !== request.tenantId)
   ) {
-    throw apiError(
-      403,
-      "approval_role_forbidden",
-      `approval ${approval.id} requires role ${approval.role}`
-    );
+    throw apiError(403, "approval_role_forbidden", "approval decision not permitted");
+  }
+  return identity;
+}
+
+function authorizeApprovalRole(identity: AuthenticatedIdentity | null, approval: ApprovalRecord) {
+  // request.role remains ignored so callers cannot self-assert privileges. Existing manager
+  // approvals use the central RBAC matrix; future explicit requirements remain exact.
+  if (
+    identity !== null &&
+    approval.role !== "manager" &&
+    normalizeRbacRole(identity.role) !== normalizeRbacRole(approval.role)
+  ) {
+    throw apiError(403, "approval_role_forbidden", "approval decision not permitted");
   }
 }
 

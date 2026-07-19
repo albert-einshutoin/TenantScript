@@ -47,7 +47,7 @@
   - RED: scope 付きトークン(read-only 等)が scope 外操作で拒否される / 失効が即時反映される
   - DoD: トークンテスト green、漏えい時の失効手順がドキュメント化
 
-- [ ] **P2-T08**(S)RBAC 攻撃テスト
+- [x] **P2-T08**(S)RBAC 攻撃テスト
   - RED: 権限昇格パターン(自分の role 変更、他者への grant 付与経由の昇格)が全て拒否される
   - DoD: security suite v3 に追加
 

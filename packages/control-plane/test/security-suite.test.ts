@@ -397,6 +397,62 @@ describe("control-plane security suite", () => {
     ).rejects.toMatchObject({ status: 403, code: "approval_role_forbidden" });
   });
 
+  it.each([
+    [
+      "scope-limited admin token",
+      {
+        subject: "scoped-admin",
+        role: "admin",
+        tenantId: "tenant_1",
+        allowedOperations: ["session:read"] as const
+      }
+    ],
+    [
+      "admin token from another tenant",
+      { subject: "other-admin", role: "admin", tenantId: "tenant_2" }
+    ]
+  ])("rejects approval escalation by %s", async (_label, identity) => {
+    const approval = pendingApproval();
+    const api = createControlPlaneApi({
+      store: createDecisionStore(approval),
+      artifacts: noopArtifacts,
+      identityResolver: createStaticTokenIdentityResolver({ attacker: identity })
+    });
+
+    await expect(
+      api.decideApproval({
+        id: approval.id,
+        tenantId: approval.tenantId,
+        decision: "approved",
+        actor: "forged-owner",
+        auditId: "audit_escalation",
+        authToken: "attacker"
+      })
+    ).rejects.toMatchObject({ status: 403, code: "approval_role_forbidden" });
+  });
+
+  it("uses the authenticated subject instead of a forged approval actor", async () => {
+    const approval = pendingApproval();
+    const api = createControlPlaneApi({
+      store: createDecisionStore(approval),
+      artifacts: noopArtifacts,
+      identityResolver: createStaticTokenIdentityResolver({
+        admin: { subject: "trusted-admin", role: "admin", tenantId: "tenant_1" }
+      })
+    });
+
+    await expect(
+      api.decideApproval({
+        id: approval.id,
+        tenantId: approval.tenantId,
+        decision: "approved",
+        actor: "forged-owner",
+        auditId: "audit_subject",
+        authToken: "admin"
+      })
+    ).resolves.toMatchObject({ decidedBy: "trusted-admin" });
+  });
+
   it("rejects approval decisions scoped to another tenant", async () => {
     const approval = {
       id: "approval_1",
@@ -714,6 +770,20 @@ const allowAdminMutation = {
 const noopArtifacts: ArtifactStore = {
   putArtifact: (hash) => Promise.resolve({ hash })
 };
+
+function pendingApproval(): ApprovalRecord {
+  return {
+    id: "approval_attack",
+    tenantId: "tenant_1",
+    pluginId: "plugin_1",
+    role: "admin",
+    subject: {},
+    resumeHook: "approval.decided",
+    state: "pending",
+    expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+    createdAt: new Date("2026-07-20T00:00:00.000Z")
+  };
+}
 
 function dashboardRequest(token: string, url: string): Request {
   return new Request(url, {
