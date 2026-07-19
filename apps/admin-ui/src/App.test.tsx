@@ -793,10 +793,11 @@ describe("Admin UI auth foundation", () => {
 
     await login("manager-token");
     fireEvent.click(screen.getByRole("button", { name: "Executions" }));
-    fireEvent.change(screen.getByLabelText("Plugin ID"), {
+    const pluginIdInput = screen.findByLabelText("Plugin ID");
+    initialDashboard.resolve(dashboardSnapshot);
+    fireEvent.change(await pluginIdInput, {
       target: { value: "plugin_large_invoice" }
     });
-    initialDashboard.resolve(dashboardSnapshot);
     fireEvent.change(screen.getByLabelText("Hook"), { target: { value: "invoice.created" } });
     fireEvent.change(screen.getByLabelText("Status"), { target: { value: "error" } });
     fireEvent.click(screen.getByRole("button", { name: "Search executions" }));
