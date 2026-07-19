@@ -1,8 +1,49 @@
 import { describe, expect, it, vi } from "vitest";
-import { AdminApiError, createHttpAdminSessionClient, type AdminSession } from "./api-client.js";
+import {
+  AdminApiError,
+  createAdminApiClient,
+  createHttpAdminSessionClient,
+  type AdminSession
+} from "./api-client.js";
+
+describe("Admin API environment selection", () => {
+  it("connects the production client to the configured Control Plane", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        subject: "ops-manager",
+        role: "manager",
+        appId: "app_acme",
+        tenantId: "tenant_acme"
+      })
+    );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+
+    await expect(client.resolveSession({ token: "production-token" })).resolves.toMatchObject({
+      subject: "ops-manager",
+      tenantId: "tenant_acme"
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("never enables fixture credentials in a production build", async () => {
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: true
+    });
+
+    await expect(client.resolveSession({ token: "manager-token" })).rejects.toEqual(
+      new AdminApiError(503, "control_plane_not_configured", "Control Plane not configured")
+    );
+  });
+});
 
 describe("Admin HTTP session client", () => {
-  it("sends the token only in Authorization and keeps it in memory", async () => {
+  it("sends the token only in Authorization and returns identity without the credential", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
         subject: "ops-manager",
@@ -19,7 +60,6 @@ describe("Admin HTTP session client", () => {
     const session = await client.resolveSession({ token: "secret-token" });
 
     expect(session).toEqual<AdminSession>({
-      token: "secret-token",
       subject: "ops-manager",
       role: "manager",
       appId: "app_acme",
@@ -32,6 +72,13 @@ describe("Admin HTTP session client", () => {
     expect(requestUrl).not.toContain("secret-token");
     expect(init?.body).toBeUndefined();
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret-token");
+  });
+
+  it("rejects remote plaintext HTTP but allows loopback development URLs", () => {
+    expect(() => createHttpAdminSessionClient({ baseUrl: "http://api.example.com" })).toThrow(
+      "control-plane URL must use https except for loopback development"
+    );
+    expect(() => createHttpAdminSessionClient({ baseUrl: "http://127.0.0.1:8787" })).not.toThrow();
   });
 
   it("converts an HTTP error envelope into a typed error", async () => {

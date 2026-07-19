@@ -48,7 +48,7 @@ export function createControlPlaneHttpHandler(
     if (request.method !== "GET") {
       return errorResponse(405, "method_not_allowed", "method not allowed", {
         ...corsHeaders,
-        Allow: "GET"
+        Allow: "GET, OPTIONS"
       });
     }
 
@@ -142,7 +142,8 @@ function preflightResponse(corsHeaders: Record<string, string> | undefined): Res
       ...corsHeaders,
       "Access-Control-Allow-Headers": "Authorization, Content-Type",
       "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Max-Age": "600"
+      "Access-Control-Max-Age": "600",
+      "Cache-Control": "no-store"
     }
   });
 }
@@ -180,10 +181,17 @@ function createAllowedOriginSet(origins: readonly string[]): ReadonlySet<string>
       throw new Error("wildcard origins are not allowed for the Admin API");
     }
     const url = new URL(origin);
-    if ((url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== origin) {
+    if (url.origin !== origin) {
       throw new Error(`invalid Admin API origin: ${origin}`);
+    }
+    if (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopbackHost(url.hostname))) {
+      throw new Error("Admin API origins must use https except for loopback development");
     }
     return origin;
   });
   return new Set(normalized);
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }

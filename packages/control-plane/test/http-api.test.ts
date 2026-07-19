@@ -115,7 +115,7 @@ describe("Control Plane HTTP session contract", () => {
       })
     );
     expect(methodResponse.status).toBe(405);
-    expect(methodResponse.headers.get("allow")).toBe("GET");
+    expect(methodResponse.headers.get("allow")).toBe("GET, OPTIONS");
     await expect(methodResponse.json()).resolves.toEqual({
       error: { code: "method_not_allowed", message: "method not allowed" }
     });
@@ -129,6 +129,15 @@ describe("Control Plane HTTP session contract", () => {
     await expect(routeResponse.json()).resolves.toEqual({
       error: { code: "route_not_found", message: "route not found" }
     });
+  });
+
+  it("rejects remote plaintext origins but allows loopback development origins", () => {
+    expect(() =>
+      createControlPlaneHttpHandler({ allowedOrigins: ["http://admin.example.com"] })
+    ).toThrow("Admin API origins must use https except for loopback development");
+    expect(() =>
+      createControlPlaneHttpHandler({ allowedOrigins: ["http://localhost:4180"] })
+    ).not.toThrow();
   });
 });
 

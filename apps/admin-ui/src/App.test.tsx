@@ -8,6 +8,14 @@ import {
 } from "./api-client.js";
 
 describe("Admin UI auth foundation", () => {
+  it("masks the bearer token while it is entered", () => {
+    render(<App client={createDemoAdminApiClient()} />);
+
+    expect(screen.getByLabelText("Token")).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText("Token")).toHaveAttribute("spellcheck", "false");
+    expect(screen.getByLabelText("Token")).toHaveAttribute("autocapitalize", "none");
+  });
+
   it("fails closed instead of enabling demo tokens by default", async () => {
     render(<App />);
 

@@ -27,6 +27,9 @@ export default defineConfig({
           PROBE_DO: "ProbeDurableObject"
         },
         bindings: {
+          ADMIN_ALLOWED_ORIGINS: '["https://admin.example.com"]',
+          ADMIN_IDENTITIES_JSON:
+            '{"worker-manager-token":{"subject":"worker-manager","role":"manager","appId":"app_worker","tenantId":"tenant_worker"}}',
           TEST_MIGRATIONS: await readD1Migrations(path.join(dirname, "migrations"))
         }
       }

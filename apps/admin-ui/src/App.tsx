@@ -71,7 +71,10 @@ function LoginPanel({
           <input
             id="token"
             name="token"
+            type="password"
             autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
             value={token}
             onChange={(event) => {
               setToken(event.currentTarget.value);
