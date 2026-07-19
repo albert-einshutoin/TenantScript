@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAdminCursorCodec, type AdminDashboardStore } from "../src/admin-dashboard.js";
+import type { AdminInstallationDetailStore } from "../src/admin-installations.js";
 import { createControlPlaneHttpHandler } from "../src/http-api.js";
 import { createStaticTokenIdentityResolver } from "../src/index.js";
 
@@ -257,6 +258,85 @@ describe("Control Plane Admin dashboard contract", () => {
   });
 });
 
+describe("Control Plane installation permission review contract", () => {
+  it.each(["manager-secret-token", "viewer-secret-token"])(
+    "allows %s to read a tenant-scoped safe installation projection",
+    async (token) => {
+      const store = installationStore();
+      const handler = createControlPlaneHttpHandler({
+        identityResolver: createStaticTokenIdentityResolver({
+          "manager-secret-token": {
+            subject: "manager",
+            role: "manager",
+            appId: "app_acme",
+            tenantId: "tenant_acme"
+          },
+          "viewer-secret-token": {
+            subject: "viewer",
+            role: "viewer",
+            appId: "app_acme",
+            tenantId: "tenant_acme"
+          }
+        }),
+        installationDetailStore: store,
+        allowedOrigins: [allowedOrigin]
+      });
+      const response = await handler(
+        sessionRequest({
+          token,
+          url: "https://api.example.com/v1/admin/installation-review?id=inst_1&tenantId=tenant_other"
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(store.readInstallation).toHaveBeenCalledWith({
+        appId: "app_acme",
+        tenantId: "tenant_acme",
+        id: "inst_1"
+      });
+      const body = await response.text();
+      expect(body).toContain("configFields");
+      expect(body).not.toContain("secret-config");
+      expect(body).not.toContain("grants_json");
+    }
+  );
+
+  it("returns 404 for an installation outside the authenticated tenant", async () => {
+    const store = installationStore();
+    store.readInstallation.mockResolvedValue(null);
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationDetailStore: store,
+      allowedOrigins: [allowedOrigin]
+    });
+    const response = await handler(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: "https://api.example.com/v1/admin/installation-review?id=inst_other"
+      })
+    );
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "installation_not_found" }
+    });
+  });
+
+  it("fails closed when the installation ID is missing", async () => {
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationDetailStore: installationStore(),
+      allowedOrigins: [allowedOrigin]
+    });
+    const response = await handler(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: "https://api.example.com/v1/admin/installation-review"
+      })
+    );
+    expect(response.status).toBe(404);
+  });
+});
+
 function createHandler() {
   return createControlPlaneHttpHandler({
     identityResolver: createStaticTokenIdentityResolver({
@@ -329,6 +409,30 @@ function dashboardStore() {
 
 function dashboardUrl(): string {
   return "https://api.example.com/v1/admin/dashboard";
+}
+
+function installationStore() {
+  return {
+    readInstallation: vi.fn<AdminInstallationDetailStore["readInstallation"]>().mockResolvedValue({
+      id: "inst_1",
+      pluginKey: "safe-plugin",
+      version: "1.0.0",
+      enabled: true,
+      priority: 10,
+      configFields: [
+        { name: "channel", type: "string", required: true, configured: true, hasDefault: false }
+      ],
+      capabilities: [
+        {
+          name: "slack.send",
+          scopeKeys: ["channel"],
+          configReferences: ["channel"],
+          status: "granted"
+        }
+      ],
+      egress: { mode: "deny", allowlistedHostCount: 0 }
+    })
+  } satisfies AdminInstallationDetailStore;
 }
 
 interface TestDashboardBody {

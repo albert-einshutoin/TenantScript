@@ -8,6 +8,7 @@ import {
   createInMemoryExecutionLogStore,
   createStaticTokenIdentityResolver,
   type AdminDashboardStore,
+  type AdminInstallationDetailStore,
   type DailyUsageRecord,
   type ApprovalContinuationRequest,
   type ApprovalRecord,
@@ -366,6 +367,39 @@ describe("control-plane security suite", () => {
         at: new Date("2026-06-13T01:00:00.000Z")
       })
     ).rejects.toThrow("cpuMs must be a non-negative finite number");
+  });
+
+  it("does not let an installation permission review cross an identity tenant boundary", async () => {
+    const detailStore = {
+      readInstallation: vi
+        .fn<AdminInstallationDetailStore["readInstallation"]>()
+        .mockResolvedValue(null)
+    } satisfies AdminInstallationDetailStore;
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({
+        viewer: { subject: "viewer", role: "viewer", appId: "app_1", tenantId: "tenant_1" }
+      }),
+      installationDetailStore: detailStore,
+      allowedOrigins: ["https://admin.example.com"]
+    });
+    const response = await handler(
+      new Request(
+        "https://api.example.com/v1/admin/installation-review?id=inst_tenant_2&tenantId=tenant_2",
+        {
+          headers: { Authorization: "Bearer viewer", Origin: "https://admin.example.com" }
+        }
+      )
+    );
+
+    expect(response.status).toBe(404);
+    expect(detailStore.readInstallation).toHaveBeenCalledWith({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      id: "inst_tenant_2"
+    });
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "installation_not_found", message: "installation not found" }
+    });
   });
 });
 

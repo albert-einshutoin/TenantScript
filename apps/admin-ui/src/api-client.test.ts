@@ -110,6 +110,80 @@ describe("Admin API environment selection", () => {
     );
   });
 
+  it("loads only safe installation permission-review metadata with the session bearer", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "inst_1",
+          pluginKey: "invoice-notify",
+          version: "1.2.3",
+          enabled: true,
+          priority: 10,
+          configFields: [
+            { name: "channel", type: "string", required: true, configured: true, hasDefault: false }
+          ],
+          capabilities: [
+            {
+              name: "slack.send",
+              scopeKeys: ["channel"],
+              configReferences: ["channel"],
+              status: "granted"
+            }
+          ],
+          egress: { mode: "deny", allowlistedHostCount: 0 }
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getInstallationPermissionReview("..")).resolves.toMatchObject({
+      configFields: [{ name: "channel", configured: true }],
+      capabilities: [{ name: "slack.send", status: "granted" }]
+    });
+    expect(requestUrl(fetcher.mock.calls[1]?.[0])).toBe(
+      "https://api.example.com/v1/admin/installation-review?id=.."
+    );
+    expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("authorization")).toBe(
+      "Bearer secret-token"
+    );
+  });
+
+  it("rejects installation review responses that include storage values", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "inst_1",
+          pluginKey: "invoice-notify",
+          version: "1.2.3",
+          enabled: true,
+          priority: 10,
+          configFields: [],
+          capabilities: [],
+          egress: { mode: "deny", allowlistedHostCount: 0 },
+          config: { channel: "must-not-render" }
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+    await expect(client.getInstallationPermissionReview("inst_1")).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
   it("rejects dashboard responses that expose storage-only fields", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

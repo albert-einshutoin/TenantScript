@@ -71,7 +71,30 @@ export interface AdminApiClient extends AdminSessionClient {
     section: AdminDashboardSection,
     cursor: string
   ) => Promise<DashboardSectionPage>;
+  getInstallationPermissionReview: (id: string) => Promise<InstallationPermissionReview>;
   clearSession: () => void;
+}
+
+export interface InstallationPermissionReview {
+  id: string;
+  pluginKey: string;
+  version: string;
+  enabled: boolean;
+  priority: number;
+  configFields: readonly {
+    name: string;
+    type: "string" | "number" | "boolean";
+    required: boolean;
+    configured: boolean;
+    hasDefault: boolean;
+  }[];
+  capabilities: readonly {
+    name: string;
+    status: "granted" | "missing";
+    scopeKeys: readonly string[];
+    configReferences: readonly string[];
+  }[];
+  egress: { mode: "deny" | "allowlist"; allowlistedHostCount: number };
 }
 
 export type DashboardSectionPage =
@@ -189,6 +212,43 @@ const dashboardSectionSchema = z.discriminatedUnion("section", [
     .strict()
 ]);
 
+const installationPermissionReviewSchema = z
+  .object({
+    id: z.string(),
+    pluginKey: z.string(),
+    version: z.string(),
+    enabled: z.boolean(),
+    priority: z.number(),
+    configFields: z.array(
+      z
+        .object({
+          name: z.string(),
+          type: z.enum(["string", "number", "boolean"]),
+          required: z.boolean(),
+          configured: z.boolean(),
+          hasDefault: z.boolean()
+        })
+        .strict()
+    ),
+    capabilities: z.array(
+      z
+        .object({
+          name: z.string(),
+          status: z.enum(["granted", "missing"]),
+          scopeKeys: z.array(z.string()),
+          configReferences: z.array(z.string())
+        })
+        .strict()
+    ),
+    egress: z
+      .object({
+        mode: z.enum(["deny", "allowlist"]),
+        allowlistedHostCount: z.number().int().nonnegative()
+      })
+      .strict()
+  })
+  .strict();
+
 const demoSessionList: readonly { token: string; session: AdminSession }[] = [
   {
     token: "manager-token",
@@ -296,6 +356,19 @@ export function createDemoAdminApiClient(): AdminApiClient {
     getDashboard: () => Promise.resolve(dashboardFixture),
     getDashboardSection: () =>
       Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
+    getInstallationPermissionReview: (id) => {
+      const installation = dashboardFixture.installations.find((candidate) => candidate.id === id);
+      if (installation === undefined)
+        return Promise.reject(
+          new AdminApiError(404, "installation_not_found", "installation not found")
+        );
+      return Promise.resolve({
+        ...installation,
+        configFields: [],
+        capabilities: [],
+        egress: { mode: "deny", allowlistedHostCount: 0 }
+      });
+    },
     clearSession: () => undefined
   };
 }
@@ -309,6 +382,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     resolveSession: unavailable,
     getDashboard: unavailable,
     getDashboardSection: unavailable,
+    getInstallationPermissionReview: unavailable,
     clearSession: () => undefined
   };
 }
@@ -364,6 +438,14 @@ export function createAdminApiClient(params: {
         throw invalidResponse();
       }
       return dashboardSectionPage(page.data);
+    },
+    getInstallationPermissionReview: async (id) => {
+      const url = new URL("/v1/admin/installation-review", dashboardUrl);
+      url.searchParams.set("id", id);
+      const payload = await fetchAdminJson(url.toString(), requireCredential(credential), fetcher);
+      const detail = installationPermissionReviewSchema.safeParse(payload);
+      if (!detail.success) throw invalidResponse();
+      return detail.data;
     },
     clearSession: () => {
       credential = undefined;

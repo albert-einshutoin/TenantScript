@@ -3,6 +3,7 @@ import { applyD1Migrations, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createD1AdminDashboardStore,
+  createD1AdminInstallationDetailStore,
   createD1ControlPlaneStore,
   type AdminDashboardSection,
   type PluginVersionRecord
@@ -99,6 +100,38 @@ describe("D1 Admin dashboard read model", () => {
     });
     expect(wrongApp.items).toEqual([]);
   });
+
+  it("reads installation permission metadata through the real tenant/app D1 boundary", async () => {
+    await seedDashboard();
+    const reviews = createD1AdminInstallationDetailStore(testEnv.DB);
+
+    const own = await reviews.readInstallation({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      id: "tenant_1_installation_a"
+    });
+    const otherTenant = await reviews.readInstallation({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      id: "tenant_2_installation_a"
+    });
+    const wrongApp = await reviews.readInstallation({
+      appId: "app_other",
+      tenantId: "tenant_1",
+      id: "tenant_1_installation_a"
+    });
+
+    expect(own).toMatchObject({
+      id: "tenant_1_installation_a",
+      pluginKey: "tenant_1-plugin",
+      egress: { mode: "deny", allowlistedHostCount: 0 }
+    });
+    expect(JSON.stringify(own)).not.toContain("secret-config");
+    expect(JSON.stringify(own)).not.toContain("secret-grant");
+    expect(JSON.stringify(own)).not.toContain("manifest-secret");
+    expect(otherTenant).toBeNull();
+    expect(wrongApp).toBeNull();
+  });
 });
 
 async function seedDashboard(): Promise<void> {
@@ -112,6 +145,17 @@ async function seedDashboard(): Promise<void> {
   await seedTenant(store, "tenant_1", "app_1", ["a", "b"]);
   await seedTenant(store, "tenant_2", "app_1", ["a"]);
   await seedTenant(store, "tenant_other_app", "app_other", ["a"]);
+  // D1 cannot encode the cross-table same-app invariant, so seed an intentionally corrupt
+  // relation to prove every Admin read keeps the other app's manifest behind the SQL boundary.
+  await store.createInstallation({
+    id: "cross_app_installation",
+    tenantId: "tenant_1",
+    pluginVersionId: "tenant_other_app_version_a",
+    enabled: true,
+    priority: 99,
+    config: { value: "cross-app-secret" },
+    grants: { permission: "cross-app-grant" }
+  });
 }
 
 async function seedTenant(
