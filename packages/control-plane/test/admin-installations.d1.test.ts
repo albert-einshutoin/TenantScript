@@ -125,7 +125,10 @@ describe("D1 admin installation command adapter", () => {
   });
 
   it("does not create a batch for no-op or already-stale revisions", async () => {
-    const db = commandDatabase([{ ...commandRow(), revision: 2 }, { ...commandRow(), revision: 2 }]);
+    const db = commandDatabase([
+      { ...commandRow(), revision: 2 },
+      { ...commandRow(), revision: 2 }
+    ]);
     const store = createD1AdminInstallationCommandStore(db);
     await expect(
       store.updateInstallation({
@@ -151,9 +154,15 @@ describe("D1 admin installation command adapter", () => {
   });
 
   it("maps an audit uniqueness failure after a raced CAS to a conflict", async () => {
-    const db = commandDatabase([{ ...commandRow(), revision: 0 }, { ...commandRow(), revision: 1 }], {
-      batchError: new Error("UNIQUE constraint failed: admin_audit_events.installation_id")
-    });
+    const db = commandDatabase(
+      [
+        { ...commandRow(), revision: 0 },
+        { ...commandRow(), revision: 1 }
+      ],
+      {
+        batchError: new Error("UNIQUE constraint failed: admin_audit_events.installation_id")
+      }
+    );
     const store = createD1AdminInstallationCommandStore(db);
     await expect(
       store.updateInstallation({
