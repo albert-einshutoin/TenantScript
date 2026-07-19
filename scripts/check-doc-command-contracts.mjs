@@ -22,6 +22,8 @@ function markdownFiles(repoRoot) {
   if (existsSync(rollback)) files.push(rollback);
   const contributing = join(repoRoot, "CONTRIBUTING.md");
   if (existsSync(contributing)) files.push(contributing);
+  const readme = join(repoRoot, "README.md");
+  if (existsSync(readme)) files.push(readme);
   return files;
 }
 
