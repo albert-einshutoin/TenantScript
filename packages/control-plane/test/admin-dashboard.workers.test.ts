@@ -45,10 +45,15 @@ describe("D1 Admin dashboard read model", () => {
       )
     );
     const serialized = JSON.stringify(pages);
+    const tenantScopedSections = JSON.stringify(
+      pages.filter((page) => page.section !== "pluginVersions")
+    );
 
     expect(serialized).toContain("tenant_1_installation_a");
     expect(serialized).toContain("tenant_1_execution");
-    expect(serialized).not.toContain("tenant_2");
+    // Versions are an app-wide install catalog, while installed/runtime records stay tenant scoped.
+    expect(serialized).toContain("tenant_2_version_a");
+    expect(tenantScopedSections).not.toContain("tenant_2");
     expect(serialized).not.toContain("other_app");
     expect(serialized).not.toContain("secret-config");
     expect(serialized).not.toContain("customer-payload");

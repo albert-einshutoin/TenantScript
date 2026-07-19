@@ -9,6 +9,10 @@ import type {
   AdminInstallationCommandStore,
   AdminInstallationDetailStore
 } from "./admin-installations.js";
+import {
+  AdminInstallFlowError,
+  type AdminInstallFlowStore
+} from "./admin-install-flow.js";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -24,6 +28,7 @@ export interface ControlPlaneHttpHandlerOptions {
   cursorCodec?: AdminCursorCodec;
   installationDetailStore?: AdminInstallationDetailStore;
   installationCommandStore?: AdminInstallationCommandStore;
+  installFlowStore?: AdminInstallFlowStore;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -59,7 +64,7 @@ export function createControlPlaneHttpHandler(
       if (origin === null) {
         return errorResponse(403, "origin_required", "request origin is required");
       }
-      return preflightResponse(corsHeaders, route === "installationCommand");
+      return preflightResponse(corsHeaders, allowedMethods(route));
     }
     if (route === "installationCommand") {
       if (request.method !== "PATCH") {
@@ -70,6 +75,15 @@ export function createControlPlaneHttpHandler(
       }
       return runInstallationCommand(request, options, corsHeaders);
     }
+    if (route === "installCreate") {
+      if (request.method !== "POST") {
+        return errorResponse(405, "method_not_allowed", "method not allowed", {
+          ...corsHeaders,
+          Allow: "POST, OPTIONS"
+        });
+      }
+      return runInstall(request, options, corsHeaders);
+    }
     if (request.method !== "GET") {
       return errorResponse(405, "method_not_allowed", "method not allowed", {
         ...corsHeaders,
@@ -79,6 +93,9 @@ export function createControlPlaneHttpHandler(
 
     if (route === "session") {
       return resolveSession(request, options.identityResolver, corsHeaders);
+    }
+    if (route === "installPreview") {
+      return resolveInstallPreview(request, url, options, corsHeaders);
     }
     if (typeof route === "object") {
       return resolveInstallationDetail(request, route.id, options, corsHeaders);
@@ -91,6 +108,8 @@ type AdminRoute =
   | "session"
   | "dashboard"
   | "installationCommand"
+  | "installPreview"
+  | "installCreate"
   | AdminDashboardSection
   | { id: string };
 
@@ -109,6 +128,12 @@ function adminRoute(url: URL): AdminRoute | null {
   if (path === "/v1/admin/installation-command") {
     return "installationCommand";
   }
+  if (path === "/v1/admin/install-preview") {
+    return "installPreview";
+  }
+  if (path === "/v1/admin/installations") {
+    return "installCreate";
+  }
   const section = path.slice("/v1/admin/dashboard/".length);
   if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
     return section;
@@ -117,6 +142,182 @@ function adminRoute(url: URL): AdminRoute | null {
 }
 
 const maximumCommandBodyBytes = 16 * 1024;
+const maximumInstallBodyBytes = 64 * 1024;
+
+async function resolveInstallPreview(
+  request: Request,
+  url: URL,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.installFlowStore === undefined) {
+    return errorResponse(
+      503,
+      "install_flow_store_unavailable",
+      "installation service unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  const versionId = url.searchParams.get("versionId");
+  if (!isNonEmptyString(versionId)) {
+    return errorResponse(400, "invalid_version", "versionId is required", corsHeaders);
+  }
+  try {
+    const preview = await options.installFlowStore.readVersion({
+      appId: identity.appId,
+      versionId
+    });
+    return preview === null
+      ? errorResponse(404, "plugin_version_not_found", "plugin version not found", corsHeaders)
+      : jsonResponse(200, preview, corsHeaders);
+  } catch {
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function runInstall(
+  request: Request,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.installFlowStore === undefined) {
+    return errorResponse(
+      503,
+      "install_flow_store_unavailable",
+      "installation service unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  if (identity.role !== "manager") {
+    return errorResponse(403, "installation_install_forbidden", "manager role required", corsHeaders);
+  }
+  const command = await parseInstallRequest(request, corsHeaders);
+  if (command instanceof Response) return command;
+  try {
+    const installed = await options.installFlowStore.install({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      actor: identity.subject,
+      ...command
+    });
+    return installed === null
+      ? errorResponse(404, "plugin_version_not_found", "plugin version not found", corsHeaders)
+      : jsonResponse(201, installed, corsHeaders);
+  } catch (error) {
+    if (error instanceof AdminInstallFlowError || isInstallValidationError(error)) {
+      const code = error.code;
+      return errorResponse(
+        400,
+        code,
+        code === "invalid_config"
+          ? "installation config validation failed"
+          : "capability confirmation does not match manifest",
+        corsHeaders
+      );
+    }
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function parseInstallRequest(
+  request: Request,
+  corsHeaders: Record<string, string> | undefined
+): Promise<
+  | {
+      versionId: string;
+      config: Record<string, string | number | boolean>;
+      confirmedCapabilities: string[];
+      enabled: boolean;
+      priority: number;
+    }
+  | Response
+> {
+  const contentType = request.headers.get("Content-Type");
+  if (
+    contentType === null ||
+    contentType.split(";", 1)[0]?.trim().toLowerCase() !== "application/json"
+  ) {
+    return errorResponse(415, "unsupported_media_type", "application/json body required", corsHeaders);
+  }
+  const contentLength = request.headers.get("Content-Length");
+  if (
+    contentLength !== null &&
+    (!/^\d+$/u.test(contentLength) || Number(contentLength) > maximumInstallBodyBytes)
+  ) {
+    return errorResponse(413, "request_too_large", "request body too large", corsHeaders);
+  }
+  let text: string;
+  try {
+    text = await readBoundedUtf8Body(request, maximumInstallBodyBytes);
+  } catch (error) {
+    return error instanceof CommandBodyTooLargeError
+      ? errorResponse(413, "request_too_large", "request body too large", corsHeaders)
+      : errorResponse(400, "invalid_install_request", "invalid installation request", corsHeaders);
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isInstallRequest(parsed)) throw new Error("invalid install request");
+    return parsed;
+  } catch {
+    return errorResponse(400, "invalid_install_request", "invalid installation request", corsHeaders);
+  }
+}
+
+function isInstallRequest(value: unknown): value is {
+  versionId: string;
+  config: Record<string, string | number | boolean>;
+  confirmedCapabilities: string[];
+  enabled: boolean;
+  priority: number;
+} {
+  if (!isRecord(value)) return false;
+  if (
+    !Object.keys(value).every(
+      (key) =>
+        key === "versionId" ||
+        key === "config" ||
+        key === "confirmedCapabilities" ||
+        key === "enabled" ||
+        key === "priority"
+    )
+  ) {
+    return false;
+  }
+  if (!isNonEmptyString(value.versionId) || !isRecord(value.config)) return false;
+  if (
+    !Object.values(value.config).every(
+      (entry) =>
+        typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean"
+    )
+  ) {
+    return false;
+  }
+  if (
+    !Array.isArray(value.confirmedCapabilities) ||
+    !value.confirmedCapabilities.every(isNonEmptyString) ||
+    new Set(value.confirmedCapabilities).size !== value.confirmedCapabilities.length
+  ) {
+    return false;
+  }
+  return (
+    typeof value.enabled === "boolean" &&
+    typeof value.priority === "number" &&
+    Number.isSafeInteger(value.priority)
+  );
+}
+
+function isInstallValidationError(
+  error: unknown
+): error is { code: "invalid_config" | "capability_confirmation_mismatch" } {
+  return (
+    isRecord(error) &&
+    (error.code === "invalid_config" || error.code === "capability_confirmation_mismatch")
+  );
+}
 
 async function runInstallationCommand(
   request: Request,
@@ -365,7 +566,10 @@ async function resolveSession(
 
 async function resolveDashboard(
   request: Request,
-  route: Exclude<AdminRoute, "session" | "installationCommand" | { id: string }>,
+  route: Exclude<
+    AdminRoute,
+    "session" | "installationCommand" | "installPreview" | "installCreate" | { id: string }
+  >,
   url: URL,
   options: ControlPlaneHttpHandlerOptions,
   corsHeaders: Record<string, string> | undefined
@@ -596,18 +800,28 @@ function unauthorizedResponse(corsHeaders: Record<string, string> | undefined): 
 
 function preflightResponse(
   corsHeaders: Record<string, string> | undefined,
-  isInstallationCommand: boolean
+  methods: string
 ): Response {
   return new Response(null, {
     status: 204,
     headers: {
       ...corsHeaders,
       "Access-Control-Allow-Headers": "Authorization, Content-Type",
-      "Access-Control-Allow-Methods": isInstallationCommand ? "PATCH, OPTIONS" : "GET, OPTIONS",
+      "Access-Control-Allow-Methods": methods,
       "Access-Control-Max-Age": "600",
       "Cache-Control": "no-store"
     }
   });
+}
+
+function allowedMethods(route: AdminRoute): string {
+  if (route === "installationCommand") return "PATCH, OPTIONS";
+  if (route === "installCreate") return "POST, OPTIONS";
+  return "GET, OPTIONS";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function errorResponse(

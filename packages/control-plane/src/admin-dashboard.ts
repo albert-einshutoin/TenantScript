@@ -17,6 +17,7 @@ export interface AdminInstallationSummary {
 export interface AdminPluginVersionSummary {
   id: string;
   pluginId: string;
+  pluginKey: string;
   version: string;
   artifactHash: string;
 }
@@ -144,12 +145,11 @@ async function readPluginVersions(
   const rows = await db
     .prepare(
       [
-        "SELECT DISTINCT pv.id, pv.plugin_id, pv.version, pv.artifact_hash",
+        "SELECT pv.id, pv.plugin_id, p.key AS plugin_key, pv.version, pv.artifact_hash",
         "FROM plugin_versions pv",
         "JOIN plugins p ON p.id = pv.plugin_id",
-        "JOIN installations i ON i.plugin_version_id = pv.id",
-        "JOIN tenants t ON t.id = i.tenant_id",
-        "WHERE t.id = ?1 AND t.app_id = ?2 AND p.app_id = t.app_id",
+        "JOIN tenants t ON t.id = ?1 AND t.app_id = p.app_id",
+        "WHERE p.app_id = ?2",
         "AND (?3 IS NULL OR pv.id > ?3)",
         "ORDER BY pv.id ASC LIMIT ?4"
       ].join(" ")
@@ -166,6 +166,7 @@ async function readPluginVersions(
     items: page.rows.map((row) => ({
       id: row.id,
       pluginId: row.plugin_id,
+      pluginKey: row.plugin_key,
       version: row.version,
       artifactHash: row.artifact_hash
     })),
@@ -371,6 +372,7 @@ interface InstallationSummaryRow {
 interface PluginVersionSummaryRow {
   id: string;
   plugin_id: string;
+  plugin_key: string;
   version: string;
   artifact_hash: string;
 }

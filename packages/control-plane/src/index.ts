@@ -173,6 +173,18 @@ export {
 } from "./slack-connection-store.js";
 
 export {
+  AdminInstallFlowError,
+  createD1AdminInstallFlowStore,
+  type AdminInstallCapability,
+  type AdminInstallConfigField,
+  type AdminInstallFlowStore,
+  type AdminInstallPreview,
+  type AdminInstallRequest,
+  type AdminInstallResult,
+  type D1AdminInstallFlowStoreOptions
+} from "./admin-install-flow.js";
+
+export {
   createControlPlaneHttpHandler,
   type AdminRole,
   type ControlPlaneHttpHandler,
