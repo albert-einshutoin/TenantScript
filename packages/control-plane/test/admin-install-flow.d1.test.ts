@@ -59,6 +59,7 @@ describe("D1 Admin install flow adapter", () => {
         appId: "app_1",
         tenantId: "tenant_1",
         actor: "manager",
+        idempotencyKey: "install-request-key-0001",
         versionId: "version_1",
         config: { channel: "C123" },
         confirmedCapabilities: ["slack.send"],
@@ -77,8 +78,8 @@ describe("D1 Admin install flow adapter", () => {
 
     expect(db.batch).toHaveBeenCalledTimes(1);
     const statements = db.batch.mock.calls[0]?.[0] ?? [];
-    const installationBindings = statementBindings(statements[0]);
-    const auditBindings = statementBindings(statements[1]);
+    const installationBindings = statementBindings(statements[1]);
+    const auditBindings = statementBindings(statements[2]);
     expect(installationBindings).toContain(JSON.stringify({ channel: "C123", retries: 3 }));
     expect(installationBindings).toContain(JSON.stringify({ "slack.send": { channel: "C123" } }));
     expect(auditBindings).toContain(
@@ -112,6 +113,7 @@ describe("D1 Admin install flow adapter", () => {
         appId: "app_1",
         tenantId: "tenant_1",
         actor: "manager",
+        idempotencyKey: "install-request-key-0002",
         versionId: "version_1",
         config,
         confirmedCapabilities,
@@ -129,6 +131,7 @@ describe("D1 Admin install flow adapter", () => {
         appId: "app_1",
         tenantId: "tenant_other",
         actor: "manager",
+        idempotencyKey: "install-request-key-0003",
         versionId: "version_1",
         config: {},
         confirmedCapabilities: [],
@@ -144,6 +147,7 @@ describe("D1 Admin install flow adapter", () => {
         appId: "app_1",
         tenantId: "tenant_1",
         actor: "manager",
+        idempotencyKey: "install-request-key-0004",
         versionId: "version_1",
         config: {},
         confirmedCapabilities: [],

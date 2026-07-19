@@ -32,6 +32,7 @@ export interface AdminInstallRequest {
   appId: string;
   tenantId: string;
   actor: string;
+  idempotencyKey: string;
   versionId: string;
   config: Record<string, unknown>;
   confirmedCapabilities: readonly string[];
@@ -60,7 +61,9 @@ export interface AdminInstallFlowStore {
 export class AdminInstallFlowError extends Error {
   override readonly name = "AdminInstallFlowError";
 
-  constructor(readonly code: "invalid_config" | "capability_confirmation_mismatch") {
+  constructor(
+    readonly code: "invalid_config" | "capability_confirmation_mismatch" | "idempotency_key_reused"
+  ) {
     super(code);
   }
 }
@@ -94,6 +97,11 @@ async function install(
   request: AdminInstallRequest,
   options: D1AdminInstallFlowStoreOptions
 ): Promise<AdminInstallResult | null> {
+  const now = options.now?.() ?? new Date();
+  const requestHash = await installRequestHash(request);
+  const replay = await readIdempotencyRecord(db, request, now);
+  if (replay !== null) return resolveReplay(replay, requestHash);
+
   const row = await db
     .prepare(
       [
@@ -129,7 +137,21 @@ async function install(
     configFields,
     capabilities: expectedCapabilities
   };
+  const result: AdminInstallResult = {
+    id,
+    versionId: row.id,
+    pluginKey: row.plugin_key,
+    version: row.version,
+    enabled: request.enabled,
+    priority: request.priority,
+    revision: 0
+  };
   const statements = [
+    db
+      .prepare(
+        "DELETE FROM admin_install_idempotency WHERE app_id = ?1 AND tenant_id = ?2 AND idempotency_key = ?3 AND expires_at <= ?4"
+      )
+      .bind(request.appId, request.tenantId, request.idempotencyKey, now.toISOString()),
     db
       .prepare(
         [
@@ -166,22 +188,98 @@ async function install(
         "installation.install",
         "{}",
         JSON.stringify(after),
-        (options.now?.() ?? new Date()).toISOString()
+        now.toISOString()
+      ),
+    db
+      .prepare(
+        [
+          "INSERT INTO admin_install_idempotency",
+          "(app_id, tenant_id, idempotency_key, actor, request_hash, result_json, created_at, expires_at)",
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        ].join(" ")
+      )
+      .bind(
+        request.appId,
+        request.tenantId,
+        request.idempotencyKey,
+        request.actor,
+        requestHash,
+        JSON.stringify(result),
+        now.toISOString(),
+        new Date(now.getTime() + installIdempotencyRetentionMs).toISOString()
       )
   ];
 
   // D1 batch is a database transaction. The installation must never survive without its audit,
   // so fail closed when a non-D1 adapter lacks this atomic primitive instead of doing two writes.
-  await requireBatch(db)(statements);
-  return {
-    id,
-    versionId: row.id,
-    pluginKey: row.plugin_key,
-    version: row.version,
+  try {
+    await requireBatch(db)(statements);
+    return result;
+  } catch (error) {
+    // A concurrent request with the same tenant-scoped key may have committed first. D1 batch
+    // rollback prevents this request's installation/audit from surviving; recover the winner.
+    const winner = await readIdempotencyRecord(db, request, now);
+    if (winner !== null) return resolveReplay(winner, requestHash);
+    throw error;
+  }
+}
+
+const installIdempotencyRetentionMs = 24 * 60 * 60 * 1000;
+
+interface InstallIdempotencyRow {
+  request_hash: string;
+  result_json: string;
+  expires_at: string;
+}
+
+async function readIdempotencyRecord(
+  db: D1DatabaseLike,
+  request: AdminInstallRequest,
+  now: Date
+): Promise<InstallIdempotencyRow | null> {
+  const row = await db
+    .prepare(
+      "SELECT request_hash, result_json, expires_at FROM admin_install_idempotency WHERE app_id = ?1 AND tenant_id = ?2 AND idempotency_key = ?3"
+    )
+    .bind(request.appId, request.tenantId, request.idempotencyKey)
+    .first<InstallIdempotencyRow>();
+  return row !== null && Date.parse(row.expires_at) > now.getTime() ? row : null;
+}
+
+function resolveReplay(row: InstallIdempotencyRow, requestHash: string): AdminInstallResult {
+  if (row.request_hash !== requestHash) {
+    throw new AdminInstallFlowError("idempotency_key_reused");
+  }
+  const result: unknown = JSON.parse(row.result_json);
+  if (!isAdminInstallResult(result)) throw new Error("invalid install idempotency record");
+  return result;
+}
+
+async function installRequestHash(request: AdminInstallRequest): Promise<string> {
+  const canonical = JSON.stringify({
+    versionId: request.versionId,
+    config: Object.fromEntries(
+      Object.entries(request.config).sort(([left], [right]) => left.localeCompare(right))
+    ),
+    confirmedCapabilities: [...request.confirmedCapabilities].sort(),
     enabled: request.enabled,
-    priority: request.priority,
-    revision: 0
-  };
+    priority: request.priority
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function isAdminInstallResult(value: unknown): value is AdminInstallResult {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.versionId === "string" &&
+    typeof value.pluginKey === "string" &&
+    typeof value.version === "string" &&
+    typeof value.enabled === "boolean" &&
+    Number.isSafeInteger(value.priority) &&
+    value.revision === 0
+  );
 }
 
 async function readVersionRow(
