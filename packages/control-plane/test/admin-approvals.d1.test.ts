@@ -111,7 +111,7 @@ function database(
   const db = {
     bindings,
     runCalls: 0,
-    prepare: (_query: string) => {
+    prepare: () => {
       const statement: D1PreparedStatementLike = {
         bind: (...values) => {
           bindings.push(values);
