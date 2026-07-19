@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createControlPlaneApi,
+  createControlPlaneHttpHandler,
   createDurableObjectDailyUsageCounter,
   createInMemoryDailyUsageCounter,
   createInMemoryExecutionLogStore,
@@ -14,6 +15,48 @@ import {
 } from "../src/index.js";
 
 describe("control-plane security suite", () => {
+  it("allows only explicitly configured Admin UI origins", async () => {
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({}),
+      allowedOrigins: ["https://admin.example.com"]
+    });
+
+    const allowed = await handler(
+      new Request("https://api.example.com/v1/session", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://admin.example.com",
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "Authorization"
+        }
+      })
+    );
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get("access-control-allow-origin")).toBe(
+      "https://admin.example.com"
+    );
+    expect(allowed.headers.get("access-control-allow-headers")).toContain("Authorization");
+
+    const denied = await handler(
+      new Request("https://api.example.com/v1/session", {
+        headers: {
+          Authorization: "Bearer secret-token",
+          Origin: "https://attacker.example"
+        }
+      })
+    );
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+    expect(await denied.text()).not.toContain("secret-token");
+
+    expect(() =>
+      createControlPlaneHttpHandler({
+        identityResolver: createStaticTokenIdentityResolver({}),
+        allowedOrigins: ["*"]
+      })
+    ).toThrow("wildcard origins are not allowed");
+  });
+
   it("does not return another tenant's execution logs when scoped by tenant", () => {
     const store = createInMemoryExecutionLogStore();
 
