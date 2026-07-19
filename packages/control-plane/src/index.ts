@@ -216,6 +216,16 @@ export {
 } from "./execution-archive.js";
 
 export {
+  createAuditExportService,
+  verifyAuditExport,
+  type AuditExportManifest,
+  type AuditExportRequest,
+  type AuditExportResult,
+  type AuditExportService,
+  type AuditExportServiceOptions
+} from "./audit-export.js";
+
+export {
   createDurableObjectSecretStore,
   createInMemorySecretStore,
   type PutSecretRequest,
