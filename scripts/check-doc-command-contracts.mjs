@@ -24,6 +24,8 @@ function markdownFiles(repoRoot) {
   if (existsSync(contributing)) files.push(contributing);
   const readme = join(repoRoot, "README.md");
   if (existsSync(readme)) files.push(readme);
+  const agentOnboarding = join(repoRoot, "llms.txt");
+  if (existsSync(agentOnboarding)) files.push(agentOnboarding);
   return files;
 }
 

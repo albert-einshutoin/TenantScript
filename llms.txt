@@ -1,0 +1,87 @@
+# TenantScript
+
+> TenantScript is a Cloudflare-native, self-hosted OSS control plane for running tenant-scoped
+> plugins, webhook transformations, approval workflows, notification rules, and API policies with
+> explicit capabilities, audit evidence, versioning, and rollback.
+
+This file is a compact map for coding agents and contributors. Follow the linked public repository
+sources instead of inferring architecture or live deployment details.
+
+## Start here
+
+- [Project status and documentation map](README.md)
+- [Contribution workflow and quality gates](CONTRIBUTING.md)
+- [Repository agent guardrails](AGENTS.md)
+- [Security reporting policy](SECURITY.md)
+- [Product direction and decisions](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md)
+- [Phase plan and package boundaries](tasks/README.md)
+- [Architecture Decision Records](docs/adr/README.md)
+
+## Runtime posture
+
+TenantScript targets TypeScript on Cloudflare Workers. Dynamic Workers is the preferred Phase 0
+candidate, but the final runtime decision is blocked until paid-plan live benchmark evidence is
+available. Local tests, workerd-backed security tests, dry-run deployment, and Tier 1 CI remain
+accountless. Do not claim the runtime ADR is accepted or invent live performance results.
+
+Use these sources for the current boundary:
+
+- [Runtime primitive ADR](docs/adr/001-runtime-primitive.md)
+- [Phase 0 benchmark status](docs/benchmarks/phase0.md)
+- [Security suite threat map](docs/security/security-suite-v2.md)
+- [Known environment limitations](README.md#既知の環境制約)
+
+## Working examples
+
+- [Zero-integration proxy quickstart](docs/quickstarts/zero-integration-proxy-mode.md)
+- [Typed SDK integration quickstart](docs/quickstarts/sdk-integration.md)
+- [Public SDK reference](docs/reference/sdk.md)
+- [Schema compatibility in CI](docs/reference/schema-diff-ci.md)
+- [Rollback operations](docs/operations/rollback-troubleshooting.md)
+
+Quickstart snippets are executable contracts. Update their linked tests in the same change; do not
+copy snippets into a second source of truth.
+
+## Public code entrypoints
+
+- [Manifest parsing and grant resolution](packages/manifest/src/index.ts)
+- [Host integration SDK](packages/host-sdk/src/index.ts)
+- [Plugin authoring SDK](packages/plugin-sdk/src/index.ts)
+- [Sandboxed plugin loader](packages/loader/src/index.ts)
+- [Capability broker](packages/capabilities/src/index.ts)
+- [Control-plane API and domain behavior](packages/control-plane/src/index.ts)
+- [Zero-integration proxy](packages/proxy/src/index.ts)
+- [Developer CLI](packages/cli/src/index.ts)
+- [Example SaaS composition root](apps/example-saas/src/index.ts)
+- [Admin UI composition root](apps/admin-ui/src/App.tsx)
+
+Import public package exports. Do not reach into another workspace's private source path or reverse
+the dependency direction documented in the phase plan.
+
+## Safe contribution workflow
+
+Use GitHub Flow from `main` and keep one issue per focused pull request. Behavior changes follow
+RED -> GREEN -> REFACTOR: prove the missing behavior with a failing test, implement the smallest
+complete contract, then improve structure while tests stay green. Security boundaries require
+adversarial coverage for tenant isolation, capabilities, secrets, egress, approvals, and audit.
+
+```sh
+# cwd: repository root
+# expected-exit: 0
+corepack enable
+pnpm install --frozen-lockfile
+pnpm verify
+git diff --check
+```
+
+`pnpm verify` is the canonical local gate: typecheck, lint, behavior tests, coverage, security
+tests, high-severity dependency audit, and formatting. Resolve every actionable review thread and
+wait for the required `accountless quality gate` before merge.
+
+## Credential and live-test boundary
+
+Tier 1 is fork-safe and must not require Cloudflare, npm, or GitHub write credentials. Tier 2 live
+checks use maintainer-controlled credentials and are not required for fork pull requests. Do not
+add credentials, account IDs, customer data, private URLs, database dumps, or machine-local paths
+to code, fixtures, logs, issues, or documentation. Never convert a missing paid account or npm
+scope into a local test bypass.

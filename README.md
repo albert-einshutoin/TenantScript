@@ -22,6 +22,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Security suite v2 threat map](docs/security/security-suite-v2.md) — Phase 1攻撃面、常設テスト、依存境界CI
 - [Security policy](SECURITY.md) — supported versions、非公開の脆弱性報告窓口、対応SLA
 - [Usage meter運用契約](docs/operations/usage-meter.md) — Analytics Engine固定schema、fail-open、UTC期間集計
+- [Agent onboarding](llms.txt) — 公開docs、package entrypoint、TDD、credential境界の短い索引
 
 ## ローカル検証とCI
 
