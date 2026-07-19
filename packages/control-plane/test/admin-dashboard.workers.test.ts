@@ -250,6 +250,50 @@ describe("D1 Admin dashboard read model", () => {
       ).resolves.toBeNull();
     }
   });
+
+  it("uses a revision CAS, appends a structured audit event, and leaves stale writes unaudited", async () => {
+    await seedDashboard();
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
+      auditId: () => "admin_audit_command_1"
+    });
+    const updated = await commands.updateInstallation({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: "manager\"subject",
+      id: "tenant_1_installation_a",
+      expectedRevision: 0,
+      enabled: false
+    });
+    expect(updated).toMatchObject({ outcome: "updated", enabled: false, priority: 10, revision: 1 });
+    await expect(
+      testEnv.DB
+        .prepare(
+          "SELECT actor, action, before_json, after_json FROM admin_audit_events WHERE id = ?"
+        )
+        .bind("admin_audit_command_1")
+        .first<{ actor: string; action: string; before_json: string; after_json: string }>()
+    ).resolves.toEqual({
+      actor: 'manager"subject',
+      action: "installation.command",
+      before_json: '{"enabled":true,"priority":10,"revision":0}',
+      after_json: '{"enabled":false,"priority":10,"revision":1}'
+    });
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).resolves.toEqual({ outcome: "conflict", id: "tenant_1_installation_a", revision: 1 });
+    await expect(
+      testEnv.DB
+        .prepare("SELECT COUNT(*) AS count FROM admin_audit_events")
+        .first<{ count: number }>()
+    ).resolves.toEqual({ count: 1 });
+  });
 });
 
 async function seedDashboard(): Promise<void> {

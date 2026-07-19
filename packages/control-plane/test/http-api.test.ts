@@ -338,6 +338,45 @@ describe("Control Plane installation permission review contract", () => {
 });
 
 describe("Control Plane installation command contract", () => {
+  it("requires a matching revision and exposes a common conflict response without a mutation audit", async () => {
+    const commandStore = {
+      updateInstallation: vi.fn().mockResolvedValue({
+        outcome: "conflict",
+        id: "inst_1",
+        revision: 4
+      })
+    };
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationCommandStore: commandStore,
+      allowedOrigins: [allowedOrigin]
+    });
+    const missingRevision = await handler(
+      commandRequest("manager-secret-token", { id: "inst_1", enabled: false })
+    );
+    expect(missingRevision.status).toBe(400);
+
+    const conflict = await handler(
+      commandRequest("manager-secret-token", {
+        id: "inst_1",
+        expectedRevision: 3,
+        enabled: false
+      })
+    );
+    expect(conflict.status).toBe(409);
+    await expect(conflict.json()).resolves.toEqual({
+      error: { code: "installation_revision_conflict", message: "installation changed; refresh" }
+    });
+    expect(commandStore.updateInstallation).toHaveBeenCalledWith({
+      appId: "app_acme",
+      tenantId: "tenant_acme",
+      actor: "ops-manager",
+      id: "inst_1",
+      expectedRevision: 3,
+      enabled: false
+    });
+  });
+
   it("lets only a manager issue a scoped command and derives every audit field from identity", async () => {
     const commandStore = {
       updateInstallation: vi.fn().mockResolvedValue({
@@ -500,6 +539,40 @@ describe("Control Plane installation command contract", () => {
     );
     expect(response.status).toBe(405);
     expect(response.headers.get("allow")).toBe("PATCH, OPTIONS");
+  });
+
+  it("rejects chunked command bodies over 16KiB and cancels their stream before mutation", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"id":"inst_1","expectedRevision":0,"enabled":'));
+        controller.enqueue(new Uint8Array(16 * 1024));
+        controller.close();
+      },
+      cancel() {
+        cancelled = true;
+      }
+    });
+    const commandStore = { updateInstallation: vi.fn() };
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationCommandStore: commandStore,
+      allowedOrigins: [allowedOrigin]
+    });
+    const request = new Request("https://api.example.com/v1/admin/installation-command", {
+      method: "PATCH",
+      headers: {
+        Authorization: "Bearer manager-secret-token",
+        Origin: allowedOrigin,
+        "Content-Type": "application/json"
+      },
+      body,
+      duplex: "half"
+    } as RequestInit);
+    const response = await handler(request);
+    expect(response.status).toBe(413);
+    expect(cancelled).toBe(true);
+    expect(commandStore.updateInstallation).not.toHaveBeenCalled();
   });
 });
 

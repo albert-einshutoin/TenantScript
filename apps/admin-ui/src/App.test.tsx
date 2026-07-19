@@ -209,6 +209,32 @@ describe("Admin UI auth foundation", () => {
     expect(screen.queryByText(/secret-config|customer payload/)).not.toBeInTheDocument();
   });
 
+  it("holds a single global installation command lock across row changes until a deferred request settles", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const deferredCommand = deferred<{ id: string; enabled: boolean; priority: number; revision: number }>();
+    const updateInstallationCommand = vi.fn().mockReturnValue(deferredCommand.promise);
+    render(<App client={{ ...baseClient, updateInstallationCommand }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+
+    await waitFor(() => {
+      expect(updateInstallationCommand).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByRole("button", { name: "Manage payload-transformer" })).toBeDisabled();
+    await act(async () => {
+      deferredCommand.resolve({ id: "inst_large_invoice", enabled: false, priority: 10, revision: 1 });
+      await deferredCommand.promise;
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Manage payload-transformer" })).toBeEnabled();
+    });
+  });
+
   it("redacts permission-review failures", async () => {
     const baseClient = createDemoAdminApiClient();
     const client: AdminApiClient = {
