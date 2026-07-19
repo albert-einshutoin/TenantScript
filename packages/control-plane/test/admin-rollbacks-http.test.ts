@@ -97,9 +97,14 @@ function createHandler(store: ReturnType<typeof rollbackStore>) {
         tenantId: "tenant_acme"
       }
     }),
-    rollbackStore: store
+    rollbackStore: store,
+    adminMutationRateLimiter: allowAdminMutation
   });
 }
+
+const allowAdminMutation = {
+  reserve: () => Promise.resolve({ allowed: true as const, remaining: 999 })
+};
 
 function rollbackStore() {
   return {

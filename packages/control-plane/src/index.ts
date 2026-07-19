@@ -200,6 +200,18 @@ export {
 } from "./http-api.js";
 
 export {
+  createAdminMutationRateLimiter,
+  createDurableObjectAdminMutationRateLimitStore,
+  evaluateFixedWindowReservation,
+  parseAdminMutationRateLimitConfiguration,
+  type AdminMutationFamily,
+  type AdminMutationRateLimiter,
+  type AdminMutationRateLimitRequest,
+  type AdminMutationRateLimitResult,
+  type AdminMutationRateLimitStore
+} from "./admin-mutation-rate-limit.js";
+
+export {
   createD1AdminDashboardStore,
   createAdminCursorCodec,
   type AdminApprovalSummary,

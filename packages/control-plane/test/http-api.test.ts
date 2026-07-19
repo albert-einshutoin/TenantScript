@@ -350,6 +350,7 @@ describe("Control Plane installation command contract", () => {
     const handler = createControlPlaneHttpHandler({
       identityResolver: createIdentityResolver(),
       installationCommandStore: commandStore,
+      adminMutationRateLimiter: allowAdminMutation,
       allowedOrigins: [allowedOrigin]
     });
     const missingRevision = await handler(
@@ -405,6 +406,7 @@ describe("Control Plane installation command contract", () => {
         }
       }),
       installationCommandStore: commandStore,
+      adminMutationRateLimiter: allowAdminMutation,
       allowedOrigins: [allowedOrigin]
     });
 
@@ -446,6 +448,7 @@ describe("Control Plane installation command contract", () => {
     const handler = createControlPlaneHttpHandler({
       identityResolver: createIdentityResolver(),
       installationCommandStore: commandStore,
+      adminMutationRateLimiter: allowAdminMutation,
       allowedOrigins: [allowedOrigin]
     });
     const headers = {
@@ -523,6 +526,7 @@ describe("Control Plane installation command contract", () => {
     const handler = createControlPlaneHttpHandler({
       identityResolver: createIdentityResolver(),
       installationCommandStore: commandStore,
+      adminMutationRateLimiter: allowAdminMutation,
       allowedOrigins: [allowedOrigin]
     });
     for (const id of ["missing", "other-tenant", "cross-app"]) {
@@ -624,6 +628,10 @@ function createHandler() {
     allowedOrigins: [allowedOrigin]
   });
 }
+
+const allowAdminMutation = {
+  reserve: () => Promise.resolve({ allowed: true as const, remaining: 999 })
+};
 
 function createIdentityResolver() {
   return createStaticTokenIdentityResolver({

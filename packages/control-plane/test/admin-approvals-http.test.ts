@@ -69,9 +69,14 @@ function createHandler(store: ReturnType<typeof decisionStore>) {
       }
     }),
     approvalDecisionStore: store,
+    adminMutationRateLimiter: allowAdminMutation,
     allowedOrigins: ["https://admin.example.com"]
   });
 }
+
+const allowAdminMutation = {
+  reserve: () => Promise.resolve({ allowed: true as const, remaining: 999 })
+};
 
 function decisionStore() {
   return {

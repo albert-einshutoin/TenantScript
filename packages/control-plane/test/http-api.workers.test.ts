@@ -110,4 +110,51 @@ describe("Control Plane Worker Admin HTTP transport", () => {
       testEnv.DB.prepare("SELECT COUNT(*) AS count FROM approval_audit_events").first()
     ).resolves.toEqual({ count: 1 });
   });
+
+  it("atomically limits concurrent tenant-scoped mutations without extra audit writes", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.createApp({ id: "app_worker", name: "Worker App" });
+    await store.createTenant({ id: "tenant_worker", appId: "app_worker", name: "Worker Tenant" });
+    await store.createPlugin({ id: "plugin_worker", appId: "app_worker", key: "worker-plugin" });
+    for (let index = 0; index < 10; index += 1) {
+      await store.createApproval({
+        id: `approval_rate_${String(index)}`,
+        tenantId: "tenant_worker",
+        pluginId: "plugin_worker",
+        role: "manager",
+        subject: {},
+        resumeHook: "approval.decided",
+        state: "pending",
+        expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+        createdAt: new Date("2026-07-20T00:00:00.000Z")
+      });
+    }
+
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        worker.default.fetch(
+          new Request("https://control-plane.example.com/v1/admin/approval-decisions", {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer worker-manager-token",
+              Origin: "https://admin.example.com",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              approvalId: `approval_rate_${String(index)}`,
+              decision: "rejected"
+            })
+          })
+        )
+      )
+    );
+
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(2);
+    const limited = responses.filter((response) => response.status === 429);
+    expect(limited).toHaveLength(8);
+    expect(limited.every((response) => response.headers.has("Retry-After"))).toBe(true);
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM approval_audit_events").first()
+    ).resolves.toEqual({ count: 2 });
+  });
 });

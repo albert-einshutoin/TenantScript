@@ -233,7 +233,8 @@ export class AdminApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
-    message: string
+    message: string,
+    readonly retryAfterSeconds?: number
   ) {
     super(message);
   }
@@ -1125,12 +1126,21 @@ async function fetchAdminJson(
       throw new AdminApiError(
         response.status,
         envelope.data.error.code,
-        envelope.data.error.message
+        envelope.data.error.message,
+        retryAfterSeconds(response)
       );
     }
     throw new AdminApiError(response.status, "http_error", "control-plane request failed");
   }
   return payload;
+}
+
+function retryAfterSeconds(response: Response): number | undefined {
+  if (response.status !== 429) return undefined;
+  const value = response.headers.get("Retry-After");
+  if (value === null || !/^[1-9]\d*$/u.test(value)) return undefined;
+  const seconds = Number(value);
+  return Number.isSafeInteger(seconds) && seconds <= 86_400 ? seconds : undefined;
 }
 
 function requireCredential(credential: string | undefined): string {
