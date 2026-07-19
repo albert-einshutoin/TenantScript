@@ -24,13 +24,17 @@ function withRepo(run) {
   try {
     mkdirSync(join(repoRoot, "docs", "security", "reviews"), { recursive: true });
     mkdirSync(join(repoRoot, "evidence"), { recursive: true });
+    mkdirSync(join(repoRoot, "packages", "loader"), { recursive: true });
+    mkdirSync(join(repoRoot, "packages", "capabilities"), { recursive: true });
     writeFileSync(join(repoRoot, "evidence", "review.txt"), "sanitized review evidence\n");
+    writeFileSync(join(repoRoot, "packages", "loader", "index.ts"), "export {};\n");
+    writeFileSync(join(repoRoot, "packages", "capabilities", "index.ts"), "export {};\n");
     execFileSync("git", ["init", "-q"], { cwd: repoRoot });
     execFileSync("git", ["config", "user.email", "review-test@example.invalid"], {
       cwd: repoRoot
     });
     execFileSync("git", ["config", "user.name", "Review Test"], { cwd: repoRoot });
-    execFileSync("git", ["add", "evidence/review.txt"], { cwd: repoRoot });
+    execFileSync("git", ["add", "."], { cwd: repoRoot });
     execFileSync("git", ["commit", "-q", "-m", "test baseline"], { cwd: repoRoot });
     const baselineCommit = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: repoRoot,
@@ -65,6 +69,21 @@ test("rejects a mutable or missing review baseline", () => {
 
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /baselineCommit must be a full 40-character commit SHA/);
+  });
+});
+
+test("rejects review scope outside the repository or absent from the baseline", () => {
+  withRepo((repoRoot, baselineCommit) => {
+    writeCampaign(repoRoot, {
+      ...preparedCampaign(baselineCommit),
+      scope: ["../private-review", "packages/missing"]
+    });
+
+    const result = runChecker(repoRoot);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /scope must stay inside the repository: \.\.\/private-review/);
+    assert.match(result.stderr, /scope does not exist: packages\/missing/);
   });
 });
 
