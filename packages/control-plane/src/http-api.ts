@@ -15,6 +15,7 @@ import type {
 import { AdminInstallFlowError, type AdminInstallFlowStore } from "./admin-install-flow.js";
 import { AdminRollbackError, type AdminRollbackStore } from "./admin-rollbacks.js";
 import type { AdminMutationFamily, AdminMutationRateLimiter } from "./admin-mutation-rate-limit.js";
+import { UsageMeterQueryError, type UsageMeter } from "./usage-meter.js";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -35,6 +36,7 @@ export interface ControlPlaneHttpHandlerOptions {
   executionDetailStore?: AdminExecutionDetailStore;
   approvalDecisionStore?: AdminApprovalDecisionStore;
   adminMutationRateLimiter?: AdminMutationRateLimiter;
+  usageMeter?: UsageMeter;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -124,6 +126,9 @@ export function createControlPlaneHttpHandler(
     if (route === "executionDetail") {
       return resolveExecutionDetail(request, url, options, corsHeaders);
     }
+    if (route === "usage") {
+      return resolveUsage(request, url, options, corsHeaders);
+    }
     if (typeof route === "object") {
       return resolveInstallationDetail(request, route.id, options, corsHeaders);
     }
@@ -139,6 +144,7 @@ type AdminRoute =
   | "installCreate"
   | "rollbackCreate"
   | "executionDetail"
+  | "usage"
   | "approvalDecisionCreate"
   | AdminDashboardSection
   | { id: string };
@@ -170,6 +176,9 @@ function adminRoute(url: URL): AdminRoute | null {
   if (path === "/v1/admin/execution-detail") {
     return "executionDetail";
   }
+  if (path === "/v1/admin/usage") {
+    return "usage";
+  }
   if (path === "/v1/admin/approval-decisions") {
     return "approvalDecisionCreate";
   }
@@ -182,6 +191,38 @@ function adminRoute(url: URL): AdminRoute | null {
 
 const maximumCommandBodyBytes = 16 * 1024;
 const maximumInstallBodyBytes = 64 * 1024;
+
+async function resolveUsage(
+  request: Request,
+  url: URL,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.usageMeter === undefined) {
+    return errorResponse(503, "usage_meter_unavailable", "usage service unavailable", corsHeaders);
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  const fromDate = url.searchParams.get("fromDate");
+  const toDate = url.searchParams.get("toDate");
+  if (fromDate === null || toDate === null) {
+    return errorResponse(400, "invalid_usage_query", "valid UTC date range required", corsHeaders);
+  }
+  const pluginId = url.searchParams.get("pluginId");
+  try {
+    const items = await options.usageMeter.getDailyUsageSummaries({
+      tenantId: identity.tenantId,
+      fromDate,
+      toDate,
+      ...(pluginId === null ? {} : { pluginId })
+    });
+    return jsonResponse(200, { items }, corsHeaders);
+  } catch (error) {
+    return error instanceof UsageMeterQueryError
+      ? errorResponse(400, error.code, "valid UTC date range required", corsHeaders)
+      : errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
 
 async function resolveInstallPreview(
   request: Request,
@@ -931,6 +972,7 @@ async function resolveDashboard(
     | "rollbackCreate"
     | "approvalDecisionCreate"
     | "executionDetail"
+    | "usage"
     | { id: string }
   >,
   url: URL,

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createAnalyticsEngineUsageSink,
   createAdminCursorCodec,
   createControlPlaneApi,
   createControlPlaneHttpHandler,
@@ -13,6 +14,7 @@ import {
   type AdminInstallFlowStore,
   type AdminRollbackStore,
   type DailyUsageRecord,
+  type AnalyticsEngineDataPoint,
   type ApprovalContinuationRequest,
   type ApprovalRecord,
   type ArtifactStore,
@@ -21,6 +23,39 @@ import {
 } from "../src/index.js";
 
 describe("control-plane security suite", () => {
+  it("writes only fixed billing fields and excludes payload, config, and secrets from usage data", async () => {
+    const points: AnalyticsEngineDataPoint[] = [];
+    const sink = createAnalyticsEngineUsageSink({
+      writeDataPoint: (point) => {
+        if (point !== undefined) points.push(point);
+      }
+    });
+    const hostileEvent = {
+      tenantId: "tenant_1",
+      pluginId: "plugin_1",
+      hookType: "event" as const,
+      status: "success" as const,
+      executions: 1 as const,
+      cpuMs: 5,
+      subrequests: 1,
+      workflowRuns: 0,
+      payload: "customer-payload",
+      config: "private-config",
+      secret: "provider-secret"
+    };
+
+    await sink.writeUsage(hostileEvent);
+
+    expect(points).toEqual([
+      {
+        indexes: ["tenant_1:plugin_1"],
+        blobs: ["tenant_1", "plugin_1", "event", "success"],
+        doubles: [1, 5, 1, 0]
+      }
+    ]);
+    expect(JSON.stringify(points)).not.toMatch(/customer-payload|private-config|provider-secret/);
+  });
+
   it("keeps rollback scope identity-derived and denies viewer or forged commands", async () => {
     const rollbackStore = {
       rollback: vi.fn<AdminRollbackStore["rollback"]>().mockResolvedValue({
