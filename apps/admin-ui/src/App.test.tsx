@@ -238,9 +238,7 @@ describe("Admin UI auth foundation", () => {
       target: { value: "20" }
     });
     fireEvent.click(screen.getByRole("button", { name: "Review installation" }));
-    expect(
-      screen.getByRole("dialog", { name: "Confirm plugin installation" })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Confirm plugin installation" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Confirm installation" }));
 
     await waitFor(() => {
@@ -253,7 +251,9 @@ describe("Admin UI auth foundation", () => {
       enabled: true,
       priority: 20
     });
-    expect(screen.queryByRole("dialog", { name: "Confirm plugin installation" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Confirm plugin installation" })
+    ).not.toBeInTheDocument();
   });
 
   it("does not expose install controls to viewers", async () => {
@@ -461,12 +461,8 @@ describe("Admin UI auth foundation", () => {
   it("shows a stable error boundary when the dashboard snapshot cannot load", async () => {
     const baseClient = createDemoAdminApiClient();
     const failingClient: AdminApiClient = {
-      resolveSession: baseClient.resolveSession,
-      getDashboard: () => Promise.reject(new Error("offline")),
-      getDashboardSection: baseClient.getDashboardSection,
-      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
-      updateInstallationCommand: baseClient.updateInstallationCommand,
-      clearSession: baseClient.clearSession
+      ...baseClient,
+      getDashboard: () => Promise.reject(new Error("offline"))
     };
     render(<App client={failingClient} />);
 
@@ -493,15 +489,13 @@ describe("Admin UI auth foundation", () => {
       ]
     });
     const client: AdminApiClient = {
-      resolveSession: baseClient.resolveSession,
+      ...baseClient,
       getDashboard: () =>
         Promise.resolve({
           ...initial,
           cursors: { installations: "signed.cursor" }
         }),
       getDashboardSection,
-      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
-      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: vi.fn()
     };
     render(<App client={client} />);
@@ -522,12 +516,9 @@ describe("Admin UI auth foundation", () => {
     const session = await baseClient.resolveSession({ token: "manager-token" });
     const initial = await baseClient.getDashboard(session);
     const client: AdminApiClient = {
-      resolveSession: baseClient.resolveSession,
+      ...baseClient,
       getDashboard: () => Promise.resolve({ ...initial, cursors: { executions: "signed.cursor" } }),
-      getDashboardSection: () => Promise.reject(new Error("SQL customer payload")),
-      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
-      updateInstallationCommand: baseClient.updateInstallationCommand,
-      clearSession: baseClient.clearSession
+      getDashboardSection: () => Promise.reject(new Error("SQL customer payload"))
     };
     render(<App client={client} />);
 
@@ -566,12 +557,8 @@ describe("Admin UI auth foundation", () => {
       ]
     };
     const client: AdminApiClient = {
-      resolveSession: baseClient.resolveSession,
-      getDashboard: () => Promise.resolve(snapshot),
-      getDashboardSection: baseClient.getDashboardSection,
-      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
-      updateInstallationCommand: baseClient.updateInstallationCommand,
-      clearSession: baseClient.clearSession
+      ...baseClient,
+      getDashboard: () => Promise.resolve(snapshot)
     };
     render(<App client={client} />);
 

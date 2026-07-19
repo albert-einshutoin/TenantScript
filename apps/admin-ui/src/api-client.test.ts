@@ -236,14 +236,17 @@ describe("Admin API environment selection", () => {
         })
       )
       .mockResolvedValueOnce(
-        Response.json({
-          id: "installation_new",
-          pluginKey: "invoice-notify",
-          version: "1.0.0",
-          enabled: true,
-          priority: 20,
-          revision: 0
-        }, { status: 201 })
+        Response.json(
+          {
+            id: "installation_new",
+            pluginKey: "invoice-notify",
+            version: "1.0.0",
+            enabled: true,
+            priority: 20,
+            revision: 0
+          },
+          { status: 201 }
+        )
       );
     const client = createAdminApiClient({
       isDevelopment: false,
@@ -277,8 +280,11 @@ describe("Admin API environment selection", () => {
     expect(installInit?.body).toBe(
       '{"versionId":"version_1","config":{"notifyChannel":"C123"},"confirmedCapabilities":["slack.send"],"enabled":true,"priority":20}'
     );
-    expect(String(installInit?.body)).not.toContain("tenantId");
-    expect(String(installInit?.body)).not.toContain("grants");
+    const installBody = installInit?.body;
+    expect(typeof installBody).toBe("string");
+    if (typeof installBody !== "string") throw new Error("expected JSON install body");
+    expect(installBody).not.toContain("tenantId");
+    expect(installBody).not.toContain("grants");
   });
 
   it("rejects install responses and previews that expose config or grant values", async () => {

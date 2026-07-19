@@ -6,6 +6,8 @@ import {
   type AdminSession,
   type DashboardSectionPage,
   type DashboardSnapshot,
+  type InstallPluginRequest,
+  type InstallPreview,
   type InstallationCommandRequest,
   type InstallationPermissionReview
 } from "./api-client.js";
@@ -114,7 +116,12 @@ function AdminShell({
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [commandInFlight, setCommandInFlight] = useState(false);
+  const [installPreview, setInstallPreview] = useState<InstallPreview | null>(null);
+  const [installLoading, setInstallLoading] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+  const [installInFlight, setInstallInFlight] = useState(false);
   const permissionRequest = useRef(0);
+  const installPreviewRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -230,6 +237,55 @@ function AdminShell({
     [client, session]
   );
 
+  const openInstallPreview = useCallback(
+    (versionId: string) => {
+      const requestId = installPreviewRequest.current + 1;
+      installPreviewRequest.current = requestId;
+      setInstallLoading(true);
+      setInstallError(null);
+      setInstallPreview(null);
+      void client
+        .getInstallPreview(versionId)
+        .then((preview) => {
+          if (installPreviewRequest.current === requestId) setInstallPreview(preview);
+        })
+        .catch(() => {
+          if (installPreviewRequest.current === requestId) {
+            setInstallError("Installation preview unavailable");
+          }
+        })
+        .finally(() => {
+          if (installPreviewRequest.current === requestId) setInstallLoading(false);
+        });
+    },
+    [client]
+  );
+
+  const installPlugin = useCallback(
+    async (request: InstallPluginRequest) => {
+      setInstallInFlight(true);
+      setInstallError(null);
+      try {
+        const installed = await client.installPlugin(request);
+        // Install results are not applied optimistically: refreshing also reconciles pagination,
+        // server defaults, and any concurrent installation changes in the tenant.
+        setSnapshot(await client.getDashboard(session));
+        setInstallPreview(null);
+        return installed;
+      } catch (cause) {
+        setInstallError(
+          cause instanceof AdminApiError && cause.code === "invalid_config"
+            ? "Configuration does not satisfy the plugin schema"
+            : "Plugin installation unavailable"
+        );
+        throw cause;
+      } finally {
+        setInstallInFlight(false);
+      }
+    },
+    [client, session]
+  );
+
   return (
     <section className="admin-layout">
       <aside className="sidebar" aria-label="TenantScript Admin navigation">
@@ -285,6 +341,12 @@ function AdminShell({
             onPermissionReview={openPermissionReview}
             onInstallationCommand={updateInstallation}
             commandInFlight={commandInFlight}
+            installPreview={installPreview}
+            installLoading={installLoading}
+            installError={installError}
+            onInstallPreview={openInstallPreview}
+            onInstall={installPlugin}
+            installInFlight={installInFlight}
           />
         )}
       </div>
@@ -311,7 +373,13 @@ function RoutePanel({
   permissionError,
   onPermissionReview,
   onInstallationCommand,
-  commandInFlight
+  commandInFlight,
+  installPreview,
+  installLoading,
+  installError,
+  onInstallPreview,
+  onInstall,
+  installInFlight
 }: {
   route: AdminRoute;
   session: AdminSession;
@@ -324,6 +392,12 @@ function RoutePanel({
   onPermissionReview: (id: string) => void;
   onInstallationCommand: (request: InstallationCommandRequest) => Promise<unknown>;
   commandInFlight: boolean;
+  installPreview: InstallPreview | null;
+  installLoading: boolean;
+  installError: string | null;
+  onInstallPreview: (versionId: string) => void;
+  onInstall: (request: InstallPluginRequest) => Promise<unknown>;
+  installInFlight: boolean;
 }) {
   switch (route) {
     case "overview":
@@ -349,10 +423,17 @@ function RoutePanel({
       return (
         <VersionsPanel
           snapshot={snapshot}
+          canInstall={session.role === "manager"}
           loading={loadingSection === "pluginVersions"}
           onLoadMore={() => {
             onLoadMore("pluginVersions");
           }}
+          installPreview={installPreview}
+          installLoading={installLoading}
+          installError={installError}
+          onInstallPreview={onInstallPreview}
+          onInstall={onInstall}
+          installInFlight={installInFlight}
         />
       );
     case "approvals":
@@ -665,11 +746,25 @@ function PermissionReviewPanel({ review }: { review: InstallationPermissionRevie
 function VersionsPanel({
   snapshot,
   loading,
-  onLoadMore
+  onLoadMore,
+  canInstall,
+  installPreview,
+  installLoading,
+  installError,
+  onInstallPreview,
+  onInstall,
+  installInFlight
 }: {
   snapshot: DashboardSnapshot;
   loading: boolean;
   onLoadMore: () => void;
+  canInstall: boolean;
+  installPreview: InstallPreview | null;
+  installLoading: boolean;
+  installError: string | null;
+  onInstallPreview: (versionId: string) => void;
+  onInstall: (request: InstallPluginRequest) => Promise<unknown>;
+  installInFlight: boolean;
 }) {
   return (
     <section className="data-panel">
@@ -681,14 +776,30 @@ function VersionsPanel({
               <th>Plugin</th>
               <th>Version</th>
               <th>Artifact</th>
+              {canInstall ? <th>Install</th> : null}
             </tr>
           </thead>
           <tbody>
             {snapshot.pluginVersions.map((version) => (
               <tr key={version.id}>
-                <td>{version.pluginId}</td>
+                <td>{version.pluginKey}</td>
                 <td>{version.version}</td>
                 <td className="mono-cell">{version.artifactHash}</td>
+                {canInstall ? (
+                  <td>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        onInstallPreview(version.id);
+                      }}
+                      disabled={installInFlight || installLoading}
+                      aria-label={`Install ${version.pluginKey} ${version.version}`}
+                    >
+                      Install
+                    </button>
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -700,8 +811,226 @@ function VersionsPanel({
         loading={loading}
         onClick={onLoadMore}
       />
+      {installLoading ? <div className="loading-panel">Loading installation preview</div> : null}
+      {installError === null ? null : <p className="form-error">{installError}</p>}
+      {installPreview === null ? null : (
+        <InstallFlowPanel
+          key={installPreview.versionId}
+          preview={installPreview}
+          onInstall={onInstall}
+          installInFlight={installInFlight}
+        />
+      )}
     </section>
   );
+}
+
+function InstallFlowPanel({
+  preview,
+  onInstall,
+  installInFlight
+}: {
+  preview: InstallPreview;
+  onInstall: (request: InstallPluginRequest) => Promise<unknown>;
+  installInFlight: boolean;
+}) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [confirmedCapabilities, setConfirmedCapabilities] = useState<readonly string[]>([]);
+  const [enabled, setEnabled] = useState(false);
+  const [priority, setPriority] = useState("100");
+  const [confirming, setConfirming] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const parsed = parseInstallConfig(preview, values);
+  const parsedPriority = Number(priority);
+  const validPriority = priority.trim() !== "" && Number.isSafeInteger(parsedPriority);
+  const allCapabilitiesConfirmed = preview.capabilities.every((capability) =>
+    confirmedCapabilities.includes(capability.name)
+  );
+  const canReview = parsed.ok && validPriority && allCapabilitiesConfirmed && !installInFlight;
+
+  const confirm = useCallback(() => {
+    if (!parsed.ok || !validPriority || !allCapabilitiesConfirmed || installInFlight) return;
+    setSubmitError(null);
+    void onInstall({
+      versionId: preview.versionId,
+      config: parsed.config,
+      confirmedCapabilities,
+      enabled,
+      priority: parsedPriority
+    })
+      .then(() => {
+        setConfirming(false);
+      })
+      .catch(() => {
+        setSubmitError("Plugin installation unavailable");
+      });
+  }, [
+    allCapabilitiesConfirmed,
+    confirmedCapabilities,
+    enabled,
+    installInFlight,
+    onInstall,
+    parsed,
+    parsedPriority,
+    preview.versionId,
+    validPriority
+  ]);
+
+  return (
+    <section className="data-panel" aria-label="Install plugin">
+      <PanelHeader title="Install plugin" detail={`${preview.pluginKey} ${preview.version}`} />
+      <p>
+        Egress:{" "}
+        {preview.egress.mode === "deny"
+          ? "denied"
+          : `${String(preview.egress.allowlistedHostCount)} allowlisted hosts`}
+      </p>
+      <h3>Configuration</h3>
+      {preview.configFields.length === 0 ? <p>No configuration required</p> : null}
+      {preview.configFields.map((field) => {
+        const label = `${field.name} (${field.required ? "required" : "optional"})`;
+        const value = values[field.name] ?? "";
+        return (
+          <label key={field.name} htmlFor={`install-config-${field.name}`}>
+            {label}
+            {field.type === "boolean" ? (
+              <select
+                id={`install-config-${field.name}`}
+                aria-label={label}
+                value={value}
+                onChange={(event) => {
+                  const nextValue = event.currentTarget.value;
+                  setValues((current) => ({ ...current, [field.name]: nextValue }));
+                }}
+              >
+                <option value="">{field.hasDefault ? "Use manifest default" : "Not set"}</option>
+                <option value="true">True</option>
+                <option value="false">False</option>
+              </select>
+            ) : (
+              <input
+                id={`install-config-${field.name}`}
+                aria-label={label}
+                type={field.type === "number" ? "number" : "text"}
+                value={value}
+                required={field.required}
+                onChange={(event) => {
+                  const nextValue = event.currentTarget.value;
+                  setValues((current) => ({ ...current, [field.name]: nextValue }));
+                }}
+              />
+            )}
+          </label>
+        );
+      })}
+      {!parsed.ok ? <p className="form-error">{parsed.message}</p> : null}
+      <h3>Requested capabilities</h3>
+      {preview.capabilities.length === 0 ? <p>No capabilities requested</p> : null}
+      {preview.capabilities.map((capability) => (
+        <label key={capability.name} htmlFor={`install-capability-${capability.name}`}>
+          <input
+            id={`install-capability-${capability.name}`}
+            type="checkbox"
+            aria-label={`Confirm ${capability.name}`}
+            checked={confirmedCapabilities.includes(capability.name)}
+            onChange={(event) => {
+              const checked = event.currentTarget.checked;
+              setConfirmedCapabilities((current) =>
+                checked
+                  ? [...current, capability.name]
+                  : current.filter((name) => name !== capability.name)
+              );
+            }}
+          />
+          Confirm {capability.name}
+          <span>
+            {capability.scopeKeys.join(", ") || "no scope keys"} ·{" "}
+            {capability.configReferences.length === 0
+              ? "static scope"
+              : `configured by ${capability.configReferences.join(", ")}`}
+          </span>
+        </label>
+      ))}
+      <label htmlFor="install-enabled">
+        <input
+          id="install-enabled"
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) => {
+            setEnabled(event.currentTarget.checked);
+          }}
+        />
+        Enable immediately
+      </label>
+      <label htmlFor="install-priority">
+        Installation priority
+        <input
+          id="install-priority"
+          inputMode="numeric"
+          value={priority}
+          onChange={(event) => {
+            setPriority(event.currentTarget.value);
+          }}
+        />
+      </label>
+      <button
+        type="button"
+        disabled={!canReview}
+        onClick={() => {
+          setConfirming(true);
+        }}
+      >
+        Review installation
+      </button>
+      {submitError === null ? null : <p className="form-error">{submitError}</p>}
+      {!confirming ? null : (
+        <div role="dialog" aria-modal="true" aria-label="Confirm plugin installation">
+          <p>
+            Install {preview.pluginKey} {preview.version} with {String(preview.capabilities.length)}{" "}
+            confirmed capabilities?
+          </p>
+          <button type="button" onClick={confirm} disabled={installInFlight}>
+            {installInFlight ? "Installing" : "Confirm installation"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirming(false);
+            }}
+            disabled={installInFlight}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function parseInstallConfig(
+  preview: InstallPreview,
+  values: Readonly<Record<string, string>>
+):
+  | { ok: true; config: Record<string, string | number | boolean> }
+  | { ok: false; message: string } {
+  const config: Record<string, string | number | boolean> = {};
+  for (const field of preview.configFields) {
+    const raw = values[field.name] ?? "";
+    if (raw === "") {
+      if (field.required) return { ok: false, message: `${field.name} is required` };
+      continue;
+    }
+    if (field.type === "number") {
+      const number = Number(raw);
+      if (!Number.isFinite(number)) return { ok: false, message: `${field.name} must be a number` };
+      config[field.name] = number;
+    } else if (field.type === "boolean") {
+      config[field.name] = raw === "true";
+    } else {
+      config[field.name] = raw;
+    }
+  }
+  return { ok: true, config };
 }
 
 function ApprovalsPanel({
