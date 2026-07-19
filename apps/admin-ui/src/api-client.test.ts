@@ -402,6 +402,94 @@ describe("Admin API environment selection", () => {
     );
   });
 
+  it("submits the minimal rollback command and validates correlated audit evidence", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          installationId: "inst_1",
+          pluginKey: "invoice-notify",
+          fromVersion: "1.3.0",
+          toVersion: "1.2.2",
+          revision: 4,
+          auditId: "audit_rollback_1",
+          completedAt: "2026-07-19T17:00:00.000Z"
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.rollbackInstallation({
+        installationId: "inst_1",
+        targetVersionId: "version_1_2_2",
+        expectedRevision: 3
+      })
+    ).resolves.toMatchObject({
+      auditId: "audit_rollback_1",
+      completedAt: new Date("2026-07-19T17:00:00.000Z")
+    });
+    const [url, init] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/rollbacks");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      installationId: "inst_1",
+      targetVersionId: "version_1_2_2",
+      expectedRevision: 3
+    });
+  });
+
+  it("rejects uncorrelated or storage-bearing rollback responses", async () => {
+    for (const payload of [
+      {
+        installationId: "other",
+        pluginKey: "invoice-notify",
+        fromVersion: "1.3.0",
+        toVersion: "1.2.2",
+        revision: 4,
+        auditId: "audit_1",
+        completedAt: "2026-07-19T17:00:00.000Z"
+      },
+      {
+        installationId: "inst_1",
+        pluginKey: "invoice-notify",
+        fromVersion: "1.3.0",
+        toVersion: "1.2.2",
+        revision: 4,
+        auditId: "audit_1",
+        completedAt: "2026-07-19T17:00:00.000Z",
+        config: { secret: "must-not-render" }
+      }
+    ]) {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(sessionPayload()))
+        .mockResolvedValueOnce(Response.json(payload));
+      const client = createAdminApiClient({
+        isDevelopment: false,
+        demoMode: false,
+        controlPlaneUrl: "https://api.example.com",
+        fetcher
+      });
+      await client.resolveSession({ token: "secret-token" });
+      await expect(
+        client.rollbackInstallation({
+          installationId: "inst_1",
+          targetVersionId: "version_1_2_2",
+          expectedRevision: 3
+        })
+      ).rejects.toEqual(
+        new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+      );
+    }
+  });
+
   it("rejects installation review responses that include storage values", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -485,7 +573,8 @@ describe("Admin API environment selection", () => {
               pluginId: "p1",
               pluginKey: "invoice-notify",
               version: "1.0.0",
-              artifactHash: "hash"
+              artifactHash: "hash",
+              createdAt: "2026-07-19T00:00:00.000Z"
             }
           ],
           nextCursor: "next.version"

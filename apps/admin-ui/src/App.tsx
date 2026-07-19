@@ -9,7 +9,9 @@ import {
   type InstallPluginRequest,
   type InstallPreview,
   type InstallationCommandRequest,
-  type InstallationPermissionReview
+  type InstallationPermissionReview,
+  type RollbackInstallationRequest,
+  type RollbackInstallationResult
 } from "./api-client.js";
 import type { AdminDashboardSection } from "@tenantscript/control-plane";
 import { type AdminRoute, useHashRoute } from "./router.js";
@@ -120,6 +122,7 @@ function AdminShell({
   const [installLoading, setInstallLoading] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
   const [installInFlight, setInstallInFlight] = useState(false);
+  const [rollbackInFlight, setRollbackInFlight] = useState(false);
   const permissionRequest = useRef(0);
   const installPreviewRequest = useRef(0);
 
@@ -286,6 +289,31 @@ function AdminShell({
     [client, session]
   );
 
+  const rollbackInstallation = useCallback(
+    async (request: RollbackInstallationRequest) => {
+      setRollbackInFlight(true);
+      try {
+        const result = await client.rollbackInstallation(request);
+        // A fresh snapshot is the completion signal: it proves the current pin changed on the
+        // server and avoids presenting a local optimistic version as an operational rollback.
+        setSnapshot(await client.getDashboard(session));
+        return result;
+      } catch (cause) {
+        if (
+          cause instanceof AdminApiError &&
+          cause.status === 409 &&
+          cause.code === "installation_revision_conflict"
+        ) {
+          setSnapshot(await client.getDashboard(session));
+        }
+        throw cause;
+      } finally {
+        setRollbackInFlight(false);
+      }
+    },
+    [client, session]
+  );
+
   return (
     <section className="admin-layout">
       <aside className="sidebar" aria-label="TenantScript Admin navigation">
@@ -347,6 +375,11 @@ function AdminShell({
             onInstallPreview={openInstallPreview}
             onInstall={installPlugin}
             installInFlight={installInFlight}
+            onRollback={rollbackInstallation}
+            rollbackInFlight={rollbackInFlight}
+            onViewExecutions={() => {
+              setRoute("executions");
+            }}
           />
         )}
       </div>
@@ -379,7 +412,10 @@ function RoutePanel({
   installError,
   onInstallPreview,
   onInstall,
-  installInFlight
+  installInFlight,
+  onRollback,
+  rollbackInFlight,
+  onViewExecutions
 }: {
   route: AdminRoute;
   session: AdminSession;
@@ -398,6 +434,9 @@ function RoutePanel({
   onInstallPreview: (versionId: string) => void;
   onInstall: (request: InstallPluginRequest) => Promise<unknown>;
   installInFlight: boolean;
+  onRollback: (request: RollbackInstallationRequest) => Promise<RollbackInstallationResult>;
+  rollbackInFlight: boolean;
+  onViewExecutions: () => void;
 }) {
   switch (route) {
     case "overview":
@@ -434,6 +473,10 @@ function RoutePanel({
           onInstallPreview={onInstallPreview}
           onInstall={onInstall}
           installInFlight={installInFlight}
+          tenantId={session.tenantId}
+          onRollback={onRollback}
+          rollbackInFlight={rollbackInFlight}
+          onViewExecutions={onViewExecutions}
         />
       );
     case "approvals":
@@ -753,7 +796,11 @@ function VersionsPanel({
   installError,
   onInstallPreview,
   onInstall,
-  installInFlight
+  installInFlight,
+  tenantId,
+  onRollback,
+  rollbackInFlight,
+  onViewExecutions
 }: {
   snapshot: DashboardSnapshot;
   loading: boolean;
@@ -765,7 +812,39 @@ function VersionsPanel({
   onInstallPreview: (versionId: string) => void;
   onInstall: (request: InstallPluginRequest) => Promise<unknown>;
   installInFlight: boolean;
+  tenantId: string;
+  onRollback: (request: RollbackInstallationRequest) => Promise<RollbackInstallationResult>;
+  rollbackInFlight: boolean;
+  onViewExecutions: () => void;
 }) {
+  const [rollbackTarget, setRollbackTarget] = useState<{
+    installation: DashboardSnapshot["installations"][number];
+    version: DashboardSnapshot["pluginVersions"][number];
+  } | null>(null);
+  const [rollbackResult, setRollbackResult] = useState<RollbackInstallationResult | null>(null);
+  const [rollbackError, setRollbackError] = useState<string | null>(null);
+
+  const confirmRollback = useCallback(() => {
+    if (rollbackTarget === null || rollbackInFlight) return;
+    setRollbackError(null);
+    void onRollback({
+      installationId: rollbackTarget.installation.id,
+      targetVersionId: rollbackTarget.version.id,
+      expectedRevision: rollbackTarget.installation.revision
+    })
+      .then((result) => {
+        setRollbackResult(result);
+        setRollbackTarget(null);
+      })
+      .catch((cause: unknown) => {
+        setRollbackError(
+          cause instanceof AdminApiError && cause.code === "installation_revision_conflict"
+            ? "Installation changed; version history refreshed"
+            : "Rollback unavailable"
+        );
+      });
+  }, [onRollback, rollbackInFlight, rollbackTarget]);
+
   return (
     <section className="data-panel">
       <PanelHeader title="Versions" detail="Pinned artifacts" />
@@ -776,32 +855,63 @@ function VersionsPanel({
               <th>Plugin</th>
               <th>Version</th>
               <th>Artifact</th>
-              {canInstall ? <th>Install</th> : null}
+              <th>Published</th>
+              <th>Pin</th>
+              {canInstall ? <th>Actions</th> : null}
             </tr>
           </thead>
           <tbody>
-            {snapshot.pluginVersions.map((version) => (
-              <tr key={version.id}>
-                <td>{version.pluginKey}</td>
-                <td>{version.version}</td>
-                <td className="mono-cell">{version.artifactHash}</td>
-                {canInstall ? (
-                  <td>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => {
-                        onInstallPreview(version.id);
-                      }}
-                      disabled={installInFlight || installLoading}
-                      aria-label={`Install ${version.pluginKey} ${version.version}`}
-                    >
-                      Install
-                    </button>
-                  </td>
-                ) : null}
-              </tr>
-            ))}
+            {snapshot.pluginVersions.map((version) => {
+              const installations = snapshot.installations.filter(
+                (installation) => installation.pluginKey === version.pluginKey
+              );
+              const current = installations.filter(
+                (installation) => installation.version === version.version
+              );
+              const rollbackCandidates = installations.filter(
+                (installation) => installation.version !== version.version
+              );
+              return (
+                <tr key={version.id}>
+                  <td>{version.pluginKey}</td>
+                  <td>{version.version}</td>
+                  <td className="mono-cell">{version.artifactHash}</td>
+                  <td>{version.createdAt.toISOString()}</td>
+                  <td>{current.length === 0 ? "past" : `current (${String(current.length)})`}</td>
+                  {canInstall ? (
+                    <td>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => {
+                          onInstallPreview(version.id);
+                        }}
+                        disabled={installInFlight || installLoading}
+                        aria-label={`Install ${version.pluginKey} ${version.version}`}
+                      >
+                        Install
+                      </button>
+                      {rollbackCandidates.map((installation) => (
+                        <button
+                          key={installation.id}
+                          type="button"
+                          className="secondary-button"
+                          disabled={rollbackInFlight || installInFlight || installLoading}
+                          aria-label={`Rollback ${version.pluginKey} from ${installation.version} to ${version.version}`}
+                          onClick={() => {
+                            setRollbackResult(null);
+                            setRollbackError(null);
+                            setRollbackTarget({ installation, version });
+                          }}
+                        >
+                          Rollback
+                        </button>
+                      ))}
+                    </td>
+                  ) : null}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -820,6 +930,42 @@ function VersionsPanel({
           onInstall={onInstall}
           installInFlight={installInFlight}
         />
+      )}
+      {rollbackError === null ? null : <p className="form-error">{rollbackError}</p>}
+      {rollbackTarget === null ? null : (
+        <div role="dialog" aria-modal="true" aria-label="Confirm plugin rollback">
+          <p>Tenant: {tenantId}</p>
+          <p>Plugin: {rollbackTarget.version.pluginKey}</p>
+          <p>From: {rollbackTarget.installation.version}</p>
+          <p>To: {rollbackTarget.version.version}</p>
+          <button type="button" onClick={confirmRollback} disabled={rollbackInFlight}>
+            {rollbackInFlight ? "Rolling back" : "Confirm rollback"}
+          </button>
+          <button
+            type="button"
+            disabled={rollbackInFlight}
+            onClick={() => {
+              setRollbackTarget(null);
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {rollbackResult === null ? null : (
+        <section aria-label="Rollback result">
+          <h3>Rollback completed</h3>
+          <p>
+            {rollbackResult.pluginKey}: {rollbackResult.fromVersion} → {rollbackResult.toVersion}
+          </p>
+          <p>
+            Audit: <span className="mono-cell">{rollbackResult.auditId}</span>
+          </p>
+          <p>Completed: {rollbackResult.completedAt.toISOString()}</p>
+          <button type="button" className="secondary-button" onClick={onViewExecutions}>
+            View execution log
+          </button>
+        </section>
       )}
     </section>
   );

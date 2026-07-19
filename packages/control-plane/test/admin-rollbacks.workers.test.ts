@@ -70,7 +70,9 @@ describe("D1 Admin rollback transaction", () => {
 
   it("rejects cross-app targets and stale retries without side effects", async () => {
     const rollback = createD1AdminRollbackStore(testEnv.DB);
-    await expect(rollback.rollback({ ...request(), targetVersionId: "version_other" })).resolves.toBeNull();
+    await expect(
+      rollback.rollback({ ...request(), targetVersionId: "version_other" })
+    ).resolves.toBeNull();
     await expect(rollback.rollback({ ...request(), expectedRevision: 1 })).resolves.toMatchObject({
       outcome: "conflict",
       revision: 0
@@ -108,7 +110,10 @@ function manifest(version: string): TenantScriptManifest {
     version,
     hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
     capabilities: { "slack.send": { channel: "$config.notifyChannel" } },
-    configSchema: { properties: { notifyChannel: { type: "string" } }, required: ["notifyChannel"] },
+    configSchema: {
+      properties: { notifyChannel: { type: "string" } },
+      required: ["notifyChannel"]
+    },
     egress: { mode: "deny" },
     limits: { cpuMs: 50, timeoutMs: 500 }
   };

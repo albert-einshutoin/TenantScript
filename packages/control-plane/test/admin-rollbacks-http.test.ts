@@ -54,28 +54,48 @@ describe("Control Plane Admin rollback HTTP contract", () => {
     store.rollback
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ outcome: "conflict", installationId: "installation_1", revision: 4 })
-      .mockResolvedValueOnce({ outcome: "same_version", installationId: "installation_1", revision: 4 });
+      .mockResolvedValueOnce({
+        outcome: "same_version",
+        installationId: "installation_1",
+        revision: 4
+      });
     const handler = createHandler(store);
 
     const missing = await handler(request("manager", validBody()));
     expect(missing.status).toBe(404);
-    await expect(missing.json()).resolves.toMatchObject({ error: { code: "rollback_target_not_found" } });
+    await expect(missing.json()).resolves.toMatchObject({
+      error: { code: "rollback_target_not_found" }
+    });
 
     const conflict = await handler(request("manager", validBody()));
     expect(conflict.status).toBe(409);
-    await expect(conflict.json()).resolves.toMatchObject({ error: { code: "installation_revision_conflict" } });
+    await expect(conflict.json()).resolves.toMatchObject({
+      error: { code: "installation_revision_conflict" }
+    });
 
     const same = await handler(request("manager", validBody()));
     expect(same.status).toBe(409);
-    await expect(same.json()).resolves.toMatchObject({ error: { code: "rollback_target_is_current" } });
+    await expect(same.json()).resolves.toMatchObject({
+      error: { code: "rollback_target_is_current" }
+    });
   });
 });
 
 function createHandler(store: ReturnType<typeof rollbackStore>) {
   return createControlPlaneHttpHandler({
     identityResolver: createStaticTokenIdentityResolver({
-      manager: { subject: "manager-subject", role: "manager", appId: "app_acme", tenantId: "tenant_acme" },
-      viewer: { subject: "viewer-subject", role: "viewer", appId: "app_acme", tenantId: "tenant_acme" }
+      manager: {
+        subject: "manager-subject",
+        role: "manager",
+        appId: "app_acme",
+        tenantId: "tenant_acme"
+      },
+      viewer: {
+        subject: "viewer-subject",
+        role: "viewer",
+        appId: "app_acme",
+        tenantId: "tenant_acme"
+      }
     }),
     rollbackStore: store
   });
@@ -97,7 +117,11 @@ function rollbackStore() {
 }
 
 function validBody(): Record<string, unknown> {
-  return { installationId: "installation_1", targetVersionId: "version_1_2_2", expectedRevision: 3 };
+  return {
+    installationId: "installation_1",
+    targetVersionId: "version_1_2_2",
+    expectedRevision: 3
+  };
 }
 
 function request(token: string, body: Record<string, unknown>): Request {

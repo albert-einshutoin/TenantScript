@@ -25,8 +25,20 @@ describe("D1 Admin dashboard adapter", () => {
           }
         ],
         pluginVersions: [
-          { id: "version_1", plugin_id: "plugin_1", version: "1.0.0", artifact_hash: "hash" },
-          { id: "version_2", plugin_id: "plugin_1", version: "2.0.0", artifact_hash: "hash-2" }
+          {
+            id: "version_1",
+            plugin_id: "plugin_1",
+            version: "1.0.0",
+            artifact_hash: "hash",
+            created_at: "2026-07-18T00:00:00.000Z"
+          },
+          {
+            id: "version_2",
+            plugin_id: "plugin_1",
+            version: "2.0.0",
+            artifact_hash: "hash-2",
+            created_at: "2026-07-19T00:00:00.000Z"
+          }
         ],
         approvals: [
           {

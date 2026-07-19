@@ -412,7 +412,12 @@ async function runRollback(
   corsHeaders: Record<string, string> | undefined
 ): Promise<Response> {
   if (options.rollbackStore === undefined) {
-    return errorResponse(503, "rollback_store_unavailable", "rollback service unavailable", corsHeaders);
+    return errorResponse(
+      503,
+      "rollback_store_unavailable",
+      "rollback service unavailable",
+      corsHeaders
+    );
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
@@ -430,13 +435,28 @@ async function runRollback(
     });
     // Installation, target-version, and cross-scope misses intentionally share one response.
     if (result === null) {
-      return errorResponse(404, "rollback_target_not_found", "rollback target not found", corsHeaders);
+      return errorResponse(
+        404,
+        "rollback_target_not_found",
+        "rollback target not found",
+        corsHeaders
+      );
     }
     if (result.outcome === "conflict") {
-      return errorResponse(409, "installation_revision_conflict", "installation changed; refresh", corsHeaders);
+      return errorResponse(
+        409,
+        "installation_revision_conflict",
+        "installation changed; refresh",
+        corsHeaders
+      );
     }
     if (result.outcome === "same_version") {
-      return errorResponse(409, "rollback_target_is_current", "target version is already current", corsHeaders);
+      return errorResponse(
+        409,
+        "rollback_target_is_current",
+        "target version is already current",
+        corsHeaders
+      );
     }
     return jsonResponse(
       200,
@@ -467,7 +487,12 @@ async function parseRollbackCommand(
     contentType === null ||
     contentType.split(";", 1)[0]?.trim().toLowerCase() !== "application/json"
   ) {
-    return errorResponse(415, "unsupported_media_type", "application/json body required", corsHeaders);
+    return errorResponse(
+      415,
+      "unsupported_media_type",
+      "application/json body required",
+      corsHeaders
+    );
   }
   const contentLength = request.headers.get("Content-Length");
   if (
@@ -483,7 +508,9 @@ async function parseRollbackCommand(
     return errorResponse(
       error instanceof CommandBodyTooLargeError ? 413 : 400,
       error instanceof CommandBodyTooLargeError ? "request_too_large" : "invalid_rollback",
-      error instanceof CommandBodyTooLargeError ? "request body too large" : "invalid rollback command",
+      error instanceof CommandBodyTooLargeError
+        ? "request body too large"
+        : "invalid rollback command",
       corsHeaders
     );
   }

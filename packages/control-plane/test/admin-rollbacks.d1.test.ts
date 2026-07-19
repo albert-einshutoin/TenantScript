@@ -24,12 +24,20 @@ describe("D1 Admin rollback adapter", () => {
     expect(db.bindings.flat()).not.toContain("secret-config");
     expect(db.bindings.flat()).not.toContain("secret-grant");
     expect(db.bindings.flat()).toContain("installation.rollback");
-    expect(db.bindings.flat()).toContain('{"versionId":"version_1_3_0","version":"1.3.0","revision":3}');
-    expect(db.bindings.flat()).toContain('{"versionId":"version_1_2_2","version":"1.2.2","revision":4}');
+    expect(db.bindings.flat()).toContain(
+      '{"versionId":"version_1_3_0","version":"1.3.0","revision":3}'
+    );
+    expect(db.bindings.flat()).toContain(
+      '{"versionId":"version_1_2_2","version":"1.2.2","revision":4}'
+    );
   });
 
   it("returns common missing, same-version, and stale outcomes without writing", async () => {
-    const db = database([null, { ...rollbackRow(), target_version_id: "version_1_3_0" }, rollbackRow()]);
+    const db = database([
+      null,
+      { ...rollbackRow(), target_version_id: "version_1_3_0" },
+      rollbackRow()
+    ]);
     const store = createD1AdminRollbackStore(db);
 
     await expect(store.rollback(request())).resolves.toBeNull();
@@ -105,7 +113,9 @@ function database(
         all: () => Promise.resolve({ results: [] }),
         run: () => {
           runs.push([]);
-          return options.runError === undefined ? Promise.resolve(undefined) : Promise.reject(options.runError);
+          return options.runError === undefined
+            ? Promise.resolve(undefined)
+            : Promise.reject(options.runError);
         }
       };
       return statement;

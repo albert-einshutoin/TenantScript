@@ -122,10 +122,7 @@ async function rollback(
 
 function readRollbackRow(
   db: D1DatabaseLike,
-  request: Pick<
-    AdminRollbackRequest,
-    "appId" | "tenantId" | "installationId" | "targetVersionId"
-  >
+  request: Pick<AdminRollbackRequest, "appId" | "tenantId" | "installationId" | "targetVersionId">
 ): Promise<RollbackRow | null> {
   return db
     .prepare(
