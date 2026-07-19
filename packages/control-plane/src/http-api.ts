@@ -15,9 +15,15 @@ import type {
 import { AdminInstallFlowError, type AdminInstallFlowStore } from "./admin-install-flow.js";
 import { AdminRollbackError, type AdminRollbackStore } from "./admin-rollbacks.js";
 import type { AdminMutationFamily, AdminMutationRateLimiter } from "./admin-mutation-rate-limit.js";
+import {
+  canRolePerform,
+  isSupportedRbacRole,
+  type RbacOperation,
+  type SupportedRbacRole
+} from "./rbac.js";
 import { UsageMeterQueryError, type UsageMeter } from "./usage-meter.js";
 
-export type AdminRole = "manager" | "viewer";
+export type AdminRole = SupportedRbacRole;
 
 export interface TenantScopedAdminIdentity extends AuthenticatedIdentity {
   role: AdminRole;
@@ -203,6 +209,8 @@ async function resolveUsage(
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(identity, "usage:read", "usage_forbidden", corsHeaders);
+  if (forbidden !== null) return forbidden;
   const fromDate = url.searchParams.get("fromDate");
   const toDate = url.searchParams.get("toDate");
   if (fromDate === null || toDate === null) {
@@ -240,6 +248,13 @@ async function resolveInstallPreview(
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(
+    identity,
+    "installation:read",
+    "installation_read_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
   const versionId = url.searchParams.get("versionId");
   if (!isNonEmptyString(versionId)) {
     return errorResponse(400, "invalid_version", "versionId is required", corsHeaders);
@@ -272,14 +287,13 @@ async function runInstall(
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
-  if (identity.role !== "manager") {
-    return errorResponse(
-      403,
-      "installation_install_forbidden",
-      "manager role required",
-      corsHeaders
-    );
-  }
+  const forbidden = requireRbac(
+    identity,
+    "installation:manage",
+    "installation_install_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
   const command = await parseInstallRequest(request, corsHeaders);
   if (command instanceof Response) return command;
   const idempotencyKey = request.headers.get("Idempotency-Key");
@@ -453,14 +467,13 @@ async function runInstallationCommand(
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
-  if (identity.role !== "manager") {
-    return errorResponse(
-      403,
-      "installation_command_forbidden",
-      "manager role required",
-      corsHeaders
-    );
-  }
+  const forbidden = requireRbac(
+    identity,
+    "installation:manage",
+    "installation_command_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
   const command = await parseInstallationCommand(request, corsHeaders);
   if (command instanceof Response) return command;
   const rateLimitResponse = await reserveAdminMutation(
@@ -520,9 +533,8 @@ async function runRollback(
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
-  if (identity.role !== "manager") {
-    return errorResponse(403, "rollback_forbidden", "manager role required", corsHeaders);
-  }
+  const forbidden = requireRbac(identity, "rollback:execute", "rollback_forbidden", corsHeaders);
+  if (forbidden !== null) return forbidden;
   const command = await parseRollbackCommand(request, corsHeaders);
   if (command instanceof Response) return command;
   const idempotencyKey = request.headers.get("Idempotency-Key");
@@ -674,9 +686,13 @@ async function runApprovalDecision(
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
-  if (identity.role !== "manager") {
-    return errorResponse(403, "approval_decision_forbidden", "manager role required", corsHeaders);
-  }
+  const forbidden = requireRbac(
+    identity,
+    "approval:decide",
+    "approval_decision_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
   const command = await parseApprovalDecision(request, corsHeaders);
   if (command instanceof Response) return command;
   const rateLimitResponse = await reserveAdminMutation(
@@ -894,6 +910,13 @@ async function resolveInstallationDetail(
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(
+    identity,
+    "installation:read",
+    "installation_read_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
   try {
     const detail = await options.installationDetailStore.readInstallation({
       appId: identity.appId,
@@ -942,6 +965,8 @@ async function resolveSession(
         corsHeaders
       );
     }
+    const forbidden = requireRbac(identity, "session:read", "admin_scope_forbidden", corsHeaders);
+    if (forbidden !== null) return forbidden;
 
     // Scope comes only from the trusted token claim. Request query/body values must never
     // select another app or tenant because every later admin read will inherit this identity.
@@ -1006,6 +1031,8 @@ async function resolveDashboard(
   if (identity instanceof Response) {
     return identity;
   }
+  const forbidden = requireRbac(identity, "dashboard:read", "dashboard_forbidden", corsHeaders);
+  if (forbidden !== null) return forbidden;
 
   try {
     if (route === "dashboard") {
@@ -1111,6 +1138,13 @@ async function resolveExecutionDetail(
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(
+    identity,
+    "execution:read",
+    "execution_read_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
   const id = url.searchParams.get("id");
   if (
     !isBoundedFilter(id) ||
@@ -1289,11 +1323,22 @@ function isTenantScopedAdminIdentity(
 ): identity is TenantScopedAdminIdentity {
   const candidate = identity as Partial<TenantScopedAdminIdentity>;
   return (
-    (candidate.role === "manager" || candidate.role === "viewer") &&
+    isSupportedRbacRole(candidate.role) &&
     isNonEmptyString(candidate.subject) &&
     isNonEmptyString(candidate.appId) &&
     isNonEmptyString(candidate.tenantId)
   );
+}
+
+function requireRbac(
+  identity: TenantScopedAdminIdentity,
+  operation: RbacOperation,
+  errorCode: string,
+  corsHeaders: Record<string, string> | undefined
+): Response | null {
+  return canRolePerform(identity.role, operation)
+    ? null
+    : errorResponse(403, errorCode, "operation not permitted", corsHeaders);
 }
 
 function isNonEmptyString(value: unknown): value is string {

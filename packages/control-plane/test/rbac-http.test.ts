@@ -66,7 +66,7 @@ function handlerFor(role: string, rollbackStore?: AdminRollbackStore) {
       [role]: { subject: `${role}-subject`, role, appId: "app_1", tenantId: "tenant_1" }
     }),
     ...(rollbackStore === undefined ? {} : { rollbackStore }),
-    adminMutationRateLimiter: { reserve: async () => ({ allowed: true }) },
+    adminMutationRateLimiter: { reserve: async () => ({ allowed: true, remaining: 1 }) },
     allowedOrigins: [allowedOrigin]
   });
 }

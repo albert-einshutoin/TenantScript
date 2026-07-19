@@ -33,13 +33,7 @@ const expectedPermissions = {
     "execution:read",
     "usage:read"
   ],
-  viewer: [
-    "session:read",
-    "dashboard:read",
-    "installation:read",
-    "execution:read",
-    "usage:read"
-  ],
+  viewer: ["session:read", "dashboard:read", "installation:read", "execution:read", "usage:read"],
   "tenant-admin": [
     "session:read",
     "dashboard:read",

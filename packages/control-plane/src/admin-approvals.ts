@@ -1,4 +1,5 @@
 import type { D1DatabaseLike } from "./storage.js";
+import { canRolePerform, normalizeRbacRole } from "./rbac.js";
 
 export interface AdminApprovalDecisionRequest {
   appId: string;
@@ -52,7 +53,7 @@ async function decide(
 ): Promise<AdminApprovalDecisionResult> {
   const approval = await readApproval(db, request);
   if (approval === null) throw new AdminApprovalDecisionError(404, "approval_not_found");
-  if (request.actorRole !== "manager" || approval.role !== request.actorRole) {
+  if (!canDecideApproval(request.actorRole, approval.role)) {
     throw new AdminApprovalDecisionError(403, "approval_role_forbidden");
   }
   if (approval.state !== "pending") {
@@ -97,6 +98,15 @@ async function decide(
   }
 
   return { approvalId: request.approvalId, state: request.decision, auditId, decidedAt };
+}
+
+function canDecideApproval(actorRole: string, requiredRole: string): boolean {
+  if (!canRolePerform(actorRole, "approval:decide")) return false;
+  // Existing rows require the Phase 1 `manager` role. The RBAC matrix supersedes that claim,
+  // while future explicit role requirements remain exact to avoid silently widening authority.
+  return (
+    requiredRole === "manager" || normalizeRbacRole(actorRole) === normalizeRbacRole(requiredRole)
+  );
 }
 
 async function readApproval(

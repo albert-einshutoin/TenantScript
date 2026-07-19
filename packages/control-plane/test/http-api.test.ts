@@ -57,7 +57,7 @@ describe("Control Plane HTTP session contract", () => {
     ["missing tenant scope", { subject: "user", role: "manager", appId: "app_acme" }],
     [
       "unsupported role",
-      { subject: "user", role: "operator", appId: "app_acme", tenantId: "tenant_acme" }
+      { subject: "user", role: "super-admin", appId: "app_acme", tenantId: "tenant_acme" }
     ]
   ])("returns 403 for %s", async (_label, identity) => {
     const handler = createControlPlaneHttpHandler({
