@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run && vitest run --config vitest.workers.config.ts",
-    "test:security": "vitest run test/security-suite.test.ts && vitest run --config vitest.workers.config.ts test/security-suite.workers.test.ts test/audit-log.workers.test.ts test/execution-archive.workers.test.ts",
+    "test:security": "vitest run test/security-suite.test.ts test/audit-export.test.ts && vitest run --config vitest.workers.config.ts test/security-suite.workers.test.ts test/audit-log.workers.test.ts test/execution-archive.workers.test.ts",
     "test:coverage": "vitest run --coverage && vitest run --config vitest.workers.config.ts"
   },
   "devDependencies": {

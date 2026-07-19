@@ -25,6 +25,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Security suite v3 RBAC attack map](docs/security/security-suite-v3.md) — role/scope/tenant昇格攻撃、identity由来audit、常設証跡
 - [Audit integrity](docs/security/audit-integrity.md) — write-once D1境界、tenant/app hash chain、改ざん検知と運用責任
 - [Execution retention](docs/operations/execution-retention.md) — D1 hot retention、R2 archive、透過検索、self-host設定例
+- [Compliance export](docs/operations/audit-export.md) — 期間指定NDJSON、データ最小化、署名manifest、鍵ローテーション
 - [Threat model](docs/security/threat-model.md) — 信頼境界、攻撃面、mitigation、常設テスト、未検証範囲
 - [Community security review](docs/security/community-review-packet.md) — 固定commitを対象にした第三者レビュー範囲、報告経路、完了証跡
 - [RBAC matrix](docs/security/rbac-matrix.md) — roleごとの操作権限、`manager` claimからの移行、未実装境界

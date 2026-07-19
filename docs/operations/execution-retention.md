@@ -65,5 +65,5 @@ before returning archived evidence, and fails closed if an object is missing or 
   are defined.
 - Monitor failed archive jobs and unreferenced objects; never delete hot D1 rows manually.
 
-Signed compliance export is a separate P2-T11 boundary. Export must consume the same verified
-search path so callers do not need to know whether evidence is still hot or archived.
+Signed compliance export consumes this same verified search path so callers do not need to know
+whether evidence is still hot or archived. See [Compliance audit export](audit-export.md).

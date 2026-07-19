@@ -2,8 +2,10 @@ import { env } from "cloudflare:workers";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  createAuditExportService,
   createD1ControlPlaneStore,
   createD1R2ExecutionArchiveStore,
+  verifyAuditExport,
   type ExecutionRecord
 } from "../src/index.js";
 
@@ -124,6 +126,38 @@ describe("D1 and R2 execution archive", () => {
         count: number;
       }>()
     ).resolves.toEqual({ count: 0 });
+  });
+
+  it("exports one signed, minimized period across hot D1 and archived R2 evidence", async () => {
+    const controlPlane = createD1ControlPlaneStore(testEnv.DB);
+    await controlPlane.writeExecution({
+      ...execution("exec_old_error", "2026-05-01T00:00:00.000Z"),
+      status: "error",
+      error: "customer-secret-must-not-be-exported"
+    });
+    await controlPlane.writeExecution(execution("exec_hot", "2026-07-10T00:00:00.000Z"));
+    const archive = createD1R2ExecutionArchiveStore(testEnv.DB, testEnv.ARTIFACTS, {
+      hotRetentionDays: 30,
+      archiveId: () => "archive_for_export"
+    });
+    await archive.archiveExpired({ ...scope, now: new Date("2026-07-20T00:00:00.000Z") });
+    const signingKey = "workerd-audit-export-signing-key-at-least-32-bytes";
+    const exporter = createAuditExportService({
+      search: archive.search,
+      signingKey,
+      signingKeyId: "workerd-test-key",
+      now: () => new Date("2026-08-01T00:00:00.000Z")
+    });
+
+    const result = await exporter.exportPeriod({
+      ...scope,
+      from: new Date("2026-05-01T00:00:00.000Z"),
+      to: new Date("2026-07-31T23:59:59.999Z")
+    });
+
+    expect(result.manifest.eventCount).toBe(2);
+    expect(result.ndjson).not.toContain("customer-secret-must-not-be-exported");
+    await expect(verifyAuditExport(result, signingKey)).resolves.toBe(true);
   });
 });
 
