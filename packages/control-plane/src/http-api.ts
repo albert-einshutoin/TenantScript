@@ -241,6 +241,15 @@ async function runInstall(
   }
   const command = await parseInstallRequest(request, corsHeaders);
   if (command instanceof Response) return command;
+  const idempotencyKey = request.headers.get("Idempotency-Key");
+  if (!isIdempotencyKey(idempotencyKey)) {
+    return errorResponse(
+      400,
+      "invalid_idempotency_key",
+      "valid Idempotency-Key header required",
+      corsHeaders
+    );
+  }
   const rateLimitResponse = await reserveAdminMutation(
     options.adminMutationRateLimiter,
     identity,
@@ -253,6 +262,7 @@ async function runInstall(
       appId: identity.appId,
       tenantId: identity.tenantId,
       actor: identity.subject,
+      idempotencyKey,
       ...command
     });
     return installed === null
@@ -261,6 +271,9 @@ async function runInstall(
   } catch (error) {
     if (error instanceof AdminInstallFlowError || isInstallValidationError(error)) {
       const code = error.code;
+      if (code === "idempotency_key_reused") {
+        return errorResponse(409, code, "idempotency key was already used", corsHeaders);
+      }
       return errorResponse(
         400,
         code,
@@ -378,6 +391,10 @@ function isInstallValidationError(
     isRecord(error) &&
     (error.code === "invalid_config" || error.code === "capability_confirmation_mismatch")
   );
+}
+
+function isIdempotencyKey(value: string | null): value is string {
+  return value !== null && /^[A-Za-z0-9._~-]{16,128}$/u.test(value);
 }
 
 async function runInstallationCommand(
@@ -1243,7 +1260,7 @@ function preflightResponse(
     status: 204,
     headers: {
       ...corsHeaders,
-      "Access-Control-Allow-Headers": "Authorization, Content-Type",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, Idempotency-Key",
       "Access-Control-Allow-Methods": methods,
       "Access-Control-Max-Age": "600",
       "Cache-Control": "no-store"

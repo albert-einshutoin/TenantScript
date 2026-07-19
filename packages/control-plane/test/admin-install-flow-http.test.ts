@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  AdminInstallFlowError,
   createControlPlaneHttpHandler,
   createStaticTokenIdentityResolver,
   type AdminInstallFlowStore
@@ -8,6 +9,32 @@ import {
 const allowedOrigin = "https://admin.example.com";
 
 describe("Control Plane Admin install flow HTTP contract", () => {
+  it("requires a bounded key and returns a stable conflict when it is reused", async () => {
+    const store = installFlowStore();
+    store.install.mockRejectedValueOnce(new AdminInstallFlowError("idempotency_key_reused"));
+    const handler = createHandler(store);
+    const missingKey = new Request("https://api.example.com/v1/admin/installations", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer manager",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(validInstallBody())
+    });
+    expect((await handler(missingKey)).status).toBe(400);
+
+    const conflict = await handler(
+      request("manager", "/v1/admin/installations", {
+        method: "POST",
+        body: validInstallBody()
+      })
+    );
+    expect(conflict.status).toBe(409);
+    await expect(conflict.json()).resolves.toEqual({
+      error: { code: "idempotency_key_reused", message: "idempotency key was already used" }
+    });
+  });
+
   it("allows both roles to preview safe metadata but only managers to install", async () => {
     const store = installFlowStore();
     const handler = createHandler(store);
@@ -41,6 +68,7 @@ describe("Control Plane Admin install flow HTTP contract", () => {
       appId: "app_acme",
       tenantId: "tenant_acme",
       actor: "manager-subject",
+      idempotencyKey: "install-http-key-0001",
       versionId: "version_1",
       config: { notifyChannel: "C123" },
       confirmedCapabilities: ["slack.send"],
@@ -219,7 +247,12 @@ function request(
     headers: {
       Authorization: `Bearer ${token}`,
       Origin: allowedOrigin,
-      ...(options.body === undefined ? {} : { "Content-Type": "application/json" })
+      ...(options.body === undefined
+        ? {}
+        : {
+            "Content-Type": "application/json",
+            "Idempotency-Key": "install-http-key-0001"
+          })
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) })
   });

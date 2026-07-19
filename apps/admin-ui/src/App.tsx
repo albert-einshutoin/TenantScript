@@ -1030,6 +1030,7 @@ function InstallFlowPanel({
   onInstall: (request: InstallPluginRequest) => Promise<unknown>;
   installInFlight: boolean;
 }) {
+  const idempotencyKey = useRef(crypto.randomUUID());
   const [values, setValues] = useState<Record<string, string>>({});
   const [confirmedCapabilities, setConfirmedCapabilities] = useState<readonly string[]>([]);
   const [enabled, setEnabled] = useState(false);
@@ -1048,6 +1049,7 @@ function InstallFlowPanel({
     if (!parsed.ok || !validPriority || !allCapabilitiesConfirmed || installInFlight) return;
     setSubmitError(null);
     void onInstall({
+      idempotencyKey: idempotencyKey.current,
       versionId: preview.versionId,
       config: parsed.config,
       confirmedCapabilities,

@@ -98,6 +98,7 @@ describe("D1 tenant boundary security suite", () => {
         appId: "app_1",
         tenantId: "tenant_2",
         actor: "manager",
+        idempotencyKey: "install-security-key-0001",
         versionId: "version_1",
         config: {},
         confirmedCapabilities: ["slack.send"],

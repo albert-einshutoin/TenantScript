@@ -208,7 +208,7 @@ describe("Admin UI auth foundation", () => {
       ],
       egress: { mode: "deny", allowlistedHostCount: 0 }
     });
-    const installPlugin = vi.fn().mockResolvedValue({
+    const installPlugin = vi.fn<AdminApiClient["installPlugin"]>().mockResolvedValue({
       id: "installation_new",
       versionId: "version_large_invoice_1_2_2",
       pluginKey: "large-invoice-notify",
@@ -248,13 +248,16 @@ describe("Admin UI auth foundation", () => {
     await waitFor(() => {
       expect(installPlugin).toHaveBeenCalledTimes(1);
     });
-    expect(installPlugin).toHaveBeenCalledWith({
-      versionId: "version_large_invoice_1_2_2",
-      config: { enabledForInvoices: true, notifyChannel: "C123", threshold: 5000 },
-      confirmedCapabilities: ["slack.send"],
-      enabled: true,
-      priority: 20
-    });
+    expect(installPlugin.mock.calls[0]?.[0]?.idempotencyKey).toMatch(/^[a-f0-9-]{36}$/u);
+    expect(installPlugin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        versionId: "version_large_invoice_1_2_2",
+        config: { enabledForInvoices: true, notifyChannel: "C123", threshold: 5000 },
+        confirmedCapabilities: ["slack.send"],
+        enabled: true,
+        priority: 20
+      })
+    );
     expect(
       screen.queryByRole("dialog", { name: "Confirm plugin installation" })
     ).not.toBeInTheDocument();
@@ -365,7 +368,7 @@ describe("Admin UI auth foundation", () => {
 
   it("installs a plugin with no config or capabilities and keeps it disabled by default", async () => {
     const baseClient = createDemoAdminApiClient();
-    const installPlugin = vi.fn().mockResolvedValue({
+    const installPlugin = vi.fn<AdminApiClient["installPlugin"]>().mockResolvedValue({
       id: "installation_empty",
       versionId: "version_large_invoice_1_3_0",
       pluginKey: "no-permissions-plugin",
@@ -404,13 +407,16 @@ describe("Admin UI auth foundation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm installation" }));
 
     await waitFor(() => {
-      expect(installPlugin).toHaveBeenCalledWith({
-        versionId: "version_large_invoice_1_3_0",
-        config: {},
-        confirmedCapabilities: [],
-        enabled: false,
-        priority: 100
-      });
+      expect(installPlugin.mock.calls[0]?.[0]?.idempotencyKey).toMatch(/^[a-f0-9-]{36}$/u);
+      expect(installPlugin).toHaveBeenCalledWith(
+        expect.objectContaining({
+          versionId: "version_large_invoice_1_3_0",
+          config: {},
+          confirmedCapabilities: [],
+          enabled: false,
+          priority: 100
+        })
+      );
     });
   });
 
@@ -428,7 +434,7 @@ describe("Admin UI auth foundation", () => {
         egress: { mode: "deny", allowlistedHostCount: 0 }
       });
     const installPlugin = vi
-      .fn()
+      .fn<AdminApiClient["installPlugin"]>()
       .mockRejectedValue(
         new AdminApiError(400, "invalid_config", "provider customer-secret validation")
       );
@@ -459,6 +465,13 @@ describe("Admin UI auth foundation", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Plugin installation unavailable")).toBeInTheDocument();
     expect(screen.queryByText(/provider customer-secret/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm installation" }));
+    await waitFor(() => {
+      expect(installPlugin).toHaveBeenCalledTimes(2);
+    });
+    const firstKey = installPlugin.mock.calls[0]?.[0]?.idempotencyKey;
+    expect(firstKey).toEqual(expect.any(String));
+    expect(installPlugin.mock.calls[1]?.[0]?.idempotencyKey).toBe(firstKey);
   });
 
   it("does not render installation controls for viewers and keeps state unchanged after command failure", async () => {

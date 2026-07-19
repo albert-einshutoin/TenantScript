@@ -10,6 +10,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [開発プラン & フェーズ別タスク](tasks/README.md) — TDDベースのPhase 0〜4タスク分解(言語: TypeScript、D-017)
 - [ベンチマーク証跡](docs/benchmarks/README.md) — Phase 0 runtime latency と Phase 1 rollback drill
 - [Admin変更APIのrate limit運用](docs/operations/admin-mutation-rate-limits.md) — Durable Object binding、fail-closed方針、設定範囲
+- [Admin installの冪等再試行](docs/operations/admin-install-idempotency.md) — Idempotency-Key、409、D1原子性、保存期間
 
 ## 方針
 

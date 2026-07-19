@@ -366,6 +366,7 @@ describe("Admin API environment selection", () => {
     });
     await expect(
       client.installPlugin({
+        idempotencyKey: "install-client-key-0001",
         versionId: "version_1",
         config: { notifyChannel: "C123" },
         confirmedCapabilities: ["slack.send"],
@@ -381,6 +382,9 @@ describe("Admin API environment selection", () => {
     const [installUrl, installInit] = fetcher.mock.calls[2] ?? [];
     expect(requestUrl(installUrl)).toBe("https://api.example.com/v1/admin/installations");
     expect(installInit?.method).toBe("POST");
+    expect(new Headers(installInit?.headers).get("idempotency-key")).toBe(
+      "install-client-key-0001"
+    );
     expect(installInit?.body).toBe(
       '{"versionId":"version_1","config":{"notifyChannel":"C123"},"confirmedCapabilities":["slack.send"],"enabled":true,"priority":20}'
     );
@@ -389,6 +393,7 @@ describe("Admin API environment selection", () => {
     if (typeof installBody !== "string") throw new Error("expected JSON install body");
     expect(installBody).not.toContain("tenantId");
     expect(installBody).not.toContain("grants");
+    expect(installBody).not.toContain("idempotencyKey");
   });
 
   it("rejects install responses and previews that expose config or grant values", async () => {
@@ -446,6 +451,7 @@ describe("Admin API environment selection", () => {
 
     await expect(
       client.installPlugin({
+        idempotencyKey: "install-client-key-0002",
         versionId: "version_1",
         config: {},
         confirmedCapabilities: [],
