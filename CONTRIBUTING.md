@@ -8,6 +8,7 @@ Before changing code, read:
 
 - [Development plan](tasks/README.md): canonical package boundaries, TDD workflow, phase gates, and quality requirements.
 - [Architecture Decision Records](docs/adr/README.md): canonical decisions that constrain runtime, licensing, approval flow, and future architecture.
+- [Benchmark evidence](docs/benchmarks/README.md): measured, blocked, and planned validation with reproducibility requirements.
 - [Security policy](SECURITY.md): private vulnerability reporting and sensitive-data rules.
 - [AGENTS.md](AGENTS.md): concise repository workflow and safety guardrails for humans and coding agents.
 

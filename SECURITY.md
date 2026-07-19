@@ -45,6 +45,17 @@ Reports about leaked third-party credentials should also follow the provider's r
 
 ## Security scope
 
-Examples of in-scope issues include tenant-boundary bypass, capability grant escalation, secret exposure, egress allowlist bypass, rollback or approval authorization bypass, audit tampering, and supply-chain compromise in this repository.
+The supported attack surface includes the loader, capability broker, control-plane API, proxy, CLI, and documentation examples maintained in this repository. Reports are in scope when behavior in one of these components could weaken an adopter's security boundary, even if the affected path is not enabled by default.
+
+Examples include tenant-boundary bypass, capability grant escalation, secret exposure, egress allowlist bypass, rollback or approval authorization bypass, audit tampering, unsafe copy-paste guidance, and supply-chain compromise in this repository.
 
 General support questions, deployment mistakes without a security boundary failure, and vulnerabilities that only affect unsupported forks should use normal project discussions after removing all sensitive data.
+
+## Security design and evidence
+
+The policy for publishing this repository is recorded in [ADR-002](docs/adr/002-oss-license-and-publication.md). Architecture decisions are indexed separately so that accepted boundaries are distinguishable from future proposals.
+
+- [Development and security-suite requirements](tasks/README.md) define package boundaries, adversarial test expectations, and the accountless quality gate.
+- [Benchmark evidence index](docs/benchmarks/README.md) distinguishes measured results from blocked or planned validation.
+
+These documents describe current repository evidence; they are not certifications or guarantees that every deployment is secure. When a report contradicts a documented claim, use the private reporting path above so maintainers can investigate before changing public guidance.
