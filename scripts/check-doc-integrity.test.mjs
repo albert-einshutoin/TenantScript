@@ -43,6 +43,18 @@ test("rejects broken relative Markdown links", () => {
   });
 });
 
+test("rejects broken relative links in llms.txt", () => {
+  withRepo((repoRoot) => {
+    writeFileSync(join(repoRoot, "llms.txt"), "Read [missing](docs/missing.md).\n");
+    writeValidQuickstart(repoRoot);
+
+    const result = runChecker(repoRoot);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /llms\.txt:1: broken relative link docs\/missing\.md/);
+  });
+});
+
 test("rejects missing and duplicate proxy snippet identifiers", () => {
   withRepo((repoRoot) => {
     writeFileSync(
