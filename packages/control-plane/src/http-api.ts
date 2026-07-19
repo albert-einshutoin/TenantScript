@@ -822,7 +822,12 @@ async function resolveDashboard(
 
     const filters = route === "executions" ? executionFilters(url) : {};
     if (filters === null) {
-      return errorResponse(400, "invalid_execution_filter", "invalid execution filter", corsHeaders);
+      return errorResponse(
+        400,
+        "invalid_execution_filter",
+        "invalid execution filter",
+        corsHeaders
+      );
     }
     const query = executionFilterQuery(filters);
 
@@ -869,7 +874,12 @@ async function resolveExecutionDetail(
   corsHeaders: Record<string, string> | undefined
 ): Promise<Response> {
   if (options.executionDetailStore === undefined) {
-    return errorResponse(503, "execution_store_unavailable", "execution service unavailable", corsHeaders);
+    return errorResponse(
+      503,
+      "execution_store_unavailable",
+      "execution service unavailable",
+      corsHeaders
+    );
   }
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
