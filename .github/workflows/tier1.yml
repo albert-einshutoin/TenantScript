@@ -14,7 +14,10 @@ jobs:
     name: accountless quality gate
     runs-on: ubuntu-latest
     steps:
+      # Review campaigns are pinned to historical commits and validate paths in that exact tree.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
