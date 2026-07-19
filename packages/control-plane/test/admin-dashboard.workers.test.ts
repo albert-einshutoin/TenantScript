@@ -73,7 +73,7 @@ describe("D1 Admin dashboard read model", () => {
       tenantId: "tenant_1",
       section: "installations",
       limit: 1,
-      position: first.nextPosition
+      ...(first.nextPosition === undefined ? {} : { position: first.nextPosition })
     });
     expect(second.items.map((item) => item.id)).toEqual(["tenant_1_installation_b"]);
     expect(second.nextPosition).toBeUndefined();
@@ -166,7 +166,10 @@ function pluginVersion(id: string, pluginId: string, suffix: string): PluginVers
     version: `1.0.${suffix === "a" ? "0" : "1"}`,
     hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
     capabilities: {},
-    configSchema: { properties: { hidden: { const: "manifest-secret" } }, required: [] },
+    configSchema: {
+      properties: { hidden: { type: "string", default: "manifest-secret" } },
+      required: []
+    },
     egress: { mode: "deny" },
     limits: { cpuMs: 50, timeoutMs: 500 }
   } satisfies TenantScriptManifest;
