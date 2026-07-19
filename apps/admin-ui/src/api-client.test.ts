@@ -36,11 +36,11 @@ describe("Admin API environment selection", () => {
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
     const [dashboardUrl, dashboardInit] = fetcher.mock.calls[1] ?? [];
-    expect(String(dashboardUrl)).toBe("https://api.example.com/v1/admin/dashboard");
+    expect(requestUrl(dashboardUrl)).toBe("https://api.example.com/v1/admin/dashboard");
     expect(new Headers(dashboardInit?.headers).get("authorization")).toBe(
       "Bearer production-token"
     );
-    expect(String(dashboardUrl)).not.toContain("production-token");
+    expect(requestUrl(dashboardUrl)).not.toContain("production-token");
   });
 
   it("never enables fixture credentials in a production build", async () => {
@@ -100,7 +100,7 @@ describe("Admin API environment selection", () => {
     await expect(
       client.getDashboardSection("installations", "signed.cursor")
     ).resolves.toMatchObject({ section: "installations", items: [{ id: "inst_2" }] });
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain(
+    expect(requestUrl(fetcher.mock.calls[1]?.[0])).toContain(
       "/v1/admin/dashboard/installations?cursor=signed.cursor"
     );
 
@@ -171,6 +171,13 @@ function dashboardPayload() {
     executions: { items: [] },
     usage: { date: "2026-07-19", executions: 1, runtimeMs: 12 }
   };
+}
+
+function requestUrl(input: Parameters<typeof fetch>[0] | undefined): string {
+  if (input === undefined) {
+    return "";
+  }
+  return typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 }
 
 describe("Admin HTTP session client", () => {

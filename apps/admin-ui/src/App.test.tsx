@@ -87,7 +87,9 @@ describe("Admin UI auth foundation", () => {
     const baseClient = createDemoAdminApiClient();
     const failingClient: AdminApiClient = {
       resolveSession: baseClient.resolveSession,
-      getDashboard: () => Promise.reject(new Error("offline"))
+      getDashboard: () => Promise.reject(new Error("offline")),
+      getDashboardSection: baseClient.getDashboardSection,
+      clearSession: baseClient.clearSession
     };
     render(<App client={failingClient} />);
 
@@ -108,7 +110,8 @@ describe("Admin UI auth foundation", () => {
           pluginKey: "next-plugin",
           version: "2.0.0",
           enabled: true,
-          priority: 30
+          priority: 30,
+          statusText: "enabled"
         }
       ]
     });
@@ -130,7 +133,9 @@ describe("Admin UI auth foundation", () => {
 
     await expect(screen.findByText("next-plugin")).resolves.toBeInTheDocument();
     expect(getDashboardSection).toHaveBeenCalledWith("installations", "signed.cursor");
-    expect(screen.queryByRole("button", { name: "Load more installations" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Load more installations" })
+    ).not.toBeInTheDocument();
   });
 
   it("renders disabled and failing operational states", async () => {
@@ -142,7 +147,7 @@ describe("Admin UI auth foundation", () => {
     const snapshot: DashboardSnapshot = {
       ...baseSnapshot,
       approvals: [],
-      usage: [],
+      usage: { date: "2026-07-19", executions: 0, runtimeMs: 0 },
       installations: [
         {
           ...installation,
@@ -153,19 +158,20 @@ describe("Admin UI auth foundation", () => {
       executions: [
         {
           ...execution,
-          status: "error",
-          error: "handler failed"
+          status: "error"
         }
       ]
     };
     const client: AdminApiClient = {
       resolveSession: baseClient.resolveSession,
-      getDashboard: () => Promise.resolve(snapshot)
+      getDashboard: () => Promise.resolve(snapshot),
+      getDashboardSection: baseClient.getDashboardSection,
+      clearSession: baseClient.clearSession
     };
     render(<App client={client} />);
 
     await login("manager-token");
-    await screen.findByText("CPU ms today");
+    await screen.findByText("Runtime ms today");
     expect(screen.getAllByText("0").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Installations" }));
