@@ -203,10 +203,18 @@ export {
   type AdminDashboardSectionPage,
   type AdminDashboardStore,
   type AdminExecutionSummary,
+  type AdminExecutionFilters,
   type AdminInstallationSummary,
   type AdminPluginVersionSummary,
   type AdminUsageSummary
 } from "./admin-dashboard.js";
+
+export {
+  createD1AdminExecutionDetailStore,
+  type AdminExecutionDetail,
+  type AdminExecutionDetailStore,
+  type AdminExecutionStatus
+} from "./admin-executions.js";
 
 export {
   createD1AdminInstallationCommandStore,
