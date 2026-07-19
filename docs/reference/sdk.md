@@ -59,6 +59,7 @@ Phase 1 built-ins:
 Phase 2 built-ins:
 
 - `email.send`: 完全一致のASCII recipient domainとtemplate scopeを強制。pluginは自由なsubject/bodyを渡せず、broker側templateのnamed string変数だけを単一passで展開する。provider credentialはtrusted adapter内で注入し、plugin context、result、error、auditへ含めない。
+- `http.fetch`: public HTTP(S) origin、標準method（GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS）、request header scopeを強制。redirectはtransportの自動追跡を無効化し、各hopのoriginと派生methodを再検証する。credentialはoriginごとのtrusted設定から注入し、別originへ持ち越さない。`createWebFetchHttpTransport`はWorkers標準`fetch`を`redirect: manual`、`credentials: omit`でadapter化する。
 
 同じexecution/call indexのretryはjournal resultを再利用する。capabilityまたはinputが変わったjournal entryは`CapabilityJournalConflictError`で拒否する。
 
