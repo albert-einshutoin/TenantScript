@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* global process */
+/* global console, process */
 
 const { runRollbackDrill } = await import("../src/rollback-drill.ts");
 const args = process.argv.slice(2);
