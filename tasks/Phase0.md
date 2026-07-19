@@ -2,14 +2,16 @@
 
 **ゴール:** Cloudflare 上で tenant plugin を「安全に」実行できることを、テストとベンチで証明する。
 
-**Exit Gate(プロダクトドキュメント §12 準拠):**
+**Exit Gate(プロダクトドキュメント §12 準拠):** 公開証跡と未完了理由は [Phase 0 Gate Evidence](../docs/reviews/phase0-gate-evidence.md) を正とする。
 
-- [ ] E2E デモ成立: example-saas の `invoice.created` → installed plugin → モック Slack 通知
+- [x] E2E デモ成立: example-saas の `invoice.created` → installed plugin → モック Slack 通知
 - [ ] blocking hook(transform)の p95 added latency(warm)が実測され docs/benchmarks/ に記録されている。目標 50ms に対する **Go/No-Go 判断が完了**している(未達の場合は原因分析と対策方針を含む)
-- [ ] adversarial security suite green(raw secret 露出・egress 逸脱・grant 外 capability の既知経路ゼロ)
+- [x] adversarial security suite green(raw secret 露出・egress 逸脱・grant 外 capability の既知経路ゼロ)
 - [ ] ADR-001 確定: Dynamic Worker Loader vs Workers for Platforms の選定
-- [ ] 全 package カバレッジ 80%+、CI green
+- [x] 全 package カバレッジ 80%+、CI green
 - [ ] LICENSE と OSS 基本整備が完了し、リポジトリ public 化のタイミングが決定されている(P0-T29)
+
+2026-07-20 reconciliation: checked rows have reproducible repository evidence. The remaining rows depend on open #4 or the npm portion of #3; fork independence is tracked separately in #2. The phase is not complete while any row remains unchecked.
 
 **スコープ外(Phase 1 に送る):** approval、rollback、budget cap、proxy mode、CLI、Admin UI、実 Slack OAuth。
 
