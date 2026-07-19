@@ -196,6 +196,16 @@ export {
 } from "./storage.js";
 
 export {
+  createD1AuditLogStore,
+  type AppendAuditEvent,
+  type AuditEvent,
+  type AuditLogStore,
+  type AuditScope,
+  type AuditValue,
+  type AuditVerificationResult
+} from "./audit-log.js";
+
+export {
   createDurableObjectSecretStore,
   createInMemorySecretStore,
   type PutSecretRequest,
