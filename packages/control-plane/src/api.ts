@@ -364,8 +364,8 @@ export function createControlPlaneApi(params: {
   };
 }
 
-export function createStaticTokenIdentityResolver(
-  identitiesByToken: Record<string, AuthenticatedIdentity>
+export function createStaticTokenIdentityResolver<TIdentity extends AuthenticatedIdentity>(
+  identitiesByToken: Record<string, TIdentity>
 ): IdentityResolver {
   return {
     resolveToken: (token) => identitiesByToken[token] ?? null

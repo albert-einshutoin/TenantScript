@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  createDemoAdminApiClient,
+  createUnavailableAdminApiClient,
+  AdminApiError,
   type AdminApiClient,
   type AdminSession,
   type DashboardSnapshot
 } from "./api-client.js";
 import { type AdminRoute, useHashRoute } from "./router.js";
 
-const defaultClient = createDemoAdminApiClient();
+const defaultClient = createUnavailableAdminApiClient();
 
 export function App({ client = defaultClient }: { client?: AdminApiClient }) {
   const [session, setSession] = useState<AdminSession | null>(null);
@@ -46,8 +47,8 @@ function LoginPanel({
     void client
       .resolveSession({ token })
       .then(onLogin)
-      .catch(() => {
-        setError("Token rejected");
+      .catch((cause: unknown) => {
+        setError(cause instanceof AdminApiError ? cause.message : "Token rejected");
       })
       .finally(() => {
         setSubmitting(false);
@@ -70,7 +71,10 @@ function LoginPanel({
           <input
             id="token"
             name="token"
+            type="password"
             autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
             value={token}
             onChange={(event) => {
               setToken(event.currentTarget.value);

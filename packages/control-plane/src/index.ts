@@ -171,3 +171,11 @@ export {
   type SlackConnectionRecord,
   type SlackConnectionStore
 } from "./slack-connection-store.js";
+
+export {
+  createControlPlaneHttpHandler,
+  type AdminRole,
+  type ControlPlaneHttpHandler,
+  type ControlPlaneHttpHandlerOptions,
+  type TenantScopedAdminIdentity
+} from "./http-api.js";

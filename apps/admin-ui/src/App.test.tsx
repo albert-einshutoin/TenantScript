@@ -8,8 +8,26 @@ import {
 } from "./api-client.js";
 
 describe("Admin UI auth foundation", () => {
-  it("logs in with a manager role token and renders the protected dashboard", async () => {
+  it("masks the bearer token while it is entered", () => {
+    render(<App client={createDemoAdminApiClient()} />);
+
+    expect(screen.getByLabelText("Token")).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText("Token")).toHaveAttribute("spellcheck", "false");
+    expect(screen.getByLabelText("Token")).toHaveAttribute("autocapitalize", "none");
+  });
+
+  it("fails closed instead of enabling demo tokens by default", async () => {
     render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Token"), { target: { value: "manager-token" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await expect(screen.findByText("Control Plane not configured")).resolves.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approval queue" })).not.toBeInTheDocument();
+  });
+
+  it("logs in with a manager role token and renders the protected dashboard", async () => {
+    render(<App client={createDemoAdminApiClient()} />);
 
     fireEvent.change(screen.getByLabelText("Token"), { target: { value: "manager-token" } });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
@@ -21,7 +39,7 @@ describe("Admin UI auth foundation", () => {
   });
 
   it("routes between operational panels and signs out", async () => {
-    render(<App />);
+    render(<App client={createDemoAdminApiClient()} />);
 
     await login("manager-token");
     await screen.findByText("Recent executions");
@@ -43,7 +61,7 @@ describe("Admin UI auth foundation", () => {
   });
 
   it("rejects invalid tokens without showing protected navigation", async () => {
-    render(<App />);
+    render(<App client={createDemoAdminApiClient()} />);
 
     fireEvent.change(screen.getByLabelText("Token"), { target: { value: "bad-token" } });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
@@ -53,7 +71,7 @@ describe("Admin UI auth foundation", () => {
   });
 
   it("keeps approval actions disabled for viewer role sessions", async () => {
-    render(<App />);
+    render(<App client={createDemoAdminApiClient()} />);
 
     fireEvent.change(screen.getByLabelText("Token"), { target: { value: "viewer-token" } });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
