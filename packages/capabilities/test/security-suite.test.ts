@@ -6,6 +6,7 @@ import {
   createApprovalsRequestProvider,
   createCapabilityBroker,
   createEmailSendProvider,
+  createHttpFetchProvider,
   createInMemoryCapabilityCallJournal,
   createInvoiceReadProvider,
   createMockSlackSendProvider,
@@ -160,6 +161,116 @@ describe("capabilities security suite", () => {
     ).rejects.toThrow("email.send rendered subject must not contain line breaks");
     expect(deliver).not.toHaveBeenCalled();
     expect(JSON.stringify(broker)).not.toContain("email-provider-secret");
+  });
+
+  it("blocks HTTP redirect allowlist bypass before credentials reach the destination", async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 302,
+        headers: { location: "http://169.254.169.254/latest/meta-data" }
+      })
+      .mockResolvedValueOnce({
+        status: 302,
+        headers: { location: "https://attacker.example.net/collect" }
+      });
+    const broker = createCapabilityBroker({
+      grants: {
+        "http.fetch": {
+          origins: ["https://api.example.com"],
+          methods: ["GET"]
+        }
+      },
+      providers: {
+        "http.fetch": createHttpFetchProvider({
+          allowedOrigins: ["https://api.example.com"],
+          allowedMethods: ["GET"],
+          credentials: {
+            "https://api.example.com": {
+              name: "authorization",
+              value: "Bearer redirect-secret"
+            }
+          },
+          transport
+        })
+      }
+    });
+
+    await expect(
+      broker.call("http.fetch", {
+        url: "https://api.example.com/start",
+        method: "GET"
+      })
+    ).rejects.toThrow("http.fetch destination http://169.254.169.254 is not public");
+    await expect(
+      broker.call("http.fetch", {
+        url: "https://api.example.com/start",
+        method: "GET"
+      })
+    ).rejects.toThrow("http.fetch origin https://attacker.example.net is outside granted scope");
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(transport.mock.calls[0])).toContain("redirect-secret");
+  });
+
+  it("rejects plugin-controlled credential and routing headers before HTTP transport", async () => {
+    const transport = vi.fn();
+    const broker = createCapabilityBroker({
+      grants: {
+        "http.fetch": {
+          origins: ["https://api.example.com"],
+          methods: ["POST"],
+          requestHeaders: ["content-type"]
+        }
+      },
+      providers: {
+        "http.fetch": createHttpFetchProvider({
+          allowedOrigins: ["https://api.example.com"],
+          allowedMethods: ["POST"],
+          transport
+        })
+      }
+    });
+
+    await expect(
+      broker.call("http.fetch", {
+        url: "https://api.example.com/v1/jobs",
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: "Bearer attacker-controlled"
+        },
+        body: "{}"
+      })
+    ).rejects.toThrow("http.fetch header authorization cannot be supplied by the plugin");
+    await expect(
+      broker.call("http.fetch", {
+        url: "https://api.example.com/v1/jobs",
+        method: "POST",
+        headers: { Host: "attacker.invalid" },
+        body: "{}"
+      })
+    ).rejects.toThrow("http.fetch header host cannot be supplied by the plugin");
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "http://127.0.0.1/admin",
+    "http://100.64.0.1/internal",
+    "http://[::1]/internal",
+    "http://metadata.google.internal/computeMetadata/v1"
+  ])("rejects reserved HTTP destination %s", async (url) => {
+    const transport = vi.fn();
+    const broker = createCapabilityBroker({
+      grants: {
+        "http.fetch": { origins: ["https://api.example.com"], methods: ["GET"] }
+      },
+      providers: { "http.fetch": transport }
+    });
+
+    await expect(broker.call("http.fetch", { url, method: "GET" })).rejects.toThrow(
+      "is not public"
+    );
+    expect(transport).not.toHaveBeenCalled();
   });
 
   it("denies approval requests outside the granted role scope", async () => {

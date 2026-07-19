@@ -2,10 +2,54 @@ import { vi } from "vitest";
 import {
   createApprovalsRequestProvider,
   createEmailSendProvider,
+  createHttpFetchProvider,
   createInvoiceReadProvider,
   createMockSlackSendProvider
 } from "../src/index.js";
 import { runCapabilityContract } from "./contract-kit.js";
+
+runCapabilityContract({
+  capability: "http.fetch",
+  grant: {
+    origins: ["https://api.example.com"],
+    methods: ["GET"],
+    requestHeaders: ["accept"]
+  },
+  allowedInput: {
+    url: "https://api.example.com/v1/invoices",
+    method: "GET",
+    headers: { accept: "application/json" }
+  },
+  deniedInput: {
+    url: "https://api.example.com.attacker.invalid/v1/invoices",
+    method: "GET",
+    headers: { accept: "application/json" }
+  },
+  createProvider: () =>
+    createHttpFetchProvider({
+      allowedOrigins: ["https://api.example.com"],
+      allowedMethods: ["GET"],
+      credentials: {
+        "https://api.example.com": {
+          name: "authorization",
+          value: "Bearer http-contract-secret"
+        }
+      },
+      transport: vi.fn().mockResolvedValue({
+        status: 200,
+        headers: { "content-type": "application/json" },
+        body: "[]"
+      })
+    }),
+  expectedAllowedResult: {
+    status: 200,
+    headers: { "content-type": "application/json" },
+    body: "[]"
+  },
+  expectedDeniedMessage:
+    "http.fetch origin https://api.example.com.attacker.invalid is outside granted scope",
+  sensitiveValue: "http-contract-secret"
+});
 
 runCapabilityContract({
   capability: "email.send",

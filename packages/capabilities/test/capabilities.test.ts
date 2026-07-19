@@ -5,11 +5,13 @@ import {
   createCapabilityBroker,
   createDurableObjectCapabilityCallJournal,
   createEmailSendProvider,
+  createHttpFetchProvider,
   createInMemoryCapabilityCallJournal,
   createInMemoryCapabilityRateLimiter,
   createInvoiceReadProvider,
   createMockSlackSendProvider,
   createPluginCapabilityContext,
+  createWebFetchHttpTransport,
   type ApprovalRecord,
   type CapabilityCallJournalEntry
 } from "../src/index.js";
@@ -185,6 +187,258 @@ describe("createCapabilityBroker", () => {
       })
     ).rejects.toThrow("email.send template internal is outside granted scope");
     expect(deliver).not.toHaveBeenCalled();
+  });
+
+  it("follows allowed HTTP redirects and injects only the destination credential", async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 302,
+        headers: { location: "https://uploads.example.com/v1/result" }
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "set-cookie": "provider-session=secret"
+        },
+        body: '{"ok":true}'
+      });
+    const broker = createCapabilityBroker({
+      grants: {
+        "http.fetch": {
+          origins: ["https://api.example.com", "https://uploads.example.com"],
+          methods: ["GET"],
+          requestHeaders: ["accept"]
+        }
+      },
+      providers: {
+        "http.fetch": createHttpFetchProvider({
+          allowedOrigins: ["https://api.example.com", "https://uploads.example.com"],
+          allowedMethods: ["GET"],
+          credentials: {
+            "https://api.example.com": {
+              name: "authorization",
+              value: "Bearer api-secret"
+            },
+            "https://uploads.example.com": {
+              name: "x-upload-token",
+              value: "upload-secret"
+            }
+          },
+          transport
+        })
+      }
+    });
+
+    await expect(
+      broker.call("http.fetch", {
+        url: "https://api.example.com/v1/start",
+        method: "GET",
+        headers: { accept: "application/json" }
+      })
+    ).resolves.toEqual({
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: '{"ok":true}'
+    });
+    expect(transport).toHaveBeenNthCalledWith(1, {
+      url: "https://api.example.com/v1/start",
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        authorization: "Bearer api-secret"
+      }
+    });
+    expect(transport).toHaveBeenNthCalledWith(2, {
+      url: "https://uploads.example.com/v1/result",
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        "x-upload-token": "upload-secret"
+      }
+    });
+  });
+
+  it("adapts the Workers fetch API with manual redirects and ambient credentials disabled", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response("accepted", {
+        status: 202,
+        headers: { "content-type": "text/plain" }
+      })
+    );
+    const transport = createWebFetchHttpTransport(fetcher);
+
+    await expect(
+      transport({
+        url: "https://api.example.com/v1/jobs",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}"
+      })
+    ).resolves.toEqual({
+      status: 202,
+      headers: { "content-type": "text/plain" },
+      body: "accepted"
+    });
+    expect(fetcher).toHaveBeenCalledWith("https://api.example.com/v1/jobs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      redirect: "manual",
+      credentials: "omit"
+    });
+  });
+
+  it("converts POST to GET after a 303 redirect and drops entity metadata", async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 303, headers: { location: "/v1/result" } })
+      .mockResolvedValueOnce({ status: 204 });
+    const broker = createCapabilityBroker({
+      grants: {
+        "http.fetch": {
+          origins: ["https://api.example.com"],
+          methods: ["POST", "GET"],
+          requestHeaders: ["content-type"]
+        }
+      },
+      providers: {
+        "http.fetch": createHttpFetchProvider({
+          allowedOrigins: ["https://api.example.com"],
+          allowedMethods: ["POST", "GET"],
+          transport
+        })
+      }
+    });
+
+    await expect(
+      broker.call("http.fetch", {
+        url: "https://api.example.com/v1/jobs",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}"
+      })
+    ).resolves.toEqual({ status: 204, headers: {} });
+    expect(transport).toHaveBeenNthCalledWith(2, {
+      url: "https://api.example.com/v1/result",
+      method: "GET",
+      headers: {}
+    });
+  });
+
+  it("fails closed when an HTTP provider exceeds its redirect budget", async () => {
+    const broker = createCapabilityBroker({
+      grants: {
+        "http.fetch": { origins: ["https://api.example.com"], methods: ["GET"] }
+      },
+      providers: {
+        "http.fetch": createHttpFetchProvider({
+          allowedOrigins: ["https://api.example.com"],
+          allowedMethods: ["GET"],
+          maxRedirects: 0,
+          transport: () => ({ status: 302, headers: { location: "/again" } })
+        })
+      }
+    });
+
+    await expect(
+      broker.call("http.fetch", { url: "https://api.example.com/start", method: "GET" })
+    ).rejects.toThrow("http.fetch exceeded redirect limit");
+  });
+
+  it("rejects unsafe HTTP provider configuration before accepting calls", () => {
+    const transport = vi.fn();
+    expect(() =>
+      createHttpFetchProvider({
+        allowedOrigins: ["https://api.example.com"],
+        allowedMethods: [],
+        transport
+      })
+    ).toThrow("http.fetch provider methods are invalid");
+    expect(() =>
+      createHttpFetchProvider({
+        allowedOrigins: ["https://api.example.com/v1"],
+        allowedMethods: ["GET"],
+        transport
+      })
+    ).toThrow("http.fetch provider origin https://api.example.com/v1 is invalid");
+    expect(() =>
+      createHttpFetchProvider({
+        allowedOrigins: ["https://api.example.com"],
+        allowedMethods: ["GET"],
+        credentials: {
+          "https://other.example.com": { name: "authorization", value: "secret" }
+        },
+        transport
+      })
+    ).toThrow("http.fetch credential origin https://other.example.com is not allowed");
+    expect(() =>
+      createHttpFetchProvider({
+        allowedOrigins: ["https://api.example.com"],
+        allowedMethods: ["GET"],
+        credentials: {
+          "https://api.example.com": { name: "host", value: "secret" }
+        },
+        transport
+      })
+    ).toThrow("http.fetch credential for https://api.example.com is invalid");
+    expect(() =>
+      createHttpFetchProvider({
+        allowedOrigins: ["http://api.example.com"],
+        allowedMethods: ["GET"],
+        credentials: {
+          "http://api.example.com": { name: "authorization", value: "secret" }
+        },
+        transport
+      })
+    ).toThrow("http.fetch credential origin http://api.example.com must use HTTPS");
+    expect(() =>
+      createHttpFetchProvider({
+        allowedOrigins: ["https://api.example.com"],
+        allowedMethods: ["GET"],
+        maxRedirects: 11,
+        transport
+      })
+    ).toThrow("http.fetch maxRedirects must be between 0 and 10");
+  });
+
+  it.each([
+    [{}, "http.fetch requires url and method"],
+    [
+      { url: "https://api.example.com", method: "GET", extra: true },
+      "http.fetch contains unsupported input fields"
+    ],
+    [
+      { url: "https://api.example.com", method: "GET", body: "not allowed" },
+      "http.fetch GET requests must not include a body"
+    ],
+    [{ url: "https://api.example.com", method: "CONNECT" }, "http.fetch method is invalid"],
+    [
+      { url: "https://user:secret@api.example.com", method: "GET" },
+      "http.fetch URL must not contain credentials"
+    ],
+    [
+      {
+        url: "https://api.example.com",
+        method: "GET",
+        headers: { Accept: "text/plain", accept: "application/json" }
+      },
+      "http.fetch header accept is duplicated"
+    ]
+  ])("rejects malformed HTTP input %#", async (input, message) => {
+    const broker = createCapabilityBroker({
+      grants: {
+        "http.fetch": {
+          origins: ["https://api.example.com"],
+          methods: ["GET"],
+          requestHeaders: ["accept"]
+        }
+      },
+      providers: { "http.fetch": vi.fn() }
+    });
+
+    await expect(broker.call("http.fetch", input)).rejects.toThrow(message);
   });
 
   it("creates an approval and lets the handler finish without suspension", async () => {
