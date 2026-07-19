@@ -79,3 +79,14 @@ test("checks SDK reference shell snippets", () => {
     assert.match(result.stderr, /docs\/reference\/sdk\.md:1: shell block must start with # cwd:/);
   });
 });
+
+test("checks contributor onboarding shell snippets", () => {
+  withRepo((dir) => {
+    writeFileSync(join(dir, "CONTRIBUTING.md"), "```sh\npnpm verify\n```\n");
+
+    const result = runChecker(dir);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /CONTRIBUTING\.md:1: shell block must start with # cwd:/);
+  });
+});
