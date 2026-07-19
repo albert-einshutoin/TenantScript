@@ -23,6 +23,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Admin rollbackの結果復旧](docs/operations/admin-rollback-idempotency.md) — 応答喪失、revision CAS、audit result再取得
 - [Security suite v2 threat map](docs/security/security-suite-v2.md) — Phase 1攻撃面、常設テスト、依存境界CI
 - [Security suite v3 RBAC attack map](docs/security/security-suite-v3.md) — role/scope/tenant昇格攻撃、identity由来audit、常設証跡
+- [Audit integrity](docs/security/audit-integrity.md) — write-once D1境界、tenant/app hash chain、改ざん検知と運用責任
 - [Threat model](docs/security/threat-model.md) — 信頼境界、攻撃面、mitigation、常設テスト、未検証範囲
 - [Community security review](docs/security/community-review-packet.md) — 固定commitを対象にした第三者レビュー範囲、報告経路、完了証跡
 - [RBAC matrix](docs/security/rbac-matrix.md) — roleごとの操作権限、`manager` claimからの移行、未実装境界

@@ -53,7 +53,7 @@
 
 ## チャンク C: audit & retention(T09–T11)
 
-- [ ] **P2-T09**(M)audit log の不変化
+- [x] **P2-T09**(M)audit log の不変化
   - RED: audit エントリの更新・削除 API が存在しない(write-once)/ hash chain で改ざん検知できる
   - DoD: 不変性・検知テスト green
 
