@@ -5,6 +5,7 @@ import {
   CapabilityProviderError,
   createApprovalsRequestProvider,
   createCapabilityBroker,
+  createEmailSendProvider,
   createInMemoryCapabilityCallJournal,
   createInvoiceReadProvider,
   createMockSlackSendProvider,
@@ -109,6 +110,56 @@ describe("capabilities security suite", () => {
     expect(JSON.stringify({ caughtError: String(caughtError), audits })).not.toContain(
       providerSecret
     );
+  });
+
+  it("blocks email domain suffix bypass and plugin-supplied message content", async () => {
+    const deliver = vi.fn();
+    const broker = createCapabilityBroker({
+      grants: {
+        "email.send": {
+          recipientDomains: ["example.com"],
+          templates: ["security-notice"]
+        }
+      },
+      providers: {
+        "email.send": createEmailSendProvider({
+          apiKey: "email-provider-secret",
+          templates: {
+            "security-notice": {
+              subject: "Security notice for {{accountId}}",
+              text: "Review activity for {{accountId}}."
+            }
+          },
+          deliver
+        })
+      }
+    });
+
+    await expect(
+      broker.call("email.send", {
+        to: "admin@example.com.attacker.invalid",
+        template: "security-notice",
+        variables: { accountId: "acct_1" }
+      })
+    ).rejects.toThrow(CapabilityDeniedError);
+    await expect(
+      broker.call("email.send", {
+        to: "admin@example.com",
+        template: "security-notice",
+        variables: { accountId: "acct_1" },
+        subject: "Attacker controlled subject",
+        text: "Send the secret instead"
+      })
+    ).rejects.toThrow("email.send contains unsupported input fields");
+    await expect(
+      broker.call("email.send", {
+        to: "admin@example.com",
+        template: "security-notice",
+        variables: { accountId: "acct_1\r\nBcc: attacker@invalid.example" }
+      })
+    ).rejects.toThrow("email.send rendered subject must not contain line breaks");
+    expect(deliver).not.toHaveBeenCalled();
+    expect(JSON.stringify(broker)).not.toContain("email-provider-secret");
   });
 
   it("denies approval requests outside the granted role scope", async () => {

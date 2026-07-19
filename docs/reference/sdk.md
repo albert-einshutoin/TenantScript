@@ -56,6 +56,10 @@ Phase 1 built-ins:
 - `approvals.request`: roleとresumeHook scopeを強制。
 - `invoice.read`: tenantとfield scopeを強制。
 
+Phase 2 built-ins:
+
+- `email.send`: 完全一致のASCII recipient domainとtemplate scopeを強制。pluginは自由なsubject/bodyを渡せず、broker側templateのnamed string変数だけを単一passで展開する。provider credentialはtrusted adapter内で注入し、plugin context、result、error、auditへ含めない。
+
 同じexecution/call indexのretryはjournal resultを再利用する。capabilityまたはinputが変わったjournal entryは`CapabilityJournalConflictError`で拒否する。
 
 providerを実行した呼び出しは`success`、grant/scope/rate limit等による拒否は`denied`、予期しないprovider障害は`error`として監査する。監査recordはcapability名、安定したreason、時刻だけを持ち、input、result、credential、provider error本文を保存しない。予期しないprovider障害は`CapabilityProviderError`へ正規化され、内部messageをpluginへ反射しない。journal replayは既存resultと監査を再利用するため、重複するprovider実行や監査recordを生成しない。

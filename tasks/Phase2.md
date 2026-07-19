@@ -67,7 +67,7 @@
 
 ## チャンク D: capability pack v2(T12–T15)
 
-- [ ] **P2-T12**(M)email.send
+- [x] **P2-T12**(M)email.send
   - RED: grant の宛先ドメイン制限 / テンプレート外の本文注入防止
   - DoD: 機能 + 攻撃テスト green
 

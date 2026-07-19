@@ -4,6 +4,7 @@ import {
   createApprovalsRequestProvider,
   createCapabilityBroker,
   createDurableObjectCapabilityCallJournal,
+  createEmailSendProvider,
   createInMemoryCapabilityCallJournal,
   createInMemoryCapabilityRateLimiter,
   createInvoiceReadProvider,
@@ -101,6 +102,89 @@ describe("createCapabilityBroker", () => {
     await expect(broker.call("slack.send", { channel: "C999", text: "hello" })).rejects.toThrow(
       "slack.send channel C999 is outside granted scope"
     );
+  });
+
+  it("renders an allowed email template without recursively evaluating variable content", async () => {
+    const deliver = vi.fn();
+    const broker = createCapabilityBroker({
+      grants: {
+        "email.send": {
+          recipientDomains: ["example.com"],
+          templates: ["invoice-ready"]
+        }
+      },
+      providers: {
+        "email.send": createEmailSendProvider({
+          apiKey: "email-provider-secret",
+          templates: {
+            "invoice-ready": {
+              subject: "Invoice {{invoiceId}} is ready",
+              text: "Hello {{recipientName}}, invoice {{invoiceId}} is ready."
+            }
+          },
+          deliver
+        })
+      }
+    });
+
+    await expect(
+      broker.call("email.send", {
+        to: "buyer@example.com",
+        template: "invoice-ready",
+        variables: {
+          invoiceId: "inv_1",
+          recipientName: "{{invoiceId}}"
+        }
+      })
+    ).resolves.toEqual({ ok: true, provider: "email" });
+    expect(deliver).toHaveBeenCalledWith(
+      {
+        to: "buyer@example.com",
+        subject: "Invoice inv_1 is ready",
+        text: "Hello {{invoiceId}}, invoice inv_1 is ready."
+      },
+      "email-provider-secret"
+    );
+  });
+
+  it("rejects email recipients and templates outside the grant before delivery", async () => {
+    const deliver = vi.fn();
+    const broker = createCapabilityBroker({
+      grants: {
+        "email.send": {
+          recipientDomains: ["example.com"],
+          templates: ["invoice-ready"]
+        }
+      },
+      providers: {
+        "email.send": createEmailSendProvider({
+          apiKey: "email-provider-secret",
+          templates: {
+            "invoice-ready": { subject: "Ready", text: "Ready" },
+            internal: { subject: "Internal", text: "Internal" }
+          },
+          deliver
+        })
+      }
+    });
+
+    await expect(
+      broker.call("email.send", {
+        to: "buyer@example.com.attacker.invalid",
+        template: "invoice-ready",
+        variables: {}
+      })
+    ).rejects.toThrow(
+      "email.send recipient domain example.com.attacker.invalid is outside granted scope"
+    );
+    await expect(
+      broker.call("email.send", {
+        to: "buyer@example.com",
+        template: "internal",
+        variables: {}
+      })
+    ).rejects.toThrow("email.send template internal is outside granted scope");
+    expect(deliver).not.toHaveBeenCalled();
   });
 
   it("creates an approval and lets the handler finish without suspension", async () => {
