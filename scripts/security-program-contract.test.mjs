@@ -55,3 +55,28 @@ test("nightly fuzz workflow runs the canonical seeded parser fuzz gate", () => {
   assert.match(workflow, /FUZZ_SEED:/);
   assert.equal(typeof packageJson.scripts?.["test:fuzz"], "string");
 });
+
+test("advisory response runbook and a machine-checked drill are published", () => {
+  for (const path of [
+    "docs/security/advisory-response-runbook.md",
+    "docs/security/advisory-drills/README.md",
+    "docs/security/advisory-drills/2026-07-20-config-input-crash.json"
+  ]) {
+    assert.ok(existsSync(join(repoRoot, path)), `missing ${path}`);
+  }
+
+  const runbook = read("docs/security/advisory-response-runbook.md");
+  for (const stage of [
+    "Intake",
+    "Triage",
+    "Regression test",
+    "Private fix",
+    "Advisory decision",
+    "Closeout"
+  ]) {
+    assert.ok(runbook.includes(stage), `advisory runbook must document ${stage}`);
+  }
+
+  assert.match(runbook, /GitHub Security Advisories/);
+  assert.match(runbook, /synthetic/i);
+});
