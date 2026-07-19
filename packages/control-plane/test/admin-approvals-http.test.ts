@@ -9,11 +9,13 @@ describe("Admin approval decision HTTP contract", () => {
   it("derives manager scope and returns correlated audit evidence", async () => {
     const store = decisionStore();
     const handler = createHandler(store);
-    const response = await handler(decisionRequest("manager", {
-      approvalId: "approval_1",
-      decision: "approved",
-      reason: "validated"
-    }));
+    const response = await handler(
+      decisionRequest("manager", {
+        approvalId: "approval_1",
+        decision: "approved",
+        reason: "validated"
+      })
+    );
 
     expect(response.status).toBe(200);
     expect(store.decide).toHaveBeenCalledWith({
