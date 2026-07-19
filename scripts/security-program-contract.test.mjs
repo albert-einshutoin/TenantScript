@@ -110,3 +110,10 @@ test("community review packet is pinned and cannot claim completion without exte
   assert.deepEqual(campaign.reviewers, []);
   assert.equal(campaign.completedAt, null);
 });
+
+test("Tier 1 fetches review baseline history before validating campaigns", () => {
+  const workflow = read(".github/workflows/tier1.yml");
+
+  assert.match(workflow, /actions\/checkout@v6\n\s+with:\n\s+fetch-depth: 0/);
+  assert.match(workflow, /pnpm lint:security-reviews|pnpm lint/);
+});
