@@ -831,7 +831,7 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByText("disabled")).toHaveClass("neutral");
 
     fireEvent.click(screen.getByRole("button", { name: "Executions" }));
-    expect(screen.getByText("error")).toHaveClass("critical");
+    expect(screen.getByText("error", { selector: "span" })).toHaveClass("critical");
   });
 });
 

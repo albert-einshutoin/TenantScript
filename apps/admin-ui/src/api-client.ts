@@ -111,6 +111,33 @@ export interface ExecutionView {
   createdAt: Date;
 }
 
+export interface ExecutionSearchRequest {
+  pluginId?: string;
+  hookName?: string;
+  status?: ExecutionView["status"];
+  cursor?: string;
+}
+
+export interface ExecutionSearchPage {
+  items: readonly ExecutionView[];
+  nextCursor?: string;
+}
+
+export interface ExecutionDetailView {
+  id: string;
+  pluginId: string;
+  hookName: string;
+  version: string;
+  status: ExecutionView["status"];
+  durationMs: number;
+  errorCode?: "execution_failed" | "execution_timeout" | "egress_denied" | "budget_exceeded";
+  capabilityCalls: readonly {
+    name: string;
+    status: "success" | "error";
+  }[];
+  createdAt: Date;
+}
+
 export interface DashboardSnapshot {
   installations: readonly InstallationView[];
   pluginVersions: readonly PluginVersionView[];
@@ -126,6 +153,8 @@ export interface AdminApiClient extends AdminSessionClient {
     section: AdminDashboardSection,
     cursor: string
   ) => Promise<DashboardSectionPage>;
+  searchExecutions: (request: ExecutionSearchRequest) => Promise<ExecutionSearchPage>;
+  getExecutionDetail: (id: string) => Promise<ExecutionDetailView>;
   getInstallationPermissionReview: (id: string) => Promise<InstallationPermissionReview>;
   updateInstallationCommand: (
     request: InstallationCommandRequest
@@ -255,6 +284,24 @@ const executionSchema = z
     status: z.enum(["success", "error", "timeout", "egress_denied", "budget_exceeded"]),
     durationMs: z.number(),
     capabilityNames: z.array(z.string()),
+    createdAt: z.coerce.date()
+  })
+  .strict();
+
+const executionDetailSchema = z
+  .object({
+    id: z.string().min(1),
+    pluginId: z.string().min(1),
+    hookName: z.string().min(1),
+    version: z.string().min(1),
+    status: z.enum(["success", "error", "timeout", "egress_denied", "budget_exceeded"]),
+    durationMs: z.number().nonnegative(),
+    errorCode: z
+      .enum(["execution_failed", "execution_timeout", "egress_denied", "budget_exceeded"])
+      .optional(),
+    capabilityCalls: z.array(
+      z.object({ name: z.string().min(1), status: z.enum(["success", "error"]) }).strict()
+    ),
     createdAt: z.coerce.date()
   })
   .strict();
@@ -501,6 +548,21 @@ const dashboardFixture: DashboardSnapshot = {
   cursors: {}
 };
 
+function executionErrorCode(status: ExecutionView["status"]): ExecutionDetailView["errorCode"] {
+  switch (status) {
+    case "success":
+      return undefined;
+    case "error":
+      return "execution_failed";
+    case "timeout":
+      return "execution_timeout";
+    case "egress_denied":
+      return "egress_denied";
+    case "budget_exceeded":
+      return "budget_exceeded";
+  }
+}
+
 export function createDemoAdminApiClient(): AdminApiClient {
   let snapshot: DashboardSnapshot = {
     ...dashboardFixture,
@@ -517,6 +579,36 @@ export function createDemoAdminApiClient(): AdminApiClient {
     getDashboard: () => Promise.resolve(snapshot),
     getDashboardSection: () =>
       Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
+    searchExecutions: (request) => {
+      const items = snapshot.executions.filter(
+        (execution) =>
+          (request.pluginId === undefined || execution.pluginId === request.pluginId) &&
+          (request.hookName === undefined || execution.hookName === request.hookName) &&
+          (request.status === undefined || execution.status === request.status)
+      );
+      return Promise.resolve({ items });
+    },
+    getExecutionDetail: (id) => {
+      const execution = snapshot.executions.find((candidate) => candidate.id === id);
+      if (execution === undefined) {
+        return Promise.reject(new AdminApiError(404, "execution_not_found", "execution not found"));
+      }
+      const errorCode = executionErrorCode(execution.status);
+      return Promise.resolve({
+        id: execution.id,
+        pluginId: execution.pluginId,
+        hookName: execution.hookName,
+        version: execution.version,
+        status: execution.status,
+        durationMs: execution.durationMs,
+        ...(errorCode === undefined ? {} : { errorCode }),
+        capabilityCalls: execution.capabilityNames.map((name) => ({
+          name,
+          status: execution.status === "success" ? "success" : "error"
+        })),
+        createdAt: execution.createdAt
+      });
+    },
     getInstallationPermissionReview: (id) => {
       const installation = snapshot.installations.find((candidate) => candidate.id === id);
       if (installation === undefined)
@@ -680,6 +772,8 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     resolveSession: unavailable,
     getDashboard: unavailable,
     getDashboardSection: unavailable,
+    searchExecutions: unavailable,
+    getExecutionDetail: unavailable,
     getInstallationPermissionReview: unavailable,
     updateInstallationCommand: unavailable,
     getInstallPreview: unavailable,
@@ -734,6 +828,11 @@ export function createAdminApiClient(params: {
     "/v1/admin/rollbacks",
     params.isDevelopment
   );
+  const executionDetailUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/execution-detail",
+    params.isDevelopment
+  );
   const fetcher = params.fetcher ?? fetch;
   let credential: string | undefined;
 
@@ -760,6 +859,28 @@ export function createAdminApiClient(params: {
         throw invalidResponse();
       }
       return dashboardSectionPage(page.data);
+    },
+    searchExecutions: async (request) => {
+      const url = new URL(`${dashboardUrl}/executions`);
+      for (const [key, value] of Object.entries(request)) {
+        if (value !== undefined && value !== "") url.searchParams.set(key, value);
+      }
+      const payload = await fetchAdminJson(url.toString(), requireCredential(credential), fetcher);
+      const page = dashboardSectionSchema.safeParse(payload);
+      if (!page.success || page.data.section !== "executions") throw invalidResponse();
+      return {
+        items: page.data.items,
+        ...(page.data.nextCursor === undefined ? {} : { nextCursor: page.data.nextCursor })
+      };
+    },
+    getExecutionDetail: async (id) => {
+      const url = new URL(executionDetailUrl);
+      url.searchParams.set("id", id);
+      const payload = await fetchAdminJson(url.toString(), requireCredential(credential), fetcher);
+      const detail = executionDetailSchema.safeParse(payload);
+      if (!detail.success || detail.data.id !== id) throw invalidResponse();
+      const { errorCode, ...safeDetail } = detail.data;
+      return errorCode === undefined ? safeDetail : { ...safeDetail, errorCode };
     },
     getInstallationPermissionReview: async (id) => {
       const url = new URL("/v1/admin/installation-review", dashboardUrl);

@@ -25,7 +25,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -46,6 +47,11 @@ button:disabled {
 
 button:focus-visible,
 input:focus-visible {
+  outline: 3px solid #8ab4ff;
+  outline-offset: 2px;
+}
+
+select:focus-visible {
   outline: 3px solid #8ab4ff;
   outline-offset: 2px;
 }
@@ -298,6 +304,86 @@ input:focus-visible {
   overflow-x: auto;
 }
 
+.tenant-context {
+  margin: 0 0 12px;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.execution-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.execution-filters label {
+  display: grid;
+  gap: 6px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.execution-filters input,
+.execution-filters select {
+  min-height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 0 10px;
+  color: #101828;
+}
+
+.execution-filters button {
+  padding: 0 14px;
+}
+
+.execution-detail {
+  margin-top: 16px;
+  border: 1px solid #bfd0ff;
+  border-radius: 8px;
+  background: #f8faff;
+  padding: 16px;
+}
+
+.execution-detail h3,
+.execution-detail h4 {
+  margin: 0 0 12px;
+  color: #101828;
+}
+
+.execution-detail dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.execution-detail dl div {
+  min-width: 0;
+}
+
+.execution-detail dt {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.execution-detail dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: #344054;
+}
+
+.execution-detail ul,
+.execution-detail p,
+.detail-state {
+  margin: 0;
+  color: #475467;
+}
+
 table {
   width: 100%;
   min-width: 680px;
@@ -406,6 +492,11 @@ td {
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .execution-filters,
+  .execution-detail dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -419,6 +510,11 @@ td {
   }
 
   .approval-row {
+    grid-template-columns: 1fr;
+  }
+
+  .execution-filters,
+  .execution-detail dl {
     grid-template-columns: 1fr;
   }
 }
