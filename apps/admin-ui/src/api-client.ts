@@ -862,9 +862,10 @@ export function createAdminApiClient(params: {
     },
     searchExecutions: async (request) => {
       const url = new URL(`${dashboardUrl}/executions`);
-      for (const [key, value] of Object.entries(request)) {
-        if (value !== undefined && value !== "") url.searchParams.set(key, value);
-      }
+      if (request.pluginId !== undefined) url.searchParams.set("pluginId", request.pluginId);
+      if (request.hookName !== undefined) url.searchParams.set("hookName", request.hookName);
+      if (request.status !== undefined) url.searchParams.set("status", request.status);
+      if (request.cursor !== undefined) url.searchParams.set("cursor", request.cursor);
       const payload = await fetchAdminJson(url.toString(), requireCredential(credential), fetcher);
       const page = dashboardSectionSchema.safeParse(payload);
       if (!page.success || page.data.section !== "executions") throw invalidResponse();

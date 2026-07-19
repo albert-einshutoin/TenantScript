@@ -25,7 +25,7 @@ describe("Admin execution search HTTP contract", () => {
       limit: 2,
       filters: { pluginId: "plugin_1", hookName: "invoice.created", status: "error" }
     });
-    const body = (await first.json()) as { nextCursor: string };
+    const body: { nextCursor: string } = await first.json();
     const replay = await handler(
       request(
         `/v1/admin/dashboard/executions?pluginId=plugin_2&hookName=invoice.created&status=error&limit=2&cursor=${encodeURIComponent(body.nextCursor)}`

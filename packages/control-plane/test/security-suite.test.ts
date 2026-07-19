@@ -260,7 +260,7 @@ describe("control-plane security suite", () => {
         "https://api.example.com/v1/admin/dashboard/executions?pluginId=plugin_1&status=error"
       )
     );
-    const firstBody = (await first.json()) as { nextCursor: string };
+    const firstBody: { nextCursor: string } = await first.json();
     const changedFilter = await handler(
       dashboardRequest(
         "tenant1",

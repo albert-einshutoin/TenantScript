@@ -1352,17 +1352,29 @@ function ExecutionsPanel({
       >
         <label>
           Plugin ID
-          <input value={pluginId} onChange={(event) => setPluginId(event.target.value)} />
+          <input
+            value={pluginId}
+            onChange={(event) => {
+              setPluginId(event.target.value);
+            }}
+          />
         </label>
         <label>
           Hook
-          <input value={hookName} onChange={(event) => setHookName(event.target.value)} />
+          <input
+            value={hookName}
+            onChange={(event) => {
+              setHookName(event.target.value);
+            }}
+          />
         </label>
         <label>
           Status
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value as "" | ExecutionView["status"])}
+            onChange={(event) => {
+              setStatus(event.target.value as "" | ExecutionView["status"]);
+            }}
           >
             <option value="">All statuses</option>
             <option value="success">success</option>
@@ -1437,7 +1449,9 @@ function ExecutionTable({
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={() => onView(execution.id)}
+                    onClick={() => {
+                      onView(execution.id);
+                    }}
                   >
                     View {execution.id}
                   </button>
