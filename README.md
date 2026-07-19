@@ -22,6 +22,22 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Security policy](SECURITY.md) — supported versions、非公開の脆弱性報告窓口、対応SLA
 - [Usage meter運用契約](docs/operations/usage-meter.md) — Analytics Engine固定schema、fail-open、UTC期間集計
 
+## ローカル検証とCI
+
+コントリビューターがPull Requestを送る前に実行する標準の品質ゲートは `pnpm verify` です。型検査、lint、通常テスト、カバレッジ、セキュリティスイート、high以上の依存関係監査、format確認を決定的な順序で実行します。Cloudflareアカウントや資格情報を使わないaccountlessな検証です。
+
+```sh
+# cwd: repository root
+# expected-exit: 0
+pnpm install --frozen-lockfile
+pnpm verify
+```
+
+調査中に対象を絞る場合は、カバレッジ閾値を確認する `pnpm test:coverage` と、tenant境界・権限昇格・egressなどを確認する `pnpm test:security` を個別に実行できます。最終確認では個別コマンドの代わりに `pnpm verify` を実行してください。
+
+- **Tier 1 (`.github/workflows/tier1.yml`)**: forkのPull Requestと `main` へのpushで動くaccountless quality gateです。Cloudflare secretsを参照せず、固定バージョンのOSV Scannerを含むため、外部コントリビューターも同じ品質境界で検証できます。
+- **Tier 2 Live (`.github/workflows/tier2-live.yml`)**: maintainer管理のscheduleまたは手動実行に限定したlive検証レーンです。Cloudflareアカウント、資格情報、paid planを必要とするsmoke testやlatency benchmarkはこのレーンだけに追加し、fork-safeな検証をTier 1から移動しません。現在のlive smokeはplaceholderであり、資格情報を伴う実行は未構成です。
+
 ## 方針
 
 - **Pure OSS**: 収益化を目的としない。self-hostが唯一の運用形態(ドキュメント D-008)。

@@ -90,3 +90,14 @@ test("checks contributor onboarding shell snippets", () => {
     assert.match(result.stderr, /CONTRIBUTING\.md:1: shell block must start with # cwd:/);
   });
 });
+
+test("checks README onboarding shell snippets", () => {
+  withRepo((dir) => {
+    writeFileSync(join(dir, "README.md"), "```sh\npnpm verify\n```\n");
+
+    const result = runChecker(dir);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /README\.md:1: shell block must start with # cwd:/);
+  });
+});
