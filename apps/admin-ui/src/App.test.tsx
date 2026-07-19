@@ -281,7 +281,7 @@ describe("Admin UI auth foundation", () => {
       auditId: string;
       completedAt: Date;
     }) => void;
-    const rollbackInstallation = vi.fn().mockReturnValue(
+    const rollbackInstallation = vi.fn<AdminApiClient["rollbackInstallation"]>().mockReturnValue(
       new Promise((resolve) => {
         resolveRollback = resolve;
       })
@@ -305,7 +305,9 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByRole("button", { name: "Rolling back" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Rolling back" }));
     expect(rollbackInstallation).toHaveBeenCalledTimes(1);
+    expect(rollbackInstallation.mock.calls[0]?.[0]?.idempotencyKey).toMatch(/^[a-f0-9-]{36}$/u);
     expect(rollbackInstallation).toHaveBeenCalledWith({
+      idempotencyKey: rollbackInstallation.mock.calls[0]?.[0]?.idempotencyKey,
       installationId: "inst_large_invoice",
       targetVersionId: "version_large_invoice_1_2_2",
       expectedRevision: 0
@@ -332,7 +334,7 @@ describe("Admin UI auth foundation", () => {
     const baseClient = createDemoAdminApiClient();
     const getDashboard = vi.spyOn(baseClient, "getDashboard");
     const rollbackInstallation = vi
-      .fn()
+      .fn<AdminApiClient["rollbackInstallation"]>()
       .mockRejectedValue(
         new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
       );
@@ -354,7 +356,13 @@ describe("Admin UI auth foundation", () => {
     await expect(
       screen.findByText("Installation changed; version history refreshed")
     ).resolves.toBeInTheDocument();
-    expect(getDashboard).toHaveBeenCalledTimes(2);
+    const firstKey = rollbackInstallation.mock.calls[0]?.[0]?.idempotencyKey;
+    fireEvent.click(screen.getByRole("button", { name: "Confirm rollback" }));
+    await waitFor(() => {
+      expect(rollbackInstallation).toHaveBeenCalledTimes(2);
+    });
+    expect(rollbackInstallation.mock.calls[1]?.[0]?.idempotencyKey).toBe(firstKey);
+    expect(getDashboard).toHaveBeenCalledTimes(3);
   });
 
   it("shows version history but hides rollback actions from viewers", async () => {

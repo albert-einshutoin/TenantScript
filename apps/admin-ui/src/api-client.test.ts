@@ -39,6 +39,7 @@ describe("Admin API environment selection", () => {
     const client = createDemoAdminApiClient();
     await expect(
       client.rollbackInstallation({
+        idempotencyKey: "rollback-client-key-0001",
         installationId: "inst_large_invoice",
         targetVersionId: "version_large_invoice_1_2_2",
         expectedRevision: 0
@@ -58,6 +59,7 @@ describe("Admin API environment selection", () => {
     });
     await expect(
       client.rollbackInstallation({
+        idempotencyKey: "rollback-client-key-0002",
         installationId: "missing",
         targetVersionId: "version_large_invoice_1_3_0",
         expectedRevision: 0
@@ -65,6 +67,7 @@ describe("Admin API environment selection", () => {
     ).rejects.toMatchObject({ code: "rollback_target_not_found" });
     await expect(
       client.rollbackInstallation({
+        idempotencyKey: "rollback-client-key-0003",
         installationId: "inst_large_invoice",
         targetVersionId: "missing",
         expectedRevision: 1
@@ -72,6 +75,7 @@ describe("Admin API environment selection", () => {
     ).rejects.toMatchObject({ code: "rollback_target_not_found" });
     await expect(
       client.rollbackInstallation({
+        idempotencyKey: "rollback-client-key-0004",
         installationId: "inst_large_invoice",
         targetVersionId: "version_large_invoice_1_3_0",
         expectedRevision: 0
@@ -79,6 +83,7 @@ describe("Admin API environment selection", () => {
     ).rejects.toMatchObject({ code: "installation_revision_conflict" });
     await expect(
       client.rollbackInstallation({
+        idempotencyKey: "rollback-client-key-0005",
         installationId: "inst_large_invoice",
         targetVersionId: "version_large_invoice_1_2_2",
         expectedRevision: 1
@@ -536,6 +541,7 @@ describe("Admin API environment selection", () => {
 
     await expect(
       client.rollbackInstallation({
+        idempotencyKey: "rollback-client-key-0006",
         installationId: "inst_1",
         targetVersionId: "version_1_2_2",
         expectedRevision: 3
@@ -547,6 +553,7 @@ describe("Admin API environment selection", () => {
     const [url, init] = fetcher.mock.calls[1] ?? [];
     expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/rollbacks");
     expect(init?.method).toBe("POST");
+    expect(new Headers(init?.headers).get("idempotency-key")).toBe("rollback-client-key-0006");
     expect(typeof init?.body).toBe("string");
     expect(JSON.parse(init?.body as string)).toEqual({
       installationId: "inst_1",
@@ -590,6 +597,7 @@ describe("Admin API environment selection", () => {
       await client.resolveSession({ token: "secret-token" });
       await expect(
         client.rollbackInstallation({
+          idempotencyKey: "rollback-client-key-0007",
           installationId: "inst_1",
           targetVersionId: "version_1_2_2",
           expectedRevision: 3
