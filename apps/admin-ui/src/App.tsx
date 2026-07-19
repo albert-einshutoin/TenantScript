@@ -113,6 +113,7 @@ function AdminShell({
   );
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [commandInFlight, setCommandInFlight] = useState(false);
   const permissionRequest = useRef(0);
 
   useEffect(() => {
@@ -187,27 +188,33 @@ function AdminShell({
 
   const updateInstallation = useCallback(
     async (request: InstallationCommandRequest) => {
-      const updated = await client.updateInstallationCommand(request);
-      // Installation controls change only after the server accepts the command. This avoids
-      // showing an authorization or audit failure as a successful local state transition.
-      setSnapshot((current) =>
-        current === null
-          ? current
-          : {
-              ...current,
-              installations: current.installations.map((installation) =>
-                installation.id === updated.id
-                  ? {
-                      ...installation,
-                      enabled: updated.enabled,
-                      priority: updated.priority,
-                      statusText: updated.enabled ? "enabled" : "disabled"
-                    }
-                  : installation
-              )
-            }
-      );
-      return updated;
+      setCommandInFlight(true);
+      try {
+        const updated = await client.updateInstallationCommand(request);
+        // Installation controls change only after the server accepts the command. This avoids
+        // showing an authorization or audit failure as a successful local state transition.
+        setSnapshot((current) =>
+          current === null
+            ? current
+            : {
+                ...current,
+                installations: current.installations.map((installation) =>
+                  installation.id === updated.id
+                    ? {
+                        ...installation,
+                        enabled: updated.enabled,
+                        priority: updated.priority,
+                        revision: updated.revision,
+                        statusText: updated.enabled ? "enabled" : "disabled"
+                      }
+                    : installation
+                )
+              }
+        );
+        return updated;
+      } finally {
+        setCommandInFlight(false);
+      }
     },
     [client]
   );
@@ -266,6 +273,7 @@ function AdminShell({
             permissionError={permissionError}
             onPermissionReview={openPermissionReview}
             onInstallationCommand={updateInstallation}
+            commandInFlight={commandInFlight}
           />
         )}
       </div>
@@ -291,7 +299,8 @@ function RoutePanel({
   permissionLoading,
   permissionError,
   onPermissionReview,
-  onInstallationCommand
+  onInstallationCommand,
+  commandInFlight
 }: {
   route: AdminRoute;
   session: AdminSession;
@@ -303,6 +312,7 @@ function RoutePanel({
   permissionError: string | null;
   onPermissionReview: (id: string) => void;
   onInstallationCommand: (request: InstallationCommandRequest) => Promise<unknown>;
+  commandInFlight: boolean;
 }) {
   switch (route) {
     case "overview":
@@ -321,6 +331,7 @@ function RoutePanel({
           onPermissionReview={onPermissionReview}
           canManage={session.role === "manager"}
           onInstallationCommand={onInstallationCommand}
+          commandInFlight={commandInFlight}
         />
       );
     case "versions":
@@ -386,7 +397,8 @@ function InstallationsPanel({
   permissionError,
   onPermissionReview,
   canManage,
-  onInstallationCommand
+  onInstallationCommand,
+  commandInFlight
 }: {
   snapshot: DashboardSnapshot;
   loading: boolean;
@@ -397,6 +409,7 @@ function InstallationsPanel({
   onPermissionReview: (id: string) => void;
   canManage: boolean;
   onInstallationCommand: (request: InstallationCommandRequest) => Promise<unknown>;
+  commandInFlight: boolean;
 }) {
   const [managedInstallationId, setManagedInstallationId] = useState<string | null>(null);
   const managedInstallation = snapshot.installations.find(
@@ -446,6 +459,7 @@ function InstallationsPanel({
                       onClick={() => {
                         setManagedInstallationId(installation.id);
                       }}
+                      disabled={commandInFlight}
                       aria-label={`Manage ${installation.pluginKey}`}
                     >
                       Manage
@@ -471,6 +485,7 @@ function InstallationsPanel({
           key={managedInstallation.id}
           installation={managedInstallation}
           onCommand={onInstallationCommand}
+          commandInFlight={commandInFlight}
         />
       )}
     </section>
@@ -479,15 +494,16 @@ function InstallationsPanel({
 
 function InstallationCommandPanel({
   installation,
-  onCommand
+  onCommand,
+  commandInFlight
 }: {
   installation: DashboardSnapshot["installations"][number];
   onCommand: (request: InstallationCommandRequest) => Promise<unknown>;
+  commandInFlight: boolean;
 }) {
   const [enabled, setEnabled] = useState(installation.enabled);
   const [priority, setPriority] = useState(String(installation.priority));
   const [confirming, setConfirming] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const parsedPriority = Number(priority);
   const validPriority =
@@ -496,20 +512,31 @@ function InstallationCommandPanel({
     validPriority && (enabled !== installation.enabled || parsedPriority !== installation.priority);
 
   const confirm = useCallback(() => {
-    if (!changed || submitting) return;
-    setSubmitting(true);
+    if (!changed || commandInFlight) return;
     setError(null);
-    void onCommand({ id: installation.id, enabled, priority: parsedPriority })
+    const request =
+      enabled !== installation.enabled && parsedPriority !== installation.priority
+        ? {
+            id: installation.id,
+            expectedRevision: installation.revision,
+            enabled,
+            priority: parsedPriority
+          }
+        : enabled !== installation.enabled
+          ? { id: installation.id, expectedRevision: installation.revision, enabled }
+          : {
+              id: installation.id,
+              expectedRevision: installation.revision,
+              priority: parsedPriority
+            };
+    void onCommand(request)
       .then(() => {
         setConfirming(false);
       })
       .catch(() => {
         setError("Installation update unavailable");
-      })
-      .finally(() => {
-        setSubmitting(false);
       });
-  }, [changed, enabled, installation.id, onCommand, parsedPriority, submitting]);
+  }, [changed, commandInFlight, enabled, installation, onCommand, parsedPriority]);
 
   return (
     <section className="data-panel" aria-label="Installation controls">
@@ -547,7 +574,7 @@ function InstallationCommandPanel({
       </label>
       <button
         type="button"
-        disabled={!changed || submitting}
+        disabled={!changed || commandInFlight}
         onClick={() => {
           setConfirming(true);
         }}
@@ -560,15 +587,15 @@ function InstallationCommandPanel({
           <p>
             Change enabled to {String(enabled)} and priority to {String(parsedPriority)}?
           </p>
-          <button type="button" onClick={confirm} disabled={submitting}>
-            {submitting ? "Saving" : "Confirm change"}
+          <button type="button" onClick={confirm} disabled={commandInFlight}>
+            {commandInFlight ? "Saving" : "Confirm change"}
           </button>
           <button
             type="button"
             onClick={() => {
               setConfirming(false);
             }}
-            disabled={submitting}
+            disabled={commandInFlight}
           >
             Cancel
           </button>

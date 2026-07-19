@@ -6,6 +6,7 @@ export interface AdminInstallationDetail {
   version: string;
   enabled: boolean;
   priority: number;
+  revision: number;
   configFields: readonly AdminConfigFieldMetadata[];
   capabilities: readonly AdminCapabilityMetadata[];
   egress: AdminEgressMetadata;
@@ -45,18 +46,23 @@ export interface AdminInstallationCommandStore {
     tenantId: string;
     actor: string;
     id: string;
+    expectedRevision: number;
     enabled?: boolean;
     priority?: number;
   }) => Promise<AdminInstallationCommandResult | null>;
 }
 
-export interface AdminInstallationCommandResult {
-  id: string;
-  enabled: boolean;
-  priority: number;
-  /** Internal store-only signal: HTTP intentionally returns the same safe DTO for a no-op. */
-  changed: boolean;
-}
+export type AdminInstallationCommandResult =
+  | {
+      outcome: "updated";
+      id: string;
+      enabled: boolean;
+      priority: number;
+      revision: number;
+      /** Internal store-only signal: HTTP returns the same safe DTO for an idempotent replay. */
+      changed: boolean;
+    }
+  | { outcome: "conflict"; id: string; revision: number };
 
 export interface D1AdminInstallationCommandStoreOptions {
   /** Test seam for a deterministic D1 constraint failure; production IDs use Web Crypto. */
@@ -86,15 +92,112 @@ async function updateInstallation(
     tenantId: string;
     actor: string;
     id: string;
+    expectedRevision: number;
     enabled?: boolean;
     priority?: number;
   },
   options: D1AdminInstallationCommandStoreOptions
 ): Promise<AdminInstallationCommandResult | null> {
-  const current = await db
+  const current = await readCommandRow(db, request);
+  if (current === null) return null;
+
+  const before = commandState(current);
+  if (request.expectedRevision !== before.revision) {
+    return {
+      outcome: "conflict",
+      id: requiredString(current.id, "invalid installation row"),
+      revision: before.revision
+    };
+  }
+  const after = {
+    enabled: request.enabled ?? before.enabled,
+    priority: request.priority ?? before.priority
+  };
+  if (after.enabled === before.enabled && after.priority === before.priority) {
+    return {
+      outcome: "updated",
+      id: requiredString(current.id, "invalid installation row"),
+      ...after,
+      revision: before.revision,
+      changed: false
+    };
+  }
+
+  const auditId = options.auditId?.() ?? `installation-command-${crypto.randomUUID()}`;
+  const nextRevision = before.revision + 1;
+  try {
+    // The unique (installation_id, revision) audit key turns a raced CAS miss into a failing D1
+    // batch rather than allowing an orphan audit row. D1 rolls the UPDATE back with that insert.
+    await db.batch([
+      db
+        .prepare(
+          [
+            "UPDATE installations SET enabled = ?1, priority = ?2, revision = revision + 1",
+            "WHERE id = ?3 AND revision = ?4 AND EXISTS (",
+            "SELECT 1 FROM tenants t",
+            "JOIN plugin_versions pv ON pv.id = installations.plugin_version_id",
+            "JOIN plugins p ON p.id = pv.plugin_id",
+            "WHERE t.id = installations.tenant_id AND t.id = ?5 AND t.app_id = ?6 AND p.app_id = t.app_id",
+            ")"
+          ].join(" ")
+        )
+        .bind(
+          after.enabled ? 1 : 0,
+          after.priority,
+          request.id,
+          request.expectedRevision,
+          request.tenantId,
+          request.appId
+        ),
+      db
+        .prepare(
+          [
+            "INSERT INTO admin_audit_events",
+            "(id, installation_id, tenant_id, plugin_id, revision, actor, action, before_json, after_json, created_at)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ].join(" ")
+        )
+        .bind(
+          auditId,
+          requiredString(current.id, "invalid installation row"),
+          requiredString(current.tenant_id, "invalid installation row"),
+          requiredString(current.plugin_id, "invalid installation row"),
+          nextRevision,
+          request.actor,
+          "installation.command",
+          JSON.stringify(before),
+          JSON.stringify({ ...after, revision: nextRevision }),
+          new Date().toISOString()
+        )
+    ]);
+  } catch (error) {
+    const latest = await readCommandRow(db, request);
+    if (latest !== null && commandState(latest).revision !== request.expectedRevision) {
+      return {
+        outcome: "conflict",
+        id: requiredString(latest.id, "invalid installation row"),
+        revision: commandState(latest).revision
+      };
+    }
+    throw error;
+  }
+  return {
+    outcome: "updated",
+    id: requiredString(current.id, "invalid installation row"),
+    ...after,
+    revision: nextRevision,
+    changed: true
+  };
+}
+
+async function readCommandRow(
+  db: D1DatabaseLike,
+  request: { appId: string; tenantId: string; id: string }
+): Promise<InstallationCommandRow | null> {
+  return db
     .prepare(
       [
-        "SELECT i.id, i.enabled, i.priority, i.tenant_id, pv.plugin_id",
+        "SELECT i.id, i.enabled, i.priority, i.revision, i.tenant_id, pv.plugin_id",
         "FROM installations i",
         "JOIN tenants t ON t.id = i.tenant_id",
         "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
@@ -104,73 +207,19 @@ async function updateInstallation(
     )
     .bind(request.tenantId, request.appId, request.id)
     .first<InstallationCommandRow>();
-  if (current === null) return null;
-
-  const before = commandState(current);
-  const after = {
-    enabled: request.enabled ?? before.enabled,
-    priority: request.priority ?? before.priority
-  };
-  if (after.enabled === before.enabled && after.priority === before.priority) {
-    return { id: requiredString(current.id, "invalid installation row"), ...after, changed: false };
-  }
-
-  const auditId = options.auditId?.() ?? `installation-command-${crypto.randomUUID()}`;
-  // D1 batch executes both statements as one transaction. This keeps a successful control-plane
-  // mutation from becoming unauditable when the execution-log insert rejects (for example, a
-  // unique-ID conflict), while keeping raw config/grant/manifest data out of the audit payload.
-  await db.batch([
-    db
-      .prepare(
-        [
-          "UPDATE installations SET enabled = ?1, priority = ?2",
-          "WHERE id = ?3 AND EXISTS (",
-          "SELECT 1 FROM tenants t",
-          "JOIN plugin_versions pv ON pv.id = installations.plugin_version_id",
-          "JOIN plugins p ON p.id = pv.plugin_id",
-          "WHERE t.id = installations.tenant_id AND t.id = ?4 AND t.app_id = ?5 AND p.app_id = t.app_id",
-          ")"
-        ].join(" ")
-      )
-      .bind(after.enabled ? 1 : 0, after.priority, request.id, request.tenantId, request.appId),
-    db
-      .prepare(
-        [
-          "INSERT INTO executions",
-          "(id, tenant_id, plugin_id, hook_name, version, status, duration_ms, error, capability_calls_json, created_at)",
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ].join(" ")
-      )
-      .bind(
-        auditId,
-        requiredString(current.tenant_id, "invalid installation row"),
-        requiredString(current.plugin_id, "invalid installation row"),
-        "installation.command",
-        "",
-        "success",
-        0,
-        commandAuditMessage(request.actor, before, after),
-        '[{"name":"installations.command","status":"success"}]',
-        new Date().toISOString()
-      )
-  ]);
-  return { id: requiredString(current.id, "invalid installation row"), ...after, changed: true };
 }
 
-function commandState(row: InstallationCommandRow): { enabled: boolean; priority: number } {
+function commandState(row: InstallationCommandRow): {
+  enabled: boolean;
+  priority: number;
+  revision: number;
+} {
   if (row.enabled !== 0 && row.enabled !== 1) throw new Error("invalid installation row");
   return {
     enabled: row.enabled === 1,
-    priority: requiredNumber(row.priority, "invalid installation row")
+    priority: requiredSafeInteger(row.priority, "invalid installation row"),
+    revision: requiredSafeInteger(row.revision, "invalid installation row")
   };
-}
-
-function commandAuditMessage(
-  actor: string,
-  before: { enabled: boolean; priority: number },
-  after: { enabled: boolean; priority: number }
-): string {
-  return `actor=${actor} old_enabled=${String(before.enabled)} old_priority=${String(before.priority)} new_enabled=${String(after.enabled)} new_priority=${String(after.priority)}`;
 }
 
 interface D1BatchDatabase extends D1DatabaseLike {
@@ -192,7 +241,7 @@ async function readInstallation(
   const row = await db
     .prepare(
       [
-        "SELECT i.id, p.key AS plugin_key, pv.version, i.enabled, i.priority,",
+        "SELECT i.id, p.key AS plugin_key, pv.version, i.enabled, i.priority, i.revision,",
         "i.config_json, i.grants_json, pv.manifest_json",
         "FROM installations i",
         "JOIN tenants t ON t.id = i.tenant_id",
@@ -224,7 +273,8 @@ async function readInstallation(
     pluginKey: requiredString(row.plugin_key, "invalid installation row"),
     version: requiredString(row.version, "invalid installation row"),
     enabled: row.enabled === 1,
-    priority: requiredNumber(row.priority, "invalid installation row"),
+    priority: requiredSafeInteger(row.priority, "invalid installation row"),
+    revision: requiredSafeInteger(row.revision, "invalid installation row"),
     configFields: Object.entries(properties)
       .map(([name, value]) => configField(name, value, required, config))
       .sort((left, right) => left.name.localeCompare(right.name)),
@@ -335,8 +385,8 @@ function requiredString(value: unknown, error: string): string {
   return value;
 }
 
-function requiredNumber(value: unknown, error: string): number {
-  if (typeof value !== "number") throw new Error(error);
+function requiredSafeInteger(value: unknown, error: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new Error(error);
   return value;
 }
 
@@ -350,6 +400,7 @@ interface InstallationDetailRow {
   version: unknown;
   enabled: unknown;
   priority: unknown;
+  revision: unknown;
   config_json: string;
   grants_json: string;
   manifest_json: string;
@@ -359,6 +410,7 @@ interface InstallationCommandRow {
   id: unknown;
   enabled: unknown;
   priority: unknown;
+  revision: unknown;
   tenant_id: unknown;
   plugin_id: unknown;
 }

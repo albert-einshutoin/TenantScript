@@ -146,15 +146,11 @@ describe("D1 Admin dashboard read model", () => {
         tenantId: "tenant_1",
         actor: "manager-subject",
         id: "tenant_1_installation_a",
+        expectedRevision: 0,
         enabled: false,
         priority: 4
       })
-    ).resolves.toEqual({
-      id: "tenant_1_installation_a",
-      enabled: false,
-      priority: 4,
-      changed: true
-    });
+    ).resolves.toMatchObject({ outcome: "updated", enabled: false, priority: 4, revision: 1 });
 
     const installation = await testEnv.DB.prepare(
       "SELECT enabled, priority FROM installations WHERE id = ?"
@@ -162,18 +158,12 @@ describe("D1 Admin dashboard read model", () => {
       .bind("tenant_1_installation_a")
       .first<{ enabled: number; priority: number }>();
     const audit = await testEnv.DB.prepare(
-      "SELECT hook_name, error, capability_calls_json FROM executions WHERE id = ?"
+      "SELECT actor, action, before_json, after_json FROM admin_audit_events WHERE id = ?"
     )
       .bind("installation_command_audit")
-      .first<{ hook_name: string; error: string; capability_calls_json: string }>();
+      .first<{ actor: string; action: string; before_json: string; after_json: string }>();
     expect(installation).toEqual({ enabled: 0, priority: 4 });
-    expect(audit?.hook_name).toBe("installation.command");
-    expect(audit?.error).toBe(
-      "actor=manager-subject old_enabled=true old_priority=10 new_enabled=false new_priority=4"
-    );
-    expect(audit?.capability_calls_json).toBe(
-      '[{"name":"installations.command","status":"success"}]'
-    );
+    expect(audit).toMatchObject({ actor: "manager-subject", action: "installation.command" });
     expect(JSON.stringify(audit)).not.toContain("secret-config");
     expect(JSON.stringify(audit)).not.toContain("secret-grant");
     expect(JSON.stringify(audit)).not.toContain("manifest-secret");
@@ -182,17 +172,18 @@ describe("D1 Admin dashboard read model", () => {
   it("does not update an installation when the paired audit insert fails, and makes no-op commands audit-free", async () => {
     await seedDashboard();
     await testEnv.DB.prepare(
-      "INSERT INTO executions (id, tenant_id, plugin_id, hook_name, version, status, duration_ms, capability_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO admin_audit_events (id, installation_id, tenant_id, plugin_id, revision, actor, action, before_json, after_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
       .bind(
         "conflicting_audit",
+        "tenant_1_installation_a",
         "tenant_1",
         "tenant_1_plugin",
-        "existing",
-        "1",
-        "success",
-        0,
-        "[]",
+        1,
+        "actor",
+        "installation.command",
+        "{}",
+        "{}",
         "2026-07-19T00:00:00.000Z"
       )
       .run();
@@ -205,6 +196,7 @@ describe("D1 Admin dashboard read model", () => {
         tenantId: "tenant_1",
         actor: "manager-subject",
         id: "tenant_1_installation_a",
+        expectedRevision: 0,
         enabled: false
       })
     ).rejects.toThrow();
@@ -219,20 +211,23 @@ describe("D1 Admin dashboard read model", () => {
       tenantId: "tenant_1",
       actor: "manager-subject",
       id: "tenant_1_installation_a",
+      expectedRevision: 0,
       enabled: true,
       priority: 10
     });
     expect(noOp).toEqual({
+      outcome: "updated",
       id: "tenant_1_installation_a",
       enabled: true,
       priority: 10,
+      revision: 0,
       changed: false
     });
     await expect(
-      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM executions WHERE hook_name = ?")
-        .bind("installation.command")
-        .first<{ count: number }>()
-    ).resolves.toEqual({ count: 0 });
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 1 });
   });
 
   it("rejects cross-tenant, cross-app, and corrupt installation relations with the same null result", async () => {
@@ -245,6 +240,7 @@ describe("D1 Admin dashboard read model", () => {
           tenantId: "tenant_1",
           actor: "manager-subject",
           id,
+          expectedRevision: 0,
           enabled: false
         })
       ).resolves.toBeNull();
@@ -259,17 +255,21 @@ describe("D1 Admin dashboard read model", () => {
     const updated = await commands.updateInstallation({
       appId: "app_1",
       tenantId: "tenant_1",
-      actor: "manager\"subject",
+      actor: 'manager"subject',
       id: "tenant_1_installation_a",
       expectedRevision: 0,
       enabled: false
     });
-    expect(updated).toMatchObject({ outcome: "updated", enabled: false, priority: 10, revision: 1 });
+    expect(updated).toMatchObject({
+      outcome: "updated",
+      enabled: false,
+      priority: 10,
+      revision: 1
+    });
     await expect(
-      testEnv.DB
-        .prepare(
-          "SELECT actor, action, before_json, after_json FROM admin_audit_events WHERE id = ?"
-        )
+      testEnv.DB.prepare(
+        "SELECT actor, action, before_json, after_json FROM admin_audit_events WHERE id = ?"
+      )
         .bind("admin_audit_command_1")
         .first<{ actor: string; action: string; before_json: string; after_json: string }>()
     ).resolves.toEqual({
@@ -289,9 +289,9 @@ describe("D1 Admin dashboard read model", () => {
       })
     ).resolves.toEqual({ outcome: "conflict", id: "tenant_1_installation_a", revision: 1 });
     await expect(
-      testEnv.DB
-        .prepare("SELECT COUNT(*) AS count FROM admin_audit_events")
-        .first<{ count: number }>()
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
     ).resolves.toEqual({ count: 1 });
   });
 });

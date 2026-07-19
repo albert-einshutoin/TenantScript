@@ -11,6 +11,7 @@ export interface AdminInstallationSummary {
   version: string;
   enabled: boolean;
   priority: number;
+  revision: number;
 }
 
 export interface AdminPluginVersionSummary {
@@ -109,7 +110,7 @@ async function readInstallations(
   const rows = await db
     .prepare(
       [
-        "SELECT i.id, p.key AS plugin_key, pv.version, i.enabled, i.priority",
+        "SELECT i.id, p.key AS plugin_key, pv.version, i.enabled, i.priority, i.revision",
         "FROM installations i",
         "JOIN tenants t ON t.id = i.tenant_id",
         "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
@@ -129,7 +130,8 @@ async function readInstallations(
       pluginKey: row.plugin_key,
       version: row.version,
       enabled: row.enabled === 1,
-      priority: row.priority
+      priority: safeInteger(row.priority, "invalid installation priority"),
+      revision: safeInteger(row.revision, "invalid installation revision")
     })),
     ...(page.nextPosition === undefined ? {} : { nextPosition: page.nextPosition })
   };
@@ -352,12 +354,18 @@ function nextIsoDate(date: string): string {
   return parsed.toISOString().slice(0, 10);
 }
 
+function safeInteger(value: number, error: string): number {
+  if (!Number.isSafeInteger(value)) throw new Error(error);
+  return value;
+}
+
 interface InstallationSummaryRow {
   id: string;
   plugin_key: string;
   version: string;
   enabled: number;
   priority: number;
+  revision: number;
 }
 
 interface PluginVersionSummaryRow {

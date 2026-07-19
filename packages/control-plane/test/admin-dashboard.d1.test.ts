@@ -12,14 +12,16 @@ describe("D1 Admin dashboard adapter", () => {
             plugin_key: "safe-plugin",
             version: "1.0.0",
             enabled: 1,
-            priority: 10
+            priority: 10,
+            revision: 0
           },
           {
             id: "inst_2",
             plugin_key: "next-plugin",
             version: "2.0.0",
             enabled: 0,
-            priority: 20
+            priority: 20,
+            revision: 1
           }
         ],
         pluginVersions: [
@@ -90,7 +92,8 @@ describe("D1 Admin dashboard adapter", () => {
           pluginKey: "safe-plugin",
           version: "1.0.0",
           enabled: true,
-          priority: 10
+          priority: 10,
+          revision: 0
         }
       ],
       nextPosition: "inst_1"

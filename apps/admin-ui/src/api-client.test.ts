@@ -84,7 +84,8 @@ describe("Admin API environment selection", () => {
               pluginKey: "second-plugin",
               version: "2.0.0",
               enabled: true,
-              priority: 20
+              priority: 20,
+              revision: 0
             }
           ]
         })
@@ -121,6 +122,7 @@ describe("Admin API environment selection", () => {
           version: "1.2.3",
           enabled: true,
           priority: 10,
+          revision: 0,
           configFields: [
             { name: "channel", type: "string", required: true, configured: true, hasDefault: false }
           ],
@@ -188,7 +190,9 @@ describe("Admin API environment selection", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json(sessionPayload()))
-      .mockResolvedValueOnce(Response.json({ id: "other", enabled: false, priority: 4, revision: 2 }));
+      .mockResolvedValueOnce(
+        Response.json({ id: "other", enabled: false, priority: 4, revision: 2 })
+      );
     const client = createAdminApiClient({
       isDevelopment: false,
       demoMode: false,
@@ -224,7 +228,7 @@ describe("Admin API environment selection", () => {
     await client.resolveSession({ token: "secret-token" });
 
     await expect(
-      client.updateInstallationCommand({ id: "inst_1", enabled: false })
+      client.updateInstallationCommand({ id: "inst_1", expectedRevision: 0, enabled: false })
     ).rejects.toEqual(
       new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
     );
@@ -411,7 +415,8 @@ function dashboardPayload() {
           pluginKey: "safe-plugin",
           version: "1.0.0",
           enabled: true,
-          priority: 10
+          priority: 10,
+          revision: 0
         }
       ],
       nextCursor: "signed.cursor"

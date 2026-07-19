@@ -11,6 +11,7 @@ describe("D1 admin installation detail adapter", () => {
         version: "1.2.3",
         enabled: 1,
         priority: 10,
+        revision: 0,
         config_json: '{"notifyChannel":"C123","retries":3}',
         grants_json: '{"slack.send":{"channel":"C123"},"invoice.read":{"fields":["id"]}}',
         manifest_json: JSON.stringify({
@@ -44,6 +45,7 @@ describe("D1 admin installation detail adapter", () => {
       version: "1.2.3",
       enabled: true,
       priority: 10,
+      revision: 0,
       egress: { mode: "allowlist", allowlistedHostCount: 2 },
       configFields: [
         { name: "dryRun", type: "boolean", required: false, configured: false, hasDefault: true },

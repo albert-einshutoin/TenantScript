@@ -125,6 +125,7 @@ describe("Admin UI auth foundation", () => {
           version: "1.3.0",
           enabled: true,
           priority: 10,
+          revision: 0,
           configFields: [],
           capabilities: [],
           egress: { mode: "allowlist", allowlistedHostCount: 2 }
@@ -147,8 +148,8 @@ describe("Admin UI auth foundation", () => {
     const baseClient = createDemoAdminApiClient();
     const updateInstallationCommand = vi.fn().mockResolvedValue({
       id: "inst_large_invoice",
-      enabled: false,
-      priority: 10
+      expectedRevision: 0,
+      enabled: false
     });
     const client: AdminApiClient = { ...baseClient, updateInstallationCommand };
     render(<App client={client} />);
@@ -178,8 +179,8 @@ describe("Admin UI auth foundation", () => {
     });
     expect(updateInstallationCommand).toHaveBeenCalledWith({
       id: "inst_large_invoice",
-      enabled: false,
-      priority: 10
+      expectedRevision: 0,
+      enabled: false
     });
     await expect(screen.findByText("disabled")).resolves.toBeInTheDocument();
   });
@@ -211,7 +212,12 @@ describe("Admin UI auth foundation", () => {
 
   it("holds a single global installation command lock across row changes until a deferred request settles", async () => {
     const baseClient = createDemoAdminApiClient();
-    const deferredCommand = deferred<{ id: string; enabled: boolean; priority: number; revision: number }>();
+    const deferredCommand = deferred<{
+      id: string;
+      enabled: boolean;
+      priority: number;
+      revision: number;
+    }>();
     const updateInstallationCommand = vi.fn().mockReturnValue(deferredCommand.promise);
     render(<App client={{ ...baseClient, updateInstallationCommand }} />);
 
@@ -227,7 +233,12 @@ describe("Admin UI auth foundation", () => {
     });
     expect(screen.getByRole("button", { name: "Manage payload-transformer" })).toBeDisabled();
     await act(async () => {
-      deferredCommand.resolve({ id: "inst_large_invoice", enabled: false, priority: 10, revision: 1 });
+      deferredCommand.resolve({
+        id: "inst_large_invoice",
+        enabled: false,
+        priority: 10,
+        revision: 1
+      });
       await deferredCommand.promise;
     });
     await waitFor(() => {
@@ -461,6 +472,7 @@ function permissionReview(id: string, pluginKey: string): InstallationPermission
     version: "1.0.0",
     enabled: true,
     priority: 10,
+    revision: 0,
     configFields: [],
     capabilities: [],
     egress: { mode: "deny", allowlistedHostCount: 0 }

@@ -19,6 +19,7 @@ export interface InstallationView {
   version: string;
   enabled: boolean;
   priority: number;
+  revision: number;
   statusText: "enabled" | "disabled";
 }
 
@@ -78,16 +79,21 @@ export interface AdminApiClient extends AdminSessionClient {
   clearSession: () => void;
 }
 
-export interface InstallationCommandRequest {
+interface InstallationCommandBase {
   id: string;
-  enabled?: boolean;
-  priority?: number;
+  expectedRevision: number;
 }
+
+export type InstallationCommandRequest =
+  | (InstallationCommandBase & { enabled: boolean; priority?: never })
+  | (InstallationCommandBase & { enabled?: never; priority: number })
+  | (InstallationCommandBase & { enabled: boolean; priority: number });
 
 export interface InstallationCommandResult {
   id: string;
   enabled: boolean;
   priority: number;
+  revision: number;
 }
 
 export interface InstallationPermissionReview {
@@ -96,6 +102,7 @@ export interface InstallationPermissionReview {
   version: string;
   enabled: boolean;
   priority: number;
+  revision: number;
   configFields: readonly {
     name: string;
     type: "string" | "number" | "boolean";
@@ -152,7 +159,8 @@ const installationSchema = z
     pluginKey: z.string(),
     version: z.string(),
     enabled: z.boolean(),
-    priority: z.number()
+    priority: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
   })
   .strict();
 
@@ -234,6 +242,7 @@ const installationPermissionReviewSchema = z
     version: z.string(),
     enabled: z.boolean(),
     priority: z.number(),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     configFields: z.array(
       z
         .object({
@@ -268,7 +277,8 @@ const installationCommandResultSchema = z
   .object({
     id: z.string().min(1),
     enabled: z.boolean(),
-    priority: z.number().int()
+    priority: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
   })
   .strict();
 
@@ -303,6 +313,7 @@ const dashboardFixture: DashboardSnapshot = {
       id: "inst_large_invoice",
       enabled: true,
       priority: 10,
+      revision: 0,
       pluginKey: "large-invoice-notify",
       version: "1.3.0",
       statusText: "enabled"
@@ -311,6 +322,7 @@ const dashboardFixture: DashboardSnapshot = {
       id: "inst_payload_transformer",
       enabled: true,
       priority: 20,
+      revision: 0,
       pluginKey: "payload-transformer",
       version: "0.9.1",
       statusText: "enabled"
@@ -387,6 +399,7 @@ export function createDemoAdminApiClient(): AdminApiClient {
         );
       return Promise.resolve({
         ...installation,
+        revision: installation.revision,
         configFields: [],
         capabilities: [],
         egress: { mode: "deny", allowlistedHostCount: 0 }
@@ -404,7 +417,11 @@ export function createDemoAdminApiClient(): AdminApiClient {
       return Promise.resolve({
         id: installation.id,
         enabled: request.enabled ?? installation.enabled,
-        priority: request.priority ?? installation.priority
+        priority: request.priority ?? installation.priority,
+        revision:
+          request.enabled === installation.enabled && request.priority === installation.priority
+            ? installation.revision
+            : installation.revision + 1
       });
     },
     clearSession: () => undefined
@@ -499,7 +516,7 @@ export function createAdminApiClient(params: {
         { method: "PATCH", body: JSON.stringify(request) }
       );
       const result = installationCommandResultSchema.safeParse(payload);
-      if (!result.success) throw invalidResponse();
+      if (!result.success || result.data.id !== request.id) throw invalidResponse();
       return result.data;
     },
     clearSession: () => {

@@ -154,9 +154,22 @@ async function runInstallationCommand(
     if (updated === null) {
       return errorResponse(404, "installation_not_found", "installation not found", corsHeaders);
     }
+    if (updated.outcome === "conflict") {
+      return errorResponse(
+        409,
+        "installation_revision_conflict",
+        "installation changed; refresh",
+        corsHeaders
+      );
+    }
     return jsonResponse(
       200,
-      { id: updated.id, enabled: updated.enabled, priority: updated.priority },
+      {
+        id: updated.id,
+        enabled: updated.enabled,
+        priority: updated.priority,
+        revision: updated.revision
+      },
       corsHeaders
     );
   } catch {
@@ -168,7 +181,9 @@ async function runInstallationCommand(
 async function parseInstallationCommand(
   request: Request,
   corsHeaders: Record<string, string> | undefined
-): Promise<{ id: string; enabled?: boolean; priority?: number } | Response> {
+): Promise<
+  { id: string; expectedRevision: number; enabled?: boolean; priority?: number } | Response
+> {
   const contentType = request.headers.get("Content-Type");
   if (
     contentType === null ||
@@ -190,12 +205,12 @@ async function parseInstallationCommand(
   }
   let text: string;
   try {
-    text = await request.text();
-  } catch {
+    text = await readBoundedUtf8Body(request, maximumCommandBodyBytes);
+  } catch (error) {
+    if (error instanceof CommandBodyTooLargeError) {
+      return errorResponse(413, "request_too_large", "request body too large", corsHeaders);
+    }
     return errorResponse(400, "invalid_command", "invalid installation command", corsHeaders);
-  }
-  if (new TextEncoder().encode(text).byteLength > maximumCommandBodyBytes) {
-    return errorResponse(413, "request_too_large", "request body too large", corsHeaders);
   }
   try {
     const parsed: unknown = JSON.parse(text);
@@ -209,12 +224,21 @@ async function parseInstallationCommand(
 
 function isInstallationCommand(
   value: unknown
-): value is { id: string; enabled?: boolean; priority?: number } {
+): value is { id: string; expectedRevision: number; enabled?: boolean; priority?: number } {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
-  if (!keys.every((key) => key === "id" || key === "enabled" || key === "priority")) return false;
+  if (
+    !keys.every(
+      (key) => key === "id" || key === "expectedRevision" || key === "enabled" || key === "priority"
+    )
+  ) {
+    return false;
+  }
   if (!isNonEmptyString(record.id)) return false;
+  if (!Number.isSafeInteger(record.expectedRevision) || (record.expectedRevision as number) < 0) {
+    return false;
+  }
   const hasEnabled = Object.hasOwn(record, "enabled");
   const hasPriority = Object.hasOwn(record, "priority");
   if (!hasEnabled && !hasPriority) return false;
@@ -223,12 +247,38 @@ function isInstallationCommand(
     hasPriority &&
     (typeof record.priority !== "number" ||
       !Number.isFinite(record.priority) ||
-      !Number.isInteger(record.priority))
+      !Number.isSafeInteger(record.priority))
   ) {
     return false;
   }
   return true;
 }
+
+async function readBoundedUtf8Body(request: Request, maximumBytes: number): Promise<string> {
+  const body = request.body;
+  if (body === null) throw new Error("missing request body");
+  const reader = body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+  const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
+  let bytes = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const next = await reader.read();
+      if (next.done) break;
+      bytes += next.value.byteLength;
+      if (bytes > maximumBytes) {
+        await reader.cancel();
+        throw new CommandBodyTooLargeError();
+      }
+      text += decoder.decode(next.value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+class CommandBodyTooLargeError extends Error {}
 
 async function resolveInstallationDetail(
   request: Request,

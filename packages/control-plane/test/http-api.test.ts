@@ -166,7 +166,8 @@ describe("Control Plane Admin dashboard contract", () => {
         pluginKey: "safe-plugin",
         version: "1.0.0",
         enabled: true,
-        priority: 10
+        priority: 10,
+        revision: 0
       }
     ]);
     expect(JSON.stringify(body)).not.toContain("secret-config");
@@ -380,9 +381,11 @@ describe("Control Plane installation command contract", () => {
   it("lets only a manager issue a scoped command and derives every audit field from identity", async () => {
     const commandStore = {
       updateInstallation: vi.fn().mockResolvedValue({
+        outcome: "updated",
         id: "inst_1",
         enabled: false,
         priority: 5,
+        revision: 1,
         changed: true
       })
     };
@@ -408,6 +411,7 @@ describe("Control Plane installation command contract", () => {
     const response = await handler(
       commandRequest("manager", {
         id: "inst_1",
+        expectedRevision: 0,
         enabled: false,
         priority: 5
       })
@@ -419,12 +423,20 @@ describe("Control Plane installation command contract", () => {
       tenantId: "tenant_acme",
       actor: "manager-subject",
       id: "inst_1",
+      expectedRevision: 0,
       enabled: false,
       priority: 5
     });
-    expect(await response.json()).toEqual({ id: "inst_1", enabled: false, priority: 5 });
+    expect(await response.json()).toEqual({
+      id: "inst_1",
+      enabled: false,
+      priority: 5,
+      revision: 1
+    });
 
-    const forbidden = await handler(commandRequest("viewer", { id: "inst_1", enabled: false }));
+    const forbidden = await handler(
+      commandRequest("viewer", { id: "inst_1", expectedRevision: 0, enabled: false })
+    );
     expect(forbidden.status).toBe(403);
     expect(commandStore.updateInstallation).toHaveBeenCalledTimes(1);
   });
@@ -448,8 +460,12 @@ describe("Control Plane installation command contract", () => {
         body: "{"
       }),
       commandRequest("manager-secret-token", { id: "inst_1" }),
-      commandRequest("manager-secret-token", { id: "inst_1", priority: 1.5 }),
-      commandRequest("manager-secret-token", { id: "inst_1", priority: Number.POSITIVE_INFINITY }),
+      commandRequest("manager-secret-token", { id: "inst_1", expectedRevision: 0, priority: 1.5 }),
+      commandRequest("manager-secret-token", {
+        id: "inst_1",
+        expectedRevision: 0,
+        priority: Number.POSITIVE_INFINITY
+      }),
       new Request("https://api.example.com/v1/admin/installation-command", {
         method: "PATCH",
         headers: { ...headers, "Content-Type": "text/plain" },
@@ -462,6 +478,7 @@ describe("Control Plane installation command contract", () => {
       }),
       commandRequest("manager-secret-token", {
         id: "inst_1",
+        expectedRevision: 0,
         enabled: true,
         tenantId: "tenant_other",
         appId: "app_other",
@@ -494,7 +511,14 @@ describe("Control Plane installation command contract", () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: "inst_1", enabled: true, priority: 10, changed: false })
+        .mockResolvedValueOnce({
+          outcome: "updated",
+          id: "inst_1",
+          enabled: true,
+          priority: 10,
+          revision: 0,
+          changed: false
+        })
     };
     const handler = createControlPlaneHttpHandler({
       identityResolver: createIdentityResolver(),
@@ -503,7 +527,7 @@ describe("Control Plane installation command contract", () => {
     });
     for (const id of ["missing", "other-tenant", "cross-app"]) {
       const response = await handler(
-        commandRequest("manager-secret-token", { id, enabled: false })
+        commandRequest("manager-secret-token", { id, expectedRevision: 0, enabled: false })
       );
       expect(response.status).toBe(404);
       await expect(response.json()).resolves.toMatchObject({
@@ -511,10 +535,20 @@ describe("Control Plane installation command contract", () => {
       });
     }
     const noOp = await handler(
-      commandRequest("manager-secret-token", { id: "inst_1", enabled: true, priority: 10 })
+      commandRequest("manager-secret-token", {
+        id: "inst_1",
+        expectedRevision: 0,
+        enabled: true,
+        priority: 10
+      })
     );
     expect(noOp.status).toBe(200);
-    await expect(noOp.json()).resolves.toEqual({ id: "inst_1", enabled: true, priority: 10 });
+    await expect(noOp.json()).resolves.toEqual({
+      id: "inst_1",
+      enabled: true,
+      priority: 10,
+      revision: 0
+    });
   });
 
   it("advertises PATCH in CORS preflight and rejects other methods", async () => {
@@ -545,9 +579,10 @@ describe("Control Plane installation command contract", () => {
     let cancelled = false;
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode('{"id":"inst_1","expectedRevision":0,"enabled":'));
+        controller.enqueue(
+          new TextEncoder().encode('{"id":"inst_1","expectedRevision":0,"enabled":')
+        );
         controller.enqueue(new Uint8Array(16 * 1024));
-        controller.close();
       },
       cancel() {
         cancelled = true;
@@ -623,7 +658,8 @@ function dashboardStore() {
               pluginKey: "safe-plugin",
               version: "1.0.0",
               enabled: true,
-              priority: 10
+              priority: 10,
+              revision: 0
             }
           ],
           nextPosition: "inst_1"
@@ -658,6 +694,7 @@ function installationStore() {
       version: "1.0.0",
       enabled: true,
       priority: 10,
+      revision: 0,
       configFields: [
         { name: "channel", type: "string", required: true, configured: true, hasDefault: false }
       ],
