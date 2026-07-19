@@ -493,7 +493,7 @@ function InstallationsPanel({
       {permissionReview === null ? null : <PermissionReviewPanel review={permissionReview} />}
       {managedInstallation === undefined ? null : (
         <InstallationCommandPanel
-          key={managedInstallation.id}
+          key={`${managedInstallation.id}:${String(managedInstallation.revision)}`}
           installation={managedInstallation}
           onCommand={onInstallationCommand}
           commandInFlight={commandInFlight}
