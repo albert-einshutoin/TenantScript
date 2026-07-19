@@ -179,3 +179,19 @@ export {
   type ControlPlaneHttpHandlerOptions,
   type TenantScopedAdminIdentity
 } from "./http-api.js";
+
+export {
+  createD1AdminDashboardStore,
+  createAdminCursorCodec,
+  type AdminApprovalSummary,
+  type AdminCursorCodec,
+  type AdminCursorPayload,
+  type AdminDashboardScope,
+  type AdminDashboardSection,
+  type AdminDashboardSectionPage,
+  type AdminDashboardStore,
+  type AdminExecutionSummary,
+  type AdminInstallationSummary,
+  type AdminPluginVersionSummary,
+  type AdminUsageSummary
+} from "./admin-dashboard.js";

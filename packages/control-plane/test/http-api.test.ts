@@ -158,7 +158,7 @@ describe("Control Plane Admin dashboard contract", () => {
     expect(store.readSection).toHaveBeenCalledWith(
       expect.objectContaining({ appId: "app_acme", tenantId: "tenant_acme", limit: 2 })
     );
-    const body = await response.json();
+    const body: TestDashboardBody = await response.json();
     expect(body.installations.items).toEqual([
       {
         id: "inst_1",
@@ -208,7 +208,8 @@ describe("Control Plane Admin dashboard contract", () => {
     const initial = await handler(
       sessionRequest({ token: "manager-secret-token", url: dashboardUrl() })
     );
-    const cursor = (await initial.json()).installations.nextCursor as string;
+    const initialBody: TestDashboardBody = await initial.json();
+    const cursor = initialBody.installations.nextCursor;
     const replacement = cursor.endsWith("a") ? "b" : "a";
     const tampered = await handler(
       sessionRequest({
@@ -328,6 +329,13 @@ function dashboardStore() {
 
 function dashboardUrl(): string {
   return "https://api.example.com/v1/admin/dashboard";
+}
+
+interface TestDashboardBody {
+  installations: {
+    items: unknown[];
+    nextCursor: string;
+  };
 }
 
 function sessionRequest(params: { token: string; url?: string }): Request {
