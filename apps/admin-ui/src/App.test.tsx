@@ -138,6 +138,28 @@ describe("Admin UI auth foundation", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows a stable error when a next page cannot load", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const initial = await baseClient.getDashboard(session);
+    const client: AdminApiClient = {
+      resolveSession: baseClient.resolveSession,
+      getDashboard: () => Promise.resolve({ ...initial, cursors: { executions: "signed.cursor" } }),
+      getDashboardSection: () => Promise.reject(new Error("SQL customer payload")),
+      clearSession: baseClient.clearSession
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Executions" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Load more executions" }));
+
+    await expect(
+      screen.findByText("Could not load more dashboard results")
+    ).resolves.toBeInTheDocument();
+    expect(screen.queryByText("SQL customer payload")).not.toBeInTheDocument();
+  });
+
   it("renders disabled and failing operational states", async () => {
     const baseClient = createDemoAdminApiClient();
     const session = await baseClient.resolveSession({ token: "manager-token" });

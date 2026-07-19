@@ -150,6 +150,107 @@ describe("Admin API environment selection", () => {
       new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
     );
   });
+
+  it("maps every paginated dashboard section DTO", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "pluginVersions",
+          items: [{ id: "v1", pluginId: "p1", version: "1.0.0", artifactHash: "hash" }],
+          nextCursor: "next.version"
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "approvals",
+          items: [
+            {
+              id: "a1",
+              pluginId: "p1",
+              role: "manager",
+              resumeHook: "approval.decided",
+              state: "approved",
+              expiresAt: "2026-07-20T00:00:00.000Z",
+              createdAt: "2026-07-19T00:00:00.000Z"
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "executions",
+          items: [
+            {
+              id: "e1",
+              pluginId: "p1",
+              hookName: "invoice.created",
+              version: "1.0.0",
+              status: "success",
+              durationMs: 12,
+              capabilityNames: [],
+              createdAt: "2026-07-19T00:00:00.000Z"
+            }
+          ]
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getDashboardSection("pluginVersions", "cursor")).resolves.toMatchObject({
+      section: "pluginVersions",
+      nextCursor: "next.version"
+    });
+    await expect(client.getDashboardSection("approvals", "cursor")).resolves.toMatchObject({
+      section: "approvals",
+      items: [{ createdAt: new Date("2026-07-19T00:00:00.000Z") }]
+    });
+    await expect(client.getDashboardSection("executions", "cursor")).resolves.toMatchObject({
+      section: "executions",
+      items: [{ capabilityNames: [] }]
+    });
+  });
+
+  it("preserves typed dashboard errors and redacts network failures", async () => {
+    const forbidden = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher: vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(sessionPayload()))
+        .mockResolvedValueOnce(
+          Response.json(
+            { error: { code: "admin_scope_forbidden", message: "tenant scope required" } },
+            { status: 403 }
+          )
+        )
+    });
+    const session = await forbidden.resolveSession({ token: "secret-token" });
+    await expect(forbidden.getDashboard(session)).rejects.toEqual(
+      new AdminApiError(403, "admin_scope_forbidden", "tenant scope required")
+    );
+
+    const network = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher: vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(sessionPayload()))
+        .mockRejectedValueOnce(new Error("provider secret"))
+    });
+    const networkSession = await network.resolveSession({ token: "secret-token" });
+    await expect(network.getDashboard(networkSession)).rejects.toEqual(
+      new AdminApiError(0, "network_error", "control-plane is unreachable")
+    );
+  });
 });
 
 function dashboardPayload() {
@@ -170,6 +271,15 @@ function dashboardPayload() {
     approvals: { items: [] },
     executions: { items: [] },
     usage: { date: "2026-07-19", executions: 1, runtimeMs: 12 }
+  };
+}
+
+function sessionPayload() {
+  return {
+    subject: "ops-manager",
+    role: "manager",
+    appId: "app_acme",
+    tenantId: "tenant_acme"
   };
 }
 
