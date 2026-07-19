@@ -5,7 +5,8 @@ import {
   type AdminApiClient,
   type AdminSession,
   type DashboardSectionPage,
-  type DashboardSnapshot
+  type DashboardSnapshot,
+  type InstallationPermissionReview
 } from "./api-client.js";
 import type { AdminDashboardSection } from "@tenantscript/control-plane";
 import { type AdminRoute, useHashRoute } from "./router.js";
@@ -106,6 +107,11 @@ function AdminShell({
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingSection, setLoadingSection] = useState<AdminDashboardSection | null>(null);
+  const [permissionReview, setPermissionReview] = useState<InstallationPermissionReview | null>(
+    null
+  );
+  const [permissionLoading, setPermissionLoading] = useState(false);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -147,6 +153,24 @@ function AdminShell({
         });
     },
     [client, loadingSection, snapshot]
+  );
+
+  const openPermissionReview = useCallback(
+    (id: string) => {
+      setPermissionLoading(true);
+      setPermissionError(null);
+      setPermissionReview(null);
+      void client
+        .getInstallationPermissionReview(id)
+        .then(setPermissionReview)
+        .catch(() => {
+          setPermissionError("Permission review unavailable");
+        })
+        .finally(() => {
+          setPermissionLoading(false);
+        });
+    },
+    [client]
   );
 
   return (
@@ -198,6 +222,10 @@ function AdminShell({
             snapshot={snapshot}
             loadingSection={loadingSection}
             onLoadMore={loadMore}
+            permissionReview={permissionReview}
+            permissionLoading={permissionLoading}
+            permissionError={permissionError}
+            onPermissionReview={openPermissionReview}
           />
         )}
       </div>
@@ -218,13 +246,21 @@ function RoutePanel({
   session,
   snapshot,
   loadingSection,
-  onLoadMore
+  onLoadMore,
+  permissionReview,
+  permissionLoading,
+  permissionError,
+  onPermissionReview
 }: {
   route: AdminRoute;
   session: AdminSession;
   snapshot: DashboardSnapshot;
   loadingSection: AdminDashboardSection | null;
   onLoadMore: (section: AdminDashboardSection) => void;
+  permissionReview: InstallationPermissionReview | null;
+  permissionLoading: boolean;
+  permissionError: string | null;
+  onPermissionReview: (id: string) => void;
 }) {
   switch (route) {
     case "overview":
@@ -237,6 +273,10 @@ function RoutePanel({
           onLoadMore={() => {
             onLoadMore("installations");
           }}
+          permissionReview={permissionReview}
+          permissionLoading={permissionLoading}
+          permissionError={permissionError}
+          onPermissionReview={onPermissionReview}
         />
       );
     case "versions":
@@ -296,11 +336,19 @@ function OverviewPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
 function InstallationsPanel({
   snapshot,
   loading,
-  onLoadMore
+  onLoadMore,
+  permissionReview,
+  permissionLoading,
+  permissionError,
+  onPermissionReview
 }: {
   snapshot: DashboardSnapshot;
   loading: boolean;
   onLoadMore: () => void;
+  permissionReview: InstallationPermissionReview | null;
+  permissionLoading: boolean;
+  permissionError: string | null;
+  onPermissionReview: (id: string) => void;
 }) {
   return (
     <section className="data-panel">
@@ -313,6 +361,7 @@ function InstallationsPanel({
               <th>Version</th>
               <th>Priority</th>
               <th>Status</th>
+              <th>Review</th>
             </tr>
           </thead>
           <tbody>
@@ -323,6 +372,18 @@ function InstallationsPanel({
                 <td>{installation.priority}</td>
                 <td>
                   <StatusPill status={installation.statusText} />
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      onPermissionReview(installation.id);
+                    }}
+                    aria-label={`Permission review for ${installation.pluginKey}`}
+                  >
+                    Permission review
+                  </button>
                 </td>
               </tr>
             ))}
@@ -335,6 +396,49 @@ function InstallationsPanel({
         loading={loading}
         onClick={onLoadMore}
       />
+      {permissionLoading ? <div className="loading-panel">Loading permission review</div> : null}
+      {permissionError === null ? null : <p className="form-error">{permissionError}</p>}
+      {permissionReview === null ? null : <PermissionReviewPanel review={permissionReview} />}
+    </section>
+  );
+}
+
+function PermissionReviewPanel({ review }: { review: InstallationPermissionReview }) {
+  return (
+    <section className="data-panel" aria-label="Installation permission review">
+      <PanelHeader title="Permission review" detail={`${review.pluginKey} ${review.version}`} />
+      <p>
+        Egress:{" "}
+        {review.egress.mode === "deny"
+          ? "denied"
+          : `${String(review.egress.allowlistedHostCount)} allowlisted hosts`}
+      </p>
+      <h3>Configuration fields</h3>
+      {review.configFields.length === 0 ? (
+        <p>No configuration fields</p>
+      ) : (
+        <ul>
+          {review.configFields.map((field) => (
+            <li key={field.name}>
+              {field.name} · {field.type} · {field.required ? "required" : "optional"} ·{" "}
+              {field.configured ? "configured" : "not configured"}
+            </li>
+          ))}
+        </ul>
+      )}
+      <h3>Capabilities</h3>
+      {review.capabilities.length === 0 ? (
+        <p>No capabilities requested</p>
+      ) : (
+        <ul>
+          {review.capabilities.map((capability) => (
+            <li key={capability.name}>
+              {capability.name} · {capability.status} ·{" "}
+              {capability.scopeKeys.join(", ") || "no scope keys"}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

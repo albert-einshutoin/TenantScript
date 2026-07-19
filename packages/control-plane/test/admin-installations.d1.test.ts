@@ -4,29 +4,33 @@ import type { D1DatabaseLike, D1PreparedStatementLike } from "../src/storage.js"
 
 describe("D1 admin installation detail adapter", () => {
   it("projects schema and capability metadata without returning config, grants, or manifests", async () => {
-    const store = createD1AdminInstallationDetailStore(database({
-      id: "inst_1",
-      plugin_key: "invoice-notify",
-      version: "1.2.3",
-      enabled: 1,
-      priority: 10,
-      config_json: '{"notifyChannel":"C123","retries":3}',
-      grants_json: '{"slack.send":{"channel":"C123"},"invoice.read":{"fields":["id"]}}',
-      manifest_json: JSON.stringify({
-        configSchema: {
-          properties: {
-            notifyChannel: { type: "string" },
-            retries: { type: "number", default: 1 },
-            dryRun: { type: "boolean", default: false }
+    const store = createD1AdminInstallationDetailStore(
+      database({
+        id: "inst_1",
+        plugin_key: "invoice-notify",
+        version: "1.2.3",
+        enabled: 1,
+        priority: 10,
+        config_json: '{"notifyChannel":"C123","retries":3}',
+        grants_json: '{"slack.send":{"channel":"C123"},"invoice.read":{"fields":["id"]}}',
+        manifest_json: JSON.stringify({
+          configSchema: {
+            properties: {
+              notifyChannel: { type: "string" },
+              retries: { type: "number", default: 1 },
+              dryRun: { type: "boolean", default: false }
+            },
+            required: ["notifyChannel"]
           },
-          required: ["notifyChannel"]
-        },
-        capabilities: {
-          "slack.send": { channel: "$config.notifyChannel" },
-          "invoice.read": { fields: ["id"] }
-        }
+          capabilities: {
+            "slack.send": { channel: "$config.notifyChannel" },
+            "invoice.read": { fields: ["id"] },
+            "audit.write": { destination: "$config.auditDestination" }
+          },
+          egress: { mode: "allowlist", hosts: ["api.example.com", "audit.example.com"] }
+        })
       })
-    }));
+    );
 
     const detail = await store.readInstallation({
       appId: "app_acme",
@@ -40,14 +44,32 @@ describe("D1 admin installation detail adapter", () => {
       version: "1.2.3",
       enabled: true,
       priority: 10,
+      egress: { mode: "allowlist", allowlistedHostCount: 2 },
       configFields: [
         { name: "dryRun", type: "boolean", required: false, configured: false, hasDefault: true },
-        { name: "notifyChannel", type: "string", required: true, configured: true, hasDefault: false },
+        {
+          name: "notifyChannel",
+          type: "string",
+          required: true,
+          configured: true,
+          hasDefault: false
+        },
         { name: "retries", type: "number", required: false, configured: true, hasDefault: true }
       ],
       capabilities: [
-        { name: "invoice.read", scopeKeys: ["fields"], configuredBy: [], status: "granted" },
-        { name: "slack.send", scopeKeys: ["channel"], configuredBy: ["notifyChannel"], status: "granted" }
+        {
+          name: "audit.write",
+          scopeKeys: ["destination"],
+          configReferences: ["auditDestination"],
+          status: "missing"
+        },
+        { name: "invoice.read", scopeKeys: ["fields"], configReferences: [], status: "granted" },
+        {
+          name: "slack.send",
+          scopeKeys: ["channel"],
+          configReferences: ["notifyChannel"],
+          status: "granted"
+        }
       ]
     });
     expect(JSON.stringify(detail)).not.toContain("C123");

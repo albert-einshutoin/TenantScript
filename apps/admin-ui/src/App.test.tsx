@@ -65,26 +65,45 @@ describe("Admin UI auth foundation", () => {
     const client: AdminApiClient = {
       ...baseClient,
       getInstallationPermissionReview: vi.fn().mockResolvedValue({
-        id: "inst_large_invoice", pluginKey: "large-invoice-notify", version: "1.3.0",
-        enabled: true, priority: 10,
+        id: "inst_large_invoice",
+        pluginKey: "large-invoice-notify",
+        version: "1.3.0",
+        enabled: true,
+        priority: 10,
         configFields: [
-          { name: "notifyChannel", type: "string", required: true, configured: true, hasDefault: false }
+          {
+            name: "notifyChannel",
+            type: "string",
+            required: true,
+            configured: true,
+            hasDefault: false
+          }
         ],
         capabilities: [
-          { name: "slack.send", scopeKeys: ["channel"], configuredBy: ["notifyChannel"], status: "granted" }
-        ]
+          {
+            name: "slack.send",
+            scopeKeys: ["channel"],
+            configReferences: ["notifyChannel"],
+            status: "granted"
+          }
+        ],
+        egress: { mode: "deny", allowlistedHostCount: 0 }
       })
     };
     render(<App client={client} />);
 
     await login("manager-token");
     fireEvent.click(screen.getByRole("button", { name: "Installations" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Permission review for large-invoice-notify" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Permission review for large-invoice-notify" })
+    );
 
-    await expect(screen.findByRole("heading", { name: "Permission review" })).resolves.toBeInTheDocument();
-    expect(screen.getByText("notifyChannel")).toBeInTheDocument();
-    expect(screen.getByText("slack.send")).toBeInTheDocument();
-    expect(screen.getByText("configured")).toBeInTheDocument();
+    await expect(
+      screen.findByRole("heading", { name: "Permission review" })
+    ).resolves.toBeInTheDocument();
+    expect(screen.getByText(/notifyChannel/)).toBeInTheDocument();
+    expect(screen.getByText(/slack\.send/)).toBeInTheDocument();
+    expect(screen.getByText(/configured/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Save|Enable|Disable/i })).not.toBeInTheDocument();
   });
 
@@ -117,6 +136,7 @@ describe("Admin UI auth foundation", () => {
       resolveSession: baseClient.resolveSession,
       getDashboard: () => Promise.reject(new Error("offline")),
       getDashboardSection: baseClient.getDashboardSection,
+      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
       clearSession: baseClient.clearSession
     };
     render(<App client={failingClient} />);
@@ -151,6 +171,7 @@ describe("Admin UI auth foundation", () => {
           cursors: { installations: "signed.cursor" }
         }),
       getDashboardSection,
+      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
       clearSession: vi.fn()
     };
     render(<App client={client} />);
@@ -174,6 +195,7 @@ describe("Admin UI auth foundation", () => {
       resolveSession: baseClient.resolveSession,
       getDashboard: () => Promise.resolve({ ...initial, cursors: { executions: "signed.cursor" } }),
       getDashboardSection: () => Promise.reject(new Error("SQL customer payload")),
+      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
       clearSession: baseClient.clearSession
     };
     render(<App client={client} />);
@@ -216,6 +238,7 @@ describe("Admin UI auth foundation", () => {
       resolveSession: baseClient.resolveSession,
       getDashboard: () => Promise.resolve(snapshot),
       getDashboardSection: baseClient.getDashboardSection,
+      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
       clearSession: baseClient.clearSession
     };
     render(<App client={client} />);

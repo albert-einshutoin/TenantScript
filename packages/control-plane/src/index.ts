@@ -195,3 +195,12 @@ export {
   type AdminPluginVersionSummary,
   type AdminUsageSummary
 } from "./admin-dashboard.js";
+
+export {
+  createD1AdminInstallationDetailStore,
+  type AdminCapabilityMetadata,
+  type AdminConfigFieldMetadata,
+  type AdminEgressMetadata,
+  type AdminInstallationDetail,
+  type AdminInstallationDetailStore
+} from "./admin-installations.js";

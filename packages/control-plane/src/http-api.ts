@@ -5,6 +5,7 @@ import type {
   AdminDashboardSectionPage,
   AdminDashboardStore
 } from "./admin-dashboard.js";
+import type { AdminInstallationDetailStore } from "./admin-installations.js";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -18,6 +19,7 @@ export interface ControlPlaneHttpHandlerOptions {
   identityResolver?: IdentityResolver;
   dashboardStore?: AdminDashboardStore;
   cursorCodec?: AdminCursorCodec;
+  installationDetailStore?: AdminInstallationDetailStore;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -65,11 +67,14 @@ export function createControlPlaneHttpHandler(
     if (route === "session") {
       return resolveSession(request, options.identityResolver, corsHeaders);
     }
+    if (typeof route === "object") {
+      return resolveInstallationDetail(request, route.id, options, corsHeaders);
+    }
     return resolveDashboard(request, route, url, options, corsHeaders);
   };
 }
 
-type AdminRoute = "session" | "dashboard" | AdminDashboardSection;
+type AdminRoute = "session" | "dashboard" | AdminDashboardSection | { id: string };
 
 function adminRoute(path: string): AdminRoute | null {
   if (path === "/v1/session") {
@@ -78,11 +83,52 @@ function adminRoute(path: string): AdminRoute | null {
   if (path === "/v1/admin/dashboard") {
     return "dashboard";
   }
+  const installation = /^\/v1\/admin\/installations\/([^/]+)$/.exec(path);
+  if (installation?.[1] !== undefined) {
+    try {
+      return { id: decodeURIComponent(installation[1]) };
+    } catch {
+      // Malformed percent escapes are untrusted route input, not an internal server error.
+      return null;
+    }
+  }
   const section = path.slice("/v1/admin/dashboard/".length);
   if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
     return section;
   }
   return null;
+}
+
+async function resolveInstallationDetail(
+  request: Request,
+  id: string,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.installationDetailStore === undefined) {
+    return errorResponse(
+      503,
+      "installation_store_unavailable",
+      "installation store unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  try {
+    const detail = await options.installationDetailStore.readInstallation({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      id
+    });
+    // A common 404 avoids revealing whether an ID belongs to another tenant or does not exist.
+    if (detail === null) {
+      return errorResponse(404, "installation_not_found", "installation not found", corsHeaders);
+    }
+    return jsonResponse(200, detail, corsHeaders);
+  } catch {
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
 }
 
 async function resolveSession(
@@ -138,7 +184,7 @@ async function resolveSession(
 
 async function resolveDashboard(
   request: Request,
-  route: Exclude<AdminRoute, "session">,
+  route: Exclude<AdminRoute, "session" | { id: string }>,
   url: URL,
   options: ControlPlaneHttpHandlerOptions,
   corsHeaders: Record<string, string> | undefined

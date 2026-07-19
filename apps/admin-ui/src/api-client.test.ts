@@ -125,12 +125,21 @@ describe("Admin API environment selection", () => {
             { name: "channel", type: "string", required: true, configured: true, hasDefault: false }
           ],
           capabilities: [
-            { name: "slack.send", scopeKeys: ["channel"], configuredBy: ["channel"], status: "granted" }
-          ]
+            {
+              name: "slack.send",
+              scopeKeys: ["channel"],
+              configReferences: ["channel"],
+              status: "granted"
+            }
+          ],
+          egress: { mode: "deny", allowlistedHostCount: 0 }
         })
       );
     const client = createAdminApiClient({
-      isDevelopment: false, demoMode: false, controlPlaneUrl: "https://api.example.com", fetcher
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
     });
     await client.resolveSession({ token: "secret-token" });
 
@@ -150,12 +159,24 @@ describe("Admin API environment selection", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json(sessionPayload()))
-      .mockResolvedValueOnce(Response.json({
-        id: "inst_1", pluginKey: "invoice-notify", version: "1.2.3", enabled: true, priority: 10,
-        configFields: [], capabilities: [], config: { channel: "must-not-render" }
-      }));
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "inst_1",
+          pluginKey: "invoice-notify",
+          version: "1.2.3",
+          enabled: true,
+          priority: 10,
+          configFields: [],
+          capabilities: [],
+          egress: { mode: "deny", allowlistedHostCount: 0 },
+          config: { channel: "must-not-render" }
+        })
+      );
     const client = createAdminApiClient({
-      isDevelopment: false, demoMode: false, controlPlaneUrl: "https://api.example.com", fetcher
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
     });
     await client.resolveSession({ token: "secret-token" });
     await expect(client.getInstallationPermissionReview("inst_1")).rejects.toEqual(

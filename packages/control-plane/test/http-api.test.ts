@@ -266,10 +266,16 @@ describe("Control Plane installation permission review contract", () => {
       const handler = createControlPlaneHttpHandler({
         identityResolver: createStaticTokenIdentityResolver({
           "manager-secret-token": {
-            subject: "manager", role: "manager", appId: "app_acme", tenantId: "tenant_acme"
+            subject: "manager",
+            role: "manager",
+            appId: "app_acme",
+            tenantId: "tenant_acme"
           },
           "viewer-secret-token": {
-            subject: "viewer", role: "viewer", appId: "app_acme", tenantId: "tenant_acme"
+            subject: "viewer",
+            role: "viewer",
+            appId: "app_acme",
+            tenantId: "tenant_acme"
           }
         }),
         installationDetailStore: store,
@@ -284,7 +290,9 @@ describe("Control Plane installation permission review contract", () => {
 
       expect(response.status).toBe(200);
       expect(store.readInstallation).toHaveBeenCalledWith({
-        appId: "app_acme", tenantId: "tenant_acme", id: "inst_1"
+        appId: "app_acme",
+        tenantId: "tenant_acme",
+        id: "inst_1"
       });
       const body = await response.text();
       expect(body).toContain("configFields");
@@ -302,10 +310,30 @@ describe("Control Plane installation permission review contract", () => {
       allowedOrigins: [allowedOrigin]
     });
     const response = await handler(
-      sessionRequest({ token: "manager-secret-token", url: "https://api.example.com/v1/admin/installations/inst_other" })
+      sessionRequest({
+        token: "manager-secret-token",
+        url: "https://api.example.com/v1/admin/installations/inst_other"
+      })
     );
     expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "installation_not_found" } });
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "installation_not_found" }
+    });
+  });
+
+  it("fails closed for malformed encoded installation IDs", async () => {
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationDetailStore: installationStore(),
+      allowedOrigins: [allowedOrigin]
+    });
+    const response = await handler(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: "https://api.example.com/v1/admin/installations/%"
+      })
+    );
+    expect(response.status).toBe(404);
   });
 });
 
@@ -395,8 +423,14 @@ function installationStore() {
         { name: "channel", type: "string", required: true, configured: true, hasDefault: false }
       ],
       capabilities: [
-        { name: "slack.send", scopeKeys: ["channel"], configuredBy: ["channel"], status: "granted" }
-      ]
+        {
+          name: "slack.send",
+          scopeKeys: ["channel"],
+          configReferences: ["channel"],
+          status: "granted"
+        }
+      ],
+      egress: { mode: "deny", allowlistedHostCount: 0 }
     })
   } satisfies AdminInstallationDetailStore;
 }

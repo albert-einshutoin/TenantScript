@@ -14,8 +14,10 @@ Demo mode is opt-in so production builds never accept fixture credentials by def
 - `manager-token`
 - `viewer-token`
 
-The real HTTP client validates `GET /v1/session`, `GET /v1/admin/dashboard`, and paginated dashboard
-section responses. The submitted Bearer token is sent only in the Authorization header, retained
+The real HTTP client validates `GET /v1/session`, `GET /v1/admin/dashboard`, paginated dashboard
+section responses, and `GET /v1/admin/installations/:id` permission reviews. The permission review
+is read-only for both manager and viewer roles: it exposes schema/capability/egress metadata only,
+never configuration values, grants, manifest contents, defaults, or resolved capability scopes. The submitted Bearer token is sent only in the Authorization header, retained
 inside the API client rather than component state, and cleared on sign out. Dashboard responses are
 strictly parsed so storage-only fields fail closed instead of reaching the component tree.
 
