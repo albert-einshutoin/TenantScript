@@ -14,6 +14,7 @@ import type {
 } from "./admin-installations.js";
 import { AdminInstallFlowError, type AdminInstallFlowStore } from "./admin-install-flow.js";
 import type { AdminRollbackStore } from "./admin-rollbacks.js";
+import type { AdminMutationFamily, AdminMutationRateLimiter } from "./admin-mutation-rate-limit.js";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -33,6 +34,7 @@ export interface ControlPlaneHttpHandlerOptions {
   rollbackStore?: AdminRollbackStore;
   executionDetailStore?: AdminExecutionDetailStore;
   approvalDecisionStore?: AdminApprovalDecisionStore;
+  adminMutationRateLimiter?: AdminMutationRateLimiter;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -239,6 +241,13 @@ async function runInstall(
   }
   const command = await parseInstallRequest(request, corsHeaders);
   if (command instanceof Response) return command;
+  const rateLimitResponse = await reserveAdminMutation(
+    options.adminMutationRateLimiter,
+    identity,
+    "installation-create",
+    corsHeaders
+  );
+  if (rateLimitResponse !== null) return rateLimitResponse;
   try {
     const installed = await options.installFlowStore.install({
       appId: identity.appId,
@@ -396,6 +405,13 @@ async function runInstallationCommand(
   }
   const command = await parseInstallationCommand(request, corsHeaders);
   if (command instanceof Response) return command;
+  const rateLimitResponse = await reserveAdminMutation(
+    options.adminMutationRateLimiter,
+    identity,
+    "installation-command",
+    corsHeaders
+  );
+  if (rateLimitResponse !== null) return rateLimitResponse;
   try {
     const updated = await options.installationCommandStore.updateInstallation({
       appId: identity.appId,
@@ -451,6 +467,13 @@ async function runRollback(
   }
   const command = await parseRollbackCommand(request, corsHeaders);
   if (command instanceof Response) return command;
+  const rateLimitResponse = await reserveAdminMutation(
+    options.adminMutationRateLimiter,
+    identity,
+    "rollback",
+    corsHeaders
+  );
+  if (rateLimitResponse !== null) return rateLimitResponse;
   try {
     const result = await options.rollbackStore.rollback({
       appId: identity.appId,
@@ -585,6 +608,13 @@ async function runApprovalDecision(
   }
   const command = await parseApprovalDecision(request, corsHeaders);
   if (command instanceof Response) return command;
+  const rateLimitResponse = await reserveAdminMutation(
+    options.adminMutationRateLimiter,
+    identity,
+    "approval-decision",
+    corsHeaders
+  );
+  if (rateLimitResponse !== null) return rateLimitResponse;
   try {
     return jsonResponse(
       200,
@@ -1230,6 +1260,44 @@ function allowedMethods(route: AdminRoute): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function reserveAdminMutation(
+  limiter: AdminMutationRateLimiter | undefined,
+  identity: TenantScopedAdminIdentity,
+  family: AdminMutationFamily,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response | null> {
+  if (limiter === undefined) {
+    return errorResponse(
+      503,
+      "admin_mutation_rate_limit_unavailable",
+      "admin mutation protection unavailable",
+      corsHeaders
+    );
+  }
+  try {
+    const result = await limiter.reserve({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      actor: identity.subject,
+      family
+    });
+    if (result.allowed) return null;
+    return errorResponse(429, "admin_mutation_rate_limited", "too many admin changes", {
+      ...corsHeaders,
+      "Retry-After": String(result.retryAfterSeconds)
+    });
+  } catch {
+    // Privileged mutations fail closed. Durable Object errors may contain object IDs or
+    // deployment details, so the public response is stable and deliberately redacted.
+    return errorResponse(
+      503,
+      "admin_mutation_rate_limit_unavailable",
+      "admin mutation protection unavailable",
+      corsHeaders
+    );
+  }
 }
 
 function errorResponse(

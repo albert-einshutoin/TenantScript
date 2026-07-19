@@ -162,9 +162,14 @@ function createHandler(store: ReturnType<typeof installFlowStore>) {
       }
     }),
     installFlowStore: store,
+    adminMutationRateLimiter: allowAdminMutation,
     allowedOrigins: [allowedOrigin]
   });
 }
+
+const allowAdminMutation = {
+  reserve: () => Promise.resolve({ allowed: true as const, remaining: 999 })
+};
 
 function installFlowStore() {
   return {

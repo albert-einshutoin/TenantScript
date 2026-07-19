@@ -40,6 +40,7 @@ describe("control-plane security suite", () => {
         viewer: { subject: "viewer", role: "viewer", appId: "app_1", tenantId: "tenant_1" }
       }),
       rollbackStore,
+      adminMutationRateLimiter: allowAdminMutation,
       allowedOrigins: ["https://admin.example.com"]
     });
     const valid = { installationId: "inst_1", targetVersionId: "version_1", expectedRevision: 0 };
@@ -547,6 +548,7 @@ describe("control-plane security suite", () => {
         }
       }),
       installFlowStore,
+      adminMutationRateLimiter: allowAdminMutation,
       allowedOrigins: ["https://admin.example.com"]
     });
     const validBody = {
@@ -579,6 +581,10 @@ describe("control-plane security suite", () => {
     });
   });
 });
+
+const allowAdminMutation = {
+  reserve: () => Promise.resolve({ allowed: true as const, remaining: 999 })
+};
 
 const noopArtifacts: ArtifactStore = {
   putArtifact: (hash) => Promise.resolve({ hash })
