@@ -15,11 +15,15 @@ Demo mode is opt-in so production builds never accept fixture credentials by def
 - `viewer-token`
 
 The real HTTP client validates `GET /v1/session`, `GET /v1/admin/dashboard`, paginated dashboard
-section responses, and `GET /v1/admin/installation-review?id=...` permission reviews. The permission review
-is read-only for both manager and viewer roles: it exposes schema/capability/egress metadata only,
-never configuration values, grants, manifest contents, defaults, or resolved capability scopes. The submitted Bearer token is sent only in the Authorization header, retained
-inside the API client rather than component state, and cleared on sign out. Dashboard responses are
-strictly parsed so storage-only fields fail closed instead of reaching the component tree.
+section responses, `GET /v1/admin/installation-review?id=...` permission reviews,
+`GET /v1/admin/install-preview?versionId=...` install previews, and manager-only
+`POST /v1/admin/installations` commands. Reviews and previews expose schema/capability/egress metadata
+only—never configuration values, grants, manifest contents, defaults, or resolved capability scopes.
+The install command accepts schema-typed config and an exact list of capabilities the manager
+confirmed; app, tenant, actor, and resolved grants are derived by the Control Plane. The submitted
+Bearer token is sent only in the Authorization header, retained inside the API client rather than
+component state, and cleared on sign out. Responses are strictly parsed so storage-only fields fail
+closed instead of reaching the component tree.
 
 ## Control Plane connection
 
@@ -38,8 +42,7 @@ Configure these Worker bindings:
   `subject`, `role` (`manager` or `viewer`), `appId`, and `tenantId`.
 - `ADMIN_CURSOR_SECRET`: secret with at least 32 bytes used to authenticate tenant- and
   section-scoped pagination cursors.
-- `DB`: D1 binding containing the Control Plane schema from
-  `packages/control-plane/migrations/0001_initial.sql`.
+- `DB`: D1 binding with every migration in `packages/control-plane/migrations/` applied in order.
 
 `ADMIN_IDENTITIES_JSON` and `ADMIN_CURSOR_SECRET` are design-partner bootstrap secrets and must be
 stored as Worker secrets, never in Git or a public variable. Missing or malformed bindings fail

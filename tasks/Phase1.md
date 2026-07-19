@@ -206,7 +206,7 @@
   - GREEN: React + Vite + ルーティング + API クライアント(zod で型共有)+ Playwright 設定
   - DoD: 起動・ログイン(最小トークン認証、P1-T41 の role クレーム対応)・E2E smoke green。**design partner 環境への手動デプロイ手順書を含む**(セットアップウィザードは Phase 3 のため)
 
-- [ ] **P1-T33**(M)installations + permission 画面
+- [x] **P1-T33**(M)installations + permission 画面
   - RED(E2E): install フローで manifest 要求 capability が表示され、grant を確認して有効化できる / config フォームが configSchema から生成され required 検証が効く
   - DoD: E2E + コンポーネントテスト green
 
