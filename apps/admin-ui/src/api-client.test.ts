@@ -34,6 +34,57 @@ describe("Admin API environment selection", () => {
       new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
     );
   });
+
+  it("keeps demo rollbacks scoped, revisioned, and correlated with dashboard state", async () => {
+    const client = createDemoAdminApiClient();
+    await expect(
+      client.rollbackInstallation({
+        installationId: "inst_large_invoice",
+        targetVersionId: "version_large_invoice_1_2_2",
+        expectedRevision: 0
+      })
+    ).resolves.toMatchObject({
+      installationId: "inst_large_invoice",
+      fromVersion: "1.3.0",
+      toVersion: "1.2.2",
+      revision: 1
+    });
+    const dashboard = await client.getDashboard(
+      await client.resolveSession({ token: "manager-token" })
+    );
+    expect(dashboard.installations.find(({ id }) => id === "inst_large_invoice")).toMatchObject({
+      version: "1.2.2",
+      revision: 1
+    });
+    await expect(
+      client.rollbackInstallation({
+        installationId: "missing",
+        targetVersionId: "version_large_invoice_1_3_0",
+        expectedRevision: 0
+      })
+    ).rejects.toMatchObject({ code: "rollback_target_not_found" });
+    await expect(
+      client.rollbackInstallation({
+        installationId: "inst_large_invoice",
+        targetVersionId: "missing",
+        expectedRevision: 1
+      })
+    ).rejects.toMatchObject({ code: "rollback_target_not_found" });
+    await expect(
+      client.rollbackInstallation({
+        installationId: "inst_large_invoice",
+        targetVersionId: "version_large_invoice_1_3_0",
+        expectedRevision: 0
+      })
+    ).rejects.toMatchObject({ code: "installation_revision_conflict" });
+    await expect(
+      client.rollbackInstallation({
+        installationId: "inst_large_invoice",
+        targetVersionId: "version_large_invoice_1_2_2",
+        expectedRevision: 1
+      })
+    ).rejects.toMatchObject({ code: "rollback_target_is_current" });
+  });
   it("connects the production client to the configured Control Plane", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

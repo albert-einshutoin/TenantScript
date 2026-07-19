@@ -321,6 +321,37 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByText("audit_rollback_1")).toBeInTheDocument();
     expect(screen.getByText(/UI rollback duration: \d+ ms/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View execution log" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View execution log" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Executions" })).toBeInTheDocument();
+  });
+
+  it("can cancel rollback and safely refreshes after a revision conflict", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const getDashboard = vi.spyOn(baseClient, "getDashboard");
+    const rollbackInstallation = vi
+      .fn()
+      .mockRejectedValue(
+        new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+      );
+    render(<App client={{ ...baseClient, getDashboard, rollbackInstallation }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    const rollback = await screen.findByRole("button", {
+      name: "Rollback large-invoice-notify from 1.3.0 to 1.2.2"
+    });
+    fireEvent.click(rollback);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+      screen.queryByRole("dialog", { name: "Confirm plugin rollback" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(rollback);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm rollback" }));
+    await expect(
+      screen.findByText("Installation changed; version history refreshed")
+    ).resolves.toBeInTheDocument();
+    expect(getDashboard).toHaveBeenCalledTimes(2);
   });
 
   it("shows version history but hides rollback actions from viewers", async () => {
