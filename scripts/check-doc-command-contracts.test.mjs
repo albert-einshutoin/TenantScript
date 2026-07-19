@@ -101,3 +101,14 @@ test("checks README onboarding shell snippets", () => {
     assert.match(result.stderr, /README\.md:1: shell block must start with # cwd:/);
   });
 });
+
+test("checks agent onboarding shell snippets", () => {
+  withRepo((dir) => {
+    writeFileSync(join(dir, "llms.txt"), "```sh\npnpm verify\n```\n");
+
+    const result = runChecker(dir);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /llms\.txt:1: shell block must start with # cwd:/);
+  });
+});

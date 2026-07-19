@@ -7,7 +7,12 @@ import { fileURLToPath } from "node:url";
 const defaultRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function markdownFiles(repoRoot) {
-  return ["docs", "tasks"].flatMap((directory) => collectMarkdown(join(repoRoot, directory)));
+  const files = ["docs", "tasks"].flatMap((directory) =>
+    collectMarkdown(join(repoRoot, directory))
+  );
+  const agentOnboarding = join(repoRoot, "llms.txt");
+  if (existsSync(agentOnboarding)) files.push(agentOnboarding);
+  return files;
 }
 
 function collectMarkdown(directory) {
@@ -136,7 +141,7 @@ function main() {
     process.exitCode = 1;
     return;
   }
-  console.log(`Doc integrity check passed (${files.length} Markdown files).`);
+  console.log(`Doc integrity check passed (${files.length} documentation files).`);
 }
 
 main();
