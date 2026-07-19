@@ -133,7 +133,7 @@ export interface ExecutionDetailView {
   errorCode?: "execution_failed" | "execution_timeout" | "egress_denied" | "budget_exceeded";
   capabilityCalls: readonly {
     name: string;
-    status: "success" | "error";
+    status: "success" | "denied" | "error";
   }[];
   createdAt: Date;
 }
@@ -300,7 +300,7 @@ const executionDetailSchema = z
       .enum(["execution_failed", "execution_timeout", "egress_denied", "budget_exceeded"])
       .optional(),
     capabilityCalls: z.array(
-      z.object({ name: z.string().min(1), status: z.enum(["success", "error"]) }).strict()
+      z.object({ name: z.string().min(1), status: z.enum(["success", "denied", "error"]) }).strict()
     ),
     createdAt: z.coerce.date()
   })

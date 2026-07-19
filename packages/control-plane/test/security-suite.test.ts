@@ -8,6 +8,7 @@ import {
   createInMemoryExecutionLogStore,
   createStaticTokenIdentityResolver,
   type AdminDashboardStore,
+  type AdminExecutionDetailStore,
   type AdminInstallationDetailStore,
   type AdminInstallFlowStore,
   type AdminRollbackStore,
@@ -210,6 +211,77 @@ describe("control-plane security suite", () => {
     );
     expect(replay.status).toBe(400);
     await expect(replay.json()).resolves.toMatchObject({ error: { code: "invalid_cursor" } });
+  });
+
+  it("binds execution filters to cursors and keeps detail lookup in identity scope", async () => {
+    const dashboardStore: AdminDashboardStore = {
+      readSection: vi.fn<AdminDashboardStore["readSection"]>().mockResolvedValue({
+        section: "executions",
+        items: [],
+        nextPosition: "2026-07-19T00:00:00.000Z\texec_1"
+      }),
+      readUsageSummary: () => Promise.resolve({ date: "2026-07-19", executions: 0, runtimeMs: 0 })
+    };
+    const executionDetailStore = {
+      readExecution: vi
+        .fn<AdminExecutionDetailStore["readExecution"]>()
+        .mockImplementation(({ tenantId, id }) =>
+          Promise.resolve(
+            tenantId === "tenant_1" && id === "exec_1"
+              ? {
+                  id,
+                  pluginId: "plugin_1",
+                  hookName: "invoice.created",
+                  version: "1.0.0",
+                  status: "error",
+                  durationMs: 12,
+                  errorCode: "execution_failed",
+                  capabilityCalls: [{ name: "slack.send", status: "denied" }],
+                  createdAt: "2026-07-19T00:00:00.000Z"
+                }
+              : null
+          )
+        )
+    } satisfies AdminExecutionDetailStore;
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({
+        tenant1: { subject: "user_1", role: "viewer", appId: "app_1", tenantId: "tenant_1" },
+        tenant2: { subject: "user_2", role: "viewer", appId: "app_2", tenantId: "tenant_2" }
+      }),
+      dashboardStore,
+      executionDetailStore,
+      cursorCodec: createAdminCursorCodec("security-execution-search-secret-32-bytes"),
+      allowedOrigins: ["https://admin.example.com"]
+    });
+
+    const first = await handler(
+      dashboardRequest(
+        "tenant1",
+        "https://api.example.com/v1/admin/dashboard/executions?pluginId=plugin_1&status=error"
+      )
+    );
+    const firstBody = (await first.json()) as { nextCursor: string };
+    const changedFilter = await handler(
+      dashboardRequest(
+        "tenant1",
+        `https://api.example.com/v1/admin/dashboard/executions?pluginId=plugin_1&status=success&cursor=${encodeURIComponent(firstBody.nextCursor)}`
+      )
+    );
+    expect(changedFilter.status).toBe(400);
+    await expect(changedFilter.json()).resolves.toMatchObject({
+      error: { code: "invalid_cursor" }
+    });
+
+    const outsideScope = await handler(
+      dashboardRequest("tenant2", "https://api.example.com/v1/admin/execution-detail?id=exec_1")
+    );
+    expect(outsideScope.status).toBe(404);
+    expect(executionDetailStore.readExecution).toHaveBeenLastCalledWith({
+      appId: "app_2",
+      tenantId: "tenant_2",
+      id: "exec_1"
+    });
+    expect(await outsideScope.text()).not.toContain("slack.send");
   });
 
   it("allows only token roles that match the approval role and ignores body role claims", async () => {
