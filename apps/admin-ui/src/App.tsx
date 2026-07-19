@@ -19,7 +19,8 @@ import {
   type RollbackInstallationRequest,
   type RollbackInstallationResult
 } from "./api-client.js";
-import { canRolePerform, type AdminDashboardSection } from "@tenantscript/control-plane";
+import type { AdminDashboardSection } from "@tenantscript/control-plane";
+import { canRolePerform } from "@tenantscript/control-plane/rbac";
 import { type AdminRoute, useHashRoute } from "./router.js";
 
 const defaultClient = createUnavailableAdminApiClient();

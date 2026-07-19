@@ -1,10 +1,6 @@
 import { z } from "zod";
-import {
-  RBAC_ROLES,
-  type AdminDashboardSection,
-  type AuthenticatedIdentity,
-  type SupportedRbacRole
-} from "@tenantscript/control-plane";
+import { RBAC_ROLES, type SupportedRbacRole } from "@tenantscript/control-plane/rbac";
+import type { AdminDashboardSection, AuthenticatedIdentity } from "@tenantscript/control-plane";
 
 export type AdminRole = SupportedRbacRole;
 
