@@ -214,8 +214,8 @@
   - RED(E2E): version 履歴表示 → ワンクリック rollback → 確認ダイアログ → 完了表示
   - DoD: E2E green(T07 の drill をこの画面で実施できる)
 
-- [ ] **P1-T35**(M)executions 検索画面
-  - RED(E2E): tenant/plugin/hook/status でフィルタし、詳細で capability call 列とエラーを見られる
+- [x] **P1-T35**(M)executions 検索画面
+  - RED(E2E): identity 由来の tenant scope 内で plugin/hook/status をフィルタし、詳細で capability call 列と安全な status 由来エラーコードを見られる
   - DoD: E2E green
 
 - [ ] **P1-T36**(M)approval queue 画面(前提: P1-T41)

@@ -3,8 +3,10 @@ import type {
   AdminCursorCodec,
   AdminDashboardSection,
   AdminDashboardSectionPage,
-  AdminDashboardStore
+  AdminDashboardStore,
+  AdminExecutionFilters
 } from "./admin-dashboard.js";
+import type { AdminExecutionDetailStore } from "./admin-executions.js";
 import type {
   AdminInstallationCommandStore,
   AdminInstallationDetailStore
@@ -28,6 +30,7 @@ export interface ControlPlaneHttpHandlerOptions {
   installationCommandStore?: AdminInstallationCommandStore;
   installFlowStore?: AdminInstallFlowStore;
   rollbackStore?: AdminRollbackStore;
+  executionDetailStore?: AdminExecutionDetailStore;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -105,6 +108,9 @@ export function createControlPlaneHttpHandler(
     if (route === "installPreview") {
       return resolveInstallPreview(request, url, options, corsHeaders);
     }
+    if (route === "executionDetail") {
+      return resolveExecutionDetail(request, url, options, corsHeaders);
+    }
     if (typeof route === "object") {
       return resolveInstallationDetail(request, route.id, options, corsHeaders);
     }
@@ -119,6 +125,7 @@ type AdminRoute =
   | "installPreview"
   | "installCreate"
   | "rollbackCreate"
+  | "executionDetail"
   | AdminDashboardSection
   | { id: string };
 
@@ -145,6 +152,9 @@ function adminRoute(url: URL): AdminRoute | null {
   }
   if (path === "/v1/admin/rollbacks") {
     return "rollbackCreate";
+  }
+  if (path === "/v1/admin/execution-detail") {
+    return "executionDetail";
   }
   const section = path.slice("/v1/admin/dashboard/".length);
   if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
@@ -734,6 +744,7 @@ async function resolveDashboard(
     | "installPreview"
     | "installCreate"
     | "rollbackCreate"
+    | "executionDetail"
     | { id: string }
   >,
   url: URL,
@@ -809,6 +820,17 @@ async function resolveDashboard(
       );
     }
 
+    const filters = route === "executions" ? executionFilters(url) : {};
+    if (filters === null) {
+      return errorResponse(
+        400,
+        "invalid_execution_filter",
+        "invalid execution filter",
+        corsHeaders
+      );
+    }
+    const query = executionFilterQuery(filters);
+
     const cursor = url.searchParams.get("cursor");
     let position: string | undefined;
     if (cursor !== null) {
@@ -816,7 +838,8 @@ async function resolveDashboard(
       if (
         payload.appId !== identity.appId ||
         payload.tenantId !== identity.tenantId ||
-        payload.section !== route
+        payload.section !== route ||
+        payload.query !== query
       ) {
         return errorResponse(400, "invalid_cursor", "invalid dashboard cursor", corsHeaders);
       }
@@ -827,14 +850,57 @@ async function resolveDashboard(
       tenantId: identity.tenantId,
       section: route,
       limit,
+      ...(route === "executions" && Object.keys(filters).length > 0 ? { filters } : {}),
       ...(position === undefined ? {} : { position })
     });
-    return jsonResponse(200, await serializeSectionPage(page, identity, cursorCodec), corsHeaders);
+    return jsonResponse(
+      200,
+      await serializeSectionPage(page, identity, cursorCodec, query),
+      corsHeaders
+    );
   } catch (error) {
     if (error instanceof Error && error.message === "invalid Admin dashboard cursor") {
       return errorResponse(400, "invalid_cursor", "invalid dashboard cursor", corsHeaders);
     }
     // Store and cursor-provider failures can include SQL, bindings, or customer data.
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function resolveExecutionDetail(
+  request: Request,
+  url: URL,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.executionDetailStore === undefined) {
+    return errorResponse(
+      503,
+      "execution_store_unavailable",
+      "execution service unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  const id = url.searchParams.get("id");
+  if (
+    !isBoundedFilter(id) ||
+    url.searchParams.getAll("id").length !== 1 ||
+    [...url.searchParams.keys()].some((key) => key !== "id")
+  ) {
+    return errorResponse(400, "invalid_execution_id", "execution id is required", corsHeaders);
+  }
+  try {
+    const detail = await options.executionDetailStore.readExecution({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      id
+    });
+    return detail === null
+      ? errorResponse(404, "execution_not_found", "execution not found", corsHeaders)
+      : jsonResponse(200, detail, corsHeaders);
+  } catch {
     return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
   }
 }
@@ -878,7 +944,8 @@ async function resolveAdminIdentity(
 async function serializeSectionPage(
   page: AdminDashboardSectionPage,
   identity: TenantScopedAdminIdentity,
-  cursorCodec: AdminCursorCodec
+  cursorCodec: AdminCursorCodec,
+  query?: string
 ) {
   const nextCursor =
     page.nextPosition === undefined
@@ -887,13 +954,61 @@ async function serializeSectionPage(
           appId: identity.appId,
           tenantId: identity.tenantId,
           section: page.section,
-          position: page.nextPosition
+          position: page.nextPosition,
+          ...(query === undefined ? {} : { query })
         });
   return {
     section: page.section,
     items: page.items,
     ...(nextCursor === undefined ? {} : { nextCursor })
   };
+}
+
+function executionFilters(url: URL): AdminExecutionFilters | null {
+  const allowed = new Set(["cursor", "limit", "pluginId", "hookName", "status"]);
+  if ([...url.searchParams.keys()].some((key) => !allowed.has(key))) return null;
+  for (const key of allowed) {
+    if (url.searchParams.getAll(key).length > 1) return null;
+  }
+  const pluginId = url.searchParams.get("pluginId");
+  const hookName = url.searchParams.get("hookName");
+  const status = url.searchParams.get("status");
+  if (
+    (pluginId !== null && !isBoundedFilter(pluginId)) ||
+    (hookName !== null && !isBoundedFilter(hookName)) ||
+    (status !== null && !isExecutionStatus(status))
+  ) {
+    return null;
+  }
+  return {
+    ...(pluginId === null ? {} : { pluginId }),
+    ...(hookName === null ? {} : { hookName }),
+    ...(status === null ? {} : { status })
+  };
+}
+
+function executionFilterQuery(filters: AdminExecutionFilters): string | undefined {
+  return Object.keys(filters).length === 0
+    ? undefined
+    : JSON.stringify({
+        pluginId: filters.pluginId ?? "",
+        hookName: filters.hookName ?? "",
+        status: filters.status ?? ""
+      });
+}
+
+function isBoundedFilter(value: string | null): value is string {
+  return value !== null && value.length > 0 && value.length <= 256 && value.trim() === value;
+}
+
+function isExecutionStatus(value: string): value is NonNullable<AdminExecutionFilters["status"]> {
+  return (
+    value === "success" ||
+    value === "error" ||
+    value === "timeout" ||
+    value === "egress_denied" ||
+    value === "budget_exceeded"
+  );
 }
 
 function requireSerializedSection(

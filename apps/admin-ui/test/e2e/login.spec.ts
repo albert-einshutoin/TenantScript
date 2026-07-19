@@ -72,6 +72,26 @@ test("manager confirms a rollback and can open execution evidence", async ({ pag
   await expect(page.getByRole("heading", { level: 1, name: "Executions" })).toBeVisible();
 });
 
+test("manager searches tenant executions and opens safe capability evidence", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Token").fill("manager-token");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByRole("button", { name: "Executions" }).click();
+  await expect(page.getByText("Tenant: tenant_acme")).toBeVisible();
+  await page.getByLabel("Plugin ID").fill("plugin_large_invoice");
+  await page.getByLabel("Hook").fill("invoice.created");
+  await page.getByLabel("Status").selectOption("success");
+  await page.getByRole("button", { name: "Search executions" }).click();
+
+  await expect(page.getByRole("cell", { name: "exec_1", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "exec_2", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "View exec_1" }).click();
+  const detail = page.getByLabel("Execution detail exec_1");
+  await expect(detail).toContainText("slack.send — success");
+  await expect(detail).toContainText("none");
+});
+
 test("invalid token stays on the login screen", async ({ page }) => {
   await page.goto("/");
 

@@ -6,6 +6,9 @@ import {
   type AdminSession,
   type DashboardSectionPage,
   type DashboardSnapshot,
+  type ExecutionDetailView,
+  type ExecutionSearchRequest,
+  type ExecutionView,
   type InstallPluginRequest,
   type InstallPreview,
   type InstallationCommandRequest,
@@ -380,6 +383,8 @@ function AdminShell({
             onViewExecutions={() => {
               setRoute("executions");
             }}
+            onSearchExecutions={client.searchExecutions}
+            onExecutionDetail={client.getExecutionDetail}
           />
         )}
       </div>
@@ -415,7 +420,9 @@ function RoutePanel({
   installInFlight,
   onRollback,
   rollbackInFlight,
-  onViewExecutions
+  onViewExecutions,
+  onSearchExecutions,
+  onExecutionDetail
 }: {
   route: AdminRoute;
   session: AdminSession;
@@ -437,6 +444,8 @@ function RoutePanel({
   onRollback: (request: RollbackInstallationRequest) => Promise<RollbackInstallationResult>;
   rollbackInFlight: boolean;
   onViewExecutions: () => void;
+  onSearchExecutions: AdminApiClient["searchExecutions"];
+  onExecutionDetail: AdminApiClient["getExecutionDetail"];
 }) {
   switch (route) {
     case "overview":
@@ -494,10 +503,13 @@ function RoutePanel({
       return (
         <ExecutionsPanel
           snapshot={snapshot}
+          tenantId={session.tenantId}
           loading={loadingSection === "executions"}
           onLoadMore={() => {
             onLoadMore("executions");
           }}
+          onSearch={onSearchExecutions}
+          onDetail={onExecutionDetail}
         />
       );
   }
@@ -1235,43 +1247,192 @@ function ApprovalsPanel({
 
 function ExecutionsPanel({
   snapshot,
+  tenantId,
   loading,
-  onLoadMore
+  onLoadMore,
+  onSearch,
+  onDetail
 }: {
   snapshot: DashboardSnapshot;
+  tenantId: string;
   loading: boolean;
   onLoadMore: () => void;
+  onSearch: AdminApiClient["searchExecutions"];
+  onDetail: AdminApiClient["getExecutionDetail"];
 }) {
+  const [pluginId, setPluginId] = useState("");
+  const [hookName, setHookName] = useState("");
+  const [status, setStatus] = useState<"" | ExecutionView["status"]>("");
+  const [results, setResults] = useState<readonly ExecutionView[] | null>(null);
+  const [filters, setFilters] = useState<ExecutionSearchRequest>({});
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<ExecutionDetailView | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const searchRequest = useRef(0);
+  const detailRequest = useRef(0);
+
+  const runSearch = useCallback(
+    (request: ExecutionSearchRequest, append: boolean) => {
+      const requestId = searchRequest.current + 1;
+      searchRequest.current = requestId;
+      setSearchLoading(true);
+      setSearchError(null);
+      void onSearch(request)
+        .then((page) => {
+          if (searchRequest.current !== requestId) return;
+          setResults((current) =>
+            append && current !== null
+              ? [
+                  ...current,
+                  ...page.items.filter((item) => !current.some(({ id }) => id === item.id))
+                ]
+              : page.items
+          );
+          setNextCursor(page.nextCursor);
+        })
+        .catch(() => {
+          if (searchRequest.current === requestId) setSearchError("Execution search unavailable");
+        })
+        .finally(() => {
+          if (searchRequest.current === requestId) setSearchLoading(false);
+        });
+    },
+    [onSearch]
+  );
+
+  const submitSearch = useCallback(() => {
+    const request: ExecutionSearchRequest = {
+      ...(pluginId.trim() === "" ? {} : { pluginId: pluginId.trim() }),
+      ...(hookName.trim() === "" ? {} : { hookName: hookName.trim() }),
+      ...(status === "" ? {} : { status })
+    };
+    setFilters(request);
+    setDetail(null);
+    setDetailError(null);
+    runSearch(request, false);
+  }, [hookName, pluginId, runSearch, status]);
+
+  const openDetail = useCallback(
+    (id: string) => {
+      const requestId = detailRequest.current + 1;
+      detailRequest.current = requestId;
+      setDetailLoading(true);
+      setDetailError(null);
+      setDetail(null);
+      void onDetail(id)
+        .then((nextDetail) => {
+          if (detailRequest.current === requestId) setDetail(nextDetail);
+        })
+        .catch(() => {
+          if (detailRequest.current === requestId) setDetailError("Execution detail unavailable");
+        })
+        .finally(() => {
+          if (detailRequest.current === requestId) setDetailLoading(false);
+        });
+    },
+    [onDetail]
+  );
+
+  const visibleExecutions = results ?? snapshot.executions;
+  const visibleCursor = results === null ? snapshot.cursors.executions : nextCursor;
+
   return (
     <section className="data-panel">
       <PanelHeader title="Executions" detail="Hook activity" />
-      <ExecutionTable snapshot={snapshot} />
+      <p className="tenant-context">Tenant: {tenantId}</p>
+      <form
+        className="execution-filters"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitSearch();
+        }}
+      >
+        <label>
+          Plugin ID
+          <input
+            value={pluginId}
+            onChange={(event) => {
+              setPluginId(event.target.value);
+            }}
+          />
+        </label>
+        <label>
+          Hook
+          <input
+            value={hookName}
+            onChange={(event) => {
+              setHookName(event.target.value);
+            }}
+          />
+        </label>
+        <label>
+          Status
+          <select
+            value={status}
+            onChange={(event) => {
+              setStatus(event.target.value as "" | ExecutionView["status"]);
+            }}
+          >
+            <option value="">All statuses</option>
+            <option value="success">success</option>
+            <option value="error">error</option>
+            <option value="timeout">timeout</option>
+            <option value="egress_denied">egress_denied</option>
+            <option value="budget_exceeded">budget_exceeded</option>
+          </select>
+        </label>
+        <button type="submit" disabled={searchLoading}>
+          Search executions
+        </button>
+      </form>
+      {searchError === null ? null : <p className="form-error">{searchError}</p>}
+      <ExecutionTable executions={visibleExecutions} onView={openDetail} />
       <LoadMoreButton
         section="executions"
-        cursor={snapshot.cursors.executions}
-        loading={loading}
-        onClick={onLoadMore}
+        cursor={visibleCursor}
+        loading={loading || searchLoading}
+        onClick={() => {
+          if (results === null) onLoadMore();
+          else if (nextCursor !== undefined) runSearch({ ...filters, cursor: nextCursor }, true);
+        }}
       />
+      {detailLoading ? <p className="detail-state">Loading execution detail</p> : null}
+      {detailError === null ? null : <p className="form-error">{detailError}</p>}
+      {detail === null ? null : <ExecutionDetail detail={detail} />}
     </section>
   );
 }
 
-function ExecutionTable({ snapshot }: { snapshot: DashboardSnapshot }) {
+function ExecutionTable({
+  snapshot,
+  executions = snapshot?.executions ?? [],
+  onView
+}: {
+  snapshot?: DashboardSnapshot;
+  executions?: readonly ExecutionView[];
+  onView?: (id: string) => void;
+}) {
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
+            <th>Execution ID</th>
             <th>Hook</th>
             <th>Plugin</th>
             <th>Status</th>
             <th>Duration</th>
             <th>Capabilities</th>
+            {onView === undefined ? null : <th>Details</th>}
           </tr>
         </thead>
         <tbody>
-          {snapshot.executions.map((execution) => (
+          {executions.map((execution) => (
             <tr key={execution.id}>
+              <td>{execution.id}</td>
               <td>{execution.hookName}</td>
               <td>{execution.pluginId}</td>
               <td>
@@ -1283,11 +1444,62 @@ function ExecutionTable({ snapshot }: { snapshot: DashboardSnapshot }) {
                   ? "none"
                   : execution.capabilityNames.join(", ")}
               </td>
+              {onView === undefined ? null : (
+                <td>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      onView(execution.id);
+                    }}
+                  >
+                    View {execution.id}
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function ExecutionDetail({ detail }: { detail: ExecutionDetailView }) {
+  return (
+    <section className="execution-detail" aria-label={`Execution detail ${detail.id}`}>
+      <h3>{detail.id}</h3>
+      <dl>
+        <div>
+          <dt>Plugin</dt>
+          <dd>{detail.pluginId}</dd>
+        </div>
+        <div>
+          <dt>Hook</dt>
+          <dd>{detail.hookName}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{detail.status}</dd>
+        </div>
+        <div>
+          <dt>Error code</dt>
+          <dd>{detail.errorCode ?? "none"}</dd>
+        </div>
+      </dl>
+      <h4>Capability calls</h4>
+      {detail.capabilityCalls.length === 0 ? (
+        <p>none</p>
+      ) : (
+        <ul>
+          {detail.capabilityCalls.map((call) => (
+            <li key={`${call.name}:${call.status}`}>
+              {call.name} — {call.status}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

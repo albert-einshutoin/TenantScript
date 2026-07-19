@@ -656,6 +656,91 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByRole("button", { name: "Reject" })).toBeDisabled();
   });
 
+  it("searches executions server-side and opens a value-free capability detail", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const searchExecutions = vi.fn().mockResolvedValue({
+      items: [
+        {
+          id: "exec_filtered",
+          pluginId: "plugin_large_invoice",
+          hookName: "invoice.created",
+          version: "1.3.0",
+          status: "error",
+          durationMs: 21,
+          capabilityNames: ["slack.send"],
+          createdAt: new Date("2026-07-19T00:00:00.000Z")
+        }
+      ],
+      nextCursor: "next-filtered"
+    });
+    const getExecutionDetail = vi.fn().mockResolvedValue({
+      id: "exec_filtered",
+      pluginId: "plugin_large_invoice",
+      hookName: "invoice.created",
+      version: "1.3.0",
+      status: "error",
+      durationMs: 21,
+      errorCode: "execution_failed",
+      capabilityCalls: [{ name: "slack.send", status: "error" }],
+      createdAt: new Date("2026-07-19T00:00:00.000Z")
+    });
+    render(<App client={{ ...baseClient, searchExecutions, getExecutionDetail }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Executions" }));
+    fireEvent.change(screen.getByLabelText("Plugin ID"), {
+      target: { value: "plugin_large_invoice" }
+    });
+    fireEvent.change(screen.getByLabelText("Hook"), { target: { value: "invoice.created" } });
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "error" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search executions" }));
+
+    await waitFor(() => {
+      expect(searchExecutions).toHaveBeenCalledWith({
+        pluginId: "plugin_large_invoice",
+        hookName: "invoice.created",
+        status: "error"
+      });
+    });
+    expect(screen.getByText("exec_filtered")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View exec_filtered" }));
+    await expect(screen.findByText("execution_failed")).resolves.toBeInTheDocument();
+    expect(screen.getByText(/slack\.send.*error/)).toBeInTheDocument();
+    expect(getExecutionDetail).toHaveBeenCalledWith("exec_filtered");
+    expect(screen.queryByText(/customer payload|provider secret/)).not.toBeInTheDocument();
+
+    searchExecutions.mockResolvedValueOnce({ items: [], nextCursor: undefined });
+    fireEvent.click(screen.getByRole("button", { name: "Load more executions" }));
+    await waitFor(() => {
+      expect(searchExecutions).toHaveBeenLastCalledWith({
+        pluginId: "plugin_large_invoice",
+        hookName: "invoice.created",
+        status: "error",
+        cursor: "next-filtered"
+      });
+    });
+  });
+
+  it("shows stable execution search and detail failures without leaking diagnostics", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const searchExecutions = vi.fn().mockRejectedValue(new Error("SQL customer payload"));
+    const getExecutionDetail = vi.fn().mockRejectedValue(new Error("provider secret"));
+    render(<App client={{ ...baseClient, searchExecutions, getExecutionDetail }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Executions" }));
+    fireEvent.click(screen.getByRole("button", { name: "View exec_1" }));
+    await expect(screen.findByText("Execution detail unavailable")).resolves.toBeInTheDocument();
+    expect(screen.queryByText("provider secret")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Search executions" }));
+    await waitFor(() => {
+      expect(searchExecutions).toHaveBeenCalledWith({});
+    });
+    await expect(screen.findByText("Execution search unavailable")).resolves.toBeInTheDocument();
+    expect(screen.queryByText("SQL customer payload")).not.toBeInTheDocument();
+  });
+
   it("shows a stable error boundary when the dashboard snapshot cannot load", async () => {
     const baseClient = createDemoAdminApiClient();
     const failingClient: AdminApiClient = {
@@ -768,7 +853,7 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByText("disabled")).toHaveClass("neutral");
 
     fireEvent.click(screen.getByRole("button", { name: "Executions" }));
-    expect(screen.getByText("error")).toHaveClass("critical");
+    expect(screen.getByText("error", { selector: "span" })).toHaveClass("critical");
   });
 });
 

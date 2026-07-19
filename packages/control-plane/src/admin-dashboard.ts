@@ -44,6 +44,12 @@ export interface AdminExecutionSummary {
   createdAt: string;
 }
 
+export interface AdminExecutionFilters {
+  pluginId?: string;
+  hookName?: string;
+  status?: AdminExecutionSummary["status"];
+}
+
 export interface AdminUsageSummary {
   date: string;
   executions: number;
@@ -69,6 +75,7 @@ export interface AdminDashboardStore {
     section: AdminDashboardSection;
     limit: number;
     position?: string;
+    filters?: AdminExecutionFilters;
   }) => Promise<AdminDashboardSectionPage>;
   readUsageSummary: (request: {
     appId: string;
@@ -80,6 +87,7 @@ export interface AdminDashboardStore {
 export interface AdminCursorPayload extends AdminDashboardScope {
   section: AdminDashboardSection;
   position: string;
+  query?: string;
 }
 
 export interface AdminCursorCodec {
@@ -221,7 +229,10 @@ async function readExecutions(
         "FROM executions e JOIN tenants t ON t.id = e.tenant_id",
         "WHERE t.id = ?1 AND t.app_id = ?2",
         "AND (?3 IS NULL OR e.created_at < ?3 OR (e.created_at = ?3 AND e.id < ?4))",
-        "ORDER BY e.created_at DESC, e.id DESC LIMIT ?5"
+        "AND (?5 IS NULL OR e.plugin_id = ?5)",
+        "AND (?6 IS NULL OR e.hook_name = ?6)",
+        "AND (?7 IS NULL OR e.status = ?7)",
+        "ORDER BY e.created_at DESC, e.id DESC LIMIT ?8"
       ].join(" ")
     )
     .bind(
@@ -229,6 +240,9 @@ async function readExecutions(
       request.appId,
       cursor?.createdAt ?? null,
       cursor?.id ?? null,
+      request.filters?.pluginId ?? null,
+      request.filters?.hookName ?? null,
+      request.filters?.status ?? null,
       request.limit + 1
     )
     .all();
@@ -282,6 +296,7 @@ interface SectionReadRequest extends AdminDashboardScope {
   section: AdminDashboardSection;
   limit: number;
   position?: string;
+  filters?: AdminExecutionFilters;
 }
 
 function keysetPage<TRow>(
@@ -449,7 +464,8 @@ export function createAdminCursorCodec(secret: string): AdminCursorCodec {
           appId: parsed.appId,
           tenantId: parsed.tenantId,
           section: parsed.section,
-          position: parsed.position
+          position: parsed.position,
+          ...(parsed.query === undefined ? {} : { query: parsed.query })
         };
       } catch {
         throw new Error("invalid Admin dashboard cursor");
@@ -467,7 +483,8 @@ function isCursorPayload(value: unknown): value is AdminCursorPayload & { versio
     isNonEmptyString(value.appId) &&
     isNonEmptyString(value.tenantId) &&
     isDashboardSection(value.section) &&
-    isNonEmptyString(value.position)
+    isNonEmptyString(value.position) &&
+    (value.query === undefined || isNonEmptyString(value.query))
   );
 }
 

@@ -85,6 +85,32 @@ describe("Admin API environment selection", () => {
       })
     ).rejects.toMatchObject({ code: "rollback_target_is_current" });
   });
+
+  it("keeps demo execution search and detail aligned with the HTTP contract", async () => {
+    const client = createDemoAdminApiClient();
+
+    await expect(client.searchExecutions({})).resolves.toMatchObject({
+      items: [{ id: "exec_1" }, { id: "exec_2" }]
+    });
+    await expect(
+      client.searchExecutions({
+        pluginId: "plugin_large_invoice",
+        hookName: "invoice.created",
+        status: "success"
+      })
+    ).resolves.toMatchObject({ items: [{ id: "exec_1" }] });
+    await expect(
+      client.searchExecutions({ pluginId: "plugin_large_invoice", status: "error" })
+    ).resolves.toMatchObject({ items: [] });
+    await expect(client.getExecutionDetail("exec_1")).resolves.toMatchObject({
+      id: "exec_1",
+      capabilityCalls: [{ name: "slack.send", status: "success" }]
+    });
+    await expect(client.getExecutionDetail("missing")).rejects.toEqual(
+      new AdminApiError(404, "execution_not_found", "execution not found")
+    );
+  });
+
   it("connects the production client to the configured Control Plane", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -719,6 +745,97 @@ describe("Admin API environment selection", () => {
     const networkSession = await network.resolveSession({ token: "secret-token" });
     await expect(network.getDashboard(networkSession)).rejects.toEqual(
       new AdminApiError(0, "network_error", "control-plane is unreachable")
+    );
+  });
+
+  it("searches executions with server filters and accepts only value-free detail fields", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "executions",
+          items: [
+            {
+              id: "exec_1",
+              pluginId: "plugin_invoice",
+              hookName: "invoice.created",
+              version: "1.2.3",
+              status: "error",
+              durationMs: 19,
+              capabilityNames: ["slack.send"],
+              createdAt: "2026-07-19T00:00:00.000Z"
+            }
+          ],
+          nextCursor: "signed.next"
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "exec_1",
+          pluginId: "plugin_invoice",
+          hookName: "invoice.created",
+          version: "1.2.3",
+          status: "error",
+          durationMs: 19,
+          errorCode: "execution_failed",
+          capabilityCalls: [{ name: "slack.send", status: "error" }],
+          createdAt: "2026-07-19T00:00:00.000Z"
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.searchExecutions({
+        pluginId: "plugin_invoice",
+        hookName: "invoice.created",
+        status: "error",
+        cursor: "signed.cursor"
+      })
+    ).resolves.toMatchObject({ items: [{ id: "exec_1" }], nextCursor: "signed.next" });
+    expect(requestUrl(fetcher.mock.calls[1]?.[0])).toBe(
+      "https://api.example.com/v1/admin/dashboard/executions?pluginId=plugin_invoice&hookName=invoice.created&status=error&cursor=signed.cursor"
+    );
+    await expect(client.getExecutionDetail("exec_1")).resolves.toMatchObject({
+      id: "exec_1",
+      errorCode: "execution_failed",
+      capabilityCalls: [{ name: "slack.send", status: "error" }]
+    });
+    expect(requestUrl(fetcher.mock.calls[2]?.[0])).toBe(
+      "https://api.example.com/v1/admin/execution-detail?id=exec_1"
+    );
+
+    const unsafeClient = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher: vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json(sessionPayload()))
+        .mockResolvedValueOnce(
+          Response.json({
+            id: "exec_unsafe",
+            pluginId: "plugin_invoice",
+            hookName: "invoice.created",
+            version: "1.2.3",
+            status: "error",
+            durationMs: 19,
+            errorCode: "execution_failed",
+            capabilityCalls: [],
+            createdAt: "2026-07-19T00:00:00.000Z",
+            error: "provider secret and customer payload"
+          })
+        )
+    });
+    await unsafeClient.resolveSession({ token: "secret-token" });
+    await expect(unsafeClient.getExecutionDetail("exec_unsafe")).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
     );
   });
 });
