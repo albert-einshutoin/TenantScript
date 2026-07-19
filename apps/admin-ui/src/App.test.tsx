@@ -162,7 +162,9 @@ describe("Admin UI auth foundation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
     expect(screen.getByRole("button", { name: "Saving" })).toBeDisabled();
 
-    await waitFor(() => expect(updateInstallationCommand).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(updateInstallationCommand).toHaveBeenCalledTimes(1);
+    });
     expect(updateInstallationCommand).toHaveBeenCalledWith({
       id: "inst_large_invoice",
       enabled: false,

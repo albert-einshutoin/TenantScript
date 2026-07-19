@@ -268,7 +268,7 @@ const installationCommandResultSchema = z
   .object({
     id: z.string().min(1),
     enabled: z.boolean(),
-    priority: z.number().finite().int()
+    priority: z.number().int()
   })
   .strict();
 

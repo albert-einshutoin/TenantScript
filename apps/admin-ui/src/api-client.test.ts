@@ -176,9 +176,12 @@ describe("Admin API environment selection", () => {
     expect(init?.method).toBe("PATCH");
     expect(new Headers(init?.headers).get("content-type")).toBe("application/json");
     expect(init?.body).toBe('{"id":"..","enabled":false,"priority":4}');
-    expect(String(init?.body)).not.toContain("tenantId");
-    expect(String(init?.body)).not.toContain("appId");
-    expect(String(init?.body)).not.toContain("actor");
+    const body = init?.body;
+    expect(typeof body).toBe("string");
+    if (typeof body !== "string") throw new Error("expected JSON command body");
+    expect(body).not.toContain("tenantId");
+    expect(body).not.toContain("appId");
+    expect(body).not.toContain("actor");
   });
 
   it("rejects installation review responses that include storage values", async () => {

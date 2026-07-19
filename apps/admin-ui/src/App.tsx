@@ -514,10 +514,22 @@ function InstallationCommandPanel({
     <section className="data-panel" aria-label="Installation controls">
       <PanelHeader title="Installation controls" detail={installation.pluginKey} />
       <div className="button-row">
-        <button type="button" className="secondary-button" onClick={() => setEnabled(true)}>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => {
+            setEnabled(true);
+          }}
+        >
           Enable installation
         </button>
-        <button type="button" className="secondary-button" onClick={() => setEnabled(false)}>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => {
+            setEnabled(false);
+          }}
+        >
           Disable installation
         </button>
       </div>
@@ -527,10 +539,18 @@ function InstallationCommandPanel({
           id="installation-priority"
           inputMode="numeric"
           value={priority}
-          onChange={(event) => setPriority(event.currentTarget.value)}
+          onChange={(event) => {
+            setPriority(event.currentTarget.value);
+          }}
         />
       </label>
-      <button type="button" disabled={!changed || submitting} onClick={() => setConfirming(true)}>
+      <button
+        type="button"
+        disabled={!changed || submitting}
+        onClick={() => {
+          setConfirming(true);
+        }}
+      >
         Review change
       </button>
       {error === null ? null : <p className="form-error">{error}</p>}
@@ -542,7 +562,13 @@ function InstallationCommandPanel({
           <button type="button" onClick={confirm} disabled={submitting}>
             {submitting ? "Saving" : "Confirm change"}
           </button>
-          <button type="button" onClick={() => setConfirming(false)} disabled={submitting}>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirming(false);
+            }}
+            disabled={submitting}
+          >
             Cancel
           </button>
         </div>
