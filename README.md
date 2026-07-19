@@ -39,6 +39,24 @@ pnpm verify
 - **Tier 1 (`.github/workflows/tier1.yml`)**: forkのPull Requestと `main` へのpushで動くaccountless quality gateです。Cloudflare secretsを参照せず、固定バージョンのOSV Scannerを含むため、外部コントリビューターも同じ品質境界で検証できます。
 - **Tier 2 Live (`.github/workflows/tier2-live.yml`)**: maintainer管理のscheduleまたは手動実行に限定したlive検証レーンです。Cloudflareアカウント、資格情報、paid planを必要とするsmoke testやlatency benchmarkはこのレーンだけに追加し、fork-safeな検証をTier 1から移動しません。現在のlive smokeはplaceholderであり、資格情報を伴う実行は未構成です。
 
+## 既知の環境制約
+
+以下はコードやローカル環境の失敗ではなく、maintainerが外部サービス側で解消する公開準備ブロッカーです。通常の開発、fork PR、`pnpm verify`にはCloudflare・npmの認証情報は不要です。
+
+| 制約                                  | 影響する作業                                                                                                                                                                       | 影響しないローカル作業                                              | 解消主体                                                            |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Cloudflare Workers Paid plan          | Dynamic Workersのlive deploy、latency benchmark、runtime primitiveの最終決定。詳細は[ADR-001](docs/adr/001-runtime-primitive.md)と[Phase 0 benchmark](docs/benchmarks/phase0.md)。 | Tier 1、unit/workerd tests、Wrangler dry-run。                      | Maintainerがpaid accountを用意し、Tier 2でlive evidenceを取得する。 |
+| npm `@tenantscript` scopeの予約・公開 | package名の確定、registry publish、外部install検証。[Issue #3](https://github.com/albert-einshutoin/TenantScript/issues/3)で追跡。                                                 | `workspace:*`によるmonorepo内参照、frozen install、全ローカル検証。 | Maintainerがnpm authenticationを行い、scopeと公開方針を確定する。   |
+
+外部アカウントがなくても、公開コードとdeployment bundleのローカル品質は次のaccountless経路で確認できます。
+
+```sh
+# cwd: repository root
+# expected-exit: 0
+pnpm verify
+pnpm --filter @tenantscript/runtime-bench exec wrangler deploy --config wrangler.jsonc --dry-run
+```
+
 ## 方針
 
 - **Pure OSS**: 収益化を目的としない。self-hostが唯一の運用形態(ドキュメント D-008)。
