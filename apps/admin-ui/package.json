@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run && playwright test",
+    "test:security": "vitest run src/security-suite.test.tsx",
     "test:coverage": "vitest run --coverage",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   CapabilityDeniedError,
+  CapabilityJournalConflictError,
   createApprovalsRequestProvider,
   createCapabilityBroker,
+  createInMemoryCapabilityCallJournal,
   createInvoiceReadProvider,
   createMockSlackSendProvider,
   createPluginCapabilityContext,
@@ -10,6 +12,30 @@ import {
 } from "../src/index.js";
 
 describe("capabilities security suite", () => {
+  it("rejects a tampered journal entry instead of replaying it or calling the provider", async () => {
+    const journal = createInMemoryCapabilityCallJournal();
+    await journal.writeCapabilityCall({
+      executionId: "exec_1",
+      callIndex: 0,
+      capability: "slack.send",
+      inputHash: JSON.stringify({ channel: "C123", text: "original" }),
+      result: { ok: true },
+      completedAt: new Date("2026-06-13T01:00:00.000Z")
+    });
+    const provider = vi.fn();
+    const broker = createCapabilityBroker({
+      executionId: "exec_1",
+      journal,
+      grants: { "slack.send": { channel: "C123" } },
+      providers: { "slack.send": provider }
+    });
+
+    await expect(broker.call("slack.send", { channel: "C123", text: "tampered" })).rejects.toThrow(
+      CapabilityJournalConflictError
+    );
+    expect(provider).not.toHaveBeenCalled();
+  });
+
   it("denies ungranted capability calls", async () => {
     const broker = createCapabilityBroker({
       grants: {},

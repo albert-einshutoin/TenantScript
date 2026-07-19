@@ -12,13 +12,14 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Admin変更APIのrate limit運用](docs/operations/admin-mutation-rate-limits.md) — Durable Object binding、fail-closed方針、設定範囲
 - [Admin installの冪等再試行](docs/operations/admin-install-idempotency.md) — Idempotency-Key、409、D1原子性、保存期間
 - [Admin rollbackの結果復旧](docs/operations/admin-rollback-idempotency.md) — 応答喪失、revision CAS、audit result再取得
+- [Security suite v2 threat map](docs/security/security-suite-v2.md) — Phase 1攻撃面、常設テスト、依存境界CI
 
 ## 方針
 
 - **Pure OSS**: 収益化を目的としない。self-hostが唯一の運用形態(ドキュメント D-008)。
 - **Markdownがsource of truth**: docx等が必要な場合は都度mdからエクスポートする(例: pandoc)。
 - **GitHub Flow**: `main` を唯一の長期ブランチとし、作業は短命の `feature/*` ブランチから Pull Request で統合する。`develop` / `release/*` / `hotfix/*` は使わない。
-- **ステータス**: Phase 0 の中核実装はほぼ完了し、Phase 0 Exit Gate の証跡回収中。Phase 1 MVP は control-plane / rollback / approval / budget / proxy / CLI / usage meter まで着手済みで、Admin UI・partner onboarding・security suite v2・ドキュメント整備・Phase 1 gate review が未完了。
+- **ステータス**: Phase 0 の中核実装はほぼ完了し、Phase 0 Exit Gate の証跡回収中。Phase 1 MVP は control-plane / rollback / approval / budget / proxy / CLI / usage meter / Admin UI / security suite v2まで実装済みで、partner onboarding・ドキュメント整備・Phase 1 gate review が未完了。
 
 ## 現在のブロッカー
 

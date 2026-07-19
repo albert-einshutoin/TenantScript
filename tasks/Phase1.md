@@ -224,7 +224,7 @@
 
 ## チャンク K: 品質・ドキュメント・ゲート(T37–T40)
 
-- [ ] **P1-T37**(M)security suite v2
+- [x] **P1-T37**(M)security suite v2
   - 内容: approval 昇格(T12)・budget 回避(T18)・proxy SSRF(T23)・journal 改ざん・UI の CSRF/XSS 検査を統合
   - DoD: `pnpm test:security` green、CI 必須ジョブ
 
