@@ -127,14 +127,21 @@ export {
 export {
   createInMemoryDailyUsageSummaryStore,
   createInMemoryUsageMeter,
+  createAnalyticsEngineUsageSink,
   createUsageMeter,
   type AnalyticsEngineDataPoint,
   type AnalyticsEngineDatasetLike,
   type DailyUsageSummary,
   type DailyUsageSummaryStore,
+  type GetDailyUsageSummariesRequest,
   type GetDailyUsageSummaryRequest,
   type RecordUsageMetricRequest,
-  type UsageMeter
+  type UsageEvent,
+  type UsageHookType,
+  type UsageMeter,
+  type UsageMeterFailure,
+  type UsageSink,
+  UsageMeterQueryError
 } from "./usage-meter.js";
 
 export {

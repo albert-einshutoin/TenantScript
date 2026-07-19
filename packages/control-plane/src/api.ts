@@ -13,6 +13,7 @@ import type { SecretRef, SecretStore } from "./secret-store.js";
 import type { SlackConnectionRecord, SlackConnectionStore } from "./slack-connection-store.js";
 import type {
   DailyUsageSummary,
+  GetDailyUsageSummariesRequest,
   GetDailyUsageSummaryRequest,
   RecordUsageMetricRequest,
   UsageMeter
@@ -124,6 +125,9 @@ export interface ControlPlaneApi {
   decideApproval: (request: DecideApprovalRequest) => Promise<ApprovalRecord>;
   recordExecutionUsage: (request: RecordUsageMetricRequest) => Promise<DailyUsageSummary>;
   getDailyUsageSummary: (request: GetDailyUsageSummaryRequest) => Promise<DailyUsageSummary>;
+  getDailyUsageSummaries: (
+    request: GetDailyUsageSummariesRequest
+  ) => Promise<readonly DailyUsageSummary[]>;
 }
 
 export interface CreateAppRequest {
@@ -360,7 +364,9 @@ export function createControlPlaneApi(params: {
     recordExecutionUsage: (request) =>
       requireUsageMeter(params.usageMeter).recordExecutionUsage(request),
     getDailyUsageSummary: (request) =>
-      requireUsageMeter(params.usageMeter).getDailyUsageSummary(request)
+      requireUsageMeter(params.usageMeter).getDailyUsageSummary(request),
+    getDailyUsageSummaries: (request) =>
+      requireUsageMeter(params.usageMeter).getDailyUsageSummaries(request)
   };
 }
 

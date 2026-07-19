@@ -278,10 +278,9 @@ describe("createControlPlaneApi usage meter", () => {
 
     await expect(
       api.recordExecutionUsage({
-        executionId: "exec_1",
         tenantId: "tenant_1",
         pluginId: "plugin_1",
-        hookName: "invoice.created",
+        hookType: "event",
         status: "success",
         cpuMs: 15,
         subrequests: 3,
@@ -304,6 +303,16 @@ describe("createControlPlaneApi usage meter", () => {
         date: "2026-06-14"
       })
     ).resolves.toMatchObject({ executions: 1, cpuMs: 15, subrequests: 3, workflowRuns: 1 });
+    await expect(
+      api.getDailyUsageSummaries({
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        fromDate: "2026-06-14",
+        toDate: "2026-06-14"
+      })
+    ).resolves.toEqual([
+      expect.objectContaining({ executions: 1, cpuMs: 15, pluginId: "plugin_1" })
+    ]);
   });
 });
 
