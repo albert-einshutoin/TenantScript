@@ -27,7 +27,7 @@ TenantScript authorizes named operations through one runtime matrix. Route handl
 - `operator` may submit an installation request, but cannot perform the immediate installation, grant approval, rollback, or existing-installation mutation operations. The request/approval split is tracked by P2-T06 in [Issue #24](https://github.com/albert-einshutoin/TenantScript/issues/24).
 - `tenant-admin` can manage resources and approvals only inside the app and tenant scope embedded in its trusted identity. It cannot issue service tokens or modify role bindings.
 - Only `owner` may modify RBAC bindings. Self-role changes and indirect grant escalation must remain denied by the P2-T08 security suite.
-- Service-token scopes and immediate revocation are P2-T07. Role permission is necessary but will not override a token's narrower scope.
+- [Service-token scopes and immediate revocation](service-tokens.md) are enforced in addition to this matrix. Role permission never overrides a token's narrower scope.
 
 The table is checked against the exported runtime fixture by `packages/control-plane/test/rbac.test.ts`; changing either side without the other fails CI.
 
