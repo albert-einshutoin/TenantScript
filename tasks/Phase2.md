@@ -79,7 +79,7 @@
   - RED: plugin ごとの durable state が plugin/tenant 境界で分離される / サイズ上限
   - DoD: 分離・上限テスト green
 
-- [ ] **P2-T15**(S)capability contract test kit(社内版)
+- [x] **P2-T15**(S)capability contract test kit(社内版)
   - 内容: capability 実装が満たすべき契約(grant 照合・audit・rate limit・非露出)を共通テストとして抽出 — Phase 4 の community connector 基盤の前身
   - DoD: 既存 capability 全てが kit を通過
 

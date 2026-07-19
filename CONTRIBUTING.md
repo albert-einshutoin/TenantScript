@@ -77,6 +77,22 @@ Preserve the dependency direction in [tasks/README.md](tasks/README.md). In part
 
 Architecture changes require an ADR proposal or an update to an existing ADR. Do not silently overturn an accepted decision in an implementation pull request.
 
+### Add or change a capability
+
+Every capability must join the shared contract in `packages/capabilities/test/capability-contracts.test.ts`. Add a fixture that proves a granted call succeeds, capability-specific scope is enforced, journal replay is idempotent, rate limiting occurs before provider execution, audit records contain metadata only, and provider failures use a stable error shape.
+
+Keep provider credentials inside the provider closure; never add them to plugin input, context, results, errors, or audit records. Validate destination, tenant, role, field, and other scopes before the provider performs an external side effect. Add focused adversarial coverage to `packages/capabilities/test/security-suite.test.ts` whenever a capability can expose secrets, cross tenant boundaries, or reach an external service.
+
+Run the capability checks during RED/GREEN iteration, then run the repository gate:
+
+```sh
+# cwd: repository root
+# expected-exit: 0
+pnpm --filter @tenantscript/capabilities test
+pnpm --filter @tenantscript/capabilities test:security
+pnpm verify
+```
+
 ## Security verification
 
 Secret exposure, egress bypass, grant escalation, tenant-boundary access, approval authorization, and audit mutation are behavior regressions and require adversarial tests. Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in a public issue or draft pull request.
