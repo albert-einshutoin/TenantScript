@@ -1,6 +1,6 @@
 # RBAC Matrix
 
-- Status: implemented role model for P2-T05
+- Status: implemented role model and installation grant separation for P2-T05/P2-T06
 - Last reviewed: 2026-07-20
 
 TenantScript authorizes named operations through one runtime matrix. Route handlers derive app and tenant scope from the authenticated identity before applying this role decision; a role never expands the identity's tenant boundary.
@@ -24,7 +24,7 @@ TenantScript authorizes named operations through one runtime matrix. Route handl
 
 ## Boundary notes
 
-- `operator` may submit an installation request, but cannot perform the immediate installation, grant approval, rollback, or existing-installation mutation operations. The request/approval split is tracked by P2-T06 in [Issue #24](https://github.com/albert-einshutoin/TenantScript/issues/24).
+- `operator` may submit an installation request, but cannot perform the immediate installation, grant approval, rollback, or existing-installation mutation operations. The exact request, approval, atomic installation, and recovery contract is documented in [Installation grant approval](../operations/installation-grant-approval.md).
 - `tenant-admin` can manage resources and approvals only inside the app and tenant scope embedded in its trusted identity. It cannot issue service tokens or modify role bindings.
 - Only `owner` may modify RBAC bindings. Self-role changes and indirect grant escalation must remain denied by the P2-T08 security suite.
 - [Service-token scopes and immediate revocation](service-tokens.md) are enforced in addition to this matrix. Role permission never overrides a token's narrower scope.
@@ -42,3 +42,5 @@ The table is checked against the exported runtime fixture by `packages/control-p
 The runtime compatibility alias prevents an immediate lockout during this migration. It does not grant an unknown claim or widen app/tenant scope. Removal of the alias must be a separately announced breaking change after service-token migration in P2-T07.
 
 Migration `0008_rbac_approval_trigger.sql` must be applied with the RBAC Worker release. It replaces the Phase 1 database trigger that accepted only the literal `manager` claim. The replacement accepts `owner`, `admin`, `tenant-admin`, and the compatibility `manager` claim for legacy manager-required approvals, while continuing to reject operator, viewer, unknown, cross-app, cross-tenant, expired, and duplicate decisions inside D1 itself.
+
+Migrations `0009_installation_grant_requests.sql` and `0010_admin_approval_threshold.sql` add the normalized installation proposal and make `admin` a minimum grant-approval threshold. They preserve exact-role matching for non-grant approvals and keep the same tenant/app, expiry, and single-decision trigger checks.

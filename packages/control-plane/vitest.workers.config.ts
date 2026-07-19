@@ -31,7 +31,7 @@ export default defineConfig({
           ADMIN_ALLOWED_ORIGINS: '["https://admin.example.com"]',
           ADMIN_CURSOR_SECRET: "cursor-secret-must-be-at-least-32-bytes-long",
           ADMIN_IDENTITIES_JSON:
-            '{"worker-manager-token":{"subject":"worker-manager","role":"manager","appId":"app_worker","tenantId":"tenant_worker"}}',
+            '{"worker-manager-token":{"subject":"worker-manager","role":"manager","appId":"app_worker","tenantId":"tenant_worker"},"worker-operator-token":{"subject":"worker-operator","role":"operator","appId":"app_worker","tenantId":"tenant_worker"}}',
           ADMIN_MUTATION_RATE_LIMIT: "2",
           ADMIN_MUTATION_RATE_WINDOW_SECONDS: "60",
           TEST_MIGRATIONS: await readD1Migrations(path.join(dirname, "migrations"))

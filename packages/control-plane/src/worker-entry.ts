@@ -5,6 +5,7 @@ import {
   createD1AdminInstallationDetailStore
 } from "./admin-installations.js";
 import { createD1AdminInstallFlowStore } from "./admin-install-flow.js";
+import { createD1AdminInstallRequestStore } from "./admin-install-requests.js";
 import { createD1AdminRollbackStore } from "./admin-rollbacks.js";
 import { createD1AdminExecutionDetailStore } from "./admin-executions.js";
 import { createD1AdminApprovalDecisionStore } from "./admin-approvals.js";
@@ -81,6 +82,8 @@ export default {
       env.DB === undefined ? undefined : createD1AdminInstallationCommandStore(env.DB);
     const installFlowStore =
       env.DB === undefined ? undefined : createD1AdminInstallFlowStore(env.DB);
+    const installRequestStore =
+      env.DB === undefined ? undefined : createD1AdminInstallRequestStore(env.DB);
     const rollbackStore = env.DB === undefined ? undefined : createD1AdminRollbackStore(env.DB);
     const executionDetailStore =
       env.DB === undefined ? undefined : createD1AdminExecutionDetailStore(env.DB);
@@ -126,6 +129,7 @@ export default {
         ...(installationDetailStore === undefined ? {} : { installationDetailStore }),
         ...(installationCommandStore === undefined ? {} : { installationCommandStore }),
         ...(installFlowStore === undefined ? {} : { installFlowStore }),
+        ...(installRequestStore === undefined ? {} : { installRequestStore }),
         ...(rollbackStore === undefined ? {} : { rollbackStore }),
         ...(executionDetailStore === undefined ? {} : { executionDetailStore }),
         ...(approvalDecisionStore === undefined ? {} : { approvalDecisionStore }),

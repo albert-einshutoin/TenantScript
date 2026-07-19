@@ -5,6 +5,7 @@ import {
   createControlPlaneApi,
   createD1AdminApprovalDecisionStore,
   createD1AdminInstallFlowStore,
+  createD1AdminInstallRequestStore,
   createD1AdminRollbackStore,
   createD1ControlPlaneStore,
   createD1ServiceTokenStore
@@ -54,7 +55,6 @@ describe("D1 tenant boundary security suite", () => {
       artifactHash: "hash_1",
       manifest
     });
-
     await expect(
       api.installPlugin({
         id: "inst_cross_scope",
@@ -111,6 +111,77 @@ describe("D1 tenant boundary security suite", () => {
       testEnv.DB.prepare("SELECT COUNT(*) AS count FROM installations WHERE id = ?")
         .bind("admin_install")
         .first()
+    ).resolves.toEqual({ count: 0 });
+  });
+
+  it("keeps operator grant proposals pending and rejects cross-tenant requests and self-approval", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.createApp({ id: "app_1", name: "Example SaaS" });
+    await store.createApp({ id: "app_2", name: "Other SaaS" });
+    await store.createTenant({ id: "tenant_1", appId: "app_1", name: "Tenant 1" });
+    await store.createTenant({ id: "tenant_2", appId: "app_2", name: "Tenant 2" });
+    await store.createPlugin({ id: "plugin_1", appId: "app_1", key: "large-invoice-notify" });
+    await store.createPluginVersion({
+      id: "version_1",
+      pluginId: "plugin_1",
+      version: "1.0.0",
+      artifactHash: "hash_1",
+      manifest
+    });
+    await store.createPlugin({ id: "plugin_2", appId: "app_1", key: "other-plugin" });
+    await store.createPluginVersion({
+      id: "version_2",
+      pluginId: "plugin_2",
+      version: "1.0.0",
+      artifactHash: "hash_2",
+      manifest: { ...manifest, name: "other-plugin" }
+    });
+    const requests = createD1AdminInstallRequestStore(testEnv.DB, {
+      approvalId: () => "approval_install_security",
+      installationId: () => "installation_install_security"
+    });
+    const proposal = {
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: "operator-subject",
+      idempotencyKey: "install-request-security-key-0001",
+      versionId: "version_1",
+      config: {},
+      confirmedCapabilities: ["slack.send"],
+      enabled: false,
+      priority: 10
+    };
+
+    await expect(requests.requestInstallation(proposal)).resolves.toMatchObject({
+      state: "pending",
+      capabilities: ["slack.send"]
+    });
+    await expect(
+      testEnv.DB.prepare(
+        "UPDATE installation_grant_requests SET plugin_id = ?, version_id = ? WHERE approval_id = ?"
+      )
+        .bind("plugin_2", "version_2", "approval_install_security")
+        .run()
+    ).rejects.toThrow();
+    await expect(
+      requests.requestInstallation({
+        ...proposal,
+        tenantId: "tenant_2",
+        idempotencyKey: "install-request-security-key-0002"
+      })
+    ).resolves.toBeNull();
+    await expect(
+      createD1AdminApprovalDecisionStore(testEnv.DB).decide({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "operator-subject",
+        actorRole: "operator",
+        approvalId: "approval_install_security",
+        decision: "approved"
+      })
+    ).rejects.toMatchObject({ code: "approval_role_forbidden" });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM installations").first()
     ).resolves.toEqual({ count: 0 });
   });
 

@@ -51,6 +51,16 @@ export interface AdminInstallResult {
   revision: 0;
 }
 
+export interface ResolvedAdminInstallProposal {
+  versionId: string;
+  pluginId: string;
+  pluginKey: string;
+  version: string;
+  config: Record<string, unknown>;
+  grants: Record<string, unknown>;
+  capabilities: readonly string[];
+}
+
 export interface AdminInstallFlowStore {
   readVersion: (request: {
     appId: string;
@@ -93,16 +103,13 @@ async function readVersion(
   return row === null ? null : preview(row);
 }
 
-async function install(
+export async function resolveAdminInstallProposal(
   db: D1DatabaseLike,
-  request: AdminInstallRequest,
-  options: D1AdminInstallFlowStoreOptions
-): Promise<AdminInstallResult | null> {
-  const now = options.now?.() ?? new Date();
-  const requestHash = await installRequestHash(request);
-  const replay = await readIdempotencyRecord(db, request, now);
-  if (replay !== null) return resolveReplay(replay, requestHash);
-
+  request: Pick<
+    AdminInstallRequest,
+    "appId" | "tenantId" | "versionId" | "config" | "confirmedCapabilities"
+  >
+): Promise<ResolvedAdminInstallProposal | null> {
   const row = await db
     .prepare(
       [
@@ -118,31 +125,54 @@ async function install(
   if (row === null) return null;
 
   const manifest = manifestFromRow(row);
-  const expectedCapabilities = Object.keys(manifest.capabilities).sort();
+  const capabilities = Object.keys(manifest.capabilities).sort();
   const confirmedCapabilities = [...request.confirmedCapabilities].sort();
-  if (!sameStrings(expectedCapabilities, confirmedCapabilities)) {
+  if (!sameStrings(capabilities, confirmedCapabilities)) {
     throw new AdminInstallFlowError("capability_confirmation_mismatch");
   }
   const validatedConfig = validateConfig(manifest.configSchema, request.config);
   if (!validatedConfig.ok) throw new AdminInstallFlowError("invalid_config");
   const grants = resolveGrants(manifest.capabilities, validatedConfig.value);
   if (!grants.ok) throw new AdminInstallFlowError("invalid_config");
+  return {
+    versionId: row.id,
+    pluginId: row.plugin_id,
+    pluginKey: row.plugin_key,
+    version: row.version,
+    config: validatedConfig.value,
+    grants: grants.value,
+    capabilities
+  };
+}
+
+async function install(
+  db: D1DatabaseLike,
+  request: AdminInstallRequest,
+  options: D1AdminInstallFlowStoreOptions
+): Promise<AdminInstallResult | null> {
+  const now = options.now?.() ?? new Date();
+  const requestHash = await installRequestHash(request);
+  const replay = await readIdempotencyRecord(db, request, now);
+  if (replay !== null) return resolveReplay(replay, requestHash);
+
+  const proposal = await resolveAdminInstallProposal(db, request);
+  if (proposal === null) return null;
 
   const id = options.installationId?.() ?? `installation-${crypto.randomUUID()}`;
   const auditId = options.auditId?.() ?? `installation-install-${crypto.randomUUID()}`;
-  const configFields = Object.keys(validatedConfig.value).sort();
+  const configFields = Object.keys(proposal.config).sort();
   const after = {
     enabled: request.enabled,
     priority: request.priority,
     revision: 0,
     configFields,
-    capabilities: expectedCapabilities
+    capabilities: proposal.capabilities
   };
   const result: AdminInstallResult = {
     id,
-    versionId: row.id,
-    pluginKey: row.plugin_key,
-    version: row.version,
+    versionId: proposal.versionId,
+    pluginKey: proposal.pluginKey,
+    version: proposal.version,
     enabled: request.enabled,
     priority: request.priority,
     revision: 0
@@ -167,8 +197,8 @@ async function install(
         request.versionId,
         request.enabled ? 1 : 0,
         request.priority,
-        JSON.stringify(validatedConfig.value),
-        JSON.stringify(grants.value)
+        JSON.stringify(proposal.config),
+        JSON.stringify(proposal.grants)
       ),
     db
       .prepare(
@@ -183,7 +213,7 @@ async function install(
         id,
         request.tenantId,
         request.appId,
-        row.plugin_id,
+        proposal.pluginId,
         0,
         request.actor,
         "installation.install",

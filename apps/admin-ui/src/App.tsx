@@ -13,7 +13,9 @@ import {
   type ExecutionSearchRequest,
   type ExecutionView,
   type InstallPluginRequest,
+  type InstallPluginResult,
   type InstallPreview,
+  type InstallRequestResult,
   type InstallationCommandRequest,
   type InstallationPermissionReview,
   type RollbackInstallationRequest,
@@ -296,6 +298,37 @@ function AdminShell({
     [client, session]
   );
 
+  const requestInstallation = useCallback(
+    async (request: InstallPluginRequest) => {
+      setInstallInFlight(true);
+      setInstallError(null);
+      try {
+        const result = await client.requestInstallation(request);
+        // Refresh only after the server returns the approval id. This keeps the queue and the
+        // operator's success evidence correlated with the exact normalized grant proposal.
+        void client
+          .getDashboard(session)
+          .then(setSnapshot)
+          .catch(() => {
+            // The mutation has already succeeded. Preserve its approval id and report only the
+            // secondary refresh failure so a user does not submit a different request by mistake.
+            setError("Approval request created; dashboard refresh unavailable");
+          });
+        return result;
+      } catch (cause) {
+        setInstallError(
+          cause instanceof AdminApiError && cause.code === "invalid_config"
+            ? "Configuration does not satisfy the plugin schema"
+            : "Installation approval request unavailable"
+        );
+        throw cause;
+      } finally {
+        setInstallInFlight(false);
+      }
+    },
+    [client, session]
+  );
+
   const rollbackInstallation = useCallback(
     async (request: RollbackInstallationRequest) => {
       setRollbackInFlight(true);
@@ -324,6 +357,17 @@ function AdminShell({
   const decideApproval = useCallback(
     async (request: ApprovalDecisionRequest) => {
       const result = await client.decideApproval(request);
+      if (result.installation !== undefined) {
+        // Grant approval creates the installation in the same server transaction. Reloading the
+        // tenant snapshot makes that atomic completion visible instead of leaving a stale queue.
+        void client
+          .getDashboard(session)
+          .then(setSnapshot)
+          .catch(() => {
+            setError("Approval completed; dashboard refresh unavailable");
+          });
+        return result;
+      }
       // Apply the queue transition only after correlated audit evidence is returned.
       setSnapshot((current) =>
         current === null
@@ -337,7 +381,7 @@ function AdminShell({
       );
       return result;
     },
-    [client]
+    [client, session]
   );
 
   return (
@@ -400,6 +444,7 @@ function AdminShell({
             installError={installError}
             onInstallPreview={openInstallPreview}
             onInstall={installPlugin}
+            onInstallRequest={requestInstallation}
             installInFlight={installInFlight}
             onRollback={rollbackInstallation}
             rollbackInFlight={rollbackInFlight}
@@ -441,6 +486,7 @@ function RoutePanel({
   installError,
   onInstallPreview,
   onInstall,
+  onInstallRequest,
   installInFlight,
   onRollback,
   rollbackInFlight,
@@ -464,7 +510,8 @@ function RoutePanel({
   installLoading: boolean;
   installError: string | null;
   onInstallPreview: (versionId: string) => void;
-  onInstall: (request: InstallPluginRequest) => Promise<unknown>;
+  onInstall: (request: InstallPluginRequest) => Promise<InstallPluginResult>;
+  onInstallRequest: (request: InstallPluginRequest) => Promise<InstallRequestResult>;
   installInFlight: boolean;
   onRollback: (request: RollbackInstallationRequest) => Promise<RollbackInstallationResult>;
   rollbackInFlight: boolean;
@@ -497,6 +544,7 @@ function RoutePanel({
       return (
         <VersionsPanel
           snapshot={snapshot}
+          canRequest={canRolePerform(session.role, "installation:request")}
           canInstall={canRolePerform(session.role, "installation:manage")}
           loading={loadingSection === "pluginVersions"}
           onLoadMore={() => {
@@ -507,6 +555,7 @@ function RoutePanel({
           installError={installError}
           onInstallPreview={onInstallPreview}
           onInstall={onInstall}
+          onInstallRequest={onInstallRequest}
           installInFlight={installInFlight}
           tenantId={session.tenantId}
           onRollback={onRollback}
@@ -831,11 +880,13 @@ function VersionsPanel({
   loading,
   onLoadMore,
   canInstall,
+  canRequest,
   installPreview,
   installLoading,
   installError,
   onInstallPreview,
   onInstall,
+  onInstallRequest,
   installInFlight,
   tenantId,
   onRollback,
@@ -846,11 +897,13 @@ function VersionsPanel({
   loading: boolean;
   onLoadMore: () => void;
   canInstall: boolean;
+  canRequest: boolean;
   installPreview: InstallPreview | null;
   installLoading: boolean;
   installError: string | null;
   onInstallPreview: (versionId: string) => void;
-  onInstall: (request: InstallPluginRequest) => Promise<unknown>;
+  onInstall: (request: InstallPluginRequest) => Promise<InstallPluginResult>;
+  onInstallRequest: (request: InstallPluginRequest) => Promise<InstallRequestResult>;
   installInFlight: boolean;
   tenantId: string;
   onRollback: (request: RollbackInstallationRequest) => Promise<RollbackInstallationResult>;
@@ -906,7 +959,7 @@ function VersionsPanel({
               <th>Artifact</th>
               <th>Published</th>
               <th>Pin</th>
-              {canInstall ? <th>Actions</th> : null}
+              {canRequest ? <th>Actions</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -927,7 +980,7 @@ function VersionsPanel({
                   <td className="mono-cell">{version.artifactHash}</td>
                   <td>{version.createdAt.toISOString()}</td>
                   <td>{current.length === 0 ? "past" : `current (${String(current.length)})`}</td>
-                  {canInstall ? (
+                  {canRequest ? (
                     <td>
                       <button
                         type="button"
@@ -936,30 +989,32 @@ function VersionsPanel({
                           onInstallPreview(version.id);
                         }}
                         disabled={installInFlight || installLoading}
-                        aria-label={`Install ${version.pluginKey} ${version.version}`}
+                        aria-label={`${canInstall ? "Install" : "Request"} ${version.pluginKey} ${version.version}`}
                       >
-                        Install
+                        {canInstall ? "Install" : "Request approval"}
                       </button>
-                      {rollbackCandidates.map((installation) => (
-                        <button
-                          key={installation.id}
-                          type="button"
-                          className="secondary-button"
-                          disabled={rollbackInFlight || installInFlight || installLoading}
-                          aria-label={`Rollback ${version.pluginKey} from ${installation.version} to ${version.version}`}
-                          onClick={() => {
-                            setRollbackResult(null);
-                            setRollbackError(null);
-                            setRollbackTarget({
-                              installation,
-                              version,
-                              idempotencyKey: crypto.randomUUID()
-                            });
-                          }}
-                        >
-                          Rollback
-                        </button>
-                      ))}
+                      {canInstall
+                        ? rollbackCandidates.map((installation) => (
+                            <button
+                              key={installation.id}
+                              type="button"
+                              className="secondary-button"
+                              disabled={rollbackInFlight || installInFlight || installLoading}
+                              aria-label={`Rollback ${version.pluginKey} from ${installation.version} to ${version.version}`}
+                              onClick={() => {
+                                setRollbackResult(null);
+                                setRollbackError(null);
+                                setRollbackTarget({
+                                  installation,
+                                  version,
+                                  idempotencyKey: crypto.randomUUID()
+                                });
+                              }}
+                            >
+                              Rollback
+                            </button>
+                          ))
+                        : null}
                     </td>
                   ) : null}
                 </tr>
@@ -980,7 +1035,8 @@ function VersionsPanel({
         <InstallFlowPanel
           key={installPreview.versionId}
           preview={installPreview}
-          onInstall={onInstall}
+          mode={canInstall ? "install" : "request"}
+          onSubmit={canInstall ? onInstall : onInstallRequest}
           installInFlight={installInFlight}
         />
       )}
@@ -1030,11 +1086,13 @@ function VersionsPanel({
 
 function InstallFlowPanel({
   preview,
-  onInstall,
+  mode,
+  onSubmit,
   installInFlight
 }: {
   preview: InstallPreview;
-  onInstall: (request: InstallPluginRequest) => Promise<unknown>;
+  mode: "install" | "request";
+  onSubmit: (request: InstallPluginRequest) => Promise<InstallPluginResult | InstallRequestResult>;
   installInFlight: boolean;
 }) {
   const idempotencyKey = useRef(crypto.randomUUID());
@@ -1044,6 +1102,7 @@ function InstallFlowPanel({
   const [priority, setPriority] = useState("100");
   const [confirming, setConfirming] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [requestResult, setRequestResult] = useState<InstallRequestResult | null>(null);
   const parsed = parseInstallConfig(preview, values);
   const parsedPriority = Number(priority);
   const validPriority = priority.trim() !== "" && Number.isSafeInteger(parsedPriority);
@@ -1055,7 +1114,7 @@ function InstallFlowPanel({
   const confirm = useCallback(() => {
     if (!parsed.ok || !validPriority || !allCapabilitiesConfirmed || installInFlight) return;
     setSubmitError(null);
-    void onInstall({
+    void onSubmit({
       idempotencyKey: idempotencyKey.current,
       versionId: preview.versionId,
       config: parsed.config,
@@ -1063,7 +1122,8 @@ function InstallFlowPanel({
       enabled,
       priority: parsedPriority
     })
-      .then(() => {
+      .then((result) => {
+        if (isInstallRequestResult(result)) setRequestResult(result);
         setConfirming(false);
       })
       .catch((cause: unknown) => {
@@ -1074,7 +1134,7 @@ function InstallFlowPanel({
     confirmedCapabilities,
     enabled,
     installInFlight,
-    onInstall,
+    onSubmit,
     parsed,
     parsedPriority,
     preview.versionId,
@@ -1082,8 +1142,14 @@ function InstallFlowPanel({
   ]);
 
   return (
-    <section className="data-panel" aria-label="Install plugin">
-      <PanelHeader title="Install plugin" detail={`${preview.pluginKey} ${preview.version}`} />
+    <section
+      className="data-panel"
+      aria-label={mode === "install" ? "Install plugin" : "Request installation approval"}
+    >
+      <PanelHeader
+        title={mode === "install" ? "Install plugin" : "Request installation approval"}
+        detail={`${preview.pluginKey} ${preview.version}`}
+      />
       <p>
         Egress:{" "}
         {preview.egress.mode === "deny"
@@ -1185,17 +1251,38 @@ function InstallFlowPanel({
           setConfirming(true);
         }}
       >
-        Review installation
+        {mode === "install" ? "Review installation" : "Review installation request"}
       </button>
       {submitError === null ? null : <p className="form-error">{submitError}</p>}
+      {requestResult === null ? null : (
+        <section aria-label="Installation approval request result">
+          <h3>Approval request pending</h3>
+          <p className="mono-cell">{requestResult.approvalId}</p>
+          <p>Expires: {requestResult.expiresAt.toISOString()}</p>
+        </section>
+      )}
       {!confirming ? null : (
-        <div role="dialog" aria-modal="true" aria-label="Confirm plugin installation">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={
+            mode === "install"
+              ? "Confirm plugin installation"
+              : "Confirm installation approval request"
+          }
+        >
           <p>
             Install {preview.pluginKey} {preview.version} with {String(preview.capabilities.length)}{" "}
             confirmed capabilities?
           </p>
           <button type="button" onClick={confirm} disabled={installInFlight}>
-            {installInFlight ? "Installing" : "Confirm installation"}
+            {installInFlight
+              ? mode === "install"
+                ? "Installing"
+                : "Submitting request"
+              : mode === "install"
+                ? "Confirm installation"
+                : "Submit approval request"}
           </button>
           <button
             type="button"
@@ -1236,6 +1323,19 @@ function parseInstallConfig(
     }
   }
   return { ok: true, config };
+}
+
+function isInstallRequestResult(value: unknown): value is InstallRequestResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "approvalId" in value &&
+    typeof value.approvalId === "string" &&
+    "state" in value &&
+    value.state === "pending" &&
+    "expiresAt" in value &&
+    value.expiresAt instanceof Date
+  );
 }
 
 function ApprovalsPanel({

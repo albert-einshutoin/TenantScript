@@ -70,6 +70,15 @@ export interface InstallPluginResult {
   revision: number;
 }
 
+export interface InstallRequestResult {
+  approvalId: string;
+  state: "pending";
+  pluginKey: string;
+  version: string;
+  capabilities: readonly string[];
+  expiresAt: Date;
+}
+
 export interface RollbackInstallationRequest {
   idempotencyKey: string;
   installationId: string;
@@ -114,6 +123,7 @@ export interface ApprovalDecisionResult {
   state: "approved" | "rejected";
   auditId: string;
   decidedAt: Date;
+  installation?: InstallPluginResult;
 }
 
 export interface ExecutionView {
@@ -178,6 +188,7 @@ export interface AdminApiClient extends AdminSessionClient {
   ) => Promise<InstallationCommandResult>;
   getInstallPreview: (versionId: string) => Promise<InstallPreview>;
   installPlugin: (request: InstallPluginRequest) => Promise<InstallPluginResult>;
+  requestInstallation: (request: InstallPluginRequest) => Promise<InstallRequestResult>;
   rollbackInstallation: (
     request: RollbackInstallationRequest
   ) => Promise<RollbackInstallationResult>;
@@ -298,7 +309,19 @@ const approvalDecisionResultSchema = z
     approvalId: z.string().min(1),
     state: z.enum(["approved", "rejected"]),
     auditId: z.string().min(1),
-    decidedAt: z.iso.datetime()
+    decidedAt: z.iso.datetime(),
+    installation: z
+      .object({
+        id: z.string().min(1),
+        versionId: z.string().min(1),
+        pluginKey: z.string().min(1),
+        version: z.string().min(1),
+        enabled: z.boolean(),
+        priority: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+        revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
+      })
+      .strict()
+      .optional()
   })
   .strict();
 
@@ -459,6 +482,17 @@ const installPluginResultSchema = z
     enabled: z.boolean(),
     priority: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
     revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
+  })
+  .strict();
+
+const installRequestResultSchema = z
+  .object({
+    approvalId: z.string().min(1),
+    state: z.literal("pending"),
+    pluginKey: z.string().min(1),
+    version: z.string().min(1),
+    capabilities: z.array(z.string().min(1)),
+    expiresAt: z.iso.datetime()
   })
   .strict();
 
@@ -735,6 +769,24 @@ export function createDemoAdminApiClient(): AdminApiClient {
       };
       return Promise.resolve(result);
     },
+    requestInstallation: (request) => {
+      const version = snapshot.pluginVersions.find(
+        (candidate) => candidate.id === request.versionId
+      );
+      if (version === undefined) {
+        return Promise.reject(
+          new AdminApiError(404, "plugin_version_not_found", "plugin version not found")
+        );
+      }
+      return Promise.resolve({
+        approvalId: `approval_demo_${request.idempotencyKey}`,
+        state: "pending" as const,
+        pluginKey: version.pluginKey,
+        version: version.version,
+        capabilities: [...request.confirmedCapabilities],
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+      });
+    },
     updateInstallationCommand: (request) => {
       const installation = snapshot.installations.find((candidate) => candidate.id === request.id);
       if (installation === undefined) {
@@ -832,6 +884,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     updateInstallationCommand: unavailable,
     getInstallPreview: unavailable,
     installPlugin: unavailable,
+    requestInstallation: unavailable,
     rollbackInstallation: unavailable,
     clearSession: () => undefined
   };
@@ -875,6 +928,11 @@ export function createAdminApiClient(params: {
   const installationsUrl = apiEndpoint(
     params.controlPlaneUrl,
     "/v1/admin/installations",
+    params.isDevelopment
+  );
+  const installationRequestsUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/installation-requests",
     params.isDevelopment
   );
   const rollbacksUrl = apiEndpoint(
@@ -953,7 +1011,10 @@ export function createAdminApiClient(params: {
       if (!result.success || result.data.approvalId !== request.approvalId) {
         throw invalidResponse();
       }
-      return { ...result.data, decidedAt: new Date(result.data.decidedAt) };
+      const { installation, ...decision } = result.data;
+      return installation === undefined
+        ? { ...decision, decidedAt: new Date(decision.decidedAt) }
+        : { ...decision, installation, decidedAt: new Date(decision.decidedAt) };
     },
     getInstallationPermissionReview: async (id) => {
       const url = new URL("/v1/admin/installation-review", dashboardUrl);
@@ -999,6 +1060,22 @@ export function createAdminApiClient(params: {
         throw invalidResponse();
       }
       return installed.data;
+    },
+    requestInstallation: async (request) => {
+      const { idempotencyKey, ...body } = request;
+      const payload = await fetchAdminJson(
+        installationRequestsUrl,
+        requireCredential(credential),
+        fetcher,
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+          headers: { "Idempotency-Key": idempotencyKey }
+        }
+      );
+      const result = installRequestResultSchema.safeParse(payload);
+      if (!result.success) throw invalidResponse();
+      return { ...result.data, expiresAt: new Date(result.data.expiresAt) };
     },
     rollbackInstallation: async (request) => {
       const { idempotencyKey, ...body } = request;
