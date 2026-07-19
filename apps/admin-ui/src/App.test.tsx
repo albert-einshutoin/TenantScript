@@ -656,6 +656,40 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByRole("button", { name: "Reject" })).toBeDisabled();
   });
 
+  it("confirms a manager approval and shows correlated audit evidence", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const decideApproval = vi.fn().mockResolvedValue({
+      approvalId: "approval_1",
+      state: "approved",
+      auditId: "approval_audit_1",
+      decidedAt: new Date("2026-07-20T00:00:00.000Z")
+    });
+    render(<App client={{ ...baseClient, decideApproval }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Approval queue" }));
+    fireEvent.change(screen.getByLabelText("Decision reason"), {
+      target: { value: "validated invoice" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Confirm approval decision" });
+    expect(dialog).toHaveTextContent("tenant_acme");
+    expect(dialog).toHaveTextContent("approval_1");
+    expect(dialog).toHaveTextContent("approved");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm approval" }));
+
+    await waitFor(() => {
+      expect(decideApproval).toHaveBeenCalledWith({
+        approvalId: "approval_1",
+        decision: "approved",
+        reason: "validated invoice"
+      });
+    });
+    expect(screen.getByText("approval_audit_1")).toBeInTheDocument();
+    expect(screen.getByText("approved")).toHaveClass("ok");
+  });
+
   it("searches executions server-side and opens a value-free capability detail", async () => {
     const baseClient = createDemoAdminApiClient();
     const searchExecutions = vi.fn().mockResolvedValue({
