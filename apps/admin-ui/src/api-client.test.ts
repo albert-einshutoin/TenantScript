@@ -438,7 +438,8 @@ describe("Admin API environment selection", () => {
     const [url, init] = fetcher.mock.calls[1] ?? [];
     expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/rollbacks");
     expect(init?.method).toBe("POST");
-    expect(JSON.parse(String(init?.body))).toEqual({
+    expect(typeof init?.body).toBe("string");
+    expect(JSON.parse(init?.body as string)).toEqual({
       installationId: "inst_1",
       targetVersionId: "version_1_2_2",
       expectedRevision: 3
