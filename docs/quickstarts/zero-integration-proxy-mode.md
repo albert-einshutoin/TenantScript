@@ -1,14 +1,32 @@
 # Zero-Integration Proxy Mode Quickstart
 
-This quickstart turns a Stripe `invoice.payment_succeeded` webhook into the shape expected by an existing billing endpoint without changing the host SaaS application. It is the lowest-friction TenantScript adoption path: point the webhook at TenantScript, transform the payload per tenant, and forward it to the original endpoint.
+15分でStripeの`invoice.payment_succeeded` webhookをtenant別に変換し、既存billing endpointへ転送する。host SaaS本体のhook工事は不要で、最初にローカルE2Eで契約を確認してからstaging webhookの向き先を変更する。
 
-## 1. Allow the original billing endpoint
+## 前提条件（2分）
+
+- Node.js 24
+- Corepackとpnpm 10.12.1
+- repositoryをclone済み
+- production/staging導入時だけ、公開HTTPS Worker URLと転送先originが必要
+
+```sh
+# cwd: repository root
+# expected-exit: 0
+corepack enable
+pnpm install --frozen-lockfile
+```
+
+## 1. 転送先をallowlistへ登録する（2分）
+
+ローカルcontractで使うallowlistは次のとおり。実環境では`TENANTSCRIPT_PROXY_ALLOWED_ORIGINS`相当のsecretではない設定値として管理し、URL pathやtokenを含めずoriginだけを登録する。
 
 ```json tenantscript-proxy-allowlist
 ["https://billing.example.com"]
 ```
 
-## 2. Add the inbound mapping
+local、private、link-local、non-HTTP destinationはallowlistに書いてもsecurity suiteが拒否する。
+
+## 2. inbound mappingを登録する（2分）
 
 ```json tenantscript-proxy-mapping
 {
@@ -19,21 +37,18 @@ This quickstart turns a Stripe `invoice.payment_succeeded` webhook into the shap
 }
 ```
 
-The destination origin must be in the allowlist. Local, private, link-local, and non-HTTP destinations are rejected by the proxy security suite.
+判断基準:
 
-## 3. Install the transform plugin
+- `inboundPath`はtenantを一意に解決できるpathにする。
+- `tenantId`をwebhook body/headerから受け取らない。mappingの保存値を信頼境界にする。
+- `destinationUrl`のoriginは手順1と完全一致させる。
+- `transformHookName`はinstallするplugin manifestのhook名と一致させる。
 
-Register a transform plugin for `stripe.invoice.payment_succeeded.transform`. In this quickstart the plugin normalizes Stripe's nested invoice event into the smaller contract the billing endpoint already accepts.
+## 3. transform pluginをinstallする（3分）
 
-## 4. Point Stripe at the proxy URL
+`stripe.invoice.payment_succeeded.transform`を宣言するtransform pluginを同じtenantへinstallする。handlerは入力bodyを変更した新しいobjectとして返す。例外時はproxyが元payloadを転送するため、機密値をerror messageへ含めない。
 
-Configure Stripe's webhook destination to use the proxy path from the mapping:
-
-```text
-https://<your-worker-host>/proxy/stripe/invoice-paid
-```
-
-Use this Stripe event shape to smoke-test the setup locally:
+このrepositoryのE2Eでは、次のStripe payloadを固定fixtureとして使用する。
 
 ```json stripe-invoice-payment-succeeded
 {
@@ -51,9 +66,17 @@ Use this Stripe event shape to smoke-test the setup locally:
 }
 ```
 
-## 5. Verify the forwarded payload
+## 4. ローカルE2Eを実行する（3分）
 
-The original billing endpoint receives the normalized body below, with the same HTTP method and request headers that arrived at the proxy.
+```sh
+# cwd: repository root
+# expected-exit: 0
+pnpm --filter @tenantscript/example-saas test -- zero-integration
+```
+
+期待結果はVitestのexit code `0`と、quickstart JSON snippetsを読み込む`zero-integration-proxy-mode quickstart` testの成功である。E2Eはmapping、tenant解決、transform、header保持、forwarded bodyを一続きで検証する。
+
+転送先が受け取るbody:
 
 ```json billing-webhook-forwarded-body
 {
@@ -67,12 +90,24 @@ The original billing endpoint receives the normalized body below, with the same 
 }
 ```
 
-## CI guard
+## 5. staging webhookを切り替える（3分）
 
-The example SaaS E2E reads the JSON snippets in this guide and executes the proxy flow against them:
+Stripe stagingの送信先を次へ変更する。
 
-```sh
-pnpm --filter @tenantscript/example-saas test -- zero-integration
+```text
+https://<your-worker-host>/proxy/stripe/invoice-paid
 ```
 
-Update the snippets and the E2E together whenever the quickstart contract changes.
+1件送信し、proxy resultが`transformed: true`、転送先が2xx、execution logのtenant/plugin/versionが期待どおりであることを確認する。Stripe署名検証はproxyの前段またはadapterで必ず実施し、署名secretをplugin contextへ渡さない。
+
+## 失敗時の確認
+
+| 症状                               | 確認する境界                                                  |
+| ---------------------------------- | ------------------------------------------------------------- |
+| mapping not found                  | request pathと`inboundPath`の完全一致                         |
+| outside allowlist / not public URL | origin allowlist、HTTPS、private/link-local addressでないこと |
+| `transformed: false`               | tenant installationがenabledでhook名が一致していること        |
+| `skipped: true`                    | transform handlerのstructured errorと元payload転送を確認      |
+| 転送先4xx/5xx                      | destination contract、署名/header、転送先logを確認            |
+
+JSON snippetを変更する場合はE2Eも同じPRで更新する。`pnpm docs:check`はshell commandのworking directory、期待exit code、workspace filterを検証する。
