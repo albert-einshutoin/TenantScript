@@ -27,6 +27,29 @@ beforeEach(async () => {
 });
 
 describe("D1 Admin approval decisions", () => {
+  it.each(["owner", "admin", "tenant-admin", "manager"])(
+    "keeps the D1 trigger aligned with approval:decide for %s",
+    async (actorRole) => {
+      const store = createD1AdminApprovalDecisionStore(testEnv.DB, {
+        auditId: () => `approval_audit_${actorRole}`,
+        now: () => new Date("2026-07-20T00:00:00.000Z")
+      });
+
+      await expect(
+        store.decide({
+          ...request("approval_1", "approved"),
+          actor: `${actorRole}-subject`,
+          actorRole
+        })
+      ).resolves.toMatchObject({ state: "approved" });
+      await expect(
+        testEnv.DB.prepare("SELECT state, decided_by FROM approvals WHERE id = ?")
+          .bind("approval_1")
+          .first()
+      ).resolves.toEqual({ state: "approved", decided_by: `${actorRole}-subject` });
+    }
+  );
+
   it("atomically decides and appends identity-scoped audit evidence", async () => {
     const store = createD1AdminApprovalDecisionStore(testEnv.DB, {
       auditId: () => "approval_audit_1",
