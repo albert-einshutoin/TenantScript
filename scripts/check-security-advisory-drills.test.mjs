@@ -53,7 +53,7 @@ test("rejects non-chronological stages and evidence outside the repository", () 
     const drill = validDrill();
     const fix = drill.stages.find((stage) => stage.name === "fix");
     assert.ok(fix);
-    fix.at = "2026-07-20T00:02:30.000Z";
+    fix.at = "2026-07-20T00:01:30.000Z";
     fix.evidence = "../private-note.md";
     writeDrill(repoRoot, drill);
 
