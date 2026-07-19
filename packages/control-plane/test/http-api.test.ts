@@ -284,7 +284,7 @@ describe("Control Plane installation permission review contract", () => {
       const response = await handler(
         sessionRequest({
           token,
-          url: "https://api.example.com/v1/admin/installations/inst_1?tenantId=tenant_other"
+          url: "https://api.example.com/v1/admin/installation-review?id=inst_1&tenantId=tenant_other"
         })
       );
 
@@ -312,7 +312,7 @@ describe("Control Plane installation permission review contract", () => {
     const response = await handler(
       sessionRequest({
         token: "manager-secret-token",
-        url: "https://api.example.com/v1/admin/installations/inst_other"
+        url: "https://api.example.com/v1/admin/installation-review?id=inst_other"
       })
     );
     expect(response.status).toBe(404);
@@ -321,7 +321,7 @@ describe("Control Plane installation permission review contract", () => {
     });
   });
 
-  it("fails closed for malformed encoded installation IDs", async () => {
+  it("fails closed when the installation ID is missing", async () => {
     const handler = createControlPlaneHttpHandler({
       identityResolver: createIdentityResolver(),
       installationDetailStore: installationStore(),
@@ -330,7 +330,7 @@ describe("Control Plane installation permission review contract", () => {
     const response = await handler(
       sessionRequest({
         token: "manager-secret-token",
-        url: "https://api.example.com/v1/admin/installations/%"
+        url: "https://api.example.com/v1/admin/installation-review"
       })
     );
     expect(response.status).toBe(404);

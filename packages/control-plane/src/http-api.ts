@@ -46,7 +46,7 @@ export function createControlPlaneHttpHandler(
 
     const corsHeaders = origin === null ? undefined : corsResponseHeaders(origin);
     const url = new URL(request.url);
-    const route = adminRoute(url.pathname);
+    const route = adminRoute(url);
     if (route === null) {
       return errorResponse(404, "route_not_found", "route not found", corsHeaders);
     }
@@ -76,21 +76,17 @@ export function createControlPlaneHttpHandler(
 
 type AdminRoute = "session" | "dashboard" | AdminDashboardSection | { id: string };
 
-function adminRoute(path: string): AdminRoute | null {
+function adminRoute(url: URL): AdminRoute | null {
+  const path = url.pathname;
   if (path === "/v1/session") {
     return "session";
   }
   if (path === "/v1/admin/dashboard") {
     return "dashboard";
   }
-  const installation = /^\/v1\/admin\/installations\/([^/]+)$/.exec(path);
-  if (installation?.[1] !== undefined) {
-    try {
-      return { id: decodeURIComponent(installation[1]) };
-    } catch {
-      // Malformed percent escapes are untrusted route input, not an internal server error.
-      return null;
-    }
+  if (path === "/v1/admin/installation-review") {
+    const id = url.searchParams.get("id");
+    return id === null || id.length === 0 ? null : { id };
   }
   const section = path.slice("/v1/admin/dashboard/".length);
   if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {

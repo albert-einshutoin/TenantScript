@@ -143,12 +143,12 @@ describe("Admin API environment selection", () => {
     });
     await client.resolveSession({ token: "secret-token" });
 
-    await expect(client.getInstallationPermissionReview("inst_1")).resolves.toMatchObject({
+    await expect(client.getInstallationPermissionReview("..")).resolves.toMatchObject({
       configFields: [{ name: "channel", configured: true }],
       capabilities: [{ name: "slack.send", status: "granted" }]
     });
     expect(requestUrl(fetcher.mock.calls[1]?.[0])).toBe(
-      "https://api.example.com/v1/admin/installations/inst_1"
+      "https://api.example.com/v1/admin/installation-review?id=.."
     );
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("authorization")).toBe(
       "Bearer secret-token"

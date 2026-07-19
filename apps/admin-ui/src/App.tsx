@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createUnavailableAdminApiClient,
   AdminApiError,
@@ -112,6 +112,7 @@ function AdminShell({
   );
   const [permissionLoading, setPermissionLoading] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const permissionRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -157,17 +158,27 @@ function AdminShell({
 
   const openPermissionReview = useCallback(
     (id: string) => {
+      const requestId = permissionRequest.current + 1;
+      permissionRequest.current = requestId;
       setPermissionLoading(true);
       setPermissionError(null);
       setPermissionReview(null);
       void client
         .getInstallationPermissionReview(id)
-        .then(setPermissionReview)
+        .then((review) => {
+          if (permissionRequest.current === requestId) {
+            setPermissionReview(review);
+          }
+        })
         .catch(() => {
-          setPermissionError("Permission review unavailable");
+          if (permissionRequest.current === requestId) {
+            setPermissionError("Permission review unavailable");
+          }
         })
         .finally(() => {
-          setPermissionLoading(false);
+          if (permissionRequest.current === requestId) {
+            setPermissionLoading(false);
+          }
         });
     },
     [client]
@@ -421,7 +432,8 @@ function PermissionReviewPanel({ review }: { review: InstallationPermissionRevie
           {review.configFields.map((field) => (
             <li key={field.name}>
               {field.name} · {field.type} · {field.required ? "required" : "optional"} ·{" "}
-              {field.configured ? "configured" : "not configured"}
+              {field.configured ? "configured" : "not configured"} ·{" "}
+              {field.hasDefault ? "default available" : "no default"}
             </li>
           ))}
         </ul>
@@ -434,7 +446,10 @@ function PermissionReviewPanel({ review }: { review: InstallationPermissionRevie
           {review.capabilities.map((capability) => (
             <li key={capability.name}>
               {capability.name} · {capability.status} ·{" "}
-              {capability.scopeKeys.join(", ") || "no scope keys"}
+              {capability.scopeKeys.join(", ") || "no scope keys"} ·{" "}
+              {capability.configReferences.length === 0
+                ? "static scope"
+                : `configured by ${capability.configReferences.join(", ")}`}
             </li>
           ))}
         </ul>

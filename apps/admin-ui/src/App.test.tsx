@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import {
   createDemoAdminApiClient,
   type AdminApiClient,
-  type DashboardSnapshot
+  type DashboardSnapshot,
+  type InstallationPermissionReview
 } from "./api-client.js";
 
 describe("Admin UI auth foundation", () => {
@@ -76,7 +77,7 @@ describe("Admin UI auth foundation", () => {
             type: "string",
             required: true,
             configured: true,
-            hasDefault: false
+            hasDefault: true
           }
         ],
         capabilities: [
@@ -85,6 +86,12 @@ describe("Admin UI auth foundation", () => {
             scopeKeys: ["channel"],
             configReferences: ["notifyChannel"],
             status: "granted"
+          },
+          {
+            name: "invoice.read",
+            scopeKeys: ["fields"],
+            configReferences: [],
+            status: "missing"
           }
         ],
         egress: { mode: "deny", allowlistedHostCount: 0 }
@@ -101,10 +108,92 @@ describe("Admin UI auth foundation", () => {
     await expect(
       screen.findByRole("heading", { name: "Permission review" })
     ).resolves.toBeInTheDocument();
-    expect(screen.getByText(/notifyChannel/)).toBeInTheDocument();
-    expect(screen.getByText(/slack\.send/)).toBeInTheDocument();
-    expect(screen.getByText(/configured/)).toBeInTheDocument();
+    expect(screen.getByText(/notifyChannel.*default available/)).toBeInTheDocument();
+    expect(screen.getByText(/slack\.send.*configured by notifyChannel/)).toBeInTheDocument();
+    expect(screen.getByText(/invoice\.read.*static scope/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Save|Enable|Disable/i })).not.toBeInTheDocument();
+  });
+
+  it("renders empty permission metadata and an allowlisted egress summary for viewers", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const client: AdminApiClient = {
+      ...baseClient,
+      getInstallationPermissionReview: () =>
+        Promise.resolve({
+          id: "inst_large_invoice",
+          pluginKey: "large-invoice-notify",
+          version: "1.3.0",
+          enabled: true,
+          priority: 10,
+          configFields: [],
+          capabilities: [],
+          egress: { mode: "allowlist", allowlistedHostCount: 2 }
+        })
+    };
+    render(<App client={client} />);
+
+    await login("viewer-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Permission review for large-invoice-notify" })
+    );
+
+    await expect(screen.findByText("No configuration fields")).resolves.toBeInTheDocument();
+    expect(screen.getByText("No capabilities requested")).toBeInTheDocument();
+    expect(screen.getByText(/2 allowlisted hosts/)).toBeInTheDocument();
+  });
+
+  it("redacts permission-review failures", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const client: AdminApiClient = {
+      ...baseClient,
+      getInstallationPermissionReview: () =>
+        Promise.reject(new Error("SQL contained customer-secret"))
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Permission review for large-invoice-notify" })
+    );
+
+    await expect(screen.findByText("Permission review unavailable")).resolves.toBeInTheDocument();
+    expect(screen.queryByText(/customer-secret/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the latest permission review when requests resolve out of order", async () => {
+    const first = deferred<InstallationPermissionReview>();
+    const second = deferred<InstallationPermissionReview>();
+    const baseClient = createDemoAdminApiClient();
+    const client: AdminApiClient = {
+      ...baseClient,
+      getInstallationPermissionReview: (id) =>
+        id === "inst_large_invoice" ? first.promise : second.promise
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Permission review for large-invoice-notify" })
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Permission review for payload-transformer" })
+    );
+
+    await act(async () => {
+      second.resolve(permissionReview("inst_payload_transformer", "payload-transformer"));
+      await second.promise;
+    });
+    await expect(screen.findByText("payload-transformer 1.0.0")).resolves.toBeInTheDocument();
+
+    await act(async () => {
+      first.resolve(permissionReview("inst_large_invoice", "large-invoice-notify"));
+      await first.promise;
+    });
+    expect(screen.getByText("payload-transformer 1.0.0")).toBeInTheDocument();
+    expect(screen.queryByText("large-invoice-notify 1.0.0")).not.toBeInTheDocument();
   });
 
   it("rejects invalid tokens without showing protected navigation", async () => {
@@ -267,4 +356,28 @@ function requireFirst<T>(items: readonly T[]): T {
     throw new Error("expected fixture item");
   }
   return item;
+}
+
+function permissionReview(id: string, pluginKey: string): InstallationPermissionReview {
+  return {
+    id,
+    pluginKey,
+    version: "1.0.0",
+    enabled: true,
+    priority: 10,
+    configFields: [],
+    capabilities: [],
+    egress: { mode: "deny", allowlistedHostCount: 0 }
+  };
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 }

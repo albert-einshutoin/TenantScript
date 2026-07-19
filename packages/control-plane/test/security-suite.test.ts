@@ -384,7 +384,7 @@ describe("control-plane security suite", () => {
     });
     const response = await handler(
       new Request(
-        "https://api.example.com/v1/admin/installations/inst_tenant_2?tenantId=tenant_2",
+        "https://api.example.com/v1/admin/installation-review?id=inst_tenant_2&tenantId=tenant_2",
         {
           headers: { Authorization: "Bearer viewer", Origin: "https://admin.example.com" }
         }

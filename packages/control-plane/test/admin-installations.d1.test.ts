@@ -83,7 +83,9 @@ describe("D1 admin installation detail adapter", () => {
     await expect(
       store.readInstallation({ appId: "app_acme", tenantId: "tenant_acme", id: "inst_other" })
     ).resolves.toBeNull();
-    expect(db.queries[0]).toContain("t.id = ?1 AND t.app_id = ?2 AND i.id = ?3");
+    expect(db.queries[0]).toContain(
+      "t.id = ?1 AND t.app_id = ?2 AND p.app_id = t.app_id AND i.id = ?3"
+    );
     expect(db.bindings[0]).toEqual(["tenant_acme", "app_acme", "inst_other"]);
   });
 });

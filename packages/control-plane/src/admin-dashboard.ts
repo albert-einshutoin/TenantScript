@@ -114,7 +114,7 @@ async function readInstallations(
         "JOIN tenants t ON t.id = i.tenant_id",
         "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
         "JOIN plugins p ON p.id = pv.plugin_id",
-        "WHERE t.id = ?1 AND t.app_id = ?2",
+        "WHERE t.id = ?1 AND t.app_id = ?2 AND p.app_id = t.app_id",
         "AND (?3 IS NULL OR i.id > ?3)",
         "ORDER BY i.id ASC LIMIT ?4"
       ].join(" ")
@@ -147,7 +147,7 @@ async function readPluginVersions(
         "JOIN plugins p ON p.id = pv.plugin_id",
         "JOIN installations i ON i.plugin_version_id = pv.id",
         "JOIN tenants t ON t.id = i.tenant_id",
-        "WHERE t.id = ?1 AND t.app_id = ?2",
+        "WHERE t.id = ?1 AND t.app_id = ?2 AND p.app_id = t.app_id",
         "AND (?3 IS NULL OR pv.id > ?3)",
         "ORDER BY pv.id ASC LIMIT ?4"
       ].join(" ")

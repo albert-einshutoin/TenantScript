@@ -440,7 +440,8 @@ export function createAdminApiClient(params: {
       return dashboardSectionPage(page.data);
     },
     getInstallationPermissionReview: async (id) => {
-      const url = new URL(`/v1/admin/installations/${encodeURIComponent(id)}`, dashboardUrl);
+      const url = new URL("/v1/admin/installation-review", dashboardUrl);
+      url.searchParams.set("id", id);
       const payload = await fetchAdminJson(url.toString(), requireCredential(credential), fetcher);
       const detail = installationPermissionReviewSchema.safeParse(payload);
       if (!detail.success) throw invalidResponse();

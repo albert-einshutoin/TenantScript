@@ -58,7 +58,9 @@ async function readInstallation(
         "JOIN tenants t ON t.id = i.tenant_id",
         "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
         "JOIN plugins p ON p.id = pv.plugin_id",
-        "WHERE t.id = ?1 AND t.app_id = ?2 AND i.id = ?3"
+        // Tenant and plugin ownership are both checked because the schema has independent FKs
+        // but cannot express that both sides of an installation belong to the same app.
+        "WHERE t.id = ?1 AND t.app_id = ?2 AND p.app_id = t.app_id AND i.id = ?3"
       ].join(" ")
     )
     .bind(request.tenantId, request.appId, request.id)
