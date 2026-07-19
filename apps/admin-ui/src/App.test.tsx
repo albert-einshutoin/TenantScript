@@ -668,15 +668,15 @@ describe("Admin UI auth foundation", () => {
 
     await login("manager-token");
     fireEvent.click(screen.getByRole("button", { name: "Approval queue" }));
-    fireEvent.change(screen.getByLabelText("Decision reason"), {
-      target: { value: "validated invoice" }
-    });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Confirm approval decision" });
     expect(dialog).toHaveTextContent("tenant_acme");
     expect(dialog).toHaveTextContent("approval_1");
     expect(dialog).toHaveTextContent("approved");
+    fireEvent.change(screen.getByLabelText("Decision reason"), {
+      target: { value: "validated invoice" }
+    });
     fireEvent.click(screen.getByRole("button", { name: "Confirm approval" }));
 
     await waitFor(() => {

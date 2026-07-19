@@ -4,6 +4,9 @@ import {
   AdminApiError,
   type AdminApiClient,
   type AdminSession,
+  type ApprovalDecisionRequest,
+  type ApprovalDecisionResult,
+  type ApprovalView,
   type DashboardSectionPage,
   type DashboardSnapshot,
   type ExecutionDetailView,
@@ -317,6 +320,25 @@ function AdminShell({
     [client, session]
   );
 
+  const decideApproval = useCallback(
+    async (request: ApprovalDecisionRequest) => {
+      const result = await client.decideApproval(request);
+      // Apply the queue transition only after correlated audit evidence is returned.
+      setSnapshot((current) =>
+        current === null
+          ? current
+          : {
+              ...current,
+              approvals: current.approvals.map((approval) =>
+                approval.id === result.approvalId ? { ...approval, state: result.state } : approval
+              )
+            }
+      );
+      return result;
+    },
+    [client]
+  );
+
   return (
     <section className="admin-layout">
       <aside className="sidebar" aria-label="TenantScript Admin navigation">
@@ -385,6 +407,7 @@ function AdminShell({
             }}
             onSearchExecutions={client.searchExecutions}
             onExecutionDetail={client.getExecutionDetail}
+            onApprovalDecision={decideApproval}
           />
         )}
       </div>
@@ -422,7 +445,8 @@ function RoutePanel({
   rollbackInFlight,
   onViewExecutions,
   onSearchExecutions,
-  onExecutionDetail
+  onExecutionDetail,
+  onApprovalDecision
 }: {
   route: AdminRoute;
   session: AdminSession;
@@ -446,6 +470,7 @@ function RoutePanel({
   onViewExecutions: () => void;
   onSearchExecutions: AdminApiClient["searchExecutions"];
   onExecutionDetail: AdminApiClient["getExecutionDetail"];
+  onApprovalDecision: (request: ApprovalDecisionRequest) => Promise<ApprovalDecisionResult>;
 }) {
   switch (route) {
     case "overview":
@@ -492,11 +517,13 @@ function RoutePanel({
       return (
         <ApprovalsPanel
           snapshot={snapshot}
+          tenantId={session.tenantId}
           canDecide={session.role === "manager"}
           loading={loadingSection === "approvals"}
           onLoadMore={() => {
             onLoadMore("approvals");
           }}
+          onDecision={onApprovalDecision}
         />
       );
     case "executions":
@@ -1204,18 +1231,54 @@ function parseInstallConfig(
 
 function ApprovalsPanel({
   snapshot,
+  tenantId,
   canDecide,
   loading,
-  onLoadMore
+  onLoadMore,
+  onDecision
 }: {
   snapshot: DashboardSnapshot;
+  tenantId: string;
   canDecide: boolean;
   loading: boolean;
   onLoadMore: () => void;
+  onDecision: (request: ApprovalDecisionRequest) => Promise<ApprovalDecisionResult>;
 }) {
+  const [reason, setReason] = useState("");
+  const [confirmation, setConfirmation] = useState<{
+    approval: ApprovalView;
+    decision: "approved" | "rejected";
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [result, setResult] = useState<ApprovalDecisionResult | null>(null);
+
+  const confirmDecision = useCallback(() => {
+    if (confirmation === null || submitting) return;
+    setSubmitting(true);
+    setDecisionError(null);
+    void onDecision({
+      approvalId: confirmation.approval.id,
+      decision: confirmation.decision,
+      ...(reason.trim() === "" ? {} : { reason: reason.trim() })
+    })
+      .then((nextResult) => {
+        setResult(nextResult);
+        setConfirmation(null);
+        setReason("");
+      })
+      .catch(() => {
+        setDecisionError("Approval decision unavailable");
+      })
+      .finally(() => {
+        setSubmitting(false);
+      });
+  }, [confirmation, onDecision, reason, submitting]);
+
   return (
     <section className="data-panel">
       <PanelHeader title="Approval queue" detail="Manager decisions" />
+      <p className="tenant-context">Tenant: {tenantId}</p>
       <div className="approval-list">
         {snapshot.approvals.map((approval) => (
           <article className="approval-row" key={approval.id}>
@@ -1225,16 +1288,70 @@ function ApprovalsPanel({
             </div>
             <StatusPill status={approval.state} />
             <div className="button-row">
-              <button type="button" disabled={!canDecide || approval.state !== "pending"}>
+              <button
+                type="button"
+                disabled={!canDecide || approval.state !== "pending" || submitting}
+                onClick={() => {
+                  setResult(null);
+                  setConfirmation({ approval, decision: "approved" });
+                }}
+              >
                 Approve
               </button>
-              <button type="button" disabled={!canDecide || approval.state !== "pending"}>
+              <button
+                type="button"
+                disabled={!canDecide || approval.state !== "pending" || submitting}
+                onClick={() => {
+                  setResult(null);
+                  setConfirmation({ approval, decision: "rejected" });
+                }}
+              >
                 Reject
               </button>
             </div>
           </article>
         ))}
       </div>
+      {decisionError === null ? null : <p className="form-error">{decisionError}</p>}
+      {confirmation === null ? null : (
+        <div role="dialog" aria-modal="true" aria-label="Confirm approval decision">
+          <p>Tenant: {tenantId}</p>
+          <p>Approval: {confirmation.approval.id}</p>
+          <p>Decision: {confirmation.decision}</p>
+          <label>
+            Decision reason
+            <input
+              value={reason}
+              maxLength={1000}
+              onChange={(event) => {
+                setReason(event.target.value);
+              }}
+            />
+          </label>
+          <button type="button" disabled={submitting} onClick={confirmDecision}>
+            {submitting ? "Deciding" : "Confirm approval"}
+          </button>
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => {
+              setConfirmation(null);
+              setReason("");
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {result === null ? null : (
+        <section aria-label="Approval decision result">
+          <h3>Approval {result.state}</h3>
+          <p>
+            Audit: <span className="mono-cell">{result.auditId}</span>
+          </p>
+          <p>Decided: {result.decidedAt.toISOString()}</p>
+        </section>
+      )}
       <LoadMoreButton
         section="approvals"
         cursor={snapshot.cursors.approvals}

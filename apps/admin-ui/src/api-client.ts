@@ -100,6 +100,19 @@ export interface ApprovalView {
   createdAt: Date;
 }
 
+export interface ApprovalDecisionRequest {
+  approvalId: string;
+  decision: "approved" | "rejected";
+  reason?: string;
+}
+
+export interface ApprovalDecisionResult {
+  approvalId: string;
+  state: "approved" | "rejected";
+  auditId: string;
+  decidedAt: Date;
+}
+
 export interface ExecutionView {
   id: string;
   pluginId: string;
@@ -155,6 +168,7 @@ export interface AdminApiClient extends AdminSessionClient {
   ) => Promise<DashboardSectionPage>;
   searchExecutions: (request: ExecutionSearchRequest) => Promise<ExecutionSearchPage>;
   getExecutionDetail: (id: string) => Promise<ExecutionDetailView>;
+  decideApproval: (request: ApprovalDecisionRequest) => Promise<ApprovalDecisionResult>;
   getInstallationPermissionReview: (id: string) => Promise<InstallationPermissionReview>;
   updateInstallationCommand: (
     request: InstallationCommandRequest
@@ -272,6 +286,15 @@ const approvalSchema = z
     state: z.enum(["pending", "approved", "rejected", "expired"]),
     expiresAt: z.coerce.date(),
     createdAt: z.coerce.date()
+  })
+  .strict();
+
+const approvalDecisionResultSchema = z
+  .object({
+    approvalId: z.string().min(1),
+    state: z.enum(["approved", "rejected"]),
+    auditId: z.string().min(1),
+    decidedAt: z.iso.datetime()
   })
   .strict();
 
@@ -609,6 +632,32 @@ export function createDemoAdminApiClient(): AdminApiClient {
         createdAt: execution.createdAt
       });
     },
+    decideApproval: (request) => {
+      const approval = snapshot.approvals.find((candidate) => candidate.id === request.approvalId);
+      if (approval === undefined) {
+        return Promise.reject(new AdminApiError(404, "approval_not_found", "approval not found"));
+      }
+      if (approval.state !== "pending") {
+        return Promise.reject(
+          new AdminApiError(409, "approval_already_decided", "approval was already decided")
+        );
+      }
+      const decidedAt = new Date();
+      snapshot = {
+        ...snapshot,
+        approvals: snapshot.approvals.map((candidate) =>
+          candidate.id === request.approvalId
+            ? { ...candidate, state: request.decision }
+            : candidate
+        )
+      };
+      return Promise.resolve({
+        approvalId: request.approvalId,
+        state: request.decision,
+        auditId: `approval_audit_demo_${request.approvalId}`,
+        decidedAt
+      });
+    },
     getInstallationPermissionReview: (id) => {
       const installation = snapshot.installations.find((candidate) => candidate.id === id);
       if (installation === undefined)
@@ -774,6 +823,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     getDashboardSection: unavailable,
     searchExecutions: unavailable,
     getExecutionDetail: unavailable,
+    decideApproval: unavailable,
     getInstallationPermissionReview: unavailable,
     updateInstallationCommand: unavailable,
     getInstallPreview: unavailable,
@@ -833,6 +883,11 @@ export function createAdminApiClient(params: {
     "/v1/admin/execution-detail",
     params.isDevelopment
   );
+  const approvalDecisionsUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/approval-decisions",
+    params.isDevelopment
+  );
   const fetcher = params.fetcher ?? fetch;
   let credential: string | undefined;
 
@@ -882,6 +937,19 @@ export function createAdminApiClient(params: {
       if (!detail.success || detail.data.id !== id) throw invalidResponse();
       const { errorCode, ...safeDetail } = detail.data;
       return errorCode === undefined ? safeDetail : { ...safeDetail, errorCode };
+    },
+    decideApproval: async (request) => {
+      const payload = await fetchAdminJson(
+        approvalDecisionsUrl,
+        requireCredential(credential),
+        fetcher,
+        { method: "POST", body: JSON.stringify(request) }
+      );
+      const result = approvalDecisionResultSchema.safeParse(payload);
+      if (!result.success || result.data.approvalId !== request.approvalId) {
+        throw invalidResponse();
+      }
+      return { ...result.data, decidedAt: new Date(result.data.decidedAt) };
     },
     getInstallationPermissionReview: async (id) => {
       const url = new URL("/v1/admin/installation-review", dashboardUrl);
@@ -1040,7 +1108,7 @@ async function fetchAdminJson(
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${credential}`,
-        ...(init.method === "PATCH" ? { "Content-Type": "application/json" } : {})
+        ...(init.body === undefined ? {} : { "Content-Type": "application/json" })
       },
       cache: "no-store",
       credentials: "omit",

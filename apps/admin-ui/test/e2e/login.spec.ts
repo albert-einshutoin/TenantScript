@@ -15,6 +15,23 @@ test("manager can sign in and reach the approval queue", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
 });
 
+test("manager confirms an approval and receives audit evidence", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Token").fill("manager-token");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Approval queue" }).click();
+
+  await page.getByRole("button", { name: "Approve" }).click();
+  const dialog = page.getByRole("dialog", { name: "Confirm approval decision" });
+  await expect(dialog).toContainText("tenant_acme");
+  await page.getByLabel("Decision reason").fill("validated invoice");
+  await page.getByRole("button", { name: "Confirm approval" }).click();
+
+  await expect(page.getByRole("heading", { name: "Approval approved" })).toBeVisible();
+  await expect(page.getByText("approval_audit_demo_approval_1")).toBeVisible();
+  await expect(page.getByText("approved", { exact: true })).toHaveClass(/ok/);
+});
+
 test("manager confirms an installation change after reviewing it", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Token").fill("manager-token");
