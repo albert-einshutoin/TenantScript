@@ -13,10 +13,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:fuzz": "vitest run test/fuzz.test.ts",
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@tenantscript/test-config": "workspace:*"
+    "@tenantscript/test-config": "workspace:*",
+    "fast-check": "^4.8.0"
   },
   "dependencies": {
     "zod": "^3.25.76"

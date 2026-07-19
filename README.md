@@ -21,6 +21,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Admin installの冪等再試行](docs/operations/admin-install-idempotency.md) — Idempotency-Key、409、D1原子性、保存期間
 - [Admin rollbackの結果復旧](docs/operations/admin-rollback-idempotency.md) — 応答喪失、revision CAS、audit result再取得
 - [Security suite v2 threat map](docs/security/security-suite-v2.md) — Phase 1攻撃面、常設テスト、依存境界CI
+- [Threat model](docs/security/threat-model.md) — 信頼境界、攻撃面、mitigation、常設テスト、未検証範囲
 - [Security policy](SECURITY.md) — supported versions、非公開の脆弱性報告窓口、対応SLA
 - [Usage meter運用契約](docs/operations/usage-meter.md) — Analytics Engine固定schema、fail-open、UTC期間集計
 - [Agent onboarding](llms.txt) — 公開docs、package entrypoint、TDD、credential境界の短い索引

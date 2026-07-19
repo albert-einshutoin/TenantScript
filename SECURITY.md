@@ -56,6 +56,7 @@ General support questions, deployment mistakes without a security boundary failu
 The policy for publishing this repository is recorded in [ADR-002](docs/adr/002-oss-license-and-publication.md). Architecture decisions are indexed separately so that accepted boundaries are distinguishable from future proposals.
 
 - [Development and security-suite requirements](tasks/README.md) define package boundaries, adversarial test expectations, and the accountless quality gate.
+- [Threat model](docs/security/threat-model.md) maps trust boundaries and attacks to named mitigations, permanent tests, and unverified gaps.
 - [Benchmark evidence index](docs/benchmarks/README.md) distinguishes measured results from blocked or planned validation.
 
 These documents describe current repository evidence; they are not certifications or guarantees that every deployment is secure. When a report contradicts a documented claim, use the private reporting path above so maintainers can investigate before changing public guidance.
