@@ -2,11 +2,38 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AdminApiError,
   createAdminApiClient,
+  createDemoAdminApiClient,
   createHttpAdminSessionClient,
   type AdminSession
 } from "./api-client.js";
 
 describe("Admin API environment selection", () => {
+  it("keeps demo commands revisioned and idempotent like the HTTP contract", async () => {
+    const client = createDemoAdminApiClient();
+    await expect(
+      client.updateInstallationCommand({
+        id: "inst_large_invoice",
+        expectedRevision: 0,
+        enabled: false
+      })
+    ).resolves.toMatchObject({ enabled: false, priority: 10, revision: 1 });
+    await expect(
+      client.updateInstallationCommand({
+        id: "inst_large_invoice",
+        expectedRevision: 1,
+        priority: 10
+      })
+    ).resolves.toMatchObject({ enabled: false, priority: 10, revision: 1 });
+    await expect(
+      client.updateInstallationCommand({
+        id: "inst_large_invoice",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).rejects.toEqual(
+      new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+    );
+  });
   it("connects the production client to the configured Control Plane", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

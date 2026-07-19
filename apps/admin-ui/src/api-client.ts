@@ -380,6 +380,10 @@ const dashboardFixture: DashboardSnapshot = {
 };
 
 export function createDemoAdminApiClient(): AdminApiClient {
+  let snapshot: DashboardSnapshot = {
+    ...dashboardFixture,
+    installations: [...dashboardFixture.installations]
+  };
   return {
     resolveSession: ({ token }) => {
       const session = demoSessions.get(token.trim());
@@ -388,11 +392,11 @@ export function createDemoAdminApiClient(): AdminApiClient {
       }
       return Promise.resolve(session);
     },
-    getDashboard: () => Promise.resolve(dashboardFixture),
+    getDashboard: () => Promise.resolve(snapshot),
     getDashboardSection: () =>
       Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
     getInstallationPermissionReview: (id) => {
-      const installation = dashboardFixture.installations.find((candidate) => candidate.id === id);
+      const installation = snapshot.installations.find((candidate) => candidate.id === id);
       if (installation === undefined)
         return Promise.reject(
           new AdminApiError(404, "installation_not_found", "installation not found")
@@ -406,23 +410,35 @@ export function createDemoAdminApiClient(): AdminApiClient {
       });
     },
     updateInstallationCommand: (request) => {
-      const installation = dashboardFixture.installations.find(
-        (candidate) => candidate.id === request.id
-      );
+      const installation = snapshot.installations.find((candidate) => candidate.id === request.id);
       if (installation === undefined) {
         return Promise.reject(
           new AdminApiError(404, "installation_not_found", "installation not found")
         );
       }
-      return Promise.resolve({
+      if (request.expectedRevision !== installation.revision) {
+        return Promise.reject(
+          new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+        );
+      }
+      const enabled = request.enabled ?? installation.enabled;
+      const priority = request.priority ?? installation.priority;
+      const changed = enabled !== installation.enabled || priority !== installation.priority;
+      const updated = {
         id: installation.id,
-        enabled: request.enabled ?? installation.enabled,
-        priority: request.priority ?? installation.priority,
-        revision:
-          request.enabled === installation.enabled && request.priority === installation.priority
-            ? installation.revision
-            : installation.revision + 1
-      });
+        enabled,
+        priority,
+        revision: changed ? installation.revision + 1 : installation.revision
+      };
+      snapshot = {
+        ...snapshot,
+        installations: snapshot.installations.map((candidate) =>
+          candidate.id === updated.id
+            ? { ...candidate, ...updated, statusText: updated.enabled ? "enabled" : "disabled" }
+            : candidate
+        )
+      };
+      return Promise.resolve(updated);
     },
     clearSession: () => undefined
   };
