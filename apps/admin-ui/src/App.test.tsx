@@ -734,7 +734,9 @@ describe("Admin UI auth foundation", () => {
     expect(screen.queryByText("provider secret")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Search executions" }));
-    await waitFor(() => expect(searchExecutions).toHaveBeenCalledWith({}));
+    await waitFor(() => {
+      expect(searchExecutions).toHaveBeenCalledWith({});
+    });
     await expect(screen.findByText("Execution search unavailable")).resolves.toBeInTheDocument();
     expect(screen.queryByText("SQL customer payload")).not.toBeInTheDocument();
   });
