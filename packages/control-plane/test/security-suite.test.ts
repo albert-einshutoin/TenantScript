@@ -112,7 +112,8 @@ describe("control-plane security suite", () => {
                   pluginKey: "safe-plugin",
                   version: "1.0.0",
                   enabled: true,
-                  priority: 10
+                  priority: 10,
+                  revision: 0
                 }
               ],
               nextPosition: "inst_safe"

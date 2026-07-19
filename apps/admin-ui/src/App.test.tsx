@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import {
+  AdminApiError,
   createDemoAdminApiClient,
   type AdminApiClient,
   type DashboardSnapshot,
@@ -125,6 +126,7 @@ describe("Admin UI auth foundation", () => {
           version: "1.3.0",
           enabled: true,
           priority: 10,
+          revision: 0,
           configFields: [],
           capabilities: [],
           egress: { mode: "allowlist", allowlistedHostCount: 2 }
@@ -141,6 +143,168 @@ describe("Admin UI auth foundation", () => {
     await expect(screen.findByText("No configuration fields")).resolves.toBeInTheDocument();
     expect(screen.getByText("No capabilities requested")).toBeInTheDocument();
     expect(screen.getByText(/2 allowlisted hosts/)).toBeInTheDocument();
+  });
+
+  it("lets a manager confirm an installation command, waits for server success, and prevents double submission", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const updateInstallationCommand = vi.fn().mockResolvedValue({
+      id: "inst_large_invoice",
+      expectedRevision: 0,
+      enabled: false
+    });
+    const client: AdminApiClient = { ...baseClient, updateInstallationCommand };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    const priority = screen.getByLabelText("Priority");
+    fireEvent.change(priority, { target: { value: "" } });
+    expect(screen.getByRole("button", { name: "Review change" })).toBeDisabled();
+    fireEvent.change(priority, { target: { value: "4.5" } });
+    expect(screen.getByRole("button", { name: "Review change" })).toBeDisabled();
+    fireEvent.change(priority, { target: { value: "9007199254740992" } });
+    expect(screen.getByRole("button", { name: "Review change" })).toBeDisabled();
+    fireEvent.change(priority, { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    expect(screen.getByRole("dialog", { name: "Confirm installation change" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+      screen.queryByRole("dialog", { name: "Confirm installation change" })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+    expect(screen.getByRole("button", { name: "Saving" })).toBeDisabled();
+
+    await waitFor(() => {
+      expect(updateInstallationCommand).toHaveBeenCalledTimes(1);
+    });
+    expect(updateInstallationCommand).toHaveBeenCalledWith({
+      id: "inst_large_invoice",
+      expectedRevision: 0,
+      enabled: false
+    });
+    await expect(screen.findByText("disabled")).resolves.toBeInTheDocument();
+  });
+
+  it("does not render installation controls for viewers and keeps state unchanged after command failure", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const updateInstallationCommand = vi
+      .fn()
+      .mockRejectedValue(new Error("SQL secret-config customer payload"));
+    const client: AdminApiClient = { ...baseClient, updateInstallationCommand };
+    render(<App client={client} />);
+
+    await login("viewer-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    expect(screen.queryByRole("button", { name: /Manage / })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+
+    await expect(screen.findByText("Installation update unavailable")).resolves.toBeInTheDocument();
+    expect(screen.getAllByText("enabled").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/secret-config|customer payload/)).not.toBeInTheDocument();
+  });
+
+  it("refreshes the installation revision after a command conflict", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const initial = await baseClient.getDashboard({
+      subject: "ops-manager",
+      role: "manager",
+      appId: "app_demo",
+      tenantId: "tenant_demo"
+    });
+    const refreshed: DashboardSnapshot = {
+      ...initial,
+      installations: initial.installations.map((installation, index) =>
+        index === 0 ? { ...installation, priority: 3, revision: 1 } : installation
+      )
+    };
+    const getDashboard = vi
+      .fn<AdminApiClient["getDashboard"]>()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(refreshed);
+    const updateInstallationCommand = vi
+      .fn<AdminApiClient["updateInstallationCommand"]>()
+      .mockRejectedValueOnce(
+        new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+      )
+      .mockResolvedValueOnce({
+        id: "inst_large_invoice",
+        enabled: false,
+        priority: 3,
+        revision: 2
+      });
+    const client: AdminApiClient = { ...baseClient, getDashboard, updateInstallationCommand };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+
+    await waitFor(() => {
+      expect(getDashboard).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.getByRole("cell", { name: "3" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Priority")).toHaveValue("3");
+
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+    await waitFor(() => {
+      expect(updateInstallationCommand).toHaveBeenCalledTimes(2);
+    });
+    expect(updateInstallationCommand).toHaveBeenLastCalledWith({
+      id: "inst_large_invoice",
+      expectedRevision: 1,
+      enabled: false
+    });
+  });
+
+  it("holds a single global installation command lock across row changes until a deferred request settles", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const deferredCommand = deferred<{
+      id: string;
+      enabled: boolean;
+      priority: number;
+      revision: number;
+    }>();
+    const updateInstallationCommand = vi.fn().mockReturnValue(deferredCommand.promise);
+    render(<App client={{ ...baseClient, updateInstallationCommand }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+
+    await waitFor(() => {
+      expect(updateInstallationCommand).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByRole("button", { name: "Manage payload-transformer" })).toBeDisabled();
+    await act(async () => {
+      deferredCommand.resolve({
+        id: "inst_large_invoice",
+        enabled: false,
+        priority: 10,
+        revision: 1
+      });
+      await deferredCommand.promise;
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Manage payload-transformer" })).toBeEnabled();
+    });
   });
 
   it("redacts permission-review failures", async () => {
@@ -226,6 +390,7 @@ describe("Admin UI auth foundation", () => {
       getDashboard: () => Promise.reject(new Error("offline")),
       getDashboardSection: baseClient.getDashboardSection,
       getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
+      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: baseClient.clearSession
     };
     render(<App client={failingClient} />);
@@ -261,6 +426,7 @@ describe("Admin UI auth foundation", () => {
         }),
       getDashboardSection,
       getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
+      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: vi.fn()
     };
     render(<App client={client} />);
@@ -285,6 +451,7 @@ describe("Admin UI auth foundation", () => {
       getDashboard: () => Promise.resolve({ ...initial, cursors: { executions: "signed.cursor" } }),
       getDashboardSection: () => Promise.reject(new Error("SQL customer payload")),
       getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
+      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: baseClient.clearSession
     };
     render(<App client={client} />);
@@ -328,6 +495,7 @@ describe("Admin UI auth foundation", () => {
       getDashboard: () => Promise.resolve(snapshot),
       getDashboardSection: baseClient.getDashboardSection,
       getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
+      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: baseClient.clearSession
     };
     render(<App client={client} />);
@@ -365,6 +533,7 @@ function permissionReview(id: string, pluginKey: string): InstallationPermission
     version: "1.0.0",
     enabled: true,
     priority: 10,
+    revision: 0,
     configFields: [],
     capabilities: [],
     egress: { mode: "deny", allowlistedHostCount: 0 }

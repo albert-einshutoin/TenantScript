@@ -2,11 +2,38 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AdminApiError,
   createAdminApiClient,
+  createDemoAdminApiClient,
   createHttpAdminSessionClient,
   type AdminSession
 } from "./api-client.js";
 
 describe("Admin API environment selection", () => {
+  it("keeps demo commands revisioned and idempotent like the HTTP contract", async () => {
+    const client = createDemoAdminApiClient();
+    await expect(
+      client.updateInstallationCommand({
+        id: "inst_large_invoice",
+        expectedRevision: 0,
+        enabled: false
+      })
+    ).resolves.toMatchObject({ enabled: false, priority: 10, revision: 1 });
+    await expect(
+      client.updateInstallationCommand({
+        id: "inst_large_invoice",
+        expectedRevision: 1,
+        priority: 10
+      })
+    ).resolves.toMatchObject({ enabled: false, priority: 10, revision: 1 });
+    await expect(
+      client.updateInstallationCommand({
+        id: "inst_large_invoice",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).rejects.toEqual(
+      new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+    );
+  });
   it("connects the production client to the configured Control Plane", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -84,7 +111,8 @@ describe("Admin API environment selection", () => {
               pluginKey: "second-plugin",
               version: "2.0.0",
               enabled: true,
-              priority: 20
+              priority: 20,
+              revision: 0
             }
           ]
         })
@@ -121,6 +149,7 @@ describe("Admin API environment selection", () => {
           version: "1.2.3",
           enabled: true,
           priority: 10,
+          revision: 0,
           configFields: [
             { name: "channel", type: "string", required: true, configured: true, hasDefault: false }
           ],
@@ -152,6 +181,83 @@ describe("Admin API environment selection", () => {
     );
     expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("authorization")).toBe(
       "Bearer secret-token"
+    );
+  });
+
+  it("sends a fixed-route PATCH command without self-asserted scope and validates its safe response", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(Response.json({ id: "..", enabled: false, priority: 4, revision: 2 }));
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.updateInstallationCommand({ id: "..", expectedRevision: 1, enabled: false })
+    ).resolves.toEqual({ id: "..", enabled: false, priority: 4, revision: 2 });
+    const [url, init] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/installation-command");
+    expect(init?.method).toBe("PATCH");
+    expect(new Headers(init?.headers).get("content-type")).toBe("application/json");
+    expect(init?.body).toBe('{"id":"..","expectedRevision":1,"enabled":false}');
+    const body = init?.body;
+    expect(typeof body).toBe("string");
+    if (typeof body !== "string") throw new Error("expected JSON command body");
+    expect(body).not.toContain("tenantId");
+    expect(body).not.toContain("appId");
+    expect(body).not.toContain("actor");
+  });
+
+  it("rejects a command response that changes the installation ID", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({ id: "other", enabled: false, priority: 4, revision: 2 })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+    await expect(
+      client.updateInstallationCommand({ id: "inst_1", expectedRevision: 1, enabled: false })
+    ).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
+  it("rejects installation command responses that include storage values", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "inst_1",
+          enabled: false,
+          priority: 4,
+          config: { channel: "must-not-render" }
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.updateInstallationCommand({ id: "inst_1", expectedRevision: 0, enabled: false })
+    ).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
     );
   });
 
@@ -336,7 +442,8 @@ function dashboardPayload() {
           pluginKey: "safe-plugin",
           version: "1.0.0",
           enabled: true,
-          priority: 10
+          priority: 10,
+          revision: 0
         }
       ],
       nextCursor: "signed.cursor"

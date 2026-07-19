@@ -166,7 +166,8 @@ describe("Control Plane Admin dashboard contract", () => {
         pluginKey: "safe-plugin",
         version: "1.0.0",
         enabled: true,
-        priority: 10
+        priority: 10,
+        revision: 0
       }
     ]);
     expect(JSON.stringify(body)).not.toContain("secret-config");
@@ -337,6 +338,279 @@ describe("Control Plane installation permission review contract", () => {
   });
 });
 
+describe("Control Plane installation command contract", () => {
+  it("requires a matching revision and exposes a common conflict response without a mutation audit", async () => {
+    const commandStore = {
+      updateInstallation: vi.fn().mockResolvedValue({
+        outcome: "conflict",
+        id: "inst_1",
+        revision: 4
+      })
+    };
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationCommandStore: commandStore,
+      allowedOrigins: [allowedOrigin]
+    });
+    const missingRevision = await handler(
+      commandRequest("manager-secret-token", { id: "inst_1", enabled: false })
+    );
+    expect(missingRevision.status).toBe(400);
+
+    const conflict = await handler(
+      commandRequest("manager-secret-token", {
+        id: "inst_1",
+        expectedRevision: 3,
+        enabled: false
+      })
+    );
+    expect(conflict.status).toBe(409);
+    await expect(conflict.json()).resolves.toEqual({
+      error: { code: "installation_revision_conflict", message: "installation changed; refresh" }
+    });
+    expect(commandStore.updateInstallation).toHaveBeenCalledWith({
+      appId: "app_acme",
+      tenantId: "tenant_acme",
+      actor: "ops-manager",
+      id: "inst_1",
+      expectedRevision: 3,
+      enabled: false
+    });
+  });
+
+  it("lets only a manager issue a scoped command and derives every audit field from identity", async () => {
+    const commandStore = {
+      updateInstallation: vi.fn().mockResolvedValue({
+        outcome: "updated",
+        id: "inst_1",
+        enabled: false,
+        priority: 5,
+        revision: 1,
+        changed: true
+      })
+    };
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({
+        manager: {
+          subject: "manager-subject",
+          role: "manager",
+          appId: "app_acme",
+          tenantId: "tenant_acme"
+        },
+        viewer: {
+          subject: "viewer-subject",
+          role: "viewer",
+          appId: "app_acme",
+          tenantId: "tenant_acme"
+        }
+      }),
+      installationCommandStore: commandStore,
+      allowedOrigins: [allowedOrigin]
+    });
+
+    const response = await handler(
+      commandRequest("manager", {
+        id: "inst_1",
+        expectedRevision: 0,
+        enabled: false,
+        priority: 5
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(commandStore.updateInstallation).toHaveBeenCalledWith({
+      appId: "app_acme",
+      tenantId: "tenant_acme",
+      actor: "manager-subject",
+      id: "inst_1",
+      expectedRevision: 0,
+      enabled: false,
+      priority: 5
+    });
+    expect(await response.json()).toEqual({
+      id: "inst_1",
+      enabled: false,
+      priority: 5,
+      revision: 1
+    });
+
+    const forbidden = await handler(
+      commandRequest("viewer", { id: "inst_1", expectedRevision: 0, enabled: false })
+    );
+    expect(forbidden.status).toBe(403);
+    expect(commandStore.updateInstallation).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed for malformed, oversized, or unsafe command bodies and only permits the fixed route", async () => {
+    const commandStore = { updateInstallation: vi.fn() };
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationCommandStore: commandStore,
+      allowedOrigins: [allowedOrigin]
+    });
+    const headers = {
+      Authorization: "Bearer manager-secret-token",
+      Origin: allowedOrigin,
+      "Content-Type": "application/json"
+    };
+    const cases = [
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PATCH",
+        headers,
+        body: "{"
+      }),
+      commandRequest("manager-secret-token", { id: "inst_1" }),
+      commandRequest("manager-secret-token", { id: "inst_1", expectedRevision: 0, priority: 1.5 }),
+      commandRequest("manager-secret-token", {
+        id: "inst_1",
+        expectedRevision: 0,
+        priority: Number.POSITIVE_INFINITY
+      }),
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "text/plain" },
+        body: JSON.stringify({ id: "inst_1", enabled: true })
+      }),
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ id: "inst_1", enabled: true, config: { secret: "no" } })
+      }),
+      commandRequest("manager-secret-token", {
+        id: "inst_1",
+        expectedRevision: 0,
+        enabled: true,
+        tenantId: "tenant_other",
+        appId: "app_other",
+        actor: "attacker",
+        role: "manager"
+      }),
+      new Request("https://api.example.com/v1/admin/installations/..", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ id: "inst_1", enabled: true })
+      }),
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ id: "inst_1", enabled: true, padding: "x".repeat(16_384) })
+      })
+    ];
+    for (const request of cases) {
+      const response = await handler(request);
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(await response.text()).not.toContain("secret");
+    }
+    expect(commandStore.updateInstallation).not.toHaveBeenCalled();
+  });
+
+  it("uses a common 404 for missing, cross-tenant, cross-app, and corrupt relations; no-op skips audit mutation", async () => {
+    const commandStore = {
+      updateInstallation: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          outcome: "updated",
+          id: "inst_1",
+          enabled: true,
+          priority: 10,
+          revision: 0,
+          changed: false
+        })
+    };
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationCommandStore: commandStore,
+      allowedOrigins: [allowedOrigin]
+    });
+    for (const id of ["missing", "other-tenant", "cross-app"]) {
+      const response = await handler(
+        commandRequest("manager-secret-token", { id, expectedRevision: 0, enabled: false })
+      );
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "installation_not_found" }
+      });
+    }
+    const noOp = await handler(
+      commandRequest("manager-secret-token", {
+        id: "inst_1",
+        expectedRevision: 0,
+        enabled: true,
+        priority: 10
+      })
+    );
+    expect(noOp.status).toBe(200);
+    await expect(noOp.json()).resolves.toEqual({
+      id: "inst_1",
+      enabled: true,
+      priority: 10,
+      revision: 0
+    });
+  });
+
+  it("advertises PATCH in CORS preflight and rejects other methods", async () => {
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationCommandStore: { updateInstallation: vi.fn() },
+      allowedOrigins: [allowedOrigin]
+    });
+    const preflight = await handler(
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "OPTIONS",
+        headers: { Origin: allowedOrigin, "Access-Control-Request-Method": "PATCH" }
+      })
+    );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-methods")).toContain("PATCH");
+    const response = await handler(
+      new Request("https://api.example.com/v1/admin/installation-command", {
+        method: "PUT",
+        headers: { Origin: allowedOrigin }
+      })
+    );
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("PATCH, OPTIONS");
+  });
+
+  it("rejects chunked command bodies over 16KiB and cancels their stream before mutation", async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode('{"id":"inst_1","expectedRevision":0,"enabled":')
+        );
+        controller.enqueue(new Uint8Array(16 * 1024));
+      },
+      cancel() {
+        cancelled = true;
+      }
+    });
+    const commandStore = { updateInstallation: vi.fn() };
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      installationCommandStore: commandStore,
+      allowedOrigins: [allowedOrigin]
+    });
+    const request = new Request("https://api.example.com/v1/admin/installation-command", {
+      method: "PATCH",
+      headers: {
+        Authorization: "Bearer manager-secret-token",
+        Origin: allowedOrigin,
+        "Content-Type": "application/json"
+      },
+      body,
+      duplex: "half"
+    } as RequestInit);
+    const response = await handler(request);
+    expect(response.status).toBe(413);
+    expect(cancelled).toBe(true);
+    expect(commandStore.updateInstallation).not.toHaveBeenCalled();
+  });
+});
+
 function createHandler() {
   return createControlPlaneHttpHandler({
     identityResolver: createStaticTokenIdentityResolver({
@@ -384,7 +658,8 @@ function dashboardStore() {
               pluginKey: "safe-plugin",
               version: "1.0.0",
               enabled: true,
-              priority: 10
+              priority: 10,
+              revision: 0
             }
           ],
           nextPosition: "inst_1"
@@ -419,6 +694,7 @@ function installationStore() {
       version: "1.0.0",
       enabled: true,
       priority: 10,
+      revision: 0,
       configFields: [
         { name: "channel", type: "string", required: true, configured: true, hasDefault: false }
       ],
@@ -448,5 +724,17 @@ function sessionRequest(params: { token: string; url?: string }): Request {
       Authorization: `Bearer ${params.token}`,
       Origin: allowedOrigin
     }
+  });
+}
+
+function commandRequest(token: string, body: Record<string, unknown>): Request {
+  return new Request("https://api.example.com/v1/admin/installation-command", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Origin: allowedOrigin,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
   });
 }

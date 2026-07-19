@@ -197,8 +197,12 @@ export {
 } from "./admin-dashboard.js";
 
 export {
+  createD1AdminInstallationCommandStore,
   createD1AdminInstallationDetailStore,
+  type AdminInstallationCommandResult,
+  type AdminInstallationCommandStore,
   type AdminCapabilityMetadata,
+  type D1AdminInstallationCommandStoreOptions,
   type AdminConfigFieldMetadata,
   type AdminEgressMetadata,
   type AdminInstallationDetail,

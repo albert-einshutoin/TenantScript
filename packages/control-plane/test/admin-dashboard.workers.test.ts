@@ -3,6 +3,7 @@ import { applyD1Migrations, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createD1AdminDashboardStore,
+  createD1AdminInstallationCommandStore,
   createD1AdminInstallationDetailStore,
   createD1ControlPlaneStore,
   type AdminDashboardSection,
@@ -131,6 +132,247 @@ describe("D1 Admin dashboard read model", () => {
     expect(JSON.stringify(own)).not.toContain("manifest-secret");
     expect(otherTenant).toBeNull();
     expect(wrongApp).toBeNull();
+  });
+
+  it("writes a manager command and its fixed-shape audit atomically at the D1 boundary", async () => {
+    await seedDashboard();
+    const auditIds = ["installation_command_audit_1", "installation_command_audit_2"];
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
+      auditId: () => auditIds.shift() ?? "unexpected_audit"
+    });
+
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 0,
+        enabled: false,
+        priority: 4
+      })
+    ).resolves.toMatchObject({ outcome: "updated", enabled: false, priority: 4, revision: 1 });
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 1,
+        priority: 2
+      })
+    ).resolves.toMatchObject({ outcome: "updated", enabled: false, priority: 2, revision: 2 });
+
+    const installation = await testEnv.DB.prepare(
+      "SELECT enabled, priority, revision FROM installations WHERE id = ?"
+    )
+      .bind("tenant_1_installation_a")
+      .first<{ enabled: number; priority: number; revision: number }>();
+    const audit = await testEnv.DB.prepare(
+      "SELECT actor, action, before_json, after_json FROM admin_audit_events WHERE id = ?"
+    )
+      .bind("installation_command_audit_1")
+      .first<{ actor: string; action: string; before_json: string; after_json: string }>();
+    expect(installation).toEqual({ enabled: 0, priority: 2, revision: 2 });
+    expect(audit).toMatchObject({ actor: "manager-subject", action: "installation.command" });
+    expect(JSON.stringify(audit)).not.toContain("secret-config");
+    expect(JSON.stringify(audit)).not.toContain("secret-grant");
+    expect(JSON.stringify(audit)).not.toContain("manifest-secret");
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 2 });
+  });
+
+  it("does not update an installation when the paired audit insert fails, and makes no-op commands audit-free", async () => {
+    await seedDashboard();
+    await testEnv.DB.prepare(
+      "INSERT INTO admin_audit_events (id, installation_id, tenant_id, app_id, plugin_id, revision, actor, action, before_json, after_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+      .bind(
+        "conflicting_audit",
+        "tenant_1_installation_a",
+        "tenant_1",
+        "app_1",
+        "tenant_1_plugin",
+        0,
+        "actor",
+        "installation.seed",
+        "{}",
+        "{}",
+        "2026-07-19T00:00:00.000Z"
+      )
+      .run();
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
+      auditId: () => "conflicting_audit"
+    });
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 0,
+        enabled: false
+      })
+    ).rejects.toThrow();
+    await expect(
+      testEnv.DB.prepare("SELECT enabled, priority FROM installations WHERE id = ?")
+        .bind("tenant_1_installation_a")
+        .first<{ enabled: number; priority: number }>()
+    ).resolves.toEqual({ enabled: 1, priority: 10 });
+
+    const noOp = await commands.updateInstallation({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: "manager-subject",
+      id: "tenant_1_installation_a",
+      expectedRevision: 0,
+      enabled: true,
+      priority: 10
+    });
+    expect(noOp).toEqual({
+      outcome: "updated",
+      id: "tenant_1_installation_a",
+      enabled: true,
+      priority: 10,
+      revision: 0,
+      changed: false
+    });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 1 });
+  });
+
+  it("rejects cross-tenant, cross-app, and corrupt installation relations with the same null result", async () => {
+    await seedDashboard();
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB);
+    for (const id of ["tenant_2_installation_a", "cross_app_installation", "does_not_exist"]) {
+      await expect(
+        commands.updateInstallation({
+          appId: "app_1",
+          tenantId: "tenant_1",
+          actor: "manager-subject",
+          id,
+          expectedRevision: 0,
+          enabled: false
+        })
+      ).resolves.toBeNull();
+    }
+  });
+
+  it("uses a revision CAS, appends a structured audit event, and leaves stale writes unaudited", async () => {
+    await seedDashboard();
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
+      auditId: () => "admin_audit_command_1"
+    });
+    const updated = await commands.updateInstallation({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: 'manager"subject',
+      id: "tenant_1_installation_a",
+      expectedRevision: 0,
+      enabled: false
+    });
+    expect(updated).toMatchObject({
+      outcome: "updated",
+      enabled: false,
+      priority: 10,
+      revision: 1
+    });
+    await expect(
+      testEnv.DB.prepare(
+        "SELECT actor, action, before_json, after_json FROM admin_audit_events WHERE id = ?"
+      )
+        .bind("admin_audit_command_1")
+        .first<{ actor: string; action: string; before_json: string; after_json: string }>()
+    ).resolves.toEqual({
+      actor: 'manager"subject',
+      action: "installation.command",
+      before_json: '{"enabled":true,"priority":10,"revision":0}',
+      after_json: '{"enabled":false,"priority":10,"revision":1}'
+    });
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).resolves.toEqual({ outcome: "conflict", id: "tenant_1_installation_a", revision: 1 });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 1 });
+  });
+
+  it("detects changes made through the existing installation store as revision conflicts", async () => {
+    await seedDashboard();
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.setInstallationEnabled({ id: "tenant_1_installation_a", enabled: false });
+
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB);
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).resolves.toEqual({
+      outcome: "conflict",
+      id: "tenant_1_installation_a",
+      revision: 1
+    });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 0 });
+  });
+
+  it("aborts an interleaved existing-store mutation without recording a false audit event", async () => {
+    await seedDashboard();
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
+      // This deterministic seam places the pre-existing writer exactly between this command's
+      // scope read and its conditional write, which is the race the D1 transaction must reject.
+      beforeWrite: () =>
+        store.setInstallationEnabled({ id: "tenant_1_installation_a", enabled: false })
+    });
+
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).resolves.toEqual({
+      outcome: "conflict",
+      id: "tenant_1_installation_a",
+      revision: 1
+    });
+    await expect(
+      testEnv.DB.prepare("SELECT enabled, priority, revision FROM installations WHERE id = ?")
+        .bind("tenant_1_installation_a")
+        .first<{ enabled: number; priority: number; revision: number }>()
+    ).resolves.toEqual({ enabled: 0, priority: 10, revision: 1 });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 0 });
   });
 });
 

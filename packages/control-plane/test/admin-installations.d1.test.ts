@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createD1AdminInstallationDetailStore } from "../src/admin-installations.js";
+import {
+  createD1AdminInstallationCommandStore,
+  createD1AdminInstallationDetailStore
+} from "../src/admin-installations.js";
 import type { D1DatabaseLike, D1PreparedStatementLike } from "../src/storage.js";
 
 describe("D1 admin installation detail adapter", () => {
@@ -11,6 +14,7 @@ describe("D1 admin installation detail adapter", () => {
         version: "1.2.3",
         enabled: 1,
         priority: 10,
+        revision: 0,
         config_json: '{"notifyChannel":"C123","retries":3}',
         grants_json: '{"slack.send":{"channel":"C123"},"invoice.read":{"fields":["id"]}}',
         manifest_json: JSON.stringify({
@@ -44,6 +48,7 @@ describe("D1 admin installation detail adapter", () => {
       version: "1.2.3",
       enabled: true,
       priority: 10,
+      revision: 0,
       egress: { mode: "allowlist", allowlistedHostCount: 2 },
       configFields: [
         { name: "dryRun", type: "boolean", required: false, configured: false, hasDefault: true },
@@ -90,6 +95,88 @@ describe("D1 admin installation detail adapter", () => {
   });
 });
 
+describe("D1 admin installation command adapter", () => {
+  it("uses one audit INSERT for the revision CAS and writes only structured before/after values", async () => {
+    const db = commandDatabase([{ ...commandRow(), revision: 0 }]);
+    const store = createD1AdminInstallationCommandStore(db, { auditId: () => "audit_1" });
+
+    await expect(
+      store.updateInstallation({
+        appId: "app_acme",
+        tenantId: "tenant_acme",
+        actor: 'manager"subject',
+        id: "inst_1",
+        expectedRevision: 0,
+        enabled: false
+      })
+    ).resolves.toEqual({
+      outcome: "updated",
+      id: "inst_1",
+      enabled: false,
+      priority: 10,
+      revision: 1,
+      changed: true
+    });
+    expect(db.runs).toHaveLength(1);
+    expect(db.bindings.flat()).not.toContain("secret-config");
+    expect(db.bindings.flat()).not.toContain("secret-grant");
+    expect(db.bindings.flat()).toContain('{"enabled":true,"priority":10,"revision":0}');
+    expect(db.bindings.flat()).toContain('{"enabled":false,"priority":10,"revision":1}');
+  });
+
+  it("does not write for no-op or already-stale revisions", async () => {
+    const db = commandDatabase([
+      { ...commandRow(), revision: 2 },
+      { ...commandRow(), revision: 2 }
+    ]);
+    const store = createD1AdminInstallationCommandStore(db);
+    await expect(
+      store.updateInstallation({
+        appId: "app_acme",
+        tenantId: "tenant_acme",
+        actor: "manager",
+        id: "inst_1",
+        expectedRevision: 2,
+        enabled: true
+      })
+    ).resolves.toMatchObject({ outcome: "updated", changed: false, revision: 2 });
+    await expect(
+      store.updateInstallation({
+        appId: "app_acme",
+        tenantId: "tenant_acme",
+        actor: "manager",
+        id: "inst_1",
+        expectedRevision: 1,
+        priority: 4
+      })
+    ).resolves.toEqual({ outcome: "conflict", id: "inst_1", revision: 2 });
+    expect(db.runs).toEqual([]);
+  });
+
+  it("maps an audit uniqueness failure after a raced CAS to a conflict", async () => {
+    const db = commandDatabase(
+      [
+        { ...commandRow(), revision: 0 },
+        { ...commandRow(), revision: 1 }
+      ],
+      {
+        runError: new Error("UNIQUE constraint failed: admin_audit_events.installation_id")
+      }
+    );
+    const store = createD1AdminInstallationCommandStore(db);
+    await expect(
+      store.updateInstallation({
+        appId: "app_acme",
+        tenantId: "tenant_acme",
+        actor: "manager",
+        id: "inst_1",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).resolves.toEqual({ outcome: "conflict", id: "inst_1", revision: 1 });
+  });
+});
+
 function database(row: unknown): D1DatabaseLike & { queries: string[]; bindings: unknown[][] } {
   const queries: string[] = [];
   const bindings: unknown[][] = [];
@@ -106,6 +193,46 @@ function database(row: unknown): D1DatabaseLike & { queries: string[]; bindings:
         run: () => Promise.resolve(undefined),
         all: () => Promise.resolve({ results: [] }),
         first: () => Promise.resolve(row as never)
+      };
+      return statement;
+    }
+  };
+}
+
+function commandRow() {
+  return {
+    id: "inst_1",
+    enabled: 1,
+    priority: 10,
+    revision: 0,
+    tenant_id: "tenant_acme",
+    plugin_id: "plugin_1"
+  };
+}
+
+function commandDatabase(
+  rows: readonly ReturnType<typeof commandRow>[],
+  options: { runError?: Error } = {}
+): D1DatabaseLike & { bindings: unknown[][]; runs: unknown[][] } {
+  const bindings: unknown[][] = [];
+  const runs: unknown[][] = [];
+  let rowIndex = 0;
+  return {
+    bindings,
+    runs,
+    prepare: () => {
+      const statement: D1PreparedStatementLike = {
+        bind: (...values) => {
+          bindings.push(values);
+          return statement;
+        },
+        run: () => {
+          runs.push([]);
+          if (options.runError !== undefined) return Promise.reject(options.runError);
+          return Promise.resolve(undefined);
+        },
+        all: () => Promise.resolve({ results: [] }),
+        first: <T>() => Promise.resolve((rows[rowIndex++] ?? null) as unknown as T | null)
       };
       return statement;
     }

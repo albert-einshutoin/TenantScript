@@ -281,7 +281,9 @@ function createInstallationConfigUpdater(db: D1DatabaseLike) {
     grants: Record<string, unknown>;
   }) => {
     await db
-      .prepare("UPDATE installations SET config_json = ?, grants_json = ? WHERE id = ?")
+      .prepare(
+        "UPDATE installations SET config_json = ?, grants_json = ?, revision = revision + 1 WHERE id = ?"
+      )
       .bind(JSON.stringify(request.config), JSON.stringify(request.grants), request.id)
       .run();
     const updated = await createInstallationByIdFinder(db)(request.id);
@@ -295,7 +297,7 @@ function createInstallationConfigUpdater(db: D1DatabaseLike) {
 function createInstallationEnabledUpdater(db: D1DatabaseLike) {
   return async (request: { id: string; enabled: boolean }) => {
     await db
-      .prepare("UPDATE installations SET enabled = ? WHERE id = ?")
+      .prepare("UPDATE installations SET enabled = ?, revision = revision + 1 WHERE id = ?")
       .bind(request.enabled ? 1 : 0, request.id)
       .run();
     const updated = await createInstallationByIdFinder(db)(request.id);
@@ -309,7 +311,7 @@ function createInstallationEnabledUpdater(db: D1DatabaseLike) {
 function createInstallationPriorityUpdater(db: D1DatabaseLike) {
   return async (request: { id: string; priority: number }) => {
     await db
-      .prepare("UPDATE installations SET priority = ? WHERE id = ?")
+      .prepare("UPDATE installations SET priority = ?, revision = revision + 1 WHERE id = ?")
       .bind(request.priority, request.id)
       .run();
     const updated = await createInstallationByIdFinder(db)(request.id);
@@ -323,7 +325,9 @@ function createInstallationPriorityUpdater(db: D1DatabaseLike) {
 function createInstallationVersionUpdater(db: D1DatabaseLike) {
   return async (request: { id: string; pluginVersionId: string }) => {
     await db
-      .prepare("UPDATE installations SET plugin_version_id = ? WHERE id = ?")
+      .prepare(
+        "UPDATE installations SET plugin_version_id = ?, revision = revision + 1 WHERE id = ?"
+      )
       .bind(request.pluginVersionId, request.id)
       .run();
     const updated = await createInstallationByIdFinder(db)(request.id);

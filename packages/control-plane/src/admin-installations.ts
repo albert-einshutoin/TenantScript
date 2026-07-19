@@ -6,6 +6,7 @@ export interface AdminInstallationDetail {
   version: string;
   enabled: boolean;
   priority: number;
+  revision: number;
   configFields: readonly AdminConfigFieldMetadata[];
   capabilities: readonly AdminCapabilityMetadata[];
   egress: AdminEgressMetadata;
@@ -39,10 +40,169 @@ export interface AdminInstallationDetailStore {
   }) => Promise<AdminInstallationDetail | null>;
 }
 
+export interface AdminInstallationCommandStore {
+  updateInstallation: (request: {
+    appId: string;
+    tenantId: string;
+    actor: string;
+    id: string;
+    expectedRevision: number;
+    enabled?: boolean;
+    priority?: number;
+  }) => Promise<AdminInstallationCommandResult | null>;
+}
+
+export type AdminInstallationCommandResult =
+  | {
+      outcome: "updated";
+      id: string;
+      enabled: boolean;
+      priority: number;
+      revision: number;
+      /** Internal store-only signal: HTTP returns the same safe DTO for an idempotent replay. */
+      changed: boolean;
+    }
+  | { outcome: "conflict"; id: string; revision: number };
+
+export interface D1AdminInstallationCommandStoreOptions {
+  /** Test seam for a deterministic D1 constraint failure; production IDs use Web Crypto. */
+  auditId?: () => string;
+  /** Test seam for exercising an existing writer between the command pre-read and audit INSERT. */
+  beforeWrite?: () => unknown;
+}
+
 export function createD1AdminInstallationDetailStore(
   db: D1DatabaseLike
 ): AdminInstallationDetailStore {
   return { readInstallation: (request) => readInstallation(db, request) };
+}
+
+export function createD1AdminInstallationCommandStore(
+  db: D1DatabaseLike,
+  options: D1AdminInstallationCommandStoreOptions = {}
+): AdminInstallationCommandStore {
+  return {
+    updateInstallation: (request) => updateInstallation(db, request, options)
+  };
+}
+
+async function updateInstallation(
+  db: D1DatabaseLike,
+  request: {
+    appId: string;
+    tenantId: string;
+    actor: string;
+    id: string;
+    expectedRevision: number;
+    enabled?: boolean;
+    priority?: number;
+  },
+  options: D1AdminInstallationCommandStoreOptions
+): Promise<AdminInstallationCommandResult | null> {
+  const current = await readCommandRow(db, request);
+  if (current === null) return null;
+
+  const before = commandState(current);
+  if (request.expectedRevision !== before.revision) {
+    return {
+      outcome: "conflict",
+      id: requiredString(current.id, "invalid installation row"),
+      revision: before.revision
+    };
+  }
+  const after = {
+    enabled: request.enabled ?? before.enabled,
+    priority: request.priority ?? before.priority
+  };
+  if (after.enabled === before.enabled && after.priority === before.priority) {
+    return {
+      outcome: "updated",
+      id: requiredString(current.id, "invalid installation row"),
+      ...after,
+      revision: before.revision,
+      changed: false
+    };
+  }
+
+  const auditId = options.auditId?.() ?? `installation-command-${crypto.randomUUID()}`;
+  const nextRevision = before.revision + 1;
+  await options.beforeWrite?.();
+  try {
+    // The migration trigger performs the conditional installation update inside this INSERT.
+    // Keeping both effects in one D1 statement means a stale CAS aborts the audit too, so no
+    // interleaving writer can leave a success response backed by a false audit event.
+    await db
+      .prepare(
+        [
+          "INSERT INTO admin_audit_events",
+          "(id, installation_id, tenant_id, app_id, plugin_id, revision, actor, action, before_json, after_json, created_at)",
+          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ].join(" ")
+      )
+      .bind(
+        auditId,
+        requiredString(current.id, "invalid installation row"),
+        requiredString(current.tenant_id, "invalid installation row"),
+        request.appId,
+        requiredString(current.plugin_id, "invalid installation row"),
+        nextRevision,
+        request.actor,
+        "installation.command",
+        JSON.stringify(before),
+        JSON.stringify({ ...after, revision: nextRevision }),
+        new Date().toISOString()
+      )
+      .run();
+  } catch (error) {
+    const latest = await readCommandRow(db, request);
+    if (latest !== null && commandState(latest).revision !== request.expectedRevision) {
+      return {
+        outcome: "conflict",
+        id: requiredString(latest.id, "invalid installation row"),
+        revision: commandState(latest).revision
+      };
+    }
+    throw error;
+  }
+  return {
+    outcome: "updated",
+    id: requiredString(current.id, "invalid installation row"),
+    ...after,
+    revision: nextRevision,
+    changed: true
+  };
+}
+
+async function readCommandRow(
+  db: D1DatabaseLike,
+  request: { appId: string; tenantId: string; id: string }
+): Promise<InstallationCommandRow | null> {
+  return db
+    .prepare(
+      [
+        "SELECT i.id, i.enabled, i.priority, i.revision, i.tenant_id, pv.plugin_id",
+        "FROM installations i",
+        "JOIN tenants t ON t.id = i.tenant_id",
+        "JOIN plugin_versions pv ON pv.id = i.plugin_version_id",
+        "JOIN plugins p ON p.id = pv.plugin_id",
+        "WHERE t.id = ?1 AND t.app_id = ?2 AND p.app_id = t.app_id AND i.id = ?3"
+      ].join(" ")
+    )
+    .bind(request.tenantId, request.appId, request.id)
+    .first<InstallationCommandRow>();
+}
+
+function commandState(row: InstallationCommandRow): {
+  enabled: boolean;
+  priority: number;
+  revision: number;
+} {
+  if (row.enabled !== 0 && row.enabled !== 1) throw new Error("invalid installation row");
+  return {
+    enabled: row.enabled === 1,
+    priority: requiredSafeInteger(row.priority, "invalid installation row"),
+    revision: requiredSafeInteger(row.revision, "invalid installation row")
+  };
 }
 
 async function readInstallation(
@@ -52,7 +212,7 @@ async function readInstallation(
   const row = await db
     .prepare(
       [
-        "SELECT i.id, p.key AS plugin_key, pv.version, i.enabled, i.priority,",
+        "SELECT i.id, p.key AS plugin_key, pv.version, i.enabled, i.priority, i.revision,",
         "i.config_json, i.grants_json, pv.manifest_json",
         "FROM installations i",
         "JOIN tenants t ON t.id = i.tenant_id",
@@ -84,7 +244,8 @@ async function readInstallation(
     pluginKey: requiredString(row.plugin_key, "invalid installation row"),
     version: requiredString(row.version, "invalid installation row"),
     enabled: row.enabled === 1,
-    priority: requiredNumber(row.priority, "invalid installation row"),
+    priority: requiredSafeInteger(row.priority, "invalid installation row"),
+    revision: requiredSafeInteger(row.revision, "invalid installation row"),
     configFields: Object.entries(properties)
       .map(([name, value]) => configField(name, value, required, config))
       .sort((left, right) => left.name.localeCompare(right.name)),
@@ -195,8 +356,8 @@ function requiredString(value: unknown, error: string): string {
   return value;
 }
 
-function requiredNumber(value: unknown, error: string): number {
-  if (typeof value !== "number") throw new Error(error);
+function requiredSafeInteger(value: unknown, error: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new Error(error);
   return value;
 }
 
@@ -210,7 +371,17 @@ interface InstallationDetailRow {
   version: unknown;
   enabled: unknown;
   priority: unknown;
+  revision: unknown;
   config_json: string;
   grants_json: string;
   manifest_json: string;
+}
+
+interface InstallationCommandRow {
+  id: unknown;
+  enabled: unknown;
+  priority: unknown;
+  revision: unknown;
+  tenant_id: unknown;
+  plugin_id: unknown;
 }

@@ -19,6 +19,7 @@ export interface InstallationView {
   version: string;
   enabled: boolean;
   priority: number;
+  revision: number;
   statusText: "enabled" | "disabled";
 }
 
@@ -72,7 +73,27 @@ export interface AdminApiClient extends AdminSessionClient {
     cursor: string
   ) => Promise<DashboardSectionPage>;
   getInstallationPermissionReview: (id: string) => Promise<InstallationPermissionReview>;
+  updateInstallationCommand: (
+    request: InstallationCommandRequest
+  ) => Promise<InstallationCommandResult>;
   clearSession: () => void;
+}
+
+interface InstallationCommandBase {
+  id: string;
+  expectedRevision: number;
+}
+
+export type InstallationCommandRequest =
+  | (InstallationCommandBase & { enabled: boolean; priority?: never })
+  | (InstallationCommandBase & { enabled?: never; priority: number })
+  | (InstallationCommandBase & { enabled: boolean; priority: number });
+
+export interface InstallationCommandResult {
+  id: string;
+  enabled: boolean;
+  priority: number;
+  revision: number;
 }
 
 export interface InstallationPermissionReview {
@@ -81,6 +102,7 @@ export interface InstallationPermissionReview {
   version: string;
   enabled: boolean;
   priority: number;
+  revision: number;
   configFields: readonly {
     name: string;
     type: "string" | "number" | "boolean";
@@ -137,7 +159,8 @@ const installationSchema = z
     pluginKey: z.string(),
     version: z.string(),
     enabled: z.boolean(),
-    priority: z.number()
+    priority: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
   })
   .strict();
 
@@ -219,6 +242,7 @@ const installationPermissionReviewSchema = z
     version: z.string(),
     enabled: z.boolean(),
     priority: z.number(),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     configFields: z.array(
       z
         .object({
@@ -246,6 +270,15 @@ const installationPermissionReviewSchema = z
         allowlistedHostCount: z.number().int().nonnegative()
       })
       .strict()
+  })
+  .strict();
+
+const installationCommandResultSchema = z
+  .object({
+    id: z.string().min(1),
+    enabled: z.boolean(),
+    priority: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
   })
   .strict();
 
@@ -280,6 +313,7 @@ const dashboardFixture: DashboardSnapshot = {
       id: "inst_large_invoice",
       enabled: true,
       priority: 10,
+      revision: 0,
       pluginKey: "large-invoice-notify",
       version: "1.3.0",
       statusText: "enabled"
@@ -288,6 +322,7 @@ const dashboardFixture: DashboardSnapshot = {
       id: "inst_payload_transformer",
       enabled: true,
       priority: 20,
+      revision: 0,
       pluginKey: "payload-transformer",
       version: "0.9.1",
       statusText: "enabled"
@@ -345,6 +380,10 @@ const dashboardFixture: DashboardSnapshot = {
 };
 
 export function createDemoAdminApiClient(): AdminApiClient {
+  let snapshot: DashboardSnapshot = {
+    ...dashboardFixture,
+    installations: [...dashboardFixture.installations]
+  };
   return {
     resolveSession: ({ token }) => {
       const session = demoSessions.get(token.trim());
@@ -353,21 +392,53 @@ export function createDemoAdminApiClient(): AdminApiClient {
       }
       return Promise.resolve(session);
     },
-    getDashboard: () => Promise.resolve(dashboardFixture),
+    getDashboard: () => Promise.resolve(snapshot),
     getDashboardSection: () =>
       Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
     getInstallationPermissionReview: (id) => {
-      const installation = dashboardFixture.installations.find((candidate) => candidate.id === id);
+      const installation = snapshot.installations.find((candidate) => candidate.id === id);
       if (installation === undefined)
         return Promise.reject(
           new AdminApiError(404, "installation_not_found", "installation not found")
         );
       return Promise.resolve({
         ...installation,
+        revision: installation.revision,
         configFields: [],
         capabilities: [],
         egress: { mode: "deny", allowlistedHostCount: 0 }
       });
+    },
+    updateInstallationCommand: (request) => {
+      const installation = snapshot.installations.find((candidate) => candidate.id === request.id);
+      if (installation === undefined) {
+        return Promise.reject(
+          new AdminApiError(404, "installation_not_found", "installation not found")
+        );
+      }
+      if (request.expectedRevision !== installation.revision) {
+        return Promise.reject(
+          new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+        );
+      }
+      const enabled = request.enabled ?? installation.enabled;
+      const priority = request.priority ?? installation.priority;
+      const changed = enabled !== installation.enabled || priority !== installation.priority;
+      const updated = {
+        id: installation.id,
+        enabled,
+        priority,
+        revision: changed ? installation.revision + 1 : installation.revision
+      };
+      snapshot = {
+        ...snapshot,
+        installations: snapshot.installations.map((candidate) =>
+          candidate.id === updated.id
+            ? { ...candidate, ...updated, statusText: updated.enabled ? "enabled" : "disabled" }
+            : candidate
+        )
+      };
+      return Promise.resolve(updated);
     },
     clearSession: () => undefined
   };
@@ -383,6 +454,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     getDashboard: unavailable,
     getDashboardSection: unavailable,
     getInstallationPermissionReview: unavailable,
+    updateInstallationCommand: unavailable,
     clearSession: () => undefined
   };
 }
@@ -410,6 +482,11 @@ export function createAdminApiClient(params: {
   const dashboardUrl = apiEndpoint(
     params.controlPlaneUrl,
     "/v1/admin/dashboard",
+    params.isDevelopment
+  );
+  const installationCommandUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/installation-command",
     params.isDevelopment
   );
   const fetcher = params.fetcher ?? fetch;
@@ -446,6 +523,17 @@ export function createAdminApiClient(params: {
       const detail = installationPermissionReviewSchema.safeParse(payload);
       if (!detail.success) throw invalidResponse();
       return detail.data;
+    },
+    updateInstallationCommand: async (request) => {
+      const payload = await fetchAdminJson(
+        installationCommandUrl,
+        requireCredential(credential),
+        fetcher,
+        { method: "PATCH", body: JSON.stringify(request) }
+      );
+      const result = installationCommandResultSchema.safeParse(payload);
+      if (!result.success || result.data.id !== request.id) throw invalidResponse();
+      return result.data;
     },
     clearSession: () => {
       credential = undefined;
@@ -543,18 +631,21 @@ function apiEndpoint(baseUrl: string, path: string, allowInsecureLoopback: boole
 async function fetchAdminJson(
   url: string,
   credential: string,
-  fetcher: typeof fetch
+  fetcher: typeof fetch,
+  init: { method: "GET" | "PATCH"; body?: string } = { method: "GET" }
 ): Promise<unknown> {
   let response: Response;
   try {
     response = await fetcher(url, {
-      method: "GET",
+      method: init.method,
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${credential}`
+        Authorization: `Bearer ${credential}`,
+        ...(init.method === "PATCH" ? { "Content-Type": "application/json" } : {})
       },
       cache: "no-store",
-      credentials: "omit"
+      credentials: "omit",
+      ...(init.body === undefined ? {} : { body: init.body })
     });
   } catch {
     throw new AdminApiError(0, "network_error", "control-plane is unreachable");

@@ -15,6 +15,21 @@ test("manager can sign in and reach the approval queue", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
 });
 
+test("manager confirms an installation change after reviewing it", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Token").fill("manager-token");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByRole("button", { name: "Installations" }).click();
+  await page.getByRole("button", { name: "Manage large-invoice-notify" }).click();
+  await page.getByRole("button", { name: "Disable installation" }).click();
+  await page.getByRole("button", { name: "Review change" }).click();
+  await expect(page.getByRole("dialog", { name: "Confirm installation change" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm change" }).click();
+
+  await expect(page.getByRole("cell", { name: "disabled" })).toBeVisible();
+});
+
 test("invalid token stays on the login screen", async ({ page }) => {
   await page.goto("/");
 
