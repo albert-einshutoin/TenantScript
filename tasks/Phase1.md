@@ -218,9 +218,9 @@
   - RED(E2E): identity 由来の tenant scope 内で plugin/hook/status をフィルタし、詳細で capability call 列と安全な status 由来エラーコードを見られる
   - DoD: E2E green
 
-- [ ] **P1-T36**(M)approval queue 画面(前提: P1-T41)
+- [x] **P1-T36**(M)approval queue 画面(前提: P1-T41)
   - RED(E2E): manager role のトークン(P1-T41)でログインすると承認待ちが表示され、approve/reject でき、結果が audit に残る / viewer トークンでは操作できない
-  - DoD: E2E green(P1-T10 の UI 版)
+  - DoD: E2E green(P1-T10 の UI 版)。承認状態遷移と audit は単一 D1 statement で原子的に確定
 
 ## チャンク K: 品質・ドキュメント・ゲート(T37–T40)
 

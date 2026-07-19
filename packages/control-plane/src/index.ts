@@ -64,6 +64,13 @@ function cloneExecution(record: ExecutionRecord): ExecutionRecord {
 }
 
 export {
+  AdminApprovalDecisionError,
+  createD1AdminApprovalDecisionStore,
+  type AdminApprovalDecisionRequest,
+  type AdminApprovalDecisionResult,
+  type AdminApprovalDecisionStore
+} from "./admin-approvals.js";
+export {
   ControlPlaneApiError,
   createControlPlaneApi,
   createStaticTokenIdentityResolver,

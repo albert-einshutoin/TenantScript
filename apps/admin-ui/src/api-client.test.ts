@@ -838,6 +838,47 @@ describe("Admin API environment selection", () => {
       new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
     );
   });
+
+  it("submits a minimal approval decision and validates correlated audit evidence", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          approvalId: "approval_1",
+          state: "approved",
+          auditId: "approval_audit_1",
+          decidedAt: "2026-07-20T00:00:00.000Z"
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(
+      client.decideApproval({
+        approvalId: "approval_1",
+        decision: "approved",
+        reason: "validated"
+      })
+    ).resolves.toEqual({
+      approvalId: "approval_1",
+      state: "approved",
+      auditId: "approval_audit_1",
+      decidedAt: new Date("2026-07-20T00:00:00.000Z")
+    });
+    const [url, init] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/approval-decisions");
+    expect(init?.method).toBe("POST");
+    expect(new Headers(init?.headers).get("content-type")).toBe("application/json");
+    expect(init?.body).toBe(
+      JSON.stringify({ approvalId: "approval_1", decision: "approved", reason: "validated" })
+    );
+  });
 });
 
 function dashboardPayload() {

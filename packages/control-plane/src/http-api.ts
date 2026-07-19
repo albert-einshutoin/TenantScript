@@ -7,6 +7,7 @@ import type {
   AdminExecutionFilters
 } from "./admin-dashboard.js";
 import type { AdminExecutionDetailStore } from "./admin-executions.js";
+import { AdminApprovalDecisionError, type AdminApprovalDecisionStore } from "./admin-approvals.js";
 import type {
   AdminInstallationCommandStore,
   AdminInstallationDetailStore
@@ -31,6 +32,7 @@ export interface ControlPlaneHttpHandlerOptions {
   installFlowStore?: AdminInstallFlowStore;
   rollbackStore?: AdminRollbackStore;
   executionDetailStore?: AdminExecutionDetailStore;
+  approvalDecisionStore?: AdminApprovalDecisionStore;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -95,6 +97,15 @@ export function createControlPlaneHttpHandler(
       }
       return runRollback(request, options, corsHeaders);
     }
+    if (route === "approvalDecisionCreate") {
+      if (request.method !== "POST") {
+        return errorResponse(405, "method_not_allowed", "method not allowed", {
+          ...corsHeaders,
+          Allow: "POST, OPTIONS"
+        });
+      }
+      return runApprovalDecision(request, options, corsHeaders);
+    }
     if (request.method !== "GET") {
       return errorResponse(405, "method_not_allowed", "method not allowed", {
         ...corsHeaders,
@@ -126,6 +137,7 @@ type AdminRoute =
   | "installCreate"
   | "rollbackCreate"
   | "executionDetail"
+  | "approvalDecisionCreate"
   | AdminDashboardSection
   | { id: string };
 
@@ -155,6 +167,9 @@ function adminRoute(url: URL): AdminRoute | null {
   }
   if (path === "/v1/admin/execution-detail") {
     return "executionDetail";
+  }
+  if (path === "/v1/admin/approval-decisions") {
+    return "approvalDecisionCreate";
   }
   const section = path.slice("/v1/admin/dashboard/".length);
   if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
@@ -550,6 +565,116 @@ async function parseRollbackCommand(
   }
 }
 
+async function runApprovalDecision(
+  request: Request,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.approvalDecisionStore === undefined) {
+    return errorResponse(
+      503,
+      "approval_store_unavailable",
+      "approval service unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  if (identity.role !== "manager") {
+    return errorResponse(403, "approval_decision_forbidden", "manager role required", corsHeaders);
+  }
+  const command = await parseApprovalDecision(request, corsHeaders);
+  if (command instanceof Response) return command;
+  try {
+    return jsonResponse(
+      200,
+      await options.approvalDecisionStore.decide({
+        appId: identity.appId,
+        tenantId: identity.tenantId,
+        actor: identity.subject,
+        actorRole: identity.role,
+        ...command
+      }),
+      corsHeaders
+    );
+  } catch (error) {
+    if (error instanceof AdminApprovalDecisionError) {
+      return errorResponse(
+        error.status,
+        error.code,
+        approvalDecisionMessage(error.code),
+        corsHeaders
+      );
+    }
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function parseApprovalDecision(
+  request: Request,
+  corsHeaders: Record<string, string> | undefined
+): Promise<{ approvalId: string; decision: "approved" | "rejected"; reason?: string } | Response> {
+  const contentType = request.headers.get("Content-Type");
+  if (
+    contentType === null ||
+    contentType.split(";", 1)[0]?.trim().toLowerCase() !== "application/json"
+  ) {
+    return errorResponse(
+      415,
+      "unsupported_media_type",
+      "application/json body required",
+      corsHeaders
+    );
+  }
+  let text: string;
+  try {
+    text = await readBoundedUtf8Body(request, maximumCommandBodyBytes);
+    const parsed: unknown = JSON.parse(text);
+    if (!isRecord(parsed)) throw new Error();
+    const keys = Object.keys(parsed);
+    const approvalId = typeof parsed.approvalId === "string" ? parsed.approvalId : null;
+    if (
+      !keys.every((key) => key === "approvalId" || key === "decision" || key === "reason") ||
+      !isBoundedFilter(approvalId) ||
+      (parsed.decision !== "approved" && parsed.decision !== "rejected") ||
+      (parsed.reason !== undefined &&
+        (typeof parsed.reason !== "string" ||
+          parsed.reason.length === 0 ||
+          parsed.reason.length > 1000 ||
+          parsed.reason.trim() !== parsed.reason))
+    ) {
+      throw new Error();
+    }
+    return {
+      approvalId,
+      decision: parsed.decision,
+      ...(parsed.reason === undefined ? {} : { reason: parsed.reason })
+    };
+  } catch (error) {
+    return errorResponse(
+      error instanceof CommandBodyTooLargeError ? 413 : 400,
+      error instanceof CommandBodyTooLargeError ? "request_too_large" : "invalid_approval_decision",
+      error instanceof CommandBodyTooLargeError
+        ? "request body too large"
+        : "invalid approval decision",
+      corsHeaders
+    );
+  }
+}
+
+function approvalDecisionMessage(code: AdminApprovalDecisionError["code"]): string {
+  switch (code) {
+    case "approval_not_found":
+      return "approval not found";
+    case "approval_role_forbidden":
+      return "approval role does not match";
+    case "approval_expired":
+      return "approval has expired";
+    case "approval_already_decided":
+      return "approval was already decided";
+  }
+}
+
 async function parseInstallationCommand(
   request: Request,
   corsHeaders: Record<string, string> | undefined
@@ -744,6 +869,7 @@ async function resolveDashboard(
     | "installPreview"
     | "installCreate"
     | "rollbackCreate"
+    | "approvalDecisionCreate"
     | "executionDetail"
     | { id: string }
   >,
@@ -1097,7 +1223,8 @@ function preflightResponse(
 
 function allowedMethods(route: AdminRoute): string {
   if (route === "installationCommand") return "PATCH, OPTIONS";
-  if (route === "installCreate" || route === "rollbackCreate") return "POST, OPTIONS";
+  if (route === "installCreate" || route === "rollbackCreate" || route === "approvalDecisionCreate")
+    return "POST, OPTIONS";
   return "GET, OPTIONS";
 }
 

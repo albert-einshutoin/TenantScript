@@ -71,4 +71,43 @@ describe("Control Plane Worker Admin HTTP transport", () => {
       usage: { executions: 0, runtimeMs: 0 }
     });
   });
+
+  it("decides an approval through the deployed Worker and writes audit evidence", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.createApp({ id: "app_worker", name: "Worker App" });
+    await store.createTenant({ id: "tenant_worker", appId: "app_worker", name: "Worker Tenant" });
+    await store.createPlugin({ id: "plugin_worker", appId: "app_worker", key: "worker-plugin" });
+    await store.createApproval({
+      id: "approval_worker",
+      tenantId: "tenant_worker",
+      pluginId: "plugin_worker",
+      role: "manager",
+      subject: { customerSecret: "not-for-audit" },
+      resumeHook: "approval.decided",
+      state: "pending",
+      expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+      createdAt: new Date("2026-07-19T00:00:00.000Z")
+    });
+
+    const response = await worker.default.fetch(
+      new Request("https://control-plane.example.com/v1/admin/approval-decisions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer worker-manager-token",
+          Origin: "https://admin.example.com",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ approvalId: "approval_worker", decision: "rejected" })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      approvalId: "approval_worker",
+      state: "rejected"
+    });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM approval_audit_events").first()
+    ).resolves.toEqual({ count: 1 });
+  });
 });
