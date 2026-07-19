@@ -337,6 +337,42 @@ describe("D1 Admin dashboard read model", () => {
       }>()
     ).resolves.toEqual({ count: 0 });
   });
+
+  it("aborts an interleaved existing-store mutation without recording a false audit event", async () => {
+    await seedDashboard();
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
+      // This deterministic seam places the pre-existing writer exactly between this command's
+      // scope read and its conditional write, which is the race the D1 transaction must reject.
+      beforeWrite: () =>
+        store.setInstallationEnabled({ id: "tenant_1_installation_a", enabled: false })
+    });
+
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).resolves.toEqual({
+      outcome: "conflict",
+      id: "tenant_1_installation_a",
+      revision: 1
+    });
+    await expect(
+      testEnv.DB.prepare("SELECT enabled, priority, revision FROM installations WHERE id = ?")
+        .bind("tenant_1_installation_a")
+        .first<{ enabled: number; priority: number; revision: number }>()
+    ).resolves.toEqual({ enabled: 0, priority: 10, revision: 1 });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 0 });
+  });
 });
 
 async function seedDashboard(): Promise<void> {
