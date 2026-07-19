@@ -220,3 +220,11 @@ export {
   type AdminInstallationDetail,
   type AdminInstallationDetailStore
 } from "./admin-installations.js";
+
+export {
+  createD1AdminRollbackStore,
+  type AdminRollbackRequest,
+  type AdminRollbackResult,
+  type AdminRollbackStore,
+  type D1AdminRollbackStoreOptions
+} from "./admin-rollbacks.js";

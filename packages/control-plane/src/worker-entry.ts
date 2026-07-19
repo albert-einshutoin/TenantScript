@@ -5,6 +5,7 @@ import {
   createD1AdminInstallationDetailStore
 } from "./admin-installations.js";
 import { createD1AdminInstallFlowStore } from "./admin-install-flow.js";
+import { createD1AdminRollbackStore } from "./admin-rollbacks.js";
 import { createControlPlaneHttpHandler } from "./http-api.js";
 import type { D1DatabaseLike } from "./storage.js";
 
@@ -37,6 +38,7 @@ export default {
       env.DB === undefined ? undefined : createD1AdminInstallationCommandStore(env.DB);
     const installFlowStore =
       env.DB === undefined ? undefined : createD1AdminInstallFlowStore(env.DB);
+    const rollbackStore = env.DB === undefined ? undefined : createD1AdminRollbackStore(env.DB);
     let handler;
     try {
       const cursorCodec =
@@ -51,6 +53,7 @@ export default {
         ...(installationDetailStore === undefined ? {} : { installationDetailStore }),
         ...(installationCommandStore === undefined ? {} : { installationCommandStore }),
         ...(installFlowStore === undefined ? {} : { installFlowStore }),
+        ...(rollbackStore === undefined ? {} : { rollbackStore }),
         ...(cursorCodec === undefined ? {} : { cursorCodec }),
         allowedOrigins
       });
