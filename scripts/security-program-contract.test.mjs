@@ -80,3 +80,33 @@ test("advisory response runbook and a machine-checked drill are published", () =
   assert.match(runbook, /GitHub Security Advisories/);
   assert.match(runbook, /synthetic/i);
 });
+
+test("community review packet is pinned and cannot claim completion without external evidence", () => {
+  for (const path of [
+    "docs/security/community-review-packet.md",
+    "docs/security/reviews/README.md",
+    "docs/security/reviews/TS-REVIEW-2026-001.json"
+  ]) {
+    assert.ok(existsSync(join(repoRoot, path)), `missing ${path}`);
+  }
+
+  const packet = read("docs/security/community-review-packet.md");
+  for (const focus of [
+    "Loader isolation",
+    "Capability broker",
+    "Egress and proxy",
+    "Identity and RBAC",
+    "Storage isolation",
+    "Admin UI"
+  ]) {
+    assert.ok(packet.includes(focus), `community review packet must cover ${focus}`);
+  }
+  assert.match(packet, /Private Vulnerability Reporting/);
+  assert.match(packet, /independent reviewer/i);
+
+  const campaign = JSON.parse(read("docs/security/reviews/TS-REVIEW-2026-001.json"));
+  assert.equal(campaign.status, "prepared");
+  assert.match(campaign.baselineCommit, /^[0-9a-f]{40}$/);
+  assert.deepEqual(campaign.reviewers, []);
+  assert.equal(campaign.completedAt, null);
+});
