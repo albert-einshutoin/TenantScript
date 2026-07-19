@@ -40,6 +40,16 @@ describe("Admin API environment selection", () => {
       new AdminApiError(503, "control_plane_not_configured", "Control Plane not configured")
     );
   });
+
+  it("rejects a loopback HTTP Control Plane URL in a production build", () => {
+    expect(() =>
+      createAdminApiClient({
+        isDevelopment: false,
+        demoMode: false,
+        controlPlaneUrl: "http://127.0.0.1:8787"
+      })
+    ).toThrow("control-plane URL must use https except for loopback development");
+  });
 });
 
 describe("Admin HTTP session client", () => {
@@ -78,7 +88,12 @@ describe("Admin HTTP session client", () => {
     expect(() => createHttpAdminSessionClient({ baseUrl: "http://api.example.com" })).toThrow(
       "control-plane URL must use https except for loopback development"
     );
-    expect(() => createHttpAdminSessionClient({ baseUrl: "http://127.0.0.1:8787" })).not.toThrow();
+    expect(() =>
+      createHttpAdminSessionClient({
+        baseUrl: "http://127.0.0.1:8787",
+        allowInsecureLoopback: true
+      })
+    ).not.toThrow();
   });
 
   it("converts an HTTP error envelope into a typed error", async () => {

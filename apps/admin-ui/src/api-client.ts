@@ -323,6 +323,7 @@ export function createAdminApiClient(params: {
 
   const sessionClient = createHttpAdminSessionClient({
     baseUrl: params.controlPlaneUrl,
+    allowInsecureLoopback: params.isDevelopment,
     ...(params.fetcher === undefined ? {} : { fetcher: params.fetcher })
   });
   return {
@@ -336,9 +337,10 @@ export function createAdminApiClient(params: {
 
 export function createHttpAdminSessionClient(params: {
   baseUrl: string;
+  allowInsecureLoopback?: boolean;
   fetcher?: typeof fetch;
 }): AdminSessionClient {
-  const sessionUrl = sessionEndpoint(params.baseUrl);
+  const sessionUrl = sessionEndpoint(params.baseUrl, params.allowInsecureLoopback ?? false);
   const fetcher = params.fetcher ?? fetch;
 
   return {
@@ -402,9 +404,12 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-function sessionEndpoint(baseUrl: string): string {
+function sessionEndpoint(baseUrl: string, allowInsecureLoopback: boolean): string {
   const base = new URL(baseUrl);
-  if (base.protocol !== "https:" && !(base.protocol === "http:" && isLoopbackHost(base.hostname))) {
+  if (
+    base.protocol !== "https:" &&
+    !(allowInsecureLoopback && base.protocol === "http:" && isLoopbackHost(base.hostname))
+  ) {
     throw new Error("control-plane URL must use https except for loopback development");
   }
   if (base.username !== "" || base.password !== "" || base.search !== "" || base.hash !== "") {

@@ -58,6 +58,25 @@ describe("Control Plane Worker configuration", () => {
       error: { code: "origin_forbidden" }
     });
   });
+
+  it.each(['["*"]', '["not-a-url"]', '["http://admin.example.com"]'])(
+    "returns a redacted 503 for unsafe origin configuration: %s",
+    async (origins) => {
+      const response = await worker.fetch(sessionRequest("manager-token", true), {
+        ADMIN_ALLOWED_ORIGINS: origins,
+        ADMIN_IDENTITIES_JSON: validIdentities
+      });
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      await expect(response.json()).resolves.toEqual({
+        error: {
+          code: "admin_configuration_unavailable",
+          message: "Admin API configuration unavailable"
+        }
+      });
+    }
+  );
 });
 
 function sessionRequest(token: string, includeOrigin: boolean): Request {

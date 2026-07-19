@@ -21,12 +21,27 @@ export default {
   fetch(request: Request, env: ControlPlaneWorkerEnv) {
     const identities = parseIdentityConfiguration(env.ADMIN_IDENTITIES_JSON);
     const allowedOrigins = parseAllowedOrigins(env.ADMIN_ALLOWED_ORIGINS);
-    const handler = createControlPlaneHttpHandler({
-      ...(identities === undefined
-        ? {}
-        : { identityResolver: createStaticTokenIdentityResolver(identities) }),
-      allowedOrigins
-    });
+    let handler;
+    try {
+      handler = createControlPlaneHttpHandler({
+        ...(identities === undefined
+          ? {}
+          : { identityResolver: createStaticTokenIdentityResolver(identities) }),
+        allowedOrigins
+      });
+    } catch {
+      // Binding errors can contain deployment values. Return a stable response without
+      // reflecting invalid origin or secret configuration into the public Worker response.
+      return Response.json(
+        {
+          error: {
+            code: "admin_configuration_unavailable",
+            message: "Admin API configuration unavailable"
+          }
+        },
+        { status: 503, headers: { "Cache-Control": "no-store" } }
+      );
+    }
     return handler(request);
   }
 };
