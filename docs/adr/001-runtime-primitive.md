@@ -55,7 +55,7 @@ Live deploy was attempted with the authenticated Wrangler account and failed:
 
 ```text
 In order to use Dynamic Workers, you must switch to a paid plan
-https://dash.cloudflare.com/c24b670d1b278abf382f0b95e1049d9d/workers/plans [code: 10195]
+[account-specific dashboard URL redacted] [code: 10195]
 ```
 
 ## Decision
