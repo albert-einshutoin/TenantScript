@@ -212,11 +212,22 @@ function AdminShell({
               }
         );
         return updated;
+      } catch (commandError) {
+        if (
+          commandError instanceof AdminApiError &&
+          commandError.status === 409 &&
+          commandError.code === "installation_revision_conflict"
+        ) {
+          // A conflict means every local installation revision may be stale. Refresh the complete
+          // tenant snapshot before allowing another command so retries cannot loop on the old CAS.
+          setSnapshot(await client.getDashboard(session));
+        }
+        throw commandError;
       } finally {
         setCommandInFlight(false);
       }
     },
-    [client]
+    [client, session]
   );
 
   return (
@@ -507,7 +518,9 @@ function InstallationCommandPanel({
   const [error, setError] = useState<string | null>(null);
   const parsedPriority = Number(priority);
   const validPriority =
-    priority.trim() !== "" && Number.isFinite(parsedPriority) && Number.isInteger(parsedPriority);
+    priority.trim() !== "" &&
+    Number.isFinite(parsedPriority) &&
+    Number.isSafeInteger(parsedPriority);
   const changed =
     validPriority && (enabled !== installation.enabled || parsedPriority !== installation.priority);
 

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import {
+  AdminApiError,
   createDemoAdminApiClient,
   type AdminApiClient,
   type DashboardSnapshot,
@@ -162,6 +163,8 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByRole("button", { name: "Review change" })).toBeDisabled();
     fireEvent.change(priority, { target: { value: "4.5" } });
     expect(screen.getByRole("button", { name: "Review change" })).toBeDisabled();
+    fireEvent.change(priority, { target: { value: "9007199254740992" } });
+    expect(screen.getByRole("button", { name: "Review change" })).toBeDisabled();
     fireEvent.change(priority, { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
     fireEvent.click(screen.getByRole("button", { name: "Review change" }));
@@ -208,6 +211,46 @@ describe("Admin UI auth foundation", () => {
     await expect(screen.findByText("Installation update unavailable")).resolves.toBeInTheDocument();
     expect(screen.getAllByText("enabled").length).toBeGreaterThan(0);
     expect(screen.queryByText(/secret-config|customer payload/)).not.toBeInTheDocument();
+  });
+
+  it("refreshes the installation revision after a command conflict", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const initial = await baseClient.getDashboard({
+      subject: "ops-manager",
+      role: "manager",
+      appId: "app_demo",
+      tenantId: "tenant_demo"
+    });
+    const refreshed: DashboardSnapshot = {
+      ...initial,
+      installations: initial.installations.map((installation, index) =>
+        index === 0 ? { ...installation, priority: 3, revision: 1 } : installation
+      )
+    };
+    const getDashboard = vi
+      .fn<AdminApiClient["getDashboard"]>()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(refreshed);
+    const updateInstallationCommand = vi
+      .fn<AdminApiClient["updateInstallationCommand"]>()
+      .mockRejectedValue(
+        new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+      );
+    const client: AdminApiClient = { ...baseClient, getDashboard, updateInstallationCommand };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Manage large-invoice-notify" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm change" }));
+
+    await waitFor(() => {
+      expect(getDashboard).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.getByRole("cell", { name: "3" })).toBeInTheDocument();
+    expect(screen.getByText("Installation update unavailable")).toBeInTheDocument();
   });
 
   it("holds a single global installation command lock across row changes until a deferred request settles", async () => {

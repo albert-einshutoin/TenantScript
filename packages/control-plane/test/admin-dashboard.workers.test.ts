@@ -136,8 +136,9 @@ describe("D1 Admin dashboard read model", () => {
 
   it("writes a manager command and its fixed-shape audit atomically at the D1 boundary", async () => {
     await seedDashboard();
+    const auditIds = ["installation_command_audit_1", "installation_command_audit_2"];
     const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
-      auditId: () => "installation_command_audit"
+      auditId: () => auditIds.shift() ?? "unexpected_audit"
     });
 
     await expect(
@@ -151,22 +152,37 @@ describe("D1 Admin dashboard read model", () => {
         priority: 4
       })
     ).resolves.toMatchObject({ outcome: "updated", enabled: false, priority: 4, revision: 1 });
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 1,
+        priority: 2
+      })
+    ).resolves.toMatchObject({ outcome: "updated", enabled: false, priority: 2, revision: 2 });
 
     const installation = await testEnv.DB.prepare(
-      "SELECT enabled, priority FROM installations WHERE id = ?"
+      "SELECT enabled, priority, revision FROM installations WHERE id = ?"
     )
       .bind("tenant_1_installation_a")
-      .first<{ enabled: number; priority: number }>();
+      .first<{ enabled: number; priority: number; revision: number }>();
     const audit = await testEnv.DB.prepare(
       "SELECT actor, action, before_json, after_json FROM admin_audit_events WHERE id = ?"
     )
-      .bind("installation_command_audit")
+      .bind("installation_command_audit_1")
       .first<{ actor: string; action: string; before_json: string; after_json: string }>();
-    expect(installation).toEqual({ enabled: 0, priority: 4 });
+    expect(installation).toEqual({ enabled: 0, priority: 2, revision: 2 });
     expect(audit).toMatchObject({ actor: "manager-subject", action: "installation.command" });
     expect(JSON.stringify(audit)).not.toContain("secret-config");
     expect(JSON.stringify(audit)).not.toContain("secret-grant");
     expect(JSON.stringify(audit)).not.toContain("manifest-secret");
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 2 });
   });
 
   it("does not update an installation when the paired audit insert fails, and makes no-op commands audit-free", async () => {
@@ -293,6 +309,33 @@ describe("D1 Admin dashboard read model", () => {
         count: number;
       }>()
     ).resolves.toEqual({ count: 1 });
+  });
+
+  it("detects changes made through the existing installation store as revision conflicts", async () => {
+    await seedDashboard();
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.setInstallationEnabled({ id: "tenant_1_installation_a", enabled: false });
+
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB);
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        expectedRevision: 0,
+        priority: 4
+      })
+    ).resolves.toEqual({
+      outcome: "conflict",
+      id: "tenant_1_installation_a",
+      revision: 1
+    });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first<{
+        count: number;
+      }>()
+    ).resolves.toEqual({ count: 0 });
   });
 });
 
