@@ -11,14 +11,18 @@ test("schema diff CI guide documents the implemented exit contract", () => {
   assert.ok(existsSync(guidePath), "missing docs/reference/schema-diff-ci.md");
   const guide = readFileSync(guidePath, "utf8");
 
-  for (const expected of [
-    "| Compatible, no warnings | `0` |",
-    "| Compatible, warning-only | `0` |",
-    "| Breaking change | `1` |",
-    "| Schema read or parse failure | `1` |",
-    "| Command usage error | `2` |"
+  for (const [outcome, exitCode] of [
+    ["Compatible, no warnings", "0"],
+    ["Compatible, warning-only", "0"],
+    ["Breaking change", "1"],
+    ["Schema read or parse failure", "1"],
+    ["Command usage error", "2"]
   ]) {
-    assert.ok(guide.includes(expected), `missing exit-code row: ${expected}`);
+    assert.match(
+      guide,
+      new RegExp(`\\|\\s*${outcome}\\s*\\|\\s*\\\`${exitCode}\\\`\\s*\\|`),
+      `missing exit-code row: ${outcome} => ${exitCode}`
+    );
   }
 
   for (const example of ["Field removal", "Optional field addition", "Field type change"]) {
