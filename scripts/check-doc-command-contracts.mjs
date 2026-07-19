@@ -20,6 +20,8 @@ function markdownFiles(repoRoot) {
   }
   const rollback = join(repoRoot, "docs", "operations", "rollback-troubleshooting.md");
   if (existsSync(rollback)) files.push(rollback);
+  const contributing = join(repoRoot, "CONTRIBUTING.md");
+  if (existsSync(contributing)) files.push(contributing);
   return files;
 }
 
