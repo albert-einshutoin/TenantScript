@@ -1,9 +1,11 @@
 import type { D1DatabaseLike } from "./storage.js";
+import { adminIdempotencyExpiry, adminRequestFingerprint } from "./admin-idempotency.js";
 
 export interface AdminRollbackRequest {
   appId: string;
   tenantId: string;
   actor: string;
+  idempotencyKey: string;
   installationId: string;
   targetVersionId: string;
   expectedRevision: number;
@@ -27,6 +29,14 @@ export interface AdminRollbackStore {
   rollback: (request: AdminRollbackRequest) => Promise<AdminRollbackResult | null>;
 }
 
+export class AdminRollbackError extends Error {
+  override readonly name = "AdminRollbackError";
+
+  constructor(readonly code: "idempotency_key_reused") {
+    super(code);
+  }
+}
+
 export interface D1AdminRollbackStoreOptions {
   auditId?: () => string;
   now?: () => Date;
@@ -45,6 +55,11 @@ async function rollback(
   request: AdminRollbackRequest,
   options: D1AdminRollbackStoreOptions
 ): Promise<AdminRollbackResult | null> {
+  const now = options.now?.() ?? new Date();
+  const requestHash = await rollbackRequestHash(request);
+  const replay = await readIdempotencyRecord(db, request, now);
+  if (replay !== null) return resolveReplay(replay, requestHash);
+
   const current = await readRollbackRow(db, request);
   if (current === null) return null;
 
@@ -58,7 +73,7 @@ async function rollback(
   }
 
   const auditId = options.auditId?.() ?? `installation-rollback-${crypto.randomUUID()}`;
-  const completedAt = (options.now?.() ?? new Date()).toISOString();
+  const completedAt = now.toISOString();
   const nextRevision = revision + 1;
   const before = {
     versionId: requiredString(current.current_version_id),
@@ -74,29 +89,67 @@ async function rollback(
   try {
     // The migration trigger applies the version pin CAS within this audit INSERT. D1 has no
     // interactive transaction here, so a single statement is required to prevent false audits.
-    await db
-      .prepare(
-        [
-          "INSERT INTO admin_audit_events",
-          "(id, installation_id, tenant_id, app_id, plugin_id, revision, actor, action, before_json, after_json, created_at)",
-          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ].join(" ")
-      )
-      .bind(
-        auditId,
-        installationId,
-        requiredString(current.tenant_id),
-        request.appId,
-        requiredString(current.plugin_id),
-        nextRevision,
-        request.actor,
-        "installation.rollback",
-        JSON.stringify(before),
-        JSON.stringify(after),
-        completedAt
-      )
-      .run();
+    const result: Extract<AdminRollbackResult, { outcome: "rolled_back" }> = {
+      outcome: "rolled_back",
+      installationId,
+      pluginKey: requiredString(current.plugin_key),
+      fromVersion: before.version,
+      toVersion: after.version,
+      revision: nextRevision,
+      auditId,
+      completedAt
+    };
+    await requireBatch(db)([
+      db
+        .prepare(
+          "DELETE FROM admin_rollback_idempotency WHERE app_id = ?1 AND tenant_id = ?2 AND idempotency_key = ?3 AND expires_at <= ?4"
+        )
+        .bind(request.appId, request.tenantId, request.idempotencyKey, completedAt),
+      db
+        .prepare(
+          [
+            "INSERT INTO admin_audit_events",
+            "(id, installation_id, tenant_id, app_id, plugin_id, revision, actor, action, before_json, after_json, created_at)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ].join(" ")
+        )
+        .bind(
+          auditId,
+          installationId,
+          requiredString(current.tenant_id),
+          request.appId,
+          requiredString(current.plugin_id),
+          nextRevision,
+          request.actor,
+          "installation.rollback",
+          JSON.stringify(before),
+          JSON.stringify(after),
+          completedAt
+        ),
+      db
+        .prepare(
+          [
+            "INSERT INTO admin_rollback_idempotency",
+            "(app_id, tenant_id, idempotency_key, installation_id, actor, request_hash, result_json, created_at, expires_at)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ].join(" ")
+        )
+        .bind(
+          request.appId,
+          request.tenantId,
+          request.idempotencyKey,
+          installationId,
+          request.actor,
+          requestHash,
+          JSON.stringify(result),
+          completedAt,
+          adminIdempotencyExpiry(now)
+        )
+    ]);
+    return result;
   } catch (error) {
+    const winner = await readIdempotencyRecord(db, request, now);
+    if (winner !== null) return resolveReplay(winner, requestHash);
     const latest = await readRollbackRow(db, request);
     if (latest !== null && requiredSafeInteger(latest.revision) !== request.expectedRevision) {
       return {
@@ -108,16 +161,80 @@ async function rollback(
     throw error;
   }
 
-  return {
-    outcome: "rolled_back",
-    installationId,
-    pluginKey: requiredString(current.plugin_key),
-    fromVersion: before.version,
-    toVersion: after.version,
-    revision: nextRevision,
-    auditId,
-    completedAt
+  throw new Error("unreachable rollback outcome");
+}
+
+interface RollbackIdempotencyRow {
+  request_hash: string;
+  result_json: string;
+  expires_at: string;
+}
+
+async function readIdempotencyRecord(
+  db: D1DatabaseLike,
+  request: AdminRollbackRequest,
+  now: Date
+): Promise<RollbackIdempotencyRow | null> {
+  const row = await db
+    .prepare(
+      "SELECT request_hash, result_json, expires_at FROM admin_rollback_idempotency WHERE app_id = ?1 AND tenant_id = ?2 AND idempotency_key = ?3"
+    )
+    .bind(request.appId, request.tenantId, request.idempotencyKey)
+    .first<RollbackIdempotencyRow>();
+  return row !== null && Date.parse(row.expires_at) > now.getTime() ? row : null;
+}
+
+function resolveReplay(row: RollbackIdempotencyRow, requestHash: string): AdminRollbackResult {
+  if (row.request_hash !== requestHash) throw new AdminRollbackError("idempotency_key_reused");
+  const result: unknown = JSON.parse(row.result_json);
+  if (!isRolledBackResult(result)) throw new Error("invalid rollback idempotency record");
+  return result;
+}
+
+async function rollbackRequestHash(request: AdminRollbackRequest): Promise<string> {
+  return adminRequestFingerprint({
+    installationId: request.installationId,
+    targetVersionId: request.targetVersionId,
+    expectedRevision: request.expectedRevision
+  });
+}
+
+function isRolledBackResult(
+  value: unknown
+): value is Extract<AdminRollbackResult, { outcome: "rolled_back" }> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const result = value as Partial<Extract<AdminRollbackResult, { outcome: "rolled_back" }>>;
+  return (
+    Object.keys(value).length === 8 &&
+    Object.keys(value).every((key) =>
+      [
+        "outcome",
+        "installationId",
+        "pluginKey",
+        "fromVersion",
+        "toVersion",
+        "revision",
+        "auditId",
+        "completedAt"
+      ].includes(key)
+    ) &&
+    result.outcome === "rolled_back" &&
+    typeof result.installationId === "string" &&
+    typeof result.pluginKey === "string" &&
+    typeof result.fromVersion === "string" &&
+    typeof result.toVersion === "string" &&
+    Number.isSafeInteger(result.revision) &&
+    typeof result.auditId === "string" &&
+    typeof result.completedAt === "string"
+  );
+}
+
+function requireBatch(db: D1DatabaseLike) {
+  const candidate = db as D1DatabaseLike & {
+    batch?: (statements: ReturnType<D1DatabaseLike["prepare"]>[]) => Promise<unknown>;
   };
+  if (candidate.batch === undefined) throw new Error("D1 batch is unavailable");
+  return candidate.batch.bind(candidate);
 }
 
 function readRollbackRow(

@@ -83,7 +83,8 @@ test("manager confirms a rollback and can open execution evidence", async ({ pag
   await page.getByRole("button", { name: "Confirm rollback" }).click();
 
   await expect(page.getByRole("heading", { name: "Rollback completed" })).toBeVisible();
-  await expect(page.getByText(/audit_demo_inst_large_invoice_1/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Rollback completed" })).toHaveCount(1);
+  await expect(page.getByText(/audit_demo_inst_large_invoice_1/)).toHaveCount(1);
   await expect(page.getByText(/UI rollback duration: \d+ ms/)).toBeVisible();
   await page.getByRole("button", { name: "View execution log" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Executions" })).toBeVisible();

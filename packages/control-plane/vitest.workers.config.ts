@@ -40,6 +40,9 @@ export default defineConfig({
     }))
   ],
   test: {
-    include: ["test/**/*.workers.test.ts"]
+    include: ["test/**/*.workers.test.ts"],
+    // Worker files share Miniflare bindings and call reset() in setup. Serializing files keeps a
+    // reset from clearing another file's Durable Object or D1 transaction mid-assertion.
+    fileParallelism: false
   }
 });

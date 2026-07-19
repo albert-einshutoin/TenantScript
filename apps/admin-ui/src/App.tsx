@@ -859,6 +859,7 @@ function VersionsPanel({
   const [rollbackTarget, setRollbackTarget] = useState<{
     installation: DashboardSnapshot["installations"][number];
     version: DashboardSnapshot["pluginVersions"][number];
+    idempotencyKey: string;
   } | null>(null);
   const [rollbackResult, setRollbackResult] = useState<RollbackInstallationResult | null>(null);
   const [rollbackError, setRollbackError] = useState<string | null>(null);
@@ -873,6 +874,7 @@ function VersionsPanel({
     setRollbackStartedAt(startedAt);
     setRollbackDurationMs(null);
     void onRollback({
+      idempotencyKey: rollbackTarget.idempotencyKey,
       installationId: rollbackTarget.installation.id,
       targetVersionId: rollbackTarget.version.id,
       expectedRevision: rollbackTarget.installation.revision
@@ -947,7 +949,11 @@ function VersionsPanel({
                           onClick={() => {
                             setRollbackResult(null);
                             setRollbackError(null);
-                            setRollbackTarget({ installation, version });
+                            setRollbackTarget({
+                              installation,
+                              version,
+                              idempotencyKey: crypto.randomUUID()
+                            });
                           }}
                         >
                           Rollback

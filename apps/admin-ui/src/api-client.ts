@@ -70,6 +70,7 @@ export interface InstallPluginResult {
 }
 
 export interface RollbackInstallationRequest {
+  idempotencyKey: string;
   installationId: string;
   targetVersionId: string;
   expectedRevision: number;
@@ -999,9 +1000,11 @@ export function createAdminApiClient(params: {
       return installed.data;
     },
     rollbackInstallation: async (request) => {
+      const { idempotencyKey, ...body } = request;
       const payload = await fetchAdminJson(rollbacksUrl, requireCredential(credential), fetcher, {
         method: "POST",
-        body: JSON.stringify(request)
+        body: JSON.stringify(body),
+        headers: { "Idempotency-Key": idempotencyKey }
       });
       const rollback = rollbackInstallationResultSchema.safeParse(payload);
       if (!rollback.success || rollback.data.installationId !== request.installationId) {
