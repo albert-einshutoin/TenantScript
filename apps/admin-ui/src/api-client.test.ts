@@ -213,6 +213,101 @@ describe("Admin API environment selection", () => {
     expect(body).not.toContain("actor");
   });
 
+  it("loads a value-free install preview and submits only config plus explicit capability confirmation", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          versionId: "version_1",
+          pluginKey: "invoice-notify",
+          version: "1.0.0",
+          configFields: [
+            { name: "notifyChannel", type: "string", required: true, hasDefault: false }
+          ],
+          capabilities: [
+            {
+              name: "slack.send",
+              scopeKeys: ["channel"],
+              configReferences: ["notifyChannel"]
+            }
+          ],
+          egress: { mode: "deny", allowlistedHostCount: 0 }
+        })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "installation_new",
+          pluginKey: "invoice-notify",
+          version: "1.0.0",
+          enabled: true,
+          priority: 20,
+          revision: 0
+        }, { status: 201 })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getInstallPreview("version_1")).resolves.toMatchObject({
+      versionId: "version_1",
+      configFields: [{ name: "notifyChannel" }]
+    });
+    await expect(
+      client.installPlugin({
+        versionId: "version_1",
+        config: { notifyChannel: "C123" },
+        confirmedCapabilities: ["slack.send"],
+        enabled: true,
+        priority: 20
+      })
+    ).resolves.toMatchObject({ id: "installation_new", revision: 0 });
+
+    const [previewUrl] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(previewUrl)).toBe(
+      "https://api.example.com/v1/admin/install-preview?versionId=version_1"
+    );
+    const [installUrl, installInit] = fetcher.mock.calls[2] ?? [];
+    expect(requestUrl(installUrl)).toBe("https://api.example.com/v1/admin/installations");
+    expect(installInit?.method).toBe("POST");
+    expect(installInit?.body).toBe(
+      '{"versionId":"version_1","config":{"notifyChannel":"C123"},"confirmedCapabilities":["slack.send"],"enabled":true,"priority":20}'
+    );
+    expect(String(installInit?.body)).not.toContain("tenantId");
+    expect(String(installInit?.body)).not.toContain("grants");
+  });
+
+  it("rejects install responses and previews that expose config or grant values", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          versionId: "version_1",
+          pluginKey: "invoice-notify",
+          version: "1.0.0",
+          configFields: [],
+          capabilities: [],
+          egress: { mode: "deny", allowlistedHostCount: 0 },
+          config: { secret: "leak" }
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+    await expect(client.getInstallPreview("version_1")).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
   it("rejects a command response that changes the installation ID", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -338,7 +433,15 @@ describe("Admin API environment selection", () => {
       .mockResolvedValueOnce(
         Response.json({
           section: "pluginVersions",
-          items: [{ id: "v1", pluginId: "p1", version: "1.0.0", artifactHash: "hash" }],
+          items: [
+            {
+              id: "v1",
+              pluginId: "p1",
+              pluginKey: "invoice-notify",
+              version: "1.0.0",
+              artifactHash: "hash"
+            }
+          ],
           nextCursor: "next.version"
         })
       )

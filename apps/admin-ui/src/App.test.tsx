@@ -188,6 +188,81 @@ describe("Admin UI auth foundation", () => {
     await expect(screen.findByText("disabled")).resolves.toBeInTheDocument();
   });
 
+  it("builds config from schema and requires capability confirmation before installing", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const getInstallPreview = vi.fn().mockResolvedValue({
+      versionId: "version_large_invoice_1_2_2",
+      pluginKey: "large-invoice-notify",
+      version: "1.2.2",
+      configFields: [
+        { name: "enabledForInvoices", type: "boolean", required: false, hasDefault: true },
+        { name: "notifyChannel", type: "string", required: true, hasDefault: false },
+        { name: "threshold", type: "number", required: false, hasDefault: false }
+      ],
+      capabilities: [
+        {
+          name: "slack.send",
+          scopeKeys: ["channel"],
+          configReferences: ["notifyChannel"]
+        }
+      ],
+      egress: { mode: "deny", allowlistedHostCount: 0 }
+    });
+    const installPlugin = vi.fn().mockResolvedValue({
+      id: "installation_new",
+      pluginKey: "large-invoice-notify",
+      version: "1.2.2",
+      enabled: true,
+      priority: 20,
+      revision: 0
+    });
+    render(<App client={{ ...baseClient, getInstallPreview, installPlugin }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Install large-invoice-notify 1.2.2" })
+    );
+    expect(await screen.findByRole("heading", { name: "Install plugin" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review installation" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("notifyChannel (required)"), {
+      target: { value: "C123" }
+    });
+    fireEvent.change(screen.getByLabelText("threshold (optional)"), {
+      target: { value: "5000" }
+    });
+    fireEvent.click(screen.getByLabelText("Confirm slack.send"));
+    fireEvent.click(screen.getByLabelText("Enable immediately"));
+    fireEvent.change(screen.getByLabelText("Installation priority"), {
+      target: { value: "20" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review installation" }));
+    expect(
+      screen.getByRole("dialog", { name: "Confirm plugin installation" })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm installation" }));
+
+    await waitFor(() => {
+      expect(installPlugin).toHaveBeenCalledTimes(1);
+    });
+    expect(installPlugin).toHaveBeenCalledWith({
+      versionId: "version_large_invoice_1_2_2",
+      config: { notifyChannel: "C123", threshold: 5000 },
+      confirmedCapabilities: ["slack.send"],
+      enabled: true,
+      priority: 20
+    });
+    expect(screen.queryByRole("dialog", { name: "Confirm plugin installation" })).not.toBeInTheDocument();
+  });
+
+  it("does not expose install controls to viewers", async () => {
+    render(<App client={createDemoAdminApiClient()} />);
+    await login("viewer-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    expect(screen.queryByRole("button", { name: /^Install / })).not.toBeInTheDocument();
+  });
+
   it("does not render installation controls for viewers and keeps state unchanged after command failure", async () => {
     const baseClient = createDemoAdminApiClient();
     const updateInstallationCommand = vi
