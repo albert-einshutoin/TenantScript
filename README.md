@@ -10,6 +10,8 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [SDK integration quickstart](docs/quickstarts/sdk-integration.md) — typed hook、plugin、capability、dry-run deployをTDDで接続
 - [SDK reference](docs/reference/sdk.md) — Phase 1 public TypeScript surfaceと安全境界
 - [Rollback troubleshooting](docs/operations/rollback-troubleshooting.md) — 検知、復旧、実行確認、MTTR drill
+- [Contributing](CONTRIBUTING.md) — 開発環境、TDD、security、issue・PRレビュー手順
+- [Governance](GOVERNANCE.md) — maintainer責任、ADR意思決定、co-maintainerへの経路
 - [プロダクト戦略 & MVP仕様](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md) — v0.4 Working Draft
 - [開発プラン & フェーズ別タスク](tasks/README.md) — TDDベースのPhase 0〜4タスク分解(言語: TypeScript、D-017)
 - [ベンチマーク証跡](docs/benchmarks/README.md) — Phase 0 runtime latency と Phase 1 rollback drill
