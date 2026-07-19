@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CapabilityDeniedError,
   CapabilityJournalConflictError,
+  CapabilityProviderError,
   createApprovalsRequestProvider,
   createCapabilityBroker,
   createInMemoryCapabilityCallJournal,
@@ -74,6 +75,40 @@ describe("capabilities security suite", () => {
     await expect(
       context.capability("slack.send", { channel: "C123", text: "allowed" })
     ).resolves.toEqual({ ok: true, provider: "mock-slack" });
+  });
+
+  it("redacts unexpected provider failure details from errors and audit records", async () => {
+    const providerSecret = "xoxb-provider-failure-secret";
+    const audits: unknown[] = [];
+    const broker = createCapabilityBroker({
+      grants: { "slack.send": { channel: "C123" } },
+      providers: {
+        "slack.send": () => {
+          throw new Error(`provider rejected ${providerSecret}`);
+        }
+      },
+      auditSink: {
+        writeCapabilityAudit: (record) => {
+          audits.push(record);
+        }
+      },
+      now: () => new Date("2026-07-20T00:00:00.000Z")
+    });
+
+    let caughtError: unknown;
+    try {
+      await broker.call("slack.send", { channel: "C123", text: "allowed" });
+    } catch (error: unknown) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBeInstanceOf(CapabilityProviderError);
+    expect(String(caughtError)).toBe(
+      "CapabilityProviderError: capability slack.send provider failed"
+    );
+    expect(JSON.stringify({ caughtError: String(caughtError), audits })).not.toContain(
+      providerSecret
+    );
   });
 
   it("denies approval requests outside the granted role scope", async () => {

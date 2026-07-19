@@ -247,6 +247,12 @@ describe("createCapabilityBroker", () => {
     expect(audits).toEqual([
       {
         capability: "slack.send",
+        status: "success",
+        reason: "provider_completed",
+        at: new Date("2026-06-13T01:00:00.000Z")
+      },
+      {
+        capability: "slack.send",
         status: "denied",
         reason: "rate_limited",
         at: new Date("2026-06-13T01:00:00.000Z")

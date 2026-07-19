@@ -66,12 +66,30 @@ export interface CapabilityRateLimiterStorage {
   put: (key: string, bucket: CapabilityRateLimitBucket) => Promise<void> | void;
 }
 
-export interface CapabilityAuditRecord {
+export type CapabilityAuditRecord = {
   capability: string;
-  status: "denied";
-  reason: "rate_limited";
   at: Date;
-}
+} & (
+  | {
+      status: "success";
+      reason: "provider_completed";
+    }
+  | {
+      status: "denied";
+      reason:
+        | "grant_missing"
+        | "provider_missing"
+        | "input_invalid"
+        | "scope_denied"
+        | "provider_denied"
+        | "result_scope_denied"
+        | "rate_limited";
+    }
+  | {
+      status: "error";
+      reason: "provider_failed";
+    }
+);
 
 export interface CapabilityAuditSink {
   writeCapabilityAudit: (record: CapabilityAuditRecord) => Promise<void> | void;
@@ -133,6 +151,12 @@ export class CapabilityJournalConflictError extends Error {
   override readonly name = "CapabilityJournalConflictError";
 }
 
+export class CapabilityProviderError extends Error {
+  override readonly name = "CapabilityProviderError";
+}
+
+class CapabilityInputError extends CapabilityDeniedError {}
+
 export function createCapabilityBroker(params: {
   grants: CapabilityGrants;
   providers: Record<string, CapabilityProvider>;
@@ -152,15 +176,38 @@ export function createCapabilityBroker(params: {
     call: async (name, input) => {
       const currentCallIndex = callIndex;
       callIndex += 1;
+      const calledAt = params.now?.() ?? new Date();
       const grant = params.grants[name];
       if (grant === undefined) {
+        await writeCapabilityAudit(params.auditSink, {
+          capability: name,
+          status: "denied",
+          reason: "grant_missing",
+          at: calledAt
+        });
         throw new CapabilityDeniedError(`capability ${name} is not granted`);
       }
 
-      assertScope(name, grant, input);
+      try {
+        assertScope(name, grant, input);
+      } catch (error) {
+        await writeCapabilityAudit(params.auditSink, {
+          capability: name,
+          status: "denied",
+          reason: error instanceof CapabilityInputError ? "input_invalid" : "scope_denied",
+          at: calledAt
+        });
+        throw error;
+      }
 
       const provider = params.providers[name];
       if (provider === undefined) {
+        await writeCapabilityAudit(params.auditSink, {
+          capability: name,
+          status: "denied",
+          reason: "provider_missing",
+          at: calledAt
+        });
         throw new CapabilityDeniedError(`capability ${name} has no provider`);
       }
 
@@ -176,7 +223,6 @@ export function createCapabilityBroker(params: {
         return journaled.result;
       }
 
-      const calledAt = params.now?.() ?? new Date();
       await enforceCapabilityRateLimit({
         capability: name,
         at: calledAt,
@@ -184,7 +230,43 @@ export function createCapabilityBroker(params: {
         auditSink: params.auditSink
       });
 
-      const result = applyResultScope(name, grant, await provider(input));
+      let providerResult: unknown;
+      try {
+        providerResult = await provider(input);
+      } catch (error) {
+        if (error instanceof CapabilityDeniedError) {
+          await writeCapabilityAudit(params.auditSink, {
+            capability: name,
+            status: "denied",
+            reason: "provider_denied",
+            at: calledAt
+          });
+          throw error;
+        }
+
+        // Provider failures may contain credentials or customer data, so only a stable
+        // category crosses the plugin boundary and enters the metadata-only audit log.
+        await writeCapabilityAudit(params.auditSink, {
+          capability: name,
+          status: "error",
+          reason: "provider_failed",
+          at: calledAt
+        });
+        throw new CapabilityProviderError(`capability ${name} provider failed`);
+      }
+
+      let result: unknown;
+      try {
+        result = applyResultScope(name, grant, providerResult);
+      } catch (error) {
+        await writeCapabilityAudit(params.auditSink, {
+          capability: name,
+          status: "denied",
+          reason: "result_scope_denied",
+          at: calledAt
+        });
+        throw error;
+      }
       await params.journal?.writeCapabilityCall({
         executionId: params.executionId ?? "",
         callIndex: currentCallIndex,
@@ -192,6 +274,12 @@ export function createCapabilityBroker(params: {
         inputHash,
         result,
         completedAt: calledAt
+      });
+      await writeCapabilityAudit(params.auditSink, {
+        capability: name,
+        status: "success",
+        reason: "provider_completed",
+        at: calledAt
       });
 
       return result;
@@ -305,13 +393,20 @@ async function enforceCapabilityRateLimit(params: {
     return;
   }
 
-  await params.auditSink?.writeCapabilityAudit({
+  await writeCapabilityAudit(params.auditSink, {
     capability: params.capability,
     status: "denied",
     reason: "rate_limited",
     at: params.at
   });
   throw new CapabilityDeniedError(`capability ${params.capability} exceeded rate limit`);
+}
+
+async function writeCapabilityAudit(
+  auditSink: CapabilityAuditSink | undefined,
+  record: CapabilityAuditRecord
+): Promise<void> {
+  await auditSink?.writeCapabilityAudit(record);
 }
 
 function validateCapabilityRateLimit(capability: string, limit: CapabilityRateLimit): void {
@@ -477,6 +572,10 @@ function assertScope(name: string, grant: CapabilityGrant, input: unknown): void
       );
     }
   }
+
+  if (name === "invoice.read") {
+    parseInvoiceReadInput(input);
+  }
 }
 
 function applyResultScope(name: string, grant: CapabilityGrant, result: unknown): unknown {
@@ -537,7 +636,7 @@ function stableJson(value: unknown): string {
 
 function parseSlackSendInput(input: unknown): { channel: string; text: string } {
   if (!isRecord(input) || typeof input.channel !== "string" || typeof input.text !== "string") {
-    throw new CapabilityDeniedError("slack.send requires channel and text");
+    throw new CapabilityInputError("slack.send requires channel and text");
   }
 
   return {
@@ -559,14 +658,14 @@ function parseApprovalRequestInput(input: unknown): {
     typeof input.resumeHook !== "string" ||
     typeof input.expiresAt !== "string"
   ) {
-    throw new CapabilityDeniedError(
+    throw new CapabilityInputError(
       "approvals.request requires role, subject, resumeHook, and expiresAt"
     );
   }
 
   const expiresAt = new Date(input.expiresAt);
   if (Number.isNaN(expiresAt.getTime())) {
-    throw new CapabilityDeniedError("approvals.request expiresAt must be an ISO timestamp");
+    throw new CapabilityInputError("approvals.request expiresAt must be an ISO timestamp");
   }
 
   return {
@@ -579,10 +678,10 @@ function parseApprovalRequestInput(input: unknown): {
 
 function parseInvoiceReadInput(input: unknown): { tenantId?: string; invoiceId: string } {
   if (!isRecord(input) || typeof input.invoiceId !== "string") {
-    throw new CapabilityDeniedError("invoice.read requires invoiceId");
+    throw new CapabilityInputError("invoice.read requires invoiceId");
   }
   if (input.tenantId !== undefined && typeof input.tenantId !== "string") {
-    throw new CapabilityDeniedError("invoice.read tenantId must be a string");
+    throw new CapabilityInputError("invoice.read tenantId must be a string");
   }
 
   if (input.tenantId === undefined) {

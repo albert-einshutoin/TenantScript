@@ -58,6 +58,10 @@ Phase 1 built-ins:
 
 同じexecution/call indexのretryはjournal resultを再利用する。capabilityまたはinputが変わったjournal entryは`CapabilityJournalConflictError`で拒否する。
 
+providerを実行した呼び出しは`success`、grant/scope/rate limit等による拒否は`denied`、予期しないprovider障害は`error`として監査する。監査recordはcapability名、安定したreason、時刻だけを持ち、input、result、credential、provider error本文を保存しない。予期しないprovider障害は`CapabilityProviderError`へ正規化され、内部messageをpluginへ反射しない。journal replayは既存resultと監査を再利用するため、重複するprovider実行や監査recordを生成しない。
+
+capability追加時は`packages/capabilities/test/capability-contracts.test.ts`へfixtureを追加し、grant、scope、監査、rate limit、冪等性、secret非露出、安定したエラー形状を共通検証する。
+
 ## `@tenantscript/proxy`
 
 | API                                    | Purpose                                                    |
