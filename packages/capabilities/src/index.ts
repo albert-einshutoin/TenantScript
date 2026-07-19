@@ -1,7 +1,10 @@
 export interface CapabilityGrant {
   channel?: string | readonly string[];
   fields?: readonly string[];
+  methods?: string | readonly string[];
+  origins?: string | readonly string[];
   recipientDomains?: string | readonly string[];
+  requestHeaders?: string | readonly string[];
   roles?: string | readonly string[];
   resumeHooks?: string | readonly string[];
   templates?: string | readonly string[];
@@ -155,6 +158,26 @@ export interface EmailDelivery {
   subject: string;
   text: string;
 }
+
+export interface HttpFetchTransportRequest {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body?: string;
+}
+
+export interface HttpFetchTransportResponse {
+  status: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
+export interface HttpFetchCredential {
+  name: string;
+  value: string;
+}
+
+export type WebFetchFunction = (input: string, init: RequestInit) => Promise<Response>;
 
 export class CapabilityDeniedError extends Error {
   override readonly name = "CapabilityDeniedError";
@@ -522,6 +545,144 @@ export function createEmailSendProvider(params: {
   };
 }
 
+export function createHttpFetchProvider(params: {
+  allowedOrigins: readonly string[];
+  allowedMethods: readonly string[];
+  credentials?: Readonly<Record<string, HttpFetchCredential>>;
+  transport: (
+    request: HttpFetchTransportRequest
+  ) => Promise<HttpFetchTransportResponse> | HttpFetchTransportResponse;
+  maxRedirects?: number;
+}): CapabilityProvider {
+  const allowedOrigins = normalizeHttpOrigins(params.allowedOrigins, "provider");
+  const allowedMethods = normalizeHttpProviderMethods(params.allowedMethods);
+  const credentials = new Map<string, HttpFetchCredential>();
+  for (const [configuredOrigin, credential] of Object.entries(params.credentials ?? {})) {
+    const [origin] = normalizeHttpOrigins([configuredOrigin], "credential");
+    if (origin === undefined || !allowedOrigins.includes(origin)) {
+      throw new Error(`http.fetch credential origin ${configuredOrigin} is not allowed`);
+    }
+    const name = normalizeHttpHeaderName(credential.name);
+    if (
+      isUnsafeCredentialHeader(name) ||
+      credential.value.length === 0 ||
+      /[\r\n]/.test(credential.value)
+    ) {
+      throw new Error(`http.fetch credential for ${origin} is invalid`);
+    }
+    if (new URL(origin).protocol !== "https:") {
+      throw new Error(`http.fetch credential origin ${origin} must use HTTPS`);
+    }
+    if (credentials.has(origin)) {
+      throw new Error(`http.fetch credential origin ${origin} is duplicated`);
+    }
+    // Credentials are snapshotted by exact origin so redirects never carry one
+    // provider's authority to a different destination.
+    credentials.set(origin, { name, value: credential.value });
+  }
+
+  const maxRedirects = params.maxRedirects ?? 5;
+  if (!Number.isInteger(maxRedirects) || maxRedirects < 0 || maxRedirects > 10) {
+    throw new Error("http.fetch maxRedirects must be between 0 and 10");
+  }
+
+  return async (input) => {
+    const request = parseHttpFetchInput(input);
+    assertHttpProviderMethod(request.method, allowedMethods);
+    let destination = parseHttpFetchUrl(request.url);
+    assertHttpFetchDestination(destination, allowedOrigins);
+    let method = request.method;
+    let body = request.body;
+    let headers = new Map(request.headers);
+
+    for (let redirectCount = 0; ; redirectCount += 1) {
+      const credential = credentials.get(destination.origin);
+      if (credential !== undefined && headers.has(credential.name)) {
+        throw new CapabilityDeniedError(
+          `http.fetch header ${credential.name} cannot be supplied by the plugin`
+        );
+      }
+      const transportHeaders = Object.fromEntries(headers);
+      if (credential !== undefined) {
+        transportHeaders[credential.name] = credential.value;
+      }
+
+      const transportRequest: HttpFetchTransportRequest = {
+        url: destination.href,
+        method,
+        headers: transportHeaders
+      };
+      if (body !== undefined) {
+        transportRequest.body = body;
+      }
+      const response = await params.transport(transportRequest);
+      validateHttpFetchResponse(response);
+
+      const location = redirectLocation(response);
+      if (!isRedirectStatus(response.status) || location === undefined) {
+        return sanitizeHttpFetchResponse(response);
+      }
+      if (redirectCount >= maxRedirects) {
+        throw new CapabilityDeniedError("http.fetch exceeded redirect limit");
+      }
+
+      destination = resolveHttpRedirect(location, destination);
+      assertHttpFetchDestination(destination, allowedOrigins);
+      if (
+        response.status === 303 ||
+        ((response.status === 301 || response.status === 302) && method === "POST")
+      ) {
+        method = "GET";
+        assertHttpProviderMethod(method, allowedMethods);
+        body = undefined;
+        headers = new Map(headers);
+        headers.delete("content-type");
+      }
+    }
+  };
+}
+
+function normalizeHttpProviderMethods(methods: readonly string[]): string[] {
+  const normalized = methods.map((method) => method.toUpperCase());
+  if (normalized.length === 0 || normalized.some((method) => !supportedHttpMethods.has(method))) {
+    throw new Error("http.fetch provider methods are invalid");
+  }
+  return [...new Set(normalized)];
+}
+
+function assertHttpProviderMethod(method: string, allowedMethods: readonly string[]): void {
+  if (!allowedMethods.includes(method)) {
+    throw new CapabilityDeniedError(`http.fetch method ${method} is outside provider scope`);
+  }
+}
+
+export function createWebFetchHttpTransport(
+  fetcher: WebFetchFunction
+): (request: HttpFetchTransportRequest) => Promise<HttpFetchTransportResponse> {
+  return async (request) => {
+    const init: RequestInit = {
+      method: request.method,
+      headers: request.headers,
+      redirect: "manual",
+      credentials: "omit"
+    };
+    if (request.body !== undefined) {
+      init.body = request.body;
+    }
+    const response = await fetcher(request.url, init);
+    const result: HttpFetchTransportResponse = {
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries())
+    };
+    // Redirect bodies are never exposed and need not be buffered because the provider
+    // validates the next hop before issuing another request.
+    if (!isRedirectStatus(response.status)) {
+      result.body = await response.text();
+    }
+    return result;
+  };
+}
+
 export function createApprovalLifecyclePlan(approval: ApprovalRecord): ApprovalLifecyclePlan {
   return {
     approvalId: approval.id,
@@ -632,6 +793,33 @@ function assertScope(name: string, grant: CapabilityGrant, input: unknown): void
       throw new CapabilityDeniedError(
         `email.send template ${request.template} is outside granted scope`
       );
+    }
+  }
+
+  if (name === "http.fetch") {
+    const request = parseHttpFetchInput(input);
+    const destination = parseHttpFetchUrl(request.url);
+    const allowedOrigins = normalizeHttpOrigins(grant.origins, "grant");
+    assertHttpFetchDestination(destination, allowedOrigins);
+
+    const allowedMethods = normalizeHttpGrantValues(grant.methods, "method", (value) =>
+      value.toUpperCase()
+    );
+    if (!allowedMethods.includes(request.method)) {
+      throw new CapabilityDeniedError(
+        `http.fetch method ${request.method} is outside granted scope`
+      );
+    }
+
+    const allowedHeaders = normalizeHttpGrantValues(
+      grant.requestHeaders,
+      "request header",
+      normalizeHttpHeaderName
+    );
+    for (const header of request.headers.keys()) {
+      if (!allowedHeaders.includes(header)) {
+        throw new CapabilityDeniedError(`http.fetch header ${header} is outside granted scope`);
+      }
     }
   }
 
@@ -756,6 +944,296 @@ interface EmailSendInput {
   to: string;
   template: string;
   variables: ReadonlyMap<string, string>;
+}
+
+interface HttpFetchInput {
+  url: string;
+  method: string;
+  headers: ReadonlyMap<string, string>;
+  body?: string;
+}
+
+const pluginForbiddenHttpHeaders = new Set([
+  "authorization",
+  "connection",
+  "content-length",
+  "cookie",
+  "host",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade"
+]);
+
+const supportedHttpMethods = new Set(["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]);
+
+function parseHttpFetchInput(input: unknown): HttpFetchInput {
+  if (!isRecord(input)) {
+    throw new CapabilityInputError("http.fetch requires url and method");
+  }
+  const supportedFields = new Set(["url", "method", "headers", "body"]);
+  if (Object.keys(input).some((field) => !supportedFields.has(field))) {
+    throw new CapabilityInputError("http.fetch contains unsupported input fields");
+  }
+  if (
+    typeof input.url !== "string" ||
+    typeof input.method !== "string" ||
+    (input.headers !== undefined && !isRecord(input.headers)) ||
+    (input.body !== undefined && typeof input.body !== "string")
+  ) {
+    throw new CapabilityInputError("http.fetch requires url and method");
+  }
+
+  const method = input.method.toUpperCase();
+  if (!supportedHttpMethods.has(method)) {
+    throw new CapabilityInputError("http.fetch method is invalid");
+  }
+  if ((method === "GET" || method === "HEAD") && input.body !== undefined) {
+    throw new CapabilityInputError(`http.fetch ${method} requests must not include a body`);
+  }
+
+  const headers = new Map<string, string>();
+  for (const [rawName, value] of Object.entries(input.headers ?? {})) {
+    if (typeof value !== "string" || /[\r\n]/.test(value)) {
+      throw new CapabilityInputError("http.fetch headers must contain string values");
+    }
+    const name = normalizeHttpHeaderName(rawName);
+    if (isRoutingHttpHeader(name)) {
+      throw new CapabilityInputError(`http.fetch header ${name} cannot be supplied by the plugin`);
+    }
+    if (headers.has(name)) {
+      throw new CapabilityInputError(`http.fetch header ${name} is duplicated`);
+    }
+    headers.set(name, value);
+  }
+
+  const parsed: HttpFetchInput = { url: input.url, method, headers };
+  if (input.body !== undefined) {
+    parsed.body = input.body;
+  }
+  return parsed;
+}
+
+function normalizeHttpHeaderName(name: string): string {
+  const normalized = name.toLowerCase();
+  if (!/^[!#$%&'*+.^_`|~0-9a-z-]+$/.test(normalized)) {
+    throw new CapabilityInputError(`http.fetch header ${name} is invalid`);
+  }
+  return normalized;
+}
+
+function isRoutingHttpHeader(name: string): boolean {
+  return (
+    pluginForbiddenHttpHeaders.has(name) ||
+    name.startsWith("proxy-") ||
+    name.startsWith("sec-") ||
+    name.startsWith("cf-") ||
+    name.startsWith("x-forwarded-")
+  );
+}
+
+function isUnsafeCredentialHeader(name: string): boolean {
+  return (
+    name === "connection" ||
+    name === "content-length" ||
+    name === "host" ||
+    name === "te" ||
+    name === "trailer" ||
+    name === "transfer-encoding" ||
+    name === "upgrade" ||
+    name.startsWith("proxy-") ||
+    name.startsWith("sec-") ||
+    name.startsWith("cf-") ||
+    name.startsWith("x-forwarded-")
+  );
+}
+
+function normalizeHttpGrantValues(
+  value: string | readonly string[] | undefined,
+  kind: "method" | "request header",
+  normalize: (value: string) => string
+): string[] {
+  const values = value === undefined ? [] : [value].flat();
+  if (values.some((entry) => typeof entry !== "string" || entry.length === 0)) {
+    throw new CapabilityDeniedError(`http.fetch has an invalid ${kind} grant`);
+  }
+  try {
+    const normalized = values.map(normalize);
+    if (
+      (kind === "method" && normalized.some((entry) => !supportedHttpMethods.has(entry))) ||
+      (kind === "request header" && normalized.some(isRoutingHttpHeader))
+    ) {
+      throw new Error("invalid grant value");
+    }
+    return [...new Set(normalized)];
+  } catch {
+    throw new CapabilityDeniedError(`http.fetch has an invalid ${kind} grant`);
+  }
+}
+
+function normalizeHttpOrigins(
+  value: string | readonly string[] | undefined,
+  source: "credential" | "grant" | "provider"
+): string[] {
+  const values = value === undefined ? [] : [value].flat();
+  const origins: string[] = [];
+  for (const entry of values) {
+    if (typeof entry !== "string") {
+      throw httpOriginConfigurationError(source, String(entry));
+    }
+    let url: URL;
+    try {
+      url = new URL(entry);
+    } catch {
+      throw httpOriginConfigurationError(source, entry);
+    }
+    if (
+      url.username.length > 0 ||
+      url.password.length > 0 ||
+      url.pathname !== "/" ||
+      url.search.length > 0 ||
+      url.hash.length > 0 ||
+      !isPublicHttpDestination(url)
+    ) {
+      throw httpOriginConfigurationError(source, entry);
+    }
+    origins.push(url.origin);
+  }
+  return [...new Set(origins)];
+}
+
+function httpOriginConfigurationError(
+  source: "credential" | "grant" | "provider",
+  value: string
+): Error {
+  const message = `http.fetch ${source} origin ${value} is invalid`;
+  return source === "grant" ? new CapabilityDeniedError(message) : new Error(message);
+}
+
+function parseHttpFetchUrl(value: string): URL {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new CapabilityInputError("http.fetch requires a valid URL");
+  }
+  if (url.username.length > 0 || url.password.length > 0) {
+    throw new CapabilityInputError("http.fetch URL must not contain credentials");
+  }
+  url.hash = "";
+  return url;
+}
+
+function assertHttpFetchDestination(destination: URL, allowedOrigins: readonly string[]): void {
+  if (!isPublicHttpDestination(destination)) {
+    throw new CapabilityDeniedError(`http.fetch destination ${destination.origin} is not public`);
+  }
+  if (!allowedOrigins.includes(destination.origin)) {
+    throw new CapabilityDeniedError(
+      `http.fetch origin ${destination.origin} is outside granted scope`
+    );
+  }
+}
+
+function isPublicHttpDestination(url: URL): boolean {
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return false;
+  }
+  const hostname = url.hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".home.arpa") ||
+    hostname === "metadata.google.internal" ||
+    hostname === "::" ||
+    hostname === "::1" ||
+    hostname.startsWith("fc") ||
+    hostname.startsWith("fd") ||
+    /^fe[89ab]/.test(hostname) ||
+    hostname.startsWith("::ffff:") ||
+    hostname.startsWith("2001:db8:") ||
+    hostname.startsWith("ff")
+  ) {
+    return false;
+  }
+  const parts = hostname.split(".");
+  if (parts.length !== 4) {
+    return true;
+  }
+  const octets = parts.map(Number);
+  if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return true;
+  }
+  const first = octets[0] ?? -1;
+  const second = octets[1] ?? -1;
+  return !(
+    first === 0 ||
+    first === 10 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 0) ||
+    (first === 192 && second === 168) ||
+    (first === 198 && (second === 18 || second === 19)) ||
+    (first === 198 && second === 51 && octets[2] === 100) ||
+    (first === 203 && second === 0 && octets[2] === 113) ||
+    first >= 224
+  );
+}
+
+function validateHttpFetchResponse(response: HttpFetchTransportResponse): void {
+  if (!Number.isInteger(response.status) || response.status < 200 || response.status > 599) {
+    throw new Error("http.fetch transport returned an invalid status");
+  }
+}
+
+function redirectLocation(response: HttpFetchTransportResponse): string | undefined {
+  for (const [name, value] of Object.entries(response.headers ?? {})) {
+    if (name.toLowerCase() === "location") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+function resolveHttpRedirect(location: string, current: URL): URL {
+  try {
+    return parseHttpFetchUrl(new URL(location, current).href);
+  } catch (error) {
+    if (error instanceof CapabilityDeniedError) {
+      throw error;
+    }
+    throw new CapabilityDeniedError("http.fetch redirect location is invalid");
+  }
+}
+
+function sanitizeHttpFetchResponse(
+  response: HttpFetchTransportResponse
+): HttpFetchTransportResponse {
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(response.headers ?? {})) {
+    const normalized = name.toLowerCase();
+    if (
+      normalized !== "set-cookie" &&
+      normalized !== "set-cookie2" &&
+      normalized !== "proxy-authenticate" &&
+      normalized !== "www-authenticate"
+    ) {
+      headers[normalized] = value;
+    }
+  }
+  const result: HttpFetchTransportResponse = { status: response.status, headers };
+  if (response.body !== undefined) {
+    result.body = response.body;
+  }
+  return result;
 }
 
 function parseEmailSendInput(input: unknown): EmailSendInput {

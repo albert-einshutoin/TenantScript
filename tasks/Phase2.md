@@ -71,7 +71,7 @@
   - RED: grant の宛先ドメイン制限 / テンプレート外の本文注入防止
   - DoD: 機能 + 攻撃テスト green
 
-- [ ] **P2-T13**(L→分割)brokered http.fetch
+- [x] **P2-T13**(L→分割)brokered http.fetch
   - RED: allowlist 外 URL 拒否(リダイレクト追跡含む)/ credential injection(plugin に header を見せず broker が注入)/ audit 記録
   - DoD: D-005 の allowlist 実装として security suite 入り
 
