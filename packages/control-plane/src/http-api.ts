@@ -884,7 +884,11 @@ async function resolveExecutionDetail(
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
   const id = url.searchParams.get("id");
-  if (!isBoundedFilter(id) || [...url.searchParams.keys()].some((key) => key !== "id")) {
+  if (
+    !isBoundedFilter(id) ||
+    url.searchParams.getAll("id").length !== 1 ||
+    [...url.searchParams.keys()].some((key) => key !== "id")
+  ) {
     return errorResponse(400, "invalid_execution_id", "execution id is required", corsHeaders);
   }
   try {

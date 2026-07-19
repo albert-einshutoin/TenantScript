@@ -73,6 +73,16 @@ describe("Admin execution search HTTP contract", () => {
       error: { code: "execution_not_found" }
     });
   });
+
+  it("rejects ambiguous execution detail identifiers before storage", async () => {
+    const details = detailStore();
+    const handler = createHandler(dashboard(), details);
+
+    const response = await handler(request("/v1/admin/execution-detail?id=exec_1&id=exec_other"));
+
+    expect(response.status).toBe(400);
+    expect(details.readExecution).not.toHaveBeenCalled();
+  });
 });
 
 function createHandler(
