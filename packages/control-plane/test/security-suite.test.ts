@@ -10,6 +10,7 @@ import {
   type AdminDashboardStore,
   type AdminInstallationDetailStore,
   type AdminInstallFlowStore,
+  type AdminRollbackStore,
   type DailyUsageRecord,
   type ApprovalContinuationRequest,
   type ApprovalRecord,
@@ -19,6 +20,47 @@ import {
 } from "../src/index.js";
 
 describe("control-plane security suite", () => {
+  it("keeps rollback scope identity-derived and denies viewer or forged commands", async () => {
+    const rollbackStore = {
+      rollback: vi.fn<AdminRollbackStore["rollback"]>().mockResolvedValue({
+        outcome: "rolled_back",
+        installationId: "inst_1",
+        pluginKey: "safe-plugin",
+        fromVersion: "2.0.0",
+        toVersion: "1.0.0",
+        revision: 1,
+        auditId: "audit_1",
+        completedAt: "2026-07-19T17:00:00.000Z"
+      })
+    } satisfies AdminRollbackStore;
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({
+        manager: { subject: "manager", role: "manager", appId: "app_1", tenantId: "tenant_1" },
+        viewer: { subject: "viewer", role: "viewer", appId: "app_1", tenantId: "tenant_1" }
+      }),
+      rollbackStore,
+      allowedOrigins: ["https://admin.example.com"]
+    });
+    const valid = { installationId: "inst_1", targetVersionId: "version_1", expectedRevision: 0 };
+
+    expect((await handler(rollbackRequest("viewer", valid))).status).toBe(403);
+    expect(
+      (
+        await handler(
+          rollbackRequest("manager", { ...valid, tenantId: "tenant_2", actor: "attacker" })
+        )
+      ).status
+    ).toBe(400);
+    expect(rollbackStore.rollback).not.toHaveBeenCalled();
+
+    expect((await handler(rollbackRequest("manager", valid))).status).toBe(200);
+    expect(rollbackStore.rollback).toHaveBeenCalledWith({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: "manager",
+      ...valid
+    });
+  });
   it("allows only explicitly configured Admin UI origins", async () => {
     const handler = createControlPlaneHttpHandler({
       identityResolver: createStaticTokenIdentityResolver({}),
@@ -481,6 +523,18 @@ function dashboardRequest(token: string, url: string): Request {
 
 function installRequest(token: string, body: Record<string, unknown>): Request {
   return new Request("https://api.example.com/v1/admin/installations", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Origin: "https://admin.example.com",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+}
+
+function rollbackRequest(token: string, body: Record<string, unknown>): Request {
+  return new Request("https://api.example.com/v1/admin/rollbacks", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
