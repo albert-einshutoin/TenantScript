@@ -35,7 +35,7 @@
 
 ## チャンク B: RBAC(T05–T08)
 
-- [ ] **P2-T05**(M)role model 設計 + 実装
+- [x] **P2-T05**(M)role model 設計 + 実装
   - RED: owner / admin / operator / viewer + tenant-admin の権限マトリクステストを先に書く(操作 × role の全組合せ)
   - DoD: マトリクステスト green
 
