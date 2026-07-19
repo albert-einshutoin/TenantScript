@@ -179,7 +179,7 @@ describe("D1 Admin dashboard read model", () => {
         "tenant_1_installation_a",
         "tenant_1",
         "tenant_1_plugin",
-        1,
+        0,
         "actor",
         "installation.command",
         "{}",

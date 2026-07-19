@@ -1,5 +1,8 @@
 ALTER TABLE installations ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_installations_id_revision
+  ON installations(id, revision);
+
 CREATE TABLE IF NOT EXISTS admin_audit_events (
   id TEXT PRIMARY KEY,
   installation_id TEXT NOT NULL REFERENCES installations(id) ON DELETE RESTRICT,
@@ -11,7 +14,8 @@ CREATE TABLE IF NOT EXISTS admin_audit_events (
   before_json TEXT NOT NULL,
   after_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  UNIQUE(installation_id, revision)
+  UNIQUE(installation_id, revision),
+  FOREIGN KEY(installation_id, revision) REFERENCES installations(id, revision)
 );
 
 CREATE INDEX IF NOT EXISTS idx_admin_audit_events_tenant_created

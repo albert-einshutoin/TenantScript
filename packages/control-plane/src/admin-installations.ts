@@ -126,8 +126,8 @@ async function updateInstallation(
   const auditId = options.auditId?.() ?? `installation-command-${crypto.randomUUID()}`;
   const nextRevision = before.revision + 1;
   try {
-    // The unique (installation_id, revision) audit key turns a raced CAS miss into a failing D1
-    // batch rather than allowing an orphan audit row. D1 rolls the UPDATE back with that insert.
+    // The audit's (installation_id, revision) foreign key requires the CAS-updated revision, and
+    // its unique key rejects a raced duplicate. Either failure rolls the full D1 batch back.
     await db.batch([
       db
         .prepare(
