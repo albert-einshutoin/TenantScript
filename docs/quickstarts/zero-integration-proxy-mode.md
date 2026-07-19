@@ -110,4 +110,4 @@ https://<your-worker-host>/proxy/stripe/invoice-paid
 | `skipped: true`                    | transform handlerのstructured errorと元payload転送を確認      |
 | 転送先4xx/5xx                      | destination contract、署名/header、転送先logを確認            |
 
-JSON snippetを変更する場合はE2Eも同じPRで更新する。`pnpm docs:check`はshell commandのworking directory、期待exit code、workspace filterを検証する。
+JSON snippetを変更する場合はE2Eも同じPRで更新する。`pnpm docs:check`はshell commandのworking directory、期待exit code、workspace filterに加え、`docs/`・`tasks/`の相対リンクとE2Eが参照するsnippet IDの存在・一意性を検証する。
