@@ -15,6 +15,12 @@ import {
   parseAdminMutationRateLimitConfiguration
 } from "./admin-mutation-rate-limit.js";
 import { createControlPlaneHttpHandler } from "./http-api.js";
+import {
+  createD1ServiceTokenStore,
+  createServiceTokenAwareIdentityResolver,
+  createServiceTokenIdentityResolver,
+  createServiceTokenManager
+} from "./service-tokens.js";
 import type { D1DatabaseLike } from "./storage.js";
 
 interface ControlPlaneWorkerEnv {
@@ -80,6 +86,7 @@ export default {
       env.DB === undefined ? undefined : createD1AdminExecutionDetailStore(env.DB);
     const approvalDecisionStore =
       env.DB === undefined ? undefined : createD1AdminApprovalDecisionStore(env.DB);
+    const serviceTokenStore = env.DB === undefined ? undefined : createD1ServiceTokenStore(env.DB);
     let handler;
     try {
       const cursorCodec =
@@ -102,10 +109,19 @@ export default {
                   : { windowSeconds: env.ADMIN_MUTATION_RATE_WINDOW_SECONDS })
               })
             });
+      const bootstrapIdentityResolver =
+        identities === undefined ? undefined : createStaticTokenIdentityResolver(identities);
+      const identityResolver =
+        serviceTokenStore === undefined
+          ? bootstrapIdentityResolver
+          : createServiceTokenAwareIdentityResolver({
+              serviceTokens: createServiceTokenIdentityResolver(serviceTokenStore),
+              ...(bootstrapIdentityResolver === undefined
+                ? {}
+                : { bootstrap: bootstrapIdentityResolver })
+            });
       handler = createControlPlaneHttpHandler({
-        ...(identities === undefined
-          ? {}
-          : { identityResolver: createStaticTokenIdentityResolver(identities) }),
+        ...(identityResolver === undefined ? {} : { identityResolver }),
         ...(dashboardStore === undefined ? {} : { dashboardStore }),
         ...(installationDetailStore === undefined ? {} : { installationDetailStore }),
         ...(installationCommandStore === undefined ? {} : { installationCommandStore }),
@@ -113,6 +129,9 @@ export default {
         ...(rollbackStore === undefined ? {} : { rollbackStore }),
         ...(executionDetailStore === undefined ? {} : { executionDetailStore }),
         ...(approvalDecisionStore === undefined ? {} : { approvalDecisionStore }),
+        ...(serviceTokenStore === undefined
+          ? {}
+          : { serviceTokenManager: createServiceTokenManager({ store: serviceTokenStore }) }),
         ...(rateLimiter === undefined ? {} : { adminMutationRateLimiter: rateLimiter }),
         ...(cursorCodec === undefined ? {} : { cursorCodec }),
         allowedOrigins

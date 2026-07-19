@@ -79,6 +79,12 @@ export function isSupportedRbacRole(role: unknown): role is SupportedRbacRole {
   return typeof role === "string" && normalizeRbacRole(role) !== null;
 }
 
+export function isRbacOperation(operation: unknown): operation is RbacOperation {
+  return (
+    typeof operation === "string" && (RBAC_OPERATIONS as readonly string[]).includes(operation)
+  );
+}
+
 function isRbacRole(role: string): role is RbacRole {
   return (RBAC_ROLES as readonly string[]).includes(role);
 }

@@ -2,7 +2,9 @@ export type AdminMutationFamily =
   | "installation-command"
   | "installation-create"
   | "rollback"
-  | "approval-decision";
+  | "approval-decision"
+  | "service-token-issue"
+  | "service-token-revoke";
 
 export interface AdminMutationRateLimitRequest {
   appId: string;

@@ -17,10 +17,13 @@ import { AdminRollbackError, type AdminRollbackStore } from "./admin-rollbacks.j
 import type { AdminMutationFamily, AdminMutationRateLimiter } from "./admin-mutation-rate-limit.js";
 import {
   canRolePerform,
+  isRbacOperation,
   isSupportedRbacRole,
+  normalizeRbacRole,
   type RbacOperation,
   type SupportedRbacRole
 } from "./rbac.js";
+import { ServiceTokenError, type ServiceTokenManager } from "./service-tokens.js";
 import { UsageMeterQueryError, type UsageMeter } from "./usage-meter.js";
 
 export type AdminRole = SupportedRbacRole;
@@ -41,6 +44,7 @@ export interface ControlPlaneHttpHandlerOptions {
   rollbackStore?: AdminRollbackStore;
   executionDetailStore?: AdminExecutionDetailStore;
   approvalDecisionStore?: AdminApprovalDecisionStore;
+  serviceTokenManager?: ServiceTokenManager;
   adminMutationRateLimiter?: AdminMutationRateLimiter;
   usageMeter?: UsageMeter;
   allowedOrigins?: readonly string[];
@@ -116,6 +120,18 @@ export function createControlPlaneHttpHandler(
       }
       return runApprovalDecision(request, options, corsHeaders);
     }
+    if (route === "serviceTokenCollection") {
+      if (request.method === "POST") {
+        return runServiceTokenIssue(request, options, corsHeaders);
+      }
+      if (request.method === "DELETE") {
+        return runServiceTokenRevoke(request, url, options, corsHeaders);
+      }
+      return errorResponse(405, "method_not_allowed", "method not allowed", {
+        ...corsHeaders,
+        Allow: "POST, DELETE, OPTIONS"
+      });
+    }
     if (request.method !== "GET") {
       return errorResponse(405, "method_not_allowed", "method not allowed", {
         ...corsHeaders,
@@ -152,6 +168,7 @@ type AdminRoute =
   | "executionDetail"
   | "usage"
   | "approvalDecisionCreate"
+  | "serviceTokenCollection"
   | AdminDashboardSection
   | { id: string };
 
@@ -188,6 +205,9 @@ function adminRoute(url: URL): AdminRoute | null {
   if (path === "/v1/admin/approval-decisions") {
     return "approvalDecisionCreate";
   }
+  if (path === "/v1/admin/service-tokens") {
+    return "serviceTokenCollection";
+  }
   const section = path.slice("/v1/admin/dashboard/".length);
   if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
     return section;
@@ -197,6 +217,186 @@ function adminRoute(url: URL): AdminRoute | null {
 
 const maximumCommandBodyBytes = 16 * 1024;
 const maximumInstallBodyBytes = 64 * 1024;
+
+async function runServiceTokenIssue(
+  request: Request,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.serviceTokenManager === undefined) {
+    return errorResponse(
+      503,
+      "service_token_service_unavailable",
+      "service token service unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(
+    identity,
+    "service-token:issue",
+    "service_token_issue_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
+  const input = await parseServiceTokenIssue(request, corsHeaders);
+  if (input instanceof Response) return input;
+  const rateLimitResponse = await reserveAdminMutation(
+    options.adminMutationRateLimiter,
+    identity,
+    "service-token-issue",
+    corsHeaders
+  );
+  if (rateLimitResponse !== null) return rateLimitResponse;
+  try {
+    return jsonResponse(
+      201,
+      await options.serviceTokenManager.issue({
+        appId: identity.appId,
+        tenantId: identity.tenantId,
+        actor: identity.subject,
+        actorRole: identity.role,
+        ...input
+      }),
+      corsHeaders
+    );
+  } catch (error) {
+    if (error instanceof ServiceTokenError) {
+      return errorResponse(
+        error.code === "invalid_service_token" ? 400 : 403,
+        error.code,
+        error.code === "invalid_service_token"
+          ? "invalid service token request"
+          : "service token grant not permitted",
+        corsHeaders
+      );
+    }
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function runServiceTokenRevoke(
+  request: Request,
+  url: URL,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.serviceTokenManager === undefined) {
+    return errorResponse(
+      503,
+      "service_token_service_unavailable",
+      "service token service unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(
+    identity,
+    "service-token:revoke",
+    "service_token_revoke_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
+  const id = url.searchParams.get("id");
+  if (
+    !isBoundedFilter(id) ||
+    url.searchParams.getAll("id").length !== 1 ||
+    [...url.searchParams.keys()].some((key) => key !== "id")
+  ) {
+    return errorResponse(
+      400,
+      "invalid_service_token",
+      "valid service token id required",
+      corsHeaders
+    );
+  }
+  const rateLimitResponse = await reserveAdminMutation(
+    options.adminMutationRateLimiter,
+    identity,
+    "service-token-revoke",
+    corsHeaders
+  );
+  if (rateLimitResponse !== null) return rateLimitResponse;
+  try {
+    const revoked = await options.serviceTokenManager.revoke({
+      id,
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      actor: identity.subject,
+      actorRole: identity.role
+    });
+    if (!revoked) {
+      return errorResponse(404, "service_token_not_found", "service token not found", corsHeaders);
+    }
+    return new Response(null, {
+      status: 204,
+      headers: { "Cache-Control": "no-store", ...corsHeaders }
+    });
+  } catch (error) {
+    if (error instanceof ServiceTokenError) {
+      return errorResponse(403, error.code, "service token revocation not permitted", corsHeaders);
+    }
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function parseServiceTokenIssue(
+  request: Request,
+  corsHeaders: Record<string, string> | undefined
+): Promise<
+  | {
+      label: string;
+      role: Exclude<SupportedRbacRole, "manager">;
+      scopes: RbacOperation[];
+      expiresAt: Date;
+    }
+  | Response
+> {
+  const contentType = request.headers.get("Content-Type");
+  if (
+    contentType === null ||
+    contentType.split(";", 1)[0]?.trim().toLowerCase() !== "application/json"
+  ) {
+    return errorResponse(
+      415,
+      "unsupported_media_type",
+      "application/json body required",
+      corsHeaders
+    );
+  }
+  try {
+    const text = await readBoundedUtf8Body(request, maximumCommandBodyBytes);
+    const parsed: unknown = JSON.parse(text);
+    if (!isRecord(parsed)) throw new Error();
+    const role = typeof parsed.role === "string" ? normalizeRbacRole(parsed.role) : null;
+    const expiresAt = typeof parsed.expiresAt === "string" ? new Date(parsed.expiresAt) : null;
+    if (
+      Object.keys(parsed).length !== 4 ||
+      !Object.keys(parsed).every((key) => ["label", "role", "scopes", "expiresAt"].includes(key)) ||
+      typeof parsed.label !== "string" ||
+      role === null ||
+      role !== parsed.role ||
+      !Array.isArray(parsed.scopes) ||
+      !parsed.scopes.every(isRbacOperation) ||
+      expiresAt === null ||
+      !Number.isFinite(expiresAt.getTime())
+    ) {
+      throw new Error();
+    }
+    return { label: parsed.label, role, scopes: parsed.scopes, expiresAt };
+  } catch (error) {
+    return errorResponse(
+      error instanceof CommandBodyTooLargeError ? 413 : 400,
+      error instanceof CommandBodyTooLargeError ? "request_too_large" : "invalid_service_token",
+      error instanceof CommandBodyTooLargeError
+        ? "request body too large"
+        : "invalid service token request",
+      corsHeaders
+    );
+  }
+}
 
 async function resolveUsage(
   request: Request,
@@ -996,6 +1196,7 @@ async function resolveDashboard(
     | "installCreate"
     | "rollbackCreate"
     | "approvalDecisionCreate"
+    | "serviceTokenCollection"
     | "executionDetail"
     | "usage"
     | { id: string }
@@ -1326,7 +1527,15 @@ function isTenantScopedAdminIdentity(
     isSupportedRbacRole(candidate.role) &&
     isNonEmptyString(candidate.subject) &&
     isNonEmptyString(candidate.appId) &&
-    isNonEmptyString(candidate.tenantId)
+    isNonEmptyString(candidate.tenantId) &&
+    (candidate.allowedOperations === undefined ||
+      (Array.isArray(candidate.allowedOperations) &&
+        candidate.allowedOperations.length > 0 &&
+        candidate.allowedOperations.every(isRbacOperation) &&
+        new Set(candidate.allowedOperations).size === candidate.allowedOperations.length &&
+        candidate.allowedOperations.every((operation) =>
+          canRolePerform(candidate.role as string, operation)
+        )))
   );
 }
 
@@ -1336,7 +1545,8 @@ function requireRbac(
   errorCode: string,
   corsHeaders: Record<string, string> | undefined
 ): Response | null {
-  return canRolePerform(identity.role, operation)
+  return canRolePerform(identity.role, operation) &&
+    (identity.allowedOperations === undefined || identity.allowedOperations.includes(operation))
     ? null
     : errorResponse(403, errorCode, "operation not permitted", corsHeaders);
 }
@@ -1372,6 +1582,7 @@ function allowedMethods(route: AdminRoute): string {
   if (route === "installationCommand") return "PATCH, OPTIONS";
   if (route === "installCreate" || route === "rollbackCreate" || route === "approvalDecisionCreate")
     return "POST, OPTIONS";
+  if (route === "serviceTokenCollection") return "POST, DELETE, OPTIONS";
   return "GET, OPTIONS";
 }
 
