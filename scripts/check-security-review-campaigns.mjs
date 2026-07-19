@@ -82,7 +82,7 @@ function validateCampaign(relativePath) {
     errors.push(`${relativePath}: status must be prepared, in-progress, or completed`);
   }
   validateBaseline(campaign.baselineCommit, relativePath);
-  validateUniqueStrings(campaign.scope, "scope", relativePath, { requireNonEmpty: true });
+  validateScope(campaign.scope, campaign.baselineCommit, relativePath);
   validateFocus(campaign.requiredFocus, relativePath);
   validateUniqueStrings(campaign.reviewers, "reviewers", relativePath);
   validateLimitations(campaign.remainingLimitations, relativePath);
@@ -108,6 +108,35 @@ function validateBaseline(value, relativePath) {
   });
   if (result.status !== 0) {
     errors.push(`${relativePath}: baselineCommit does not exist in this repository: ${value}`);
+  }
+}
+
+function validateScope(value, baselineCommit, relativePath) {
+  validateUniqueStrings(value, "scope", relativePath, { requireNonEmpty: true });
+  if (!Array.isArray(value)) {
+    return;
+  }
+  for (const path of value) {
+    if (typeof path !== "string" || path.trim() === "") {
+      continue;
+    }
+    if (
+      isAbsolute(path) ||
+      /^[A-Za-z]:[\\/]/.test(path) ||
+      path.split(/[\\/]/).includes("..") ||
+      path.startsWith("file:")
+    ) {
+      errors.push(`${relativePath}: scope must stay inside the repository: ${path}`);
+      continue;
+    }
+    // Checking the pinned tree, not the current checkout, keeps the published scope reproducible.
+    const result = spawnSync("git", ["cat-file", "-e", `${String(baselineCommit)}:${path}`], {
+      cwd: repoRoot,
+      encoding: "utf8"
+    });
+    if (result.status !== 0) {
+      errors.push(`${relativePath}: scope does not exist: ${path}`);
+    }
   }
 }
 
