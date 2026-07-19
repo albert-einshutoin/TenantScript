@@ -50,6 +50,28 @@ test("manager reviews schema and capabilities before installing a plugin version
   await expect(page.getByRole("cell", { name: "1.2.2" })).toBeVisible();
 });
 
+test("manager confirms a rollback and can open execution evidence", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Token").fill("manager-token");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByRole("button", { name: "Versions" }).click();
+  await page
+    .getByRole("button", { name: "Rollback large-invoice-notify from 1.3.0 to 1.2.2" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Confirm plugin rollback" });
+  await expect(dialog).toContainText("tenant_acme");
+  await expect(dialog).toContainText("1.3.0");
+  await expect(dialog).toContainText("1.2.2");
+  await page.getByRole("button", { name: "Confirm rollback" }).click();
+
+  await expect(page.getByRole("heading", { name: "Rollback completed" })).toBeVisible();
+  await expect(page.getByText(/audit_demo_inst_large_invoice_1/)).toBeVisible();
+  await expect(page.getByText(/UI rollback duration: \d+ ms/)).toBeVisible();
+  await page.getByRole("button", { name: "View execution log" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Executions" })).toBeVisible();
+});
+
 test("invalid token stays on the login screen", async ({ page }) => {
   await page.goto("/");
 

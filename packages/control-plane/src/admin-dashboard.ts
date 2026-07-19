@@ -20,6 +20,7 @@ export interface AdminPluginVersionSummary {
   pluginKey: string;
   version: string;
   artifactHash: string;
+  createdAt: string;
 }
 
 export interface AdminApprovalSummary {
@@ -145,7 +146,7 @@ async function readPluginVersions(
   const rows = await db
     .prepare(
       [
-        "SELECT pv.id, pv.plugin_id, p.key AS plugin_key, pv.version, pv.artifact_hash",
+        "SELECT pv.id, pv.plugin_id, p.key AS plugin_key, pv.version, pv.artifact_hash, pv.created_at",
         "FROM plugin_versions pv",
         "JOIN plugins p ON p.id = pv.plugin_id",
         "JOIN tenants t ON t.id = ?1 AND t.app_id = p.app_id",
@@ -168,7 +169,8 @@ async function readPluginVersions(
       pluginId: row.plugin_id,
       pluginKey: row.plugin_key,
       version: row.version,
-      artifactHash: row.artifact_hash
+      artifactHash: row.artifact_hash,
+      createdAt: row.created_at
     })),
     ...(page.nextPosition === undefined ? {} : { nextPosition: page.nextPosition })
   };
@@ -375,6 +377,7 @@ interface PluginVersionSummaryRow {
   plugin_key: string;
   version: string;
   artifact_hash: string;
+  created_at: string;
 }
 
 interface ApprovalSummaryRow {

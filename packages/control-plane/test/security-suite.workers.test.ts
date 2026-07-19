@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   createControlPlaneApi,
   createD1AdminInstallFlowStore,
+  createD1AdminRollbackStore,
   createD1ControlPlaneStore
 } from "../src/index.js";
 import type { TenantScriptManifest } from "@tenantscript/manifest";
@@ -107,6 +108,58 @@ describe("D1 tenant boundary security suite", () => {
       testEnv.DB.prepare("SELECT COUNT(*) AS count FROM installations WHERE id = ?")
         .bind("admin_install")
         .first()
+    ).resolves.toEqual({ count: 0 });
+  });
+
+  it("cannot rollback an installation to another app's version", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.createApp({ id: "app_1", name: "App 1" });
+    await store.createApp({ id: "app_2", name: "App 2" });
+    await store.createTenant({ id: "tenant_1", appId: "app_1", name: "Tenant 1" });
+    await store.createPlugin({ id: "plugin_1", appId: "app_1", key: "safe-plugin" });
+    await store.createPlugin({ id: "plugin_2", appId: "app_2", key: "other-plugin" });
+    await store.createPluginVersion({
+      id: "version_current",
+      pluginId: "plugin_1",
+      version: "2.0.0",
+      artifactHash: "hash_current",
+      manifest: { ...manifest, name: "safe-plugin", version: "2.0.0" }
+    });
+    await store.createPluginVersion({
+      id: "version_other",
+      pluginId: "plugin_2",
+      version: "1.0.0",
+      artifactHash: "hash_other",
+      manifest: { ...manifest, name: "other-plugin", version: "1.0.0" }
+    });
+    await store.createInstallation({
+      id: "installation_1",
+      tenantId: "tenant_1",
+      pluginVersionId: "version_current",
+      enabled: true,
+      priority: 10,
+      config: { customerSecret: "must-stay-private" },
+      grants: {}
+    });
+    const rollback = createD1AdminRollbackStore(testEnv.DB);
+
+    await expect(
+      rollback.rollback({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager",
+        installationId: "installation_1",
+        targetVersionId: "version_other",
+        expectedRevision: 0
+      })
+    ).resolves.toBeNull();
+    await expect(
+      testEnv.DB.prepare("SELECT plugin_version_id, revision FROM installations WHERE id = ?")
+        .bind("installation_1")
+        .first()
+    ).resolves.toEqual({ plugin_version_id: "version_current", revision: 0 });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM admin_audit_events").first()
     ).resolves.toEqual({ count: 0 });
   });
 

@@ -29,6 +29,7 @@ export interface PluginVersionView {
   pluginKey: string;
   version: string;
   artifactHash: string;
+  createdAt: Date;
 }
 
 export interface InstallPreview {
@@ -65,6 +66,22 @@ export interface InstallPluginResult {
   enabled: boolean;
   priority: number;
   revision: number;
+}
+
+export interface RollbackInstallationRequest {
+  installationId: string;
+  targetVersionId: string;
+  expectedRevision: number;
+}
+
+export interface RollbackInstallationResult {
+  installationId: string;
+  pluginKey: string;
+  fromVersion: string;
+  toVersion: string;
+  revision: number;
+  auditId: string;
+  completedAt: Date;
 }
 
 export interface DailyUsageSummaryView {
@@ -115,6 +132,9 @@ export interface AdminApiClient extends AdminSessionClient {
   ) => Promise<InstallationCommandResult>;
   getInstallPreview: (versionId: string) => Promise<InstallPreview>;
   installPlugin: (request: InstallPluginRequest) => Promise<InstallPluginResult>;
+  rollbackInstallation: (
+    request: RollbackInstallationRequest
+  ) => Promise<RollbackInstallationResult>;
   clearSession: () => void;
 }
 
@@ -209,7 +229,8 @@ const pluginVersionSchema = z
     pluginId: z.string(),
     pluginKey: z.string(),
     version: z.string(),
-    artifactHash: z.string()
+    artifactHash: z.string(),
+    createdAt: z.coerce.date()
   })
   .strict();
 
@@ -367,6 +388,18 @@ const installPluginResultSchema = z
   })
   .strict();
 
+const rollbackInstallationResultSchema = z
+  .object({
+    installationId: z.string().min(1),
+    pluginKey: z.string().min(1),
+    fromVersion: z.string().min(1),
+    toVersion: z.string().min(1),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    auditId: z.string().min(1),
+    completedAt: z.iso.datetime()
+  })
+  .strict();
+
 const demoSessionList: readonly { token: string; session: AdminSession }[] = [
   {
     token: "manager-token",
@@ -419,14 +452,16 @@ const dashboardFixture: DashboardSnapshot = {
       pluginId: "plugin_large_invoice",
       pluginKey: "large-invoice-notify",
       version: "1.3.0",
-      artifactHash: "sha256:large-invoice-130"
+      artifactHash: "sha256:large-invoice-130",
+      createdAt: new Date("2026-07-19T16:00:00.000Z")
     },
     {
       id: "version_large_invoice_1_2_2",
       pluginId: "plugin_large_invoice",
       pluginKey: "large-invoice-notify",
       version: "1.2.2",
-      artifactHash: "sha256:large-invoice-122"
+      artifactHash: "sha256:large-invoice-122",
+      createdAt: new Date("2026-07-18T16:00:00.000Z")
     }
   ],
   approvals: [
@@ -586,6 +621,52 @@ export function createDemoAdminApiClient(): AdminApiClient {
       };
       return Promise.resolve(updated);
     },
+    rollbackInstallation: (request) => {
+      const installation = snapshot.installations.find(
+        (candidate) => candidate.id === request.installationId
+      );
+      const target = snapshot.pluginVersions.find(
+        (candidate) => candidate.id === request.targetVersionId
+      );
+      if (
+        installation === undefined ||
+        target === undefined ||
+        target.pluginKey !== installation.pluginKey
+      ) {
+        return Promise.reject(
+          new AdminApiError(404, "rollback_target_not_found", "rollback target not found")
+        );
+      }
+      if (request.expectedRevision !== installation.revision) {
+        return Promise.reject(
+          new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+        );
+      }
+      if (target.version === installation.version) {
+        return Promise.reject(
+          new AdminApiError(409, "rollback_target_is_current", "target version is already current")
+        );
+      }
+      const completedAt = new Date();
+      const result: RollbackInstallationResult = {
+        installationId: installation.id,
+        pluginKey: installation.pluginKey,
+        fromVersion: installation.version,
+        toVersion: target.version,
+        revision: installation.revision + 1,
+        auditId: `audit_demo_${installation.id}_${String(installation.revision + 1)}`,
+        completedAt
+      };
+      snapshot = {
+        ...snapshot,
+        installations: snapshot.installations.map((candidate) =>
+          candidate.id === installation.id
+            ? { ...candidate, version: target.version, revision: result.revision }
+            : candidate
+        )
+      };
+      return Promise.resolve(result);
+    },
     clearSession: () => undefined
   };
 }
@@ -603,6 +684,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     updateInstallationCommand: unavailable,
     getInstallPreview: unavailable,
     installPlugin: unavailable,
+    rollbackInstallation: unavailable,
     clearSession: () => undefined
   };
 }
@@ -645,6 +727,11 @@ export function createAdminApiClient(params: {
   const installationsUrl = apiEndpoint(
     params.controlPlaneUrl,
     "/v1/admin/installations",
+    params.isDevelopment
+  );
+  const rollbacksUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/rollbacks",
     params.isDevelopment
   );
   const fetcher = params.fetcher ?? fetch;
@@ -713,6 +800,17 @@ export function createAdminApiClient(params: {
         throw invalidResponse();
       }
       return installed.data;
+    },
+    rollbackInstallation: async (request) => {
+      const payload = await fetchAdminJson(rollbacksUrl, requireCredential(credential), fetcher, {
+        method: "POST",
+        body: JSON.stringify(request)
+      });
+      const rollback = rollbackInstallationResultSchema.safeParse(payload);
+      if (!rollback.success || rollback.data.installationId !== request.installationId) {
+        throw invalidResponse();
+      }
+      return { ...rollback.data, completedAt: new Date(rollback.data.completedAt) };
     },
     clearSession: () => {
       credential = undefined;

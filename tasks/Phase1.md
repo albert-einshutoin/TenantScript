@@ -210,7 +210,7 @@
   - RED(E2E): install フローで manifest 要求 capability が表示され、grant を確認して有効化できる / config フォームが configSchema から生成され required 検証が効く
   - DoD: E2E + コンポーネントテスト green
 
-- [ ] **P1-T34**(M)versions + rollback 画面
+- [x] **P1-T34**(M)versions + rollback 画面
   - RED(E2E): version 履歴表示 → ワンクリック rollback → 確認ダイアログ → 完了表示
   - DoD: E2E green(T07 の drill をこの画面で実施できる)
 

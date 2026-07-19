@@ -25,6 +25,12 @@ Bearer token is sent only in the Authorization header, retained inside the API c
 component state, and cleared on sign out. Responses are strictly parsed so storage-only fields fail
 closed instead of reaching the component tree.
 
+The Versions screen shows catalog history, current tenant pins, artifact hashes, and publication
+times. Managers can submit `POST /v1/admin/rollbacks` only after confirming the identity-derived
+tenant, plugin, current version, and target version. The UI waits for the audited server response,
+refreshes the dashboard before treating the operation as complete, and exposes the audit ID,
+completion timestamp, UI duration, and execution-log navigation needed by the rollback drill.
+
 ## Control Plane connection
 
 Set the Pages build variable to the HTTPS Worker origin (loopback HTTP is accepted for local

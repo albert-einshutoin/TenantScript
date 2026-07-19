@@ -267,6 +267,102 @@ describe("Admin UI auth foundation", () => {
     expect(screen.queryByRole("button", { name: /^Install / })).not.toBeInTheDocument();
   });
 
+  it("confirms the exact rollback scope, prevents duplicate submission, and shows audit evidence", async () => {
+    const baseClient = createDemoAdminApiClient();
+    let resolveRollback!: (value: {
+      installationId: string;
+      pluginKey: string;
+      fromVersion: string;
+      toVersion: string;
+      revision: number;
+      auditId: string;
+      completedAt: Date;
+    }) => void;
+    const rollbackInstallation = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        resolveRollback = resolve;
+      })
+    );
+    render(<App client={{ ...baseClient, rollbackInstallation }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Rollback large-invoice-notify from 1.3.0 to 1.2.2"
+      })
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Confirm plugin rollback" });
+    expect(dialog).toHaveTextContent("tenant_acme");
+    expect(dialog).toHaveTextContent("large-invoice-notify");
+    expect(dialog).toHaveTextContent("1.3.0");
+    expect(dialog).toHaveTextContent("1.2.2");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm rollback" }));
+    expect(screen.getByRole("button", { name: "Rolling back" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Rolling back" }));
+    expect(rollbackInstallation).toHaveBeenCalledTimes(1);
+    expect(rollbackInstallation).toHaveBeenCalledWith({
+      installationId: "inst_large_invoice",
+      targetVersionId: "version_large_invoice_1_2_2",
+      expectedRevision: 0
+    });
+
+    resolveRollback({
+      installationId: "inst_large_invoice",
+      pluginKey: "large-invoice-notify",
+      fromVersion: "1.3.0",
+      toVersion: "1.2.2",
+      revision: 1,
+      auditId: "audit_rollback_1",
+      completedAt: new Date("2026-07-19T17:00:00.000Z")
+    });
+    await expect(screen.findByText("Rollback completed")).resolves.toBeInTheDocument();
+    expect(screen.getByText("audit_rollback_1")).toBeInTheDocument();
+    expect(screen.getByText(/UI rollback duration: \d+ ms/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View execution log" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View execution log" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Executions" })).toBeInTheDocument();
+  });
+
+  it("can cancel rollback and safely refreshes after a revision conflict", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const getDashboard = vi.spyOn(baseClient, "getDashboard");
+    const rollbackInstallation = vi
+      .fn()
+      .mockRejectedValue(
+        new AdminApiError(409, "installation_revision_conflict", "installation changed; refresh")
+      );
+    render(<App client={{ ...baseClient, getDashboard, rollbackInstallation }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    const rollback = await screen.findByRole("button", {
+      name: "Rollback large-invoice-notify from 1.3.0 to 1.2.2"
+    });
+    fireEvent.click(rollback);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(
+      screen.queryByRole("dialog", { name: "Confirm plugin rollback" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(rollback);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm rollback" }));
+    await expect(
+      screen.findByText("Installation changed; version history refreshed")
+    ).resolves.toBeInTheDocument();
+    expect(getDashboard).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows version history but hides rollback actions from viewers", async () => {
+    render(<App client={createDemoAdminApiClient()} />);
+    await login("viewer-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+
+    expect(await screen.findByText("sha256:large-invoice-122")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Rollback / })).not.toBeInTheDocument();
+  });
+
   it("installs a plugin with no config or capabilities and keeps it disabled by default", async () => {
     const baseClient = createDemoAdminApiClient();
     const installPlugin = vi.fn().mockResolvedValue({

@@ -10,6 +10,7 @@ import type {
   AdminInstallationDetailStore
 } from "./admin-installations.js";
 import { AdminInstallFlowError, type AdminInstallFlowStore } from "./admin-install-flow.js";
+import type { AdminRollbackStore } from "./admin-rollbacks.js";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -26,6 +27,7 @@ export interface ControlPlaneHttpHandlerOptions {
   installationDetailStore?: AdminInstallationDetailStore;
   installationCommandStore?: AdminInstallationCommandStore;
   installFlowStore?: AdminInstallFlowStore;
+  rollbackStore?: AdminRollbackStore;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -81,6 +83,15 @@ export function createControlPlaneHttpHandler(
       }
       return runInstall(request, options, corsHeaders);
     }
+    if (route === "rollbackCreate") {
+      if (request.method !== "POST") {
+        return errorResponse(405, "method_not_allowed", "method not allowed", {
+          ...corsHeaders,
+          Allow: "POST, OPTIONS"
+        });
+      }
+      return runRollback(request, options, corsHeaders);
+    }
     if (request.method !== "GET") {
       return errorResponse(405, "method_not_allowed", "method not allowed", {
         ...corsHeaders,
@@ -107,6 +118,7 @@ type AdminRoute =
   | "installationCommand"
   | "installPreview"
   | "installCreate"
+  | "rollbackCreate"
   | AdminDashboardSection
   | { id: string };
 
@@ -130,6 +142,9 @@ function adminRoute(url: URL): AdminRoute | null {
   }
   if (path === "/v1/admin/installations") {
     return "installCreate";
+  }
+  if (path === "/v1/admin/rollbacks") {
+    return "rollbackCreate";
   }
   const section = path.slice("/v1/admin/dashboard/".length);
   if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
@@ -391,6 +406,140 @@ async function runInstallationCommand(
   }
 }
 
+async function runRollback(
+  request: Request,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.rollbackStore === undefined) {
+    return errorResponse(
+      503,
+      "rollback_store_unavailable",
+      "rollback service unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  if (identity.role !== "manager") {
+    return errorResponse(403, "rollback_forbidden", "manager role required", corsHeaders);
+  }
+  const command = await parseRollbackCommand(request, corsHeaders);
+  if (command instanceof Response) return command;
+  try {
+    const result = await options.rollbackStore.rollback({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      actor: identity.subject,
+      ...command
+    });
+    // Installation, target-version, and cross-scope misses intentionally share one response.
+    if (result === null) {
+      return errorResponse(
+        404,
+        "rollback_target_not_found",
+        "rollback target not found",
+        corsHeaders
+      );
+    }
+    if (result.outcome === "conflict") {
+      return errorResponse(
+        409,
+        "installation_revision_conflict",
+        "installation changed; refresh",
+        corsHeaders
+      );
+    }
+    if (result.outcome === "same_version") {
+      return errorResponse(
+        409,
+        "rollback_target_is_current",
+        "target version is already current",
+        corsHeaders
+      );
+    }
+    return jsonResponse(
+      200,
+      {
+        installationId: result.installationId,
+        pluginKey: result.pluginKey,
+        fromVersion: result.fromVersion,
+        toVersion: result.toVersion,
+        revision: result.revision,
+        auditId: result.auditId,
+        completedAt: result.completedAt
+      },
+      corsHeaders
+    );
+  } catch {
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function parseRollbackCommand(
+  request: Request,
+  corsHeaders: Record<string, string> | undefined
+): Promise<
+  { installationId: string; targetVersionId: string; expectedRevision: number } | Response
+> {
+  const contentType = request.headers.get("Content-Type");
+  if (
+    contentType === null ||
+    contentType.split(";", 1)[0]?.trim().toLowerCase() !== "application/json"
+  ) {
+    return errorResponse(
+      415,
+      "unsupported_media_type",
+      "application/json body required",
+      corsHeaders
+    );
+  }
+  const contentLength = request.headers.get("Content-Length");
+  if (
+    contentLength !== null &&
+    (!/^\d+$/u.test(contentLength) || Number(contentLength) > maximumCommandBodyBytes)
+  ) {
+    return errorResponse(413, "request_too_large", "request body too large", corsHeaders);
+  }
+  let text: string;
+  try {
+    text = await readBoundedUtf8Body(request, maximumCommandBodyBytes);
+  } catch (error) {
+    return errorResponse(
+      error instanceof CommandBodyTooLargeError ? 413 : 400,
+      error instanceof CommandBodyTooLargeError ? "request_too_large" : "invalid_rollback",
+      error instanceof CommandBodyTooLargeError
+        ? "request body too large"
+        : "invalid rollback command",
+      corsHeaders
+    );
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error();
+    const record = parsed as Record<string, unknown>;
+    if (
+      Object.keys(record).length !== 3 ||
+      !Object.hasOwn(record, "installationId") ||
+      !Object.hasOwn(record, "targetVersionId") ||
+      !Object.hasOwn(record, "expectedRevision") ||
+      !isNonEmptyString(record.installationId) ||
+      !isNonEmptyString(record.targetVersionId) ||
+      !Number.isSafeInteger(record.expectedRevision) ||
+      (record.expectedRevision as number) < 0
+    ) {
+      throw new Error();
+    }
+    return {
+      installationId: record.installationId,
+      targetVersionId: record.targetVersionId,
+      expectedRevision: record.expectedRevision as number
+    };
+  } catch {
+    return errorResponse(400, "invalid_rollback", "invalid rollback command", corsHeaders);
+  }
+}
+
 async function parseInstallationCommand(
   request: Request,
   corsHeaders: Record<string, string> | undefined
@@ -580,7 +729,12 @@ async function resolveDashboard(
   request: Request,
   route: Exclude<
     AdminRoute,
-    "session" | "installationCommand" | "installPreview" | "installCreate" | { id: string }
+    | "session"
+    | "installationCommand"
+    | "installPreview"
+    | "installCreate"
+    | "rollbackCreate"
+    | { id: string }
   >,
   url: URL,
   options: ControlPlaneHttpHandlerOptions,
@@ -828,7 +982,7 @@ function preflightResponse(
 
 function allowedMethods(route: AdminRoute): string {
   if (route === "installationCommand") return "PATCH, OPTIONS";
-  if (route === "installCreate") return "POST, OPTIONS";
+  if (route === "installCreate" || route === "rollbackCreate") return "POST, OPTIONS";
   return "GET, OPTIONS";
 }
 
