@@ -319,6 +319,7 @@ describe("Admin UI auth foundation", () => {
     });
     await expect(screen.findByText("Rollback completed")).resolves.toBeInTheDocument();
     expect(screen.getByText("audit_rollback_1")).toBeInTheDocument();
+    expect(screen.getByText(/UI rollback duration: \d+ ms/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View execution log" })).toBeInTheDocument();
   });
 

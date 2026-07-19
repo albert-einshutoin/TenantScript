@@ -823,10 +823,16 @@ function VersionsPanel({
   } | null>(null);
   const [rollbackResult, setRollbackResult] = useState<RollbackInstallationResult | null>(null);
   const [rollbackError, setRollbackError] = useState<string | null>(null);
+  const [rollbackStartedAt, setRollbackStartedAt] = useState<Date | null>(null);
+  const [rollbackDurationMs, setRollbackDurationMs] = useState<number | null>(null);
 
   const confirmRollback = useCallback(() => {
     if (rollbackTarget === null || rollbackInFlight) return;
+    const startedAt = new Date();
+    const startedTick = performance.now();
     setRollbackError(null);
+    setRollbackStartedAt(startedAt);
+    setRollbackDurationMs(null);
     void onRollback({
       installationId: rollbackTarget.installation.id,
       targetVersionId: rollbackTarget.version.id,
@@ -834,6 +840,7 @@ function VersionsPanel({
     })
       .then((result) => {
         setRollbackResult(result);
+        setRollbackDurationMs(Math.max(0, Math.round(performance.now() - startedTick)));
         setRollbackTarget(null);
       })
       .catch((cause: unknown) => {
@@ -961,7 +968,11 @@ function VersionsPanel({
           <p>
             Audit: <span className="mono-cell">{rollbackResult.auditId}</span>
           </p>
+          {rollbackStartedAt === null ? null : <p>Started: {rollbackStartedAt.toISOString()}</p>}
           <p>Completed: {rollbackResult.completedAt.toISOString()}</p>
+          {rollbackDurationMs === null ? null : (
+            <p>UI rollback duration: {String(rollbackDurationMs)} ms</p>
+          )}
           <button type="button" className="secondary-button" onClick={onViewExecutions}>
             View execution log
           </button>
