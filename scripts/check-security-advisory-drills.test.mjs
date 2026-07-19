@@ -79,6 +79,23 @@ test("rejects credential-shaped fields from public synthetic records", () => {
   });
 });
 
+test("rejects credential-shaped values and URL query data", () => {
+  withRepo((repoRoot) => {
+    const drill = validDrill();
+    drill.scenario = "Synthetic credential ghp_12345678901234567890 must not be recorded.";
+    const closeout = drill.stages.find((stage) => stage.name === "closeout");
+    assert.ok(closeout);
+    closeout.evidence = "https://github.com/example/repository/pull/1?access=private";
+    writeDrill(repoRoot, drill);
+
+    const result = runChecker(repoRoot);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /forbidden credential-like value/);
+    assert.match(result.stderr, /HTTPS evidence must not contain query or fragment data/);
+  });
+});
+
 function writeDrill(repoRoot, drill) {
   writeFileSync(
     join(repoRoot, "docs", "security", "advisory-drills", "drill.json"),
