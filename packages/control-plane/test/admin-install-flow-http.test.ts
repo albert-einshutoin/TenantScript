@@ -11,7 +11,9 @@ describe("Control Plane Admin install flow HTTP contract", () => {
   it("allows both roles to preview safe metadata but only managers to install", async () => {
     const store = installFlowStore();
     const handler = createHandler(store);
-    const preview = await handler(request("viewer", "/v1/admin/install-preview?versionId=version_1"));
+    const preview = await handler(
+      request("viewer", "/v1/admin/install-preview?versionId=version_1")
+    );
 
     expect(preview.status).toBe(200);
     expect(store.readVersion).toHaveBeenCalledWith({ appId: "app_acme", versionId: "version_1" });
@@ -169,9 +171,7 @@ function installFlowStore() {
       versionId: "version_1",
       pluginKey: "invoice-notify",
       version: "1.0.0",
-      configFields: [
-        { name: "notifyChannel", type: "string", required: true, hasDefault: false }
-      ],
+      configFields: [{ name: "notifyChannel", type: "string", required: true, hasDefault: false }],
       capabilities: [
         {
           name: "slack.send",

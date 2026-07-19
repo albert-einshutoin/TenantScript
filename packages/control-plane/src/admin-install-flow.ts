@@ -49,7 +49,10 @@ export interface AdminInstallResult {
 }
 
 export interface AdminInstallFlowStore {
-  readVersion: (request: { appId: string; versionId: string }) => Promise<AdminInstallPreview | null>;
+  readVersion: (request: {
+    appId: string;
+    versionId: string;
+  }) => Promise<AdminInstallPreview | null>;
   install: (request: AdminInstallRequest) => Promise<AdminInstallResult | null>;
 }
 

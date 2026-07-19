@@ -9,10 +9,7 @@ import type {
   AdminInstallationCommandStore,
   AdminInstallationDetailStore
 } from "./admin-installations.js";
-import {
-  AdminInstallFlowError,
-  type AdminInstallFlowStore
-} from "./admin-install-flow.js";
+import { AdminInstallFlowError, type AdminInstallFlowStore } from "./admin-install-flow.js";
 
 export type AdminRole = "manager" | "viewer";
 
@@ -193,7 +190,12 @@ async function runInstall(
   const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
   if (identity instanceof Response) return identity;
   if (identity.role !== "manager") {
-    return errorResponse(403, "installation_install_forbidden", "manager role required", corsHeaders);
+    return errorResponse(
+      403,
+      "installation_install_forbidden",
+      "manager role required",
+      corsHeaders
+    );
   }
   const command = await parseInstallRequest(request, corsHeaders);
   if (command instanceof Response) return command;
@@ -241,7 +243,12 @@ async function parseInstallRequest(
     contentType === null ||
     contentType.split(";", 1)[0]?.trim().toLowerCase() !== "application/json"
   ) {
-    return errorResponse(415, "unsupported_media_type", "application/json body required", corsHeaders);
+    return errorResponse(
+      415,
+      "unsupported_media_type",
+      "application/json body required",
+      corsHeaders
+    );
   }
   const contentLength = request.headers.get("Content-Length");
   if (
@@ -263,7 +270,12 @@ async function parseInstallRequest(
     if (!isInstallRequest(parsed)) throw new Error("invalid install request");
     return parsed;
   } catch {
-    return errorResponse(400, "invalid_install_request", "invalid installation request", corsHeaders);
+    return errorResponse(
+      400,
+      "invalid_install_request",
+      "invalid installation request",
+      corsHeaders
+    );
   }
 }
 
