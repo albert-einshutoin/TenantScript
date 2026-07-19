@@ -115,6 +115,17 @@ export {
 } from "./approval-state.js";
 
 export {
+  RBAC_OPERATIONS,
+  RBAC_ROLES,
+  canRolePerform,
+  isSupportedRbacRole,
+  normalizeRbacRole,
+  type RbacOperation,
+  type RbacRole,
+  type SupportedRbacRole
+} from "./rbac.js";
+
+export {
   createDurableObjectDailyUsageCounter,
   createInMemoryDailyUsageCounter,
   type DailyUsageCounter,

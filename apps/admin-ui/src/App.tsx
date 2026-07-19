@@ -20,6 +20,7 @@ import {
   type RollbackInstallationResult
 } from "./api-client.js";
 import type { AdminDashboardSection } from "@tenantscript/control-plane";
+import { canRolePerform } from "@tenantscript/control-plane/rbac";
 import { type AdminRoute, useHashRoute } from "./router.js";
 
 const defaultClient = createUnavailableAdminApiClient();
@@ -487,7 +488,7 @@ function RoutePanel({
           permissionLoading={permissionLoading}
           permissionError={permissionError}
           onPermissionReview={onPermissionReview}
-          canManage={session.role === "manager"}
+          canManage={canRolePerform(session.role, "installation:manage")}
           onInstallationCommand={onInstallationCommand}
           commandInFlight={commandInFlight}
         />
@@ -496,7 +497,7 @@ function RoutePanel({
       return (
         <VersionsPanel
           snapshot={snapshot}
-          canInstall={session.role === "manager"}
+          canInstall={canRolePerform(session.role, "installation:manage")}
           loading={loadingSection === "pluginVersions"}
           onLoadMore={() => {
             onLoadMore("pluginVersions");
@@ -518,7 +519,7 @@ function RoutePanel({
         <ApprovalsPanel
           snapshot={snapshot}
           tenantId={session.tenantId}
-          canDecide={session.role === "manager"}
+          canDecide={canRolePerform(session.role, "approval:decide")}
           loading={loadingSection === "approvals"}
           onLoadMore={() => {
             onLoadMore("approvals");

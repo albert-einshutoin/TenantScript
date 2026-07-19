@@ -1049,7 +1049,7 @@ describe("Admin HTTP session client", () => {
     ["missing tenant scope", { subject: "user", role: "manager", appId: "app_acme" }],
     [
       "unknown role",
-      { subject: "user", role: "operator", appId: "app_acme", tenantId: "tenant_acme" }
+      { subject: "user", role: "super-admin", appId: "app_acme", tenantId: "tenant_acme" }
     ],
     ["malformed payload", { ok: true }]
   ])("rejects %s as an invalid response", async (_label, payload) => {
@@ -1062,4 +1062,17 @@ describe("Admin HTTP session client", () => {
       new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
     );
   });
+
+  it.each(["owner", "admin", "operator", "viewer", "tenant-admin", "manager"])(
+    "accepts the supported %s session role",
+    async (role) => {
+      const payload = { subject: "user", role, appId: "app_acme", tenantId: "tenant_acme" };
+      const client = createHttpAdminSessionClient({
+        baseUrl: "https://api.example.com",
+        fetcher: vi.fn<typeof fetch>().mockResolvedValue(Response.json(payload))
+      });
+
+      await expect(client.resolveSession({ token: "secret" })).resolves.toEqual(payload);
+    }
+  );
 });

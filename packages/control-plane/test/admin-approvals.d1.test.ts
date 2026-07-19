@@ -31,6 +31,22 @@ describe("D1 Admin approval decision adapter", () => {
     ]);
   });
 
+  it.each(["owner", "admin", "tenant-admin", "manager"])(
+    "allows %s to decide a Phase 1 manager approval during migration",
+    async (actorRole) => {
+      const db = database([pending()]);
+      const store = createD1AdminApprovalDecisionStore(db, {
+        auditId: () => "audit_rbac",
+        now: () => new Date("2026-07-20T00:00:00.000Z")
+      });
+
+      await expect(store.decide({ ...request(), actorRole })).resolves.toMatchObject({
+        state: "approved"
+      });
+      expect(db.bindings[1]?.[6]).toBe(actorRole);
+    }
+  );
+
   it.each([
     ["missing", null, request(), "approval_not_found"],
     ["viewer", pending(), { ...request(), actorRole: "viewer" }, "approval_role_forbidden"],

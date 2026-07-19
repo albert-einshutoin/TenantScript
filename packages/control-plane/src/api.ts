@@ -18,6 +18,7 @@ import type {
   RecordUsageMetricRequest,
   UsageMeter
 } from "./usage-meter.js";
+import { canRolePerform, normalizeRbacRole } from "./rbac.js";
 
 export type { ApprovalDecision, ApprovalState } from "./approval-state.js";
 
@@ -809,9 +810,14 @@ async function authorizeApprovalDecision(
 
   const token = request.authToken;
   const identity = token === undefined ? null : await identityResolver.resolveToken(token);
-  // MVP identity is deliberately a static token -> role claim map. P2-T05 replaces this
-  // with RBAC; request.role is ignored so callers cannot self-assert manager privileges.
-  if (identity === null || identity.role !== approval.role) {
+  // request.role remains ignored so callers cannot self-assert privileges. Existing manager
+  // approvals use the central RBAC matrix; future explicit requirements remain exact.
+  if (
+    identity === null ||
+    !canRolePerform(identity.role, "approval:decide") ||
+    (approval.role !== "manager" &&
+      normalizeRbacRole(identity.role) !== normalizeRbacRole(approval.role))
+  ) {
     throw apiError(
       403,
       "approval_role_forbidden",

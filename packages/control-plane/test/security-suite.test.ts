@@ -321,7 +321,7 @@ describe("control-plane security suite", () => {
     expect(await outsideScope.text()).not.toContain("slack.send");
   });
 
-  it("allows only token roles that match the approval role and ignores body role claims", async () => {
+  it("uses the RBAC matrix for approval decisions and ignores body role claims", async () => {
     const approval = {
       id: "approval_1",
       tenantId: "tenant_1",
@@ -351,6 +351,24 @@ describe("control-plane security suite", () => {
         actor: "manager@example.com",
         auditId: "audit_1",
         authToken: "manager-token"
+      })
+    ).resolves.toMatchObject({ state: "approved" });
+
+    const adminApi = createControlPlaneApi({
+      store: createDecisionStore(approval),
+      artifacts: noopArtifacts,
+      identityResolver: createStaticTokenIdentityResolver({
+        "admin-token": { subject: "user_admin", role: "admin" }
+      })
+    });
+    await expect(
+      adminApi.decideApproval({
+        id: "approval_1",
+        tenantId: "tenant_1",
+        decision: "approved",
+        actor: "admin@example.com",
+        auditId: "audit_admin",
+        authToken: "admin-token"
       })
     ).resolves.toMatchObject({ state: "approved" });
 
