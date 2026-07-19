@@ -16,15 +16,21 @@ The Phase 1 gate is MTTR `< 5 minutes`.
 4. Wait for **Rollback completed**. Record the displayed audit ID, server completion timestamp, and
    UI rollback duration; then use **View execution log** to confirm the next execution used the
    restored version.
-5. Record the four timestamps with `rollback:drill`.
+5. Record the four timestamps with the public CLI subcommand `ext rollback-drill` or the repository
+   wrapper shown below.
 
 The manager confirmation must show the tenant, plugin, current version, and target version. Viewer
 tokens must not show rollback controls and receive `403` from the direct API.
 
 ## Measurement Command
 
+Installed CLI users run `ext rollback-drill <options>`. From a TenantScript checkout, use the pnpm
+script wrapper below; `rollback:drill` is a package script name, not an `ext` subcommand.
+
 ```sh
-pnpm --filter @tenantscript/cli rollback:drill -- \
+# cwd: repository root
+# expected-exit: 0
+pnpm --filter @tenantscript/cli run rollback:drill -- \
   --deployed-at 2026-06-13T00:00:00.000Z \
   --detected-at 2026-06-13T00:01:15.000Z \
   --rollback-started-at 2026-06-13T00:02:00.000Z \
@@ -76,5 +82,5 @@ customer payloads):
 ```
 
 `completedAt` and `auditId` come from the Control Plane response. `verificationExecutionId` is the
-first post-rollback execution using `toVersion`. The existing `rollback:drill` command remains the
-canonical timestamp validator and computes the gate result.
+first post-rollback execution using `toVersion`. The public `ext rollback-drill` subcommand and the
+repository `rollback:drill` script wrapper use the same timestamp validator and gate computation.

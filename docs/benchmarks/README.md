@@ -16,6 +16,20 @@ Live latency evidence is **blocked** on the Cloudflare paid Workers plan. The ha
 ## Phase 1 rollback drill
 
 Operator rollback path and MTTR measurement are documented in [phase1-rollback-drill.md](phase1-rollback-drill.md).
+Regenerate the sample result from a repository checkout with the package script wrapper:
+
+```sh
+# cwd: repository root
+# expected-exit: 0
+pnpm --filter @tenantscript/cli run rollback:drill -- \
+  --deployed-at 2026-06-13T00:00:00.000Z \
+  --detected-at 2026-06-13T00:01:15.000Z \
+  --rollback-started-at 2026-06-13T00:02:00.000Z \
+  --completed-at 2026-06-13T00:03:20.000Z
+```
+
+The installed product CLI spells the same operation `ext rollback-drill`; `rollback:drill` is only
+the pnpm script name used inside this repository.
 
 ## How to add a benchmark
 
@@ -44,5 +58,7 @@ When you add a new benchmark document, update this README index and include the 
 After updating the index and benchmark doc, confirm the new row appears in the table above and the linked doc contains all required fields:
 
 ```sh
+# cwd: repository root
+# expected-exit: 0
 rg -n "Phase|Topic|Status|measurement|Result|Go/No-Go|Decision" docs/benchmarks/
 ```
