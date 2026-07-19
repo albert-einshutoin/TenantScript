@@ -26,8 +26,45 @@ export interface InstallationView {
 export interface PluginVersionView {
   id: string;
   pluginId: string;
+  pluginKey: string;
   version: string;
   artifactHash: string;
+}
+
+export interface InstallPreview {
+  versionId: string;
+  pluginKey: string;
+  version: string;
+  configFields: readonly {
+    name: string;
+    type: "string" | "number" | "boolean";
+    required: boolean;
+    hasDefault: boolean;
+  }[];
+  capabilities: readonly {
+    name: string;
+    scopeKeys: readonly string[];
+    configReferences: readonly string[];
+  }[];
+  egress: { mode: "deny" | "allowlist"; allowlistedHostCount: number };
+}
+
+export interface InstallPluginRequest {
+  versionId: string;
+  config: Record<string, string | number | boolean>;
+  confirmedCapabilities: readonly string[];
+  enabled: boolean;
+  priority: number;
+}
+
+export interface InstallPluginResult {
+  id: string;
+  versionId: string;
+  pluginKey: string;
+  version: string;
+  enabled: boolean;
+  priority: number;
+  revision: number;
 }
 
 export interface DailyUsageSummaryView {
@@ -76,6 +113,8 @@ export interface AdminApiClient extends AdminSessionClient {
   updateInstallationCommand: (
     request: InstallationCommandRequest
   ) => Promise<InstallationCommandResult>;
+  getInstallPreview: (versionId: string) => Promise<InstallPreview>;
+  installPlugin: (request: InstallPluginRequest) => Promise<InstallPluginResult>;
   clearSession: () => void;
 }
 
@@ -168,6 +207,7 @@ const pluginVersionSchema = z
   .object({
     id: z.string(),
     pluginId: z.string(),
+    pluginKey: z.string(),
     version: z.string(),
     artifactHash: z.string()
   })
@@ -282,6 +322,51 @@ const installationCommandResultSchema = z
   })
   .strict();
 
+const installPreviewSchema = z
+  .object({
+    versionId: z.string().min(1),
+    pluginKey: z.string().min(1),
+    version: z.string().min(1),
+    configFields: z.array(
+      z
+        .object({
+          name: z.string().min(1),
+          type: z.enum(["string", "number", "boolean"]),
+          required: z.boolean(),
+          hasDefault: z.boolean()
+        })
+        .strict()
+    ),
+    capabilities: z.array(
+      z
+        .object({
+          name: z.string().min(1),
+          scopeKeys: z.array(z.string()),
+          configReferences: z.array(z.string())
+        })
+        .strict()
+    ),
+    egress: z
+      .object({
+        mode: z.enum(["deny", "allowlist"]),
+        allowlistedHostCount: z.number().int().min(0)
+      })
+      .strict()
+  })
+  .strict();
+
+const installPluginResultSchema = z
+  .object({
+    id: z.string().min(1),
+    versionId: z.string().min(1),
+    pluginKey: z.string().min(1),
+    version: z.string().min(1),
+    enabled: z.boolean(),
+    priority: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
+  })
+  .strict();
+
 const demoSessionList: readonly { token: string; session: AdminSession }[] = [
   {
     token: "manager-token",
@@ -332,12 +417,14 @@ const dashboardFixture: DashboardSnapshot = {
     {
       id: "version_large_invoice_1_3_0",
       pluginId: "plugin_large_invoice",
+      pluginKey: "large-invoice-notify",
       version: "1.3.0",
       artifactHash: "sha256:large-invoice-130"
     },
     {
       id: "version_large_invoice_1_2_2",
       pluginId: "plugin_large_invoice",
+      pluginKey: "large-invoice-notify",
       version: "1.2.2",
       artifactHash: "sha256:large-invoice-122"
     }
@@ -409,6 +496,65 @@ export function createDemoAdminApiClient(): AdminApiClient {
         egress: { mode: "deny", allowlistedHostCount: 0 }
       });
     },
+    getInstallPreview: (versionId) => {
+      const version = snapshot.pluginVersions.find((candidate) => candidate.id === versionId);
+      if (version === undefined) {
+        return Promise.reject(
+          new AdminApiError(404, "plugin_version_not_found", "plugin version not found")
+        );
+      }
+      return Promise.resolve({
+        versionId: version.id,
+        pluginKey: version.pluginKey,
+        version: version.version,
+        configFields: [
+          { name: "notifyChannel", type: "string", required: true, hasDefault: false }
+        ],
+        capabilities: [
+          {
+            name: "slack.send",
+            scopeKeys: ["channel"],
+            configReferences: ["notifyChannel"]
+          }
+        ],
+        egress: { mode: "deny", allowlistedHostCount: 0 }
+      });
+    },
+    installPlugin: (request) => {
+      const version = snapshot.pluginVersions.find(
+        (candidate) => candidate.id === request.versionId
+      );
+      if (version === undefined) {
+        return Promise.reject(
+          new AdminApiError(404, "plugin_version_not_found", "plugin version not found")
+        );
+      }
+      if (
+        typeof request.config.notifyChannel !== "string" ||
+        !request.confirmedCapabilities.includes("slack.send")
+      ) {
+        return Promise.reject(
+          new AdminApiError(400, "invalid_config", "installation config validation failed")
+        );
+      }
+      const result = {
+        id: `installation_demo_${String(snapshot.installations.length + 1)}`,
+        versionId: request.versionId,
+        pluginKey: version.pluginKey,
+        version: version.version,
+        enabled: request.enabled,
+        priority: request.priority,
+        revision: 0
+      };
+      snapshot = {
+        ...snapshot,
+        installations: [
+          ...snapshot.installations,
+          { ...result, statusText: result.enabled ? "enabled" : "disabled" }
+        ]
+      };
+      return Promise.resolve(result);
+    },
     updateInstallationCommand: (request) => {
       const installation = snapshot.installations.find((candidate) => candidate.id === request.id);
       if (installation === undefined) {
@@ -455,6 +601,8 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     getDashboardSection: unavailable,
     getInstallationPermissionReview: unavailable,
     updateInstallationCommand: unavailable,
+    getInstallPreview: unavailable,
+    installPlugin: unavailable,
     clearSession: () => undefined
   };
 }
@@ -487,6 +635,16 @@ export function createAdminApiClient(params: {
   const installationCommandUrl = apiEndpoint(
     params.controlPlaneUrl,
     "/v1/admin/installation-command",
+    params.isDevelopment
+  );
+  const installPreviewUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/install-preview",
+    params.isDevelopment
+  );
+  const installationsUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/installations",
     params.isDevelopment
   );
   const fetcher = params.fetcher ?? fetch;
@@ -534,6 +692,27 @@ export function createAdminApiClient(params: {
       const result = installationCommandResultSchema.safeParse(payload);
       if (!result.success || result.data.id !== request.id) throw invalidResponse();
       return result.data;
+    },
+    getInstallPreview: async (versionId) => {
+      const url = new URL(installPreviewUrl);
+      url.searchParams.set("versionId", versionId);
+      const payload = await fetchAdminJson(url.toString(), requireCredential(credential), fetcher);
+      const preview = installPreviewSchema.safeParse(payload);
+      if (!preview.success || preview.data.versionId !== versionId) throw invalidResponse();
+      return preview.data;
+    },
+    installPlugin: async (request) => {
+      const payload = await fetchAdminJson(
+        installationsUrl,
+        requireCredential(credential),
+        fetcher,
+        { method: "POST", body: JSON.stringify(request) }
+      );
+      const installed = installPluginResultSchema.safeParse(payload);
+      if (!installed.success || installed.data.versionId !== request.versionId) {
+        throw invalidResponse();
+      }
+      return installed.data;
     },
     clearSession: () => {
       credential = undefined;
@@ -632,7 +811,7 @@ async function fetchAdminJson(
   url: string,
   credential: string,
   fetcher: typeof fetch,
-  init: { method: "GET" | "PATCH"; body?: string } = { method: "GET" }
+  init: { method: "GET" | "PATCH" | "POST"; body?: string } = { method: "GET" }
 ): Promise<unknown> {
   let response: Response;
   try {

@@ -4,6 +4,7 @@ import {
   createD1AdminInstallationCommandStore,
   createD1AdminInstallationDetailStore
 } from "./admin-installations.js";
+import { createD1AdminInstallFlowStore } from "./admin-install-flow.js";
 import { createControlPlaneHttpHandler } from "./http-api.js";
 import type { D1DatabaseLike } from "./storage.js";
 
@@ -34,6 +35,8 @@ export default {
       env.DB === undefined ? undefined : createD1AdminInstallationDetailStore(env.DB);
     const installationCommandStore =
       env.DB === undefined ? undefined : createD1AdminInstallationCommandStore(env.DB);
+    const installFlowStore =
+      env.DB === undefined ? undefined : createD1AdminInstallFlowStore(env.DB);
     let handler;
     try {
       const cursorCodec =
@@ -47,6 +50,7 @@ export default {
         ...(dashboardStore === undefined ? {} : { dashboardStore }),
         ...(installationDetailStore === undefined ? {} : { installationDetailStore }),
         ...(installationCommandStore === undefined ? {} : { installationCommandStore }),
+        ...(installFlowStore === undefined ? {} : { installFlowStore }),
         ...(cursorCodec === undefined ? {} : { cursorCodec }),
         allowedOrigins
       });

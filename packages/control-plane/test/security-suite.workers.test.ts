@@ -1,7 +1,11 @@
 import { env } from "cloudflare:workers";
 import { applyD1Migrations, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { createControlPlaneApi, createD1ControlPlaneStore } from "../src/index.js";
+import {
+  createControlPlaneApi,
+  createD1AdminInstallFlowStore,
+  createD1ControlPlaneStore
+} from "../src/index.js";
 import type { TenantScriptManifest } from "@tenantscript/manifest";
 
 interface TestWorkersEnv {
@@ -66,6 +70,44 @@ describe("D1 tenant boundary security suite", () => {
         hookName: "invoice.created"
       })
     ).resolves.toEqual([]);
+  });
+
+  it("keeps Admin install creation and resolved grants behind the app/tenant D1 boundary", async () => {
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    await store.createApp({ id: "app_1", name: "Example SaaS" });
+    await store.createApp({ id: "app_2", name: "Other SaaS" });
+    await store.createTenant({ id: "tenant_1", appId: "app_1", name: "Tenant 1" });
+    await store.createTenant({ id: "tenant_2", appId: "app_2", name: "Tenant 2" });
+    await store.createPlugin({ id: "plugin_1", appId: "app_1", key: "large-invoice-notify" });
+    await store.createPluginVersion({
+      id: "version_1",
+      pluginId: "plugin_1",
+      version: "1.0.0",
+      artifactHash: "hash_1",
+      manifest
+    });
+    const flow = createD1AdminInstallFlowStore(testEnv.DB, {
+      installationId: () => "admin_install",
+      auditId: () => "admin_install_audit"
+    });
+
+    await expect(
+      flow.install({
+        appId: "app_1",
+        tenantId: "tenant_2",
+        actor: "manager",
+        versionId: "version_1",
+        config: {},
+        confirmedCapabilities: ["slack.send"],
+        enabled: false,
+        priority: 10
+      })
+    ).resolves.toBeNull();
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM installations WHERE id = ?")
+        .bind("admin_install")
+        .first()
+    ).resolves.toEqual({ count: 0 });
   });
 
   it("does not resolve another tenant's installations, grants, or config", async () => {

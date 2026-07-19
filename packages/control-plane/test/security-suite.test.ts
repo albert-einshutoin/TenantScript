@@ -9,6 +9,7 @@ import {
   createStaticTokenIdentityResolver,
   type AdminDashboardStore,
   type AdminInstallationDetailStore,
+  type AdminInstallFlowStore,
   type DailyUsageRecord,
   type ApprovalContinuationRequest,
   type ApprovalRecord,
@@ -402,6 +403,67 @@ describe("control-plane security suite", () => {
       error: { code: "installation_not_found", message: "installation not found" }
     });
   });
+
+  it("derives install scope from identity and rejects viewer or self-asserted grant escalation", async () => {
+    const installFlowStore = {
+      readVersion: vi.fn<AdminInstallFlowStore["readVersion"]>(),
+      install: vi.fn<AdminInstallFlowStore["install"]>().mockResolvedValue({
+        id: "installation_new",
+        versionId: "version_1",
+        pluginKey: "invoice-notify",
+        version: "1.0.0",
+        enabled: false,
+        priority: 10,
+        revision: 0
+      })
+    } satisfies AdminInstallFlowStore;
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({
+        manager: {
+          subject: "manager-subject",
+          role: "manager",
+          appId: "app_1",
+          tenantId: "tenant_1"
+        },
+        viewer: {
+          subject: "viewer-subject",
+          role: "viewer",
+          appId: "app_1",
+          tenantId: "tenant_1"
+        }
+      }),
+      installFlowStore,
+      allowedOrigins: ["https://admin.example.com"]
+    });
+    const validBody = {
+      versionId: "version_1",
+      config: {},
+      confirmedCapabilities: ["slack.send"],
+      enabled: false,
+      priority: 10
+    };
+    const viewer = await handler(installRequest("viewer", validBody));
+    expect(viewer.status).toBe(403);
+
+    const forged = await handler(
+      installRequest("manager", {
+        ...validBody,
+        tenantId: "tenant_2",
+        grants: { "slack.send": { channel: "attacker-controlled" } }
+      })
+    );
+    expect(forged.status).toBe(400);
+    expect(installFlowStore.install).not.toHaveBeenCalled();
+
+    const valid = await handler(installRequest("manager", validBody));
+    expect(valid.status).toBe(201);
+    expect(installFlowStore.install).toHaveBeenCalledWith({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: "manager-subject",
+      ...validBody
+    });
+  });
 });
 
 const noopArtifacts: ArtifactStore = {
@@ -414,6 +476,18 @@ function dashboardRequest(token: string, url: string): Request {
       Authorization: `Bearer ${token}`,
       Origin: "https://admin.example.com"
     }
+  });
+}
+
+function installRequest(token: string, body: Record<string, unknown>): Request {
+  return new Request("https://api.example.com/v1/admin/installations", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Origin: "https://admin.example.com",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
   });
 }
 

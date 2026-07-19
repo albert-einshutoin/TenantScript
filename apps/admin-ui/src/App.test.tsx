@@ -188,6 +188,183 @@ describe("Admin UI auth foundation", () => {
     await expect(screen.findByText("disabled")).resolves.toBeInTheDocument();
   });
 
+  it("builds config from schema and requires capability confirmation before installing", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const getInstallPreview = vi.fn().mockResolvedValue({
+      versionId: "version_large_invoice_1_2_2",
+      pluginKey: "large-invoice-notify",
+      version: "1.2.2",
+      configFields: [
+        { name: "enabledForInvoices", type: "boolean", required: false, hasDefault: true },
+        { name: "notifyChannel", type: "string", required: true, hasDefault: false },
+        { name: "threshold", type: "number", required: false, hasDefault: false }
+      ],
+      capabilities: [
+        {
+          name: "slack.send",
+          scopeKeys: ["channel"],
+          configReferences: ["notifyChannel"]
+        }
+      ],
+      egress: { mode: "deny", allowlistedHostCount: 0 }
+    });
+    const installPlugin = vi.fn().mockResolvedValue({
+      id: "installation_new",
+      versionId: "version_large_invoice_1_2_2",
+      pluginKey: "large-invoice-notify",
+      version: "1.2.2",
+      enabled: true,
+      priority: 20,
+      revision: 0
+    });
+    render(<App client={{ ...baseClient, getInstallPreview, installPlugin }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Install large-invoice-notify 1.2.2" })
+    );
+    expect(await screen.findByRole("heading", { name: "Install plugin" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review installation" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("notifyChannel (required)"), {
+      target: { value: "C123" }
+    });
+    fireEvent.change(screen.getByLabelText("threshold (optional)"), {
+      target: { value: "5000" }
+    });
+    fireEvent.change(screen.getByLabelText("enabledForInvoices (optional)"), {
+      target: { value: "true" }
+    });
+    fireEvent.click(screen.getByLabelText("Confirm slack.send"));
+    fireEvent.click(screen.getByLabelText("Enable immediately"));
+    fireEvent.change(screen.getByLabelText("Installation priority"), {
+      target: { value: "20" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review installation" }));
+    expect(screen.getByRole("dialog", { name: "Confirm plugin installation" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm installation" }));
+
+    await waitFor(() => {
+      expect(installPlugin).toHaveBeenCalledTimes(1);
+    });
+    expect(installPlugin).toHaveBeenCalledWith({
+      versionId: "version_large_invoice_1_2_2",
+      config: { enabledForInvoices: true, notifyChannel: "C123", threshold: 5000 },
+      confirmedCapabilities: ["slack.send"],
+      enabled: true,
+      priority: 20
+    });
+    expect(
+      screen.queryByRole("dialog", { name: "Confirm plugin installation" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not expose install controls to viewers", async () => {
+    render(<App client={createDemoAdminApiClient()} />);
+    await login("viewer-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    expect(screen.queryByRole("button", { name: /^Install / })).not.toBeInTheDocument();
+  });
+
+  it("installs a plugin with no config or capabilities and keeps it disabled by default", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const installPlugin = vi.fn().mockResolvedValue({
+      id: "installation_empty",
+      versionId: "version_large_invoice_1_3_0",
+      pluginKey: "no-permissions-plugin",
+      version: "1.0.0",
+      enabled: false,
+      priority: 100,
+      revision: 0
+    });
+    render(
+      <App
+        client={{
+          ...baseClient,
+          getInstallPreview: () =>
+            Promise.resolve({
+              versionId: "version_large_invoice_1_3_0",
+              pluginKey: "no-permissions-plugin",
+              version: "1.0.0",
+              configFields: [],
+              capabilities: [],
+              egress: { mode: "allowlist", allowlistedHostCount: 1 }
+            }),
+          installPlugin
+        }}
+      />
+    );
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Install large-invoice-notify 1.3.0" })
+    );
+    expect(await screen.findByText("No configuration required")).toBeInTheDocument();
+    expect(screen.getByText("No capabilities requested")).toBeInTheDocument();
+    expect(screen.getByText(/1 allowlisted hosts/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm installation" }));
+
+    await waitFor(() => {
+      expect(installPlugin).toHaveBeenCalledWith({
+        versionId: "version_large_invoice_1_3_0",
+        config: {},
+        confirmedCapabilities: [],
+        enabled: false,
+        priority: 100
+      });
+    });
+  });
+
+  it("shows stable install preview and submission failures without provider details", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const getInstallPreview = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("manifest customer-secret"))
+      .mockResolvedValueOnce({
+        versionId: "version_large_invoice_1_2_2",
+        pluginKey: "large-invoice-notify",
+        version: "1.2.2",
+        configFields: [],
+        capabilities: [],
+        egress: { mode: "deny", allowlistedHostCount: 0 }
+      });
+    const installPlugin = vi
+      .fn()
+      .mockRejectedValue(
+        new AdminApiError(400, "invalid_config", "provider customer-secret validation")
+      );
+    render(<App client={{ ...baseClient, getInstallPreview, installPlugin }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Versions" }));
+    const installButton = await screen.findByRole("button", {
+      name: "Install large-invoice-notify 1.2.2"
+    });
+    fireEvent.click(installButton);
+    expect(await screen.findByText("Installation preview unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/customer-secret/)).not.toBeInTheDocument();
+
+    fireEvent.click(installButton);
+    fireEvent.change(await screen.findByLabelText("Installation priority"), {
+      target: { value: "" }
+    });
+    expect(screen.getByRole("button", { name: "Review installation" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Installation priority"), {
+      target: { value: "100" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review installation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm installation" }));
+
+    expect(
+      await screen.findByText("Configuration does not satisfy the plugin schema")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Plugin installation unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/provider customer-secret/)).not.toBeInTheDocument();
+  });
+
   it("does not render installation controls for viewers and keeps state unchanged after command failure", async () => {
     const baseClient = createDemoAdminApiClient();
     const updateInstallationCommand = vi
@@ -386,12 +563,8 @@ describe("Admin UI auth foundation", () => {
   it("shows a stable error boundary when the dashboard snapshot cannot load", async () => {
     const baseClient = createDemoAdminApiClient();
     const failingClient: AdminApiClient = {
-      resolveSession: baseClient.resolveSession,
-      getDashboard: () => Promise.reject(new Error("offline")),
-      getDashboardSection: baseClient.getDashboardSection,
-      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
-      updateInstallationCommand: baseClient.updateInstallationCommand,
-      clearSession: baseClient.clearSession
+      ...baseClient,
+      getDashboard: () => Promise.reject(new Error("offline"))
     };
     render(<App client={failingClient} />);
 
@@ -418,15 +591,13 @@ describe("Admin UI auth foundation", () => {
       ]
     });
     const client: AdminApiClient = {
-      resolveSession: baseClient.resolveSession,
+      ...baseClient,
       getDashboard: () =>
         Promise.resolve({
           ...initial,
           cursors: { installations: "signed.cursor" }
         }),
       getDashboardSection,
-      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
-      updateInstallationCommand: baseClient.updateInstallationCommand,
       clearSession: vi.fn()
     };
     render(<App client={client} />);
@@ -447,12 +618,9 @@ describe("Admin UI auth foundation", () => {
     const session = await baseClient.resolveSession({ token: "manager-token" });
     const initial = await baseClient.getDashboard(session);
     const client: AdminApiClient = {
-      resolveSession: baseClient.resolveSession,
+      ...baseClient,
       getDashboard: () => Promise.resolve({ ...initial, cursors: { executions: "signed.cursor" } }),
-      getDashboardSection: () => Promise.reject(new Error("SQL customer payload")),
-      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
-      updateInstallationCommand: baseClient.updateInstallationCommand,
-      clearSession: baseClient.clearSession
+      getDashboardSection: () => Promise.reject(new Error("SQL customer payload"))
     };
     render(<App client={client} />);
 
@@ -491,12 +659,8 @@ describe("Admin UI auth foundation", () => {
       ]
     };
     const client: AdminApiClient = {
-      resolveSession: baseClient.resolveSession,
-      getDashboard: () => Promise.resolve(snapshot),
-      getDashboardSection: baseClient.getDashboardSection,
-      getInstallationPermissionReview: baseClient.getInstallationPermissionReview,
-      updateInstallationCommand: baseClient.updateInstallationCommand,
-      clearSession: baseClient.clearSession
+      ...baseClient,
+      getDashboard: () => Promise.resolve(snapshot)
     };
     render(<App client={client} />);
 
