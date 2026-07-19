@@ -20,6 +20,10 @@ beforeEach(async () => {
   await store.createPlugin({ id: "plugin_2", appId: "app_2", key: "plugin-2" });
   await store.createApproval(approval("approval_1", "tenant_1", "plugin_1"));
   await store.createApproval(approval("approval_2", "tenant_2", "plugin_2"));
+  await store.createApproval({
+    ...approval("approval_expired", "tenant_1", "plugin_1"),
+    expiresAt: new Date("2026-07-19T23:59:59.000Z")
+  });
 });
 
 describe("D1 Admin approval decisions", () => {
@@ -63,6 +67,9 @@ describe("D1 Admin approval decisions", () => {
     await expect(
       store.decide({ ...request("approval_1", "approved"), actorRole: "viewer" })
     ).rejects.toMatchObject({ code: "approval_role_forbidden" });
+    await expect(store.decide(request("approval_expired", "approved"))).rejects.toMatchObject({
+      code: "approval_expired"
+    });
 
     await store.decide(request("approval_1", "rejected"));
     await expect(store.decide(request("approval_1", "approved"))).rejects.toMatchObject({
