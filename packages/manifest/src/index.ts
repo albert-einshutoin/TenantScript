@@ -84,20 +84,26 @@ export function parseManifest(input: unknown): ValidationResult<TenantScriptMani
 }
 
 export function validateConfig(
-  schemaInput: ConfigSchemaSpec,
-  configInput: Record<string, unknown>
+  schemaInput: unknown,
+  configInput: unknown
 ): ValidationResult<InstallationConfig> {
   const schemaResult = configSchemaSpec.safeParse(schemaInput);
   if (!schemaResult.success) {
     return { ok: false, errors: formatZodErrors(schemaResult.error) };
   }
 
+  const configResult = z.record(z.string(), z.unknown()).safeParse(configInput);
+  if (!configResult.success) {
+    return { ok: false, errors: formatZodErrors(configResult.error) };
+  }
+
   const schema = schemaResult.data;
+  const input = configResult.data;
   const config: InstallationConfig = {};
   const errors: ValidationIssue[] = [];
 
   for (const [name, field] of Object.entries(schema.properties)) {
-    const providedValue = configInput[name];
+    const providedValue = input[name];
 
     if (providedValue === undefined) {
       if (schema.required.includes(name)) {
@@ -119,7 +125,7 @@ export function validateConfig(
     config[name] = providedValue;
   }
 
-  for (const name of Object.keys(configInput)) {
+  for (const name of Object.keys(input)) {
     if (!(name in schema.properties)) {
       errors.push({ path: name, message: "unknown config key" });
     }

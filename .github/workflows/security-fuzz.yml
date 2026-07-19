@@ -1,0 +1,31 @@
+name: Security Fuzz
+
+on:
+  schedule:
+    - cron: "23 17 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-fuzz
+  cancel-in-progress: false
+
+jobs:
+  parser-boundaries:
+    name: seeded parser boundary fuzzing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FUZZ_RUNS: "25000"
+      FUZZ_SEED: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:fuzz
