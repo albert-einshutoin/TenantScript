@@ -22,6 +22,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Admin rollbackの結果復旧](docs/operations/admin-rollback-idempotency.md) — 応答喪失、revision CAS、audit result再取得
 - [Security suite v2 threat map](docs/security/security-suite-v2.md) — Phase 1攻撃面、常設テスト、依存境界CI
 - [Threat model](docs/security/threat-model.md) — 信頼境界、攻撃面、mitigation、常設テスト、未検証範囲
+- [Community security review](docs/security/community-review-packet.md) — 固定commitを対象にした第三者レビュー範囲、報告経路、完了証跡
 - [Security policy](SECURITY.md) — supported versions、非公開の脆弱性報告窓口、対応SLA
 - [Usage meter運用契約](docs/operations/usage-meter.md) — Analytics Engine固定schema、fail-open、UTC期間集計
 - [Agent onboarding](llms.txt) — 公開docs、package entrypoint、TDD、credential境界の短い索引

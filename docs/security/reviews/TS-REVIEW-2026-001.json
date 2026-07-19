@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "TS-REVIEW-2026-001",
+  "status": "prepared",
+  "baselineCommit": "c906cf2465b16bc5032e544d07ee0588bac40028",
+  "scope": [
+    "packages/loader",
+    "packages/capabilities",
+    "packages/proxy",
+    "packages/control-plane",
+    "apps/admin-ui",
+    "packages/manifest",
+    "packages/host-sdk",
+    "docs/security/threat-model.md"
+  ],
+  "requiredFocus": [
+    "loader-isolation",
+    "capability-broker",
+    "egress-proxy",
+    "identity-rbac",
+    "storage-isolation",
+    "admin-ui"
+  ],
+  "reviewers": [],
+  "independenceStatement": null,
+  "startedAt": null,
+  "completedAt": null,
+  "coverage": [],
+  "findings": [],
+  "attestationEvidence": null,
+  "remainingLimitations": [
+    "No independent reviewer has started this prepared campaign.",
+    "External or structured community security review remains incomplete.",
+    "Live Cloudflare enforcement remains outside the accountless review baseline."
+  ]
+}
