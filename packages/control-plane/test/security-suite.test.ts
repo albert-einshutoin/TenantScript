@@ -7,6 +7,8 @@ import {
   createDurableObjectDailyUsageCounter,
   createInMemoryDailyUsageCounter,
   createInMemoryExecutionLogStore,
+  createServiceTokenIdentityResolver,
+  createServiceTokenManager,
   createStaticTokenIdentityResolver,
   type AdminDashboardStore,
   type AdminExecutionDetailStore,
@@ -19,7 +21,9 @@ import {
   type ApprovalRecord,
   type ArtifactStore,
   type ContinuationRunner,
-  type ControlPlaneStore
+  type ControlPlaneStore,
+  type ServiceTokenRecord,
+  type ServiceTokenStore
 } from "../src/index.js";
 
 describe("control-plane security suite", () => {
@@ -634,6 +638,72 @@ describe("control-plane security suite", () => {
       idempotencyKey: "install-security-http-key-0001",
       ...validBody
     });
+  });
+
+  it("keeps service credentials hashed, non-escalating, scoped, and immediately revocable", async () => {
+    const records: ServiceTokenRecord[] = [];
+    const store: ServiceTokenStore = {
+      create: (record) => {
+        records.push(structuredClone(record));
+        return Promise.resolve();
+      },
+      findByTokenHash: (hash) =>
+        Promise.resolve(records.find((record) => record.tokenHash === hash) ?? null),
+      revoke: ({ id, appId, tenantId, revokedAt, revokedBy }) => {
+        const record = records.find(
+          (candidate) =>
+            candidate.id === id && candidate.appId === appId && candidate.tenantId === tenantId
+        );
+        if (record === undefined) return Promise.resolve(false);
+        record.revokedAt ??= revokedAt;
+        record.revokedBy ??= revokedBy;
+        return Promise.resolve(true);
+      }
+    };
+    const now = () => new Date("2026-07-20T00:00:00.000Z");
+    const manager = createServiceTokenManager({
+      store,
+      now,
+      generateId: () => "st_security",
+      generateSecret: () => "security-suite-secret-with-enough-entropy"
+    });
+
+    await expect(
+      manager.issue({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "operator_1",
+        actorRole: "operator",
+        label: "escalation",
+        role: "viewer",
+        scopes: ["session:read"],
+        expiresAt: new Date("2026-07-21T00:00:00.000Z")
+      })
+    ).rejects.toMatchObject({ code: "service_token_role_escalation" });
+
+    const issued = await manager.issue({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: "admin_1",
+      actorRole: "admin",
+      label: "read bot",
+      role: "viewer",
+      scopes: ["session:read"],
+      expiresAt: new Date("2026-07-21T00:00:00.000Z")
+    });
+    expect(JSON.stringify(records)).not.toContain(issued.token);
+    const resolver = createServiceTokenIdentityResolver(store, { now });
+    await expect(resolver.resolveToken(issued.token)).resolves.toMatchObject({
+      allowedOperations: ["session:read"]
+    });
+    await manager.revoke({
+      id: issued.id,
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: "admin_1",
+      actorRole: "admin"
+    });
+    await expect(resolver.resolveToken(issued.token)).resolves.toBeNull();
   });
 });
 

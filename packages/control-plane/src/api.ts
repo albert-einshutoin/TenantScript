@@ -18,7 +18,7 @@ import type {
   RecordUsageMetricRequest,
   UsageMeter
 } from "./usage-meter.js";
-import { canRolePerform, normalizeRbacRole } from "./rbac.js";
+import { canRolePerform, normalizeRbacRole, type RbacOperation } from "./rbac.js";
 
 export type { ApprovalDecision, ApprovalState } from "./approval-state.js";
 
@@ -83,6 +83,9 @@ export interface ContinuationRunner {
 export interface AuthenticatedIdentity {
   subject: string;
   role: string;
+  appId?: string;
+  tenantId?: string;
+  allowedOperations?: readonly RbacOperation[];
 }
 
 export interface IdentityResolver {

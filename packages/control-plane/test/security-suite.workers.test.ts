@@ -6,7 +6,8 @@ import {
   createD1AdminApprovalDecisionStore,
   createD1AdminInstallFlowStore,
   createD1AdminRollbackStore,
-  createD1ControlPlaneStore
+  createD1ControlPlaneStore,
+  createD1ServiceTokenStore
 } from "../src/index.js";
 import type { TenantScriptManifest } from "@tenantscript/manifest";
 
@@ -256,6 +257,32 @@ describe("D1 tenant boundary security suite", () => {
 
     expect(records.map((record) => record.id)).toEqual(["exec_tenant_1"]);
     expect(JSON.stringify(records)).not.toContain("tenant 2 only");
+  });
+
+  it("rejects service-token persistence across the app and tenant boundary", async () => {
+    const controlPlane = createD1ControlPlaneStore(testEnv.DB);
+    await controlPlane.createApp({ id: "app_1", name: "App 1" });
+    await controlPlane.createApp({ id: "app_2", name: "App 2" });
+    await controlPlane.createTenant({ id: "tenant_1", appId: "app_1", name: "Tenant 1" });
+    const serviceTokens = createD1ServiceTokenStore(testEnv.DB);
+
+    await expect(
+      serviceTokens.create({
+        id: "st_cross_scope",
+        tokenHash: "a".repeat(64),
+        label: "cross scope",
+        role: "viewer",
+        appId: "app_2",
+        tenantId: "tenant_1",
+        scopes: ["session:read"],
+        createdBy: "attacker",
+        createdAt: "2026-07-20T00:00:00.000Z",
+        expiresAt: "2026-07-21T00:00:00.000Z"
+      })
+    ).rejects.toThrow();
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM service_tokens").first()
+    ).resolves.toEqual({ count: 0 });
   });
 });
 

@@ -43,7 +43,7 @@
   - RED: capability grant の承認は admin 以上 / operator は install 申請のみ可能
   - DoD: 分離テスト green
 
-- [ ] **P2-T07**(M)API トークン / サービス認証
+- [x] **P2-T07**(M)API トークン / サービス認証
   - RED: scope 付きトークン(read-only 等)が scope 外操作で拒否される / 失効が即時反映される
   - DoD: トークンテスト green、漏えい時の失効手順がドキュメント化
 

@@ -119,11 +119,25 @@ export {
   RBAC_ROLES,
   canRolePerform,
   isSupportedRbacRole,
+  isRbacOperation,
   normalizeRbacRole,
   type RbacOperation,
   type RbacRole,
   type SupportedRbacRole
 } from "./rbac.js";
+
+export {
+  ServiceTokenError,
+  createD1ServiceTokenStore,
+  createServiceTokenAwareIdentityResolver,
+  createServiceTokenIdentityResolver,
+  createServiceTokenManager,
+  isServiceTokenCredential,
+  type ServiceTokenErrorCode,
+  type ServiceTokenManager,
+  type ServiceTokenRecord,
+  type ServiceTokenStore
+} from "./service-tokens.js";
 
 export {
   createDurableObjectDailyUsageCounter,
