@@ -19,8 +19,7 @@ test("rollback drill docs distinguish the public CLI from the repository wrapper
   assert.match(cliSource, /command === "rollback-drill"/);
   assert.equal(typeof cliManifest.scripts["rollback:drill"], "string");
   assert.match(drillGuide, /`ext rollback-drill`/);
-  const repositoryCommand =
-    "pnpm --filter @tenantscript/cli run rollback:drill -- \\";
+  const repositoryCommand = "pnpm --filter @tenantscript/cli run rollback:drill -- \\";
   assert.ok(
     drillGuide.includes(repositoryCommand),
     "drill guide must document the repository wrapper"
