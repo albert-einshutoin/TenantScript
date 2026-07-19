@@ -80,15 +80,12 @@ Architecture changes require an ADR proposal or an update to an existing ADR. Do
 
 Secret exposure, egress bypass, grant escalation, tenant-boundary access, approval authorization, and audit mutation are behavior regressions and require adversarial tests. Report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in a public issue or draft pull request.
 
-Run the complete accountless checks before opening a code pull request:
+`pnpm verify` is the canonical local Tier 1/accountless gate. It runs type checking, lint, behavior tests, package coverage, adversarial security tests, dependency audit, and formatting in a deterministic order. Run it before opening a code pull request:
 
 ```sh
 # cwd: repository root
 # expected-exit: 0
 pnpm verify
-pnpm test:security
-pnpm test:coverage
-pnpm audit --audit-level high
 git diff --check
 ```
 

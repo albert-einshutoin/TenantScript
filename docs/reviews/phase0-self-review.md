@@ -37,8 +37,9 @@ runtime limits, security suite, and runtime benchmark harness.
 Run after the refactor pass:
 
 ```sh
+# cwd: repository root
+# expected-exit: 0
 pnpm verify
-pnpm test:coverage
-pnpm test:security
-osv-scanner scan --lockfile=pnpm-lock.yaml
 ```
+
+`pnpm verify` is the canonical local accountless gate and includes coverage, security, and dependency audit. Tier 1 CI additionally scans the committed lockfile with its pinned OSV-Scanner action.

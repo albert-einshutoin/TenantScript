@@ -36,9 +36,6 @@ Fixes #
 
 ```text
 pnpm verify
-pnpm test:security
-pnpm test:coverage
-pnpm audit --audit-level high
 git diff --check
 ```
 
