@@ -751,6 +751,9 @@ describe("Admin UI auth foundation", () => {
 
   it("searches executions server-side and opens a value-free capability detail", async () => {
     const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const dashboardSnapshot = await baseClient.getDashboard(session);
+    const initialDashboard = deferred<DashboardSnapshot>();
     const searchExecutions = vi.fn().mockResolvedValue({
       items: [
         {
@@ -777,11 +780,22 @@ describe("Admin UI auth foundation", () => {
       capabilityCalls: [{ name: "slack.send", status: "error" }],
       createdAt: new Date("2026-07-19T00:00:00.000Z")
     });
-    render(<App client={{ ...baseClient, searchExecutions, getExecutionDetail }} />);
+    render(
+      <App
+        client={{
+          ...baseClient,
+          getDashboard: () => initialDashboard.promise,
+          searchExecutions,
+          getExecutionDetail
+        }}
+      />
+    );
 
     await login("manager-token");
     fireEvent.click(screen.getByRole("button", { name: "Executions" }));
-    fireEvent.change(screen.getByLabelText("Plugin ID"), {
+    const pluginIdInput = screen.findByLabelText("Plugin ID");
+    initialDashboard.resolve(dashboardSnapshot);
+    fireEvent.change(await pluginIdInput, {
       target: { value: "plugin_large_invoice" }
     });
     fireEvent.change(screen.getByLabelText("Hook"), { target: { value: "invoice.created" } });
