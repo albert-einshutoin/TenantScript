@@ -1,10 +1,44 @@
 import { vi } from "vitest";
 import {
   createApprovalsRequestProvider,
+  createEmailSendProvider,
   createInvoiceReadProvider,
   createMockSlackSendProvider
 } from "../src/index.js";
 import { runCapabilityContract } from "./contract-kit.js";
+
+runCapabilityContract({
+  capability: "email.send",
+  grant: {
+    recipientDomains: ["example.com"],
+    templates: ["invoice-ready"]
+  },
+  allowedInput: {
+    to: "buyer@example.com",
+    template: "invoice-ready",
+    variables: { invoiceId: "inv_1" }
+  },
+  deniedInput: {
+    to: "buyer@example.com.attacker.invalid",
+    template: "invoice-ready",
+    variables: { invoiceId: "inv_1" }
+  },
+  createProvider: () =>
+    createEmailSendProvider({
+      apiKey: "email-contract-secret",
+      templates: {
+        "invoice-ready": {
+          subject: "Invoice {{invoiceId}} is ready",
+          text: "Invoice {{invoiceId}} is ready."
+        }
+      },
+      deliver: vi.fn()
+    }),
+  expectedAllowedResult: { ok: true, provider: "email" },
+  expectedDeniedMessage:
+    "email.send recipient domain example.com.attacker.invalid is outside granted scope",
+  sensitiveValue: "email-contract-secret"
+});
 
 runCapabilityContract({
   capability: "slack.send",

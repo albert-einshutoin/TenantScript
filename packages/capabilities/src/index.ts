@@ -1,8 +1,10 @@
 export interface CapabilityGrant {
   channel?: string | readonly string[];
   fields?: readonly string[];
+  recipientDomains?: string | readonly string[];
   roles?: string | readonly string[];
   resumeHooks?: string | readonly string[];
+  templates?: string | readonly string[];
 }
 
 export type CapabilityGrants = Record<string, CapabilityGrant>;
@@ -141,6 +143,17 @@ export interface InvoiceStore {
     tenantId: string;
     invoiceId: string;
   }) => Promise<InvoiceRecord | null> | InvoiceRecord | null;
+}
+
+export interface EmailTemplate {
+  subject: string;
+  text: string;
+}
+
+export interface EmailDelivery {
+  to: string;
+  subject: string;
+  text: string;
 }
 
 export class CapabilityDeniedError extends Error {
@@ -478,6 +491,37 @@ export function createInvoiceReadProvider(params: {
   };
 }
 
+export function createEmailSendProvider(params: {
+  apiKey: string;
+  templates: Record<string, EmailTemplate>;
+  deliver: (message: EmailDelivery, apiKey: string) => Promise<void> | void;
+}): CapabilityProvider {
+  if (params.apiKey.trim().length === 0) {
+    throw new Error("email provider API key must not be empty");
+  }
+  const templates = new Map<string, EmailTemplate>();
+  for (const [name, template] of Object.entries(params.templates)) {
+    validateEmailTemplate(name, template);
+    // Snapshot trusted templates at provider creation so later mutation of a caller-owned
+    // configuration object cannot change already-reviewed email content at send time.
+    templates.set(name, { subject: template.subject, text: template.text });
+  }
+
+  return async (input) => {
+    const request = parseEmailSendInput(input);
+    const template = templates.get(request.template);
+    if (template === undefined) {
+      throw new CapabilityDeniedError(`email.send template ${request.template} is unavailable`);
+    }
+
+    const message = renderEmailTemplate(request, template);
+    // The credential is injected only inside the trusted provider adapter so plugin input,
+    // results, errors, and audit records never gain a reference to the raw secret.
+    await params.deliver(message, params.apiKey);
+    return { ok: true, provider: "email" };
+  };
+}
+
 export function createApprovalLifecyclePlan(approval: ApprovalRecord): ApprovalLifecyclePlan {
   return {
     approvalId: approval.id,
@@ -569,6 +613,24 @@ function assertScope(name: string, grant: CapabilityGrant, input: unknown): void
     if (allowedResumeHooks.length > 0 && !allowedResumeHooks.includes(request.resumeHook)) {
       throw new CapabilityDeniedError(
         `approvals.request resumeHook ${request.resumeHook} is outside granted scope`
+      );
+    }
+  }
+
+  if (name === "email.send") {
+    const request = parseEmailSendInput(input);
+    const recipientDomain = emailRecipientDomain(request.to);
+    const allowedDomains = normalizeEmailGrantValues(grant.recipientDomains, "recipient domain");
+    if (!allowedDomains.includes(recipientDomain)) {
+      throw new CapabilityDeniedError(
+        `email.send recipient domain ${recipientDomain} is outside granted scope`
+      );
+    }
+
+    const allowedTemplates = normalizeEmailGrantValues(grant.templates, "template");
+    if (!allowedTemplates.includes(request.template)) {
+      throw new CapabilityDeniedError(
+        `email.send template ${request.template} is outside granted scope`
       );
     }
   }
@@ -688,6 +750,146 @@ function parseInvoiceReadInput(input: unknown): { tenantId?: string; invoiceId: 
     return { invoiceId: input.invoiceId };
   }
   return { tenantId: input.tenantId, invoiceId: input.invoiceId };
+}
+
+interface EmailSendInput {
+  to: string;
+  template: string;
+  variables: ReadonlyMap<string, string>;
+}
+
+function parseEmailSendInput(input: unknown): EmailSendInput {
+  if (!isRecord(input)) {
+    throw new CapabilityInputError("email.send requires to, template, and variables");
+  }
+  const supportedFields = new Set(["to", "template", "variables"]);
+  if (Object.keys(input).some((field) => !supportedFields.has(field))) {
+    throw new CapabilityInputError("email.send contains unsupported input fields");
+  }
+  if (
+    typeof input.to !== "string" ||
+    typeof input.template !== "string" ||
+    input.template.length === 0 ||
+    !isRecord(input.variables)
+  ) {
+    throw new CapabilityInputError("email.send requires to, template, and variables");
+  }
+
+  emailRecipientDomain(input.to);
+  // A Map avoids prototype-key behavior from untrusted JSON variable names while retaining
+  // deterministic one-pass lookup during rendering.
+  const variables = new Map<string, string>();
+  for (const [name, value] of Object.entries(input.variables)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || typeof value !== "string") {
+      throw new CapabilityInputError("email.send variables must be named string values");
+    }
+    variables.set(name, value);
+  }
+  return { to: input.to, template: input.template, variables };
+}
+
+function emailRecipientDomain(address: string): string {
+  if (address.trim() !== address || /[\r\n]/.test(address) || address.length > 254) {
+    throw new CapabilityInputError("email.send requires a valid recipient email address");
+  }
+  const separator = address.indexOf("@");
+  if (separator < 1 || separator !== address.lastIndexOf("@")) {
+    throw new CapabilityInputError("email.send requires a valid recipient email address");
+  }
+  const local = address.slice(0, separator);
+  const domain = address.slice(separator + 1).toLowerCase();
+  if (
+    local.length > 64 ||
+    !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local) ||
+    local.startsWith(".") ||
+    local.endsWith(".") ||
+    local.includes("..") ||
+    !isValidEmailDomain(domain)
+  ) {
+    throw new CapabilityInputError("email.send requires a valid recipient email address");
+  }
+  return domain;
+}
+
+function isValidEmailDomain(domain: string): boolean {
+  if (domain.length === 0 || domain.length > 253) {
+    return false;
+  }
+  return domain
+    .split(".")
+    .every(
+      (label) =>
+        label.length > 0 &&
+        label.length <= 63 &&
+        /^[a-z0-9-]+$/.test(label) &&
+        !label.startsWith("-") &&
+        !label.endsWith("-")
+    );
+}
+
+function normalizeEmailGrantValues(
+  value: string | readonly string[] | undefined,
+  kind: "recipient domain" | "template"
+): string[] {
+  const values = value === undefined ? [] : [value].flat();
+  if (values.some((entry) => entry.length === 0)) {
+    throw new CapabilityDeniedError(`email.send has an invalid ${kind} grant`);
+  }
+  if (kind === "template") {
+    return values;
+  }
+
+  const normalized = values.map((entry) => entry.toLowerCase());
+  if (normalized.some((entry) => !isValidEmailDomain(entry))) {
+    throw new CapabilityDeniedError("email.send has an invalid recipient domain grant");
+  }
+  return normalized;
+}
+
+function validateEmailTemplate(name: string, template: EmailTemplate): void {
+  if (name.length === 0 || template.subject.length === 0 || template.text.length === 0) {
+    throw new Error(`email template ${name} must define subject and text`);
+  }
+  for (const source of [template.subject, template.text]) {
+    const withoutPlaceholders = source.replace(/\{\{[A-Za-z_][A-Za-z0-9_]*\}\}/g, "");
+    if (withoutPlaceholders.includes("{{") || withoutPlaceholders.includes("}}")) {
+      throw new Error(`email template ${name} contains an invalid placeholder`);
+    }
+  }
+}
+
+function renderEmailTemplate(request: EmailSendInput, template: EmailTemplate): EmailDelivery {
+  const requiredVariables = new Set<string>();
+  for (const source of [template.subject, template.text]) {
+    for (const match of source.matchAll(/\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g)) {
+      const name = match[1];
+      if (name !== undefined) {
+        requiredVariables.add(name);
+      }
+    }
+  }
+  for (const name of requiredVariables) {
+    if (!request.variables.has(name)) {
+      throw new CapabilityInputError(`email.send variable ${name} is required`);
+    }
+  }
+  for (const name of request.variables.keys()) {
+    if (!requiredVariables.has(name)) {
+      throw new CapabilityInputError(`email.send variable ${name} is not used by the template`);
+    }
+  }
+
+  const render = (source: string): string =>
+    source.replace(
+      /\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g,
+      (_placeholder, name: string) => request.variables.get(name) ?? ""
+    );
+  const subject = render(template.subject);
+  if (/[\r\n]/.test(subject)) {
+    throw new CapabilityInputError("email.send rendered subject must not contain line breaks");
+  }
+
+  return { to: request.to, subject, text: render(template.text) };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
