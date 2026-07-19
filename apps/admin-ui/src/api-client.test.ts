@@ -85,6 +85,32 @@ describe("Admin API environment selection", () => {
       })
     ).rejects.toMatchObject({ code: "rollback_target_is_current" });
   });
+
+  it("keeps demo execution search and detail aligned with the HTTP contract", async () => {
+    const client = createDemoAdminApiClient();
+
+    await expect(client.searchExecutions({})).resolves.toMatchObject({
+      items: [{ id: "exec_1" }, { id: "exec_2" }]
+    });
+    await expect(
+      client.searchExecutions({
+        pluginId: "plugin_large_invoice",
+        hookName: "invoice.created",
+        status: "success"
+      })
+    ).resolves.toMatchObject({ items: [{ id: "exec_1" }] });
+    await expect(
+      client.searchExecutions({ pluginId: "plugin_large_invoice", status: "error" })
+    ).resolves.toMatchObject({ items: [] });
+    await expect(client.getExecutionDetail("exec_1")).resolves.toMatchObject({
+      id: "exec_1",
+      capabilityCalls: [{ name: "slack.send", status: "success" }]
+    });
+    await expect(client.getExecutionDetail("missing")).rejects.toEqual(
+      new AdminApiError(404, "execution_not_found", "execution not found")
+    );
+  });
+
   it("connects the production client to the configured Control Plane", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

@@ -721,6 +721,24 @@ describe("Admin UI auth foundation", () => {
     });
   });
 
+  it("shows stable execution search and detail failures without leaking diagnostics", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const searchExecutions = vi.fn().mockRejectedValue(new Error("SQL customer payload"));
+    const getExecutionDetail = vi.fn().mockRejectedValue(new Error("provider secret"));
+    render(<App client={{ ...baseClient, searchExecutions, getExecutionDetail }} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Executions" }));
+    fireEvent.click(screen.getByRole("button", { name: "View exec_1" }));
+    await expect(screen.findByText("Execution detail unavailable")).resolves.toBeInTheDocument();
+    expect(screen.queryByText("provider secret")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Search executions" }));
+    await waitFor(() => expect(searchExecutions).toHaveBeenCalledWith({}));
+    await expect(screen.findByText("Execution search unavailable")).resolves.toBeInTheDocument();
+    expect(screen.queryByText("SQL customer payload")).not.toBeInTheDocument();
+  });
+
   it("shows a stable error boundary when the dashboard snapshot cannot load", async () => {
     const baseClient = createDemoAdminApiClient();
     const failingClient: AdminApiClient = {
