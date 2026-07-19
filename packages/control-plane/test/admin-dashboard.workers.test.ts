@@ -3,6 +3,7 @@ import { applyD1Migrations, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createD1AdminDashboardStore,
+  createD1AdminInstallationCommandStore,
   createD1AdminInstallationDetailStore,
   createD1ControlPlaneStore,
   type AdminDashboardSection,
@@ -131,6 +132,114 @@ describe("D1 Admin dashboard read model", () => {
     expect(JSON.stringify(own)).not.toContain("manifest-secret");
     expect(otherTenant).toBeNull();
     expect(wrongApp).toBeNull();
+  });
+
+  it("writes a manager command and its fixed-shape audit atomically at the D1 boundary", async () => {
+    await seedDashboard();
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
+      auditId: () => "installation_command_audit"
+    });
+
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        enabled: false,
+        priority: 4
+      })
+    ).resolves.toEqual({
+      id: "tenant_1_installation_a",
+      enabled: false,
+      priority: 4,
+      changed: true
+    });
+
+    const installation = await testEnv.DB
+      .prepare("SELECT enabled, priority FROM installations WHERE id = ?")
+      .bind("tenant_1_installation_a")
+      .first<{ enabled: number; priority: number }>();
+    const audit = await testEnv.DB
+      .prepare("SELECT hook_name, error, capability_calls_json FROM executions WHERE id = ?")
+      .bind("installation_command_audit")
+      .first<{ hook_name: string; error: string; capability_calls_json: string }>();
+    expect(installation).toEqual({ enabled: 0, priority: 4 });
+    expect(audit?.hook_name).toBe("installation.command");
+    expect(audit?.error).toBe(
+      "actor=manager-subject old_enabled=true old_priority=10 new_enabled=false new_priority=4"
+    );
+    expect(audit?.capability_calls_json).toBe('[{"name":"installations.command","status":"success"}]');
+    expect(JSON.stringify(audit)).not.toContain("secret-config");
+    expect(JSON.stringify(audit)).not.toContain("secret-grant");
+    expect(JSON.stringify(audit)).not.toContain("manifest-secret");
+  });
+
+  it("does not update an installation when the paired audit insert fails, and makes no-op commands audit-free", async () => {
+    await seedDashboard();
+    await testEnv.DB
+      .prepare(
+        "INSERT INTO executions (id, tenant_id, plugin_id, hook_name, version, status, duration_ms, capability_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      )
+      .bind(
+        "conflicting_audit",
+        "tenant_1",
+        "tenant_1_plugin",
+        "existing",
+        "1",
+        "success",
+        0,
+        "[]",
+        "2026-07-19T00:00:00.000Z"
+      )
+      .run();
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB, {
+      auditId: () => "conflicting_audit"
+    });
+    await expect(
+      commands.updateInstallation({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        actor: "manager-subject",
+        id: "tenant_1_installation_a",
+        enabled: false
+      })
+    ).rejects.toThrow();
+    await expect(
+      testEnv.DB
+        .prepare("SELECT enabled, priority FROM installations WHERE id = ?")
+        .bind("tenant_1_installation_a")
+        .first<{ enabled: number; priority: number }>()
+    ).resolves.toEqual({ enabled: 1, priority: 10 });
+
+    const noOp = await commands.updateInstallation({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      actor: "manager-subject",
+      id: "tenant_1_installation_a",
+      enabled: true,
+      priority: 10
+    });
+    expect(noOp).toEqual({ id: "tenant_1_installation_a", enabled: true, priority: 10, changed: false });
+    await expect(
+      testEnv.DB.prepare("SELECT COUNT(*) AS count FROM executions WHERE hook_name = ?").bind("installation.command").first<{ count: number }>()
+    ).resolves.toEqual({ count: 0 });
+  });
+
+  it("rejects cross-tenant, cross-app, and corrupt installation relations with the same null result", async () => {
+    await seedDashboard();
+    const commands = createD1AdminInstallationCommandStore(testEnv.DB);
+    for (const id of ["tenant_2_installation_a", "cross_app_installation", "does_not_exist"]) {
+      await expect(
+        commands.updateInstallation({
+          appId: "app_1",
+          tenantId: "tenant_1",
+          actor: "manager-subject",
+          id,
+          enabled: false
+        })
+      ).resolves.toBeNull();
+    }
   });
 });
 
