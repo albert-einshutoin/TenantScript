@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import {
   createDemoAdminApiClient,
@@ -94,6 +94,43 @@ describe("Admin UI auth foundation", () => {
     await login("manager-token");
 
     await expect(screen.findByText("Dashboard unavailable")).resolves.toBeInTheDocument();
+  });
+
+  it("loads and appends the next tenant-scoped section page", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const initial = await baseClient.getDashboard(session);
+    const getDashboardSection = vi.fn().mockResolvedValue({
+      section: "installations",
+      items: [
+        {
+          id: "inst_next",
+          pluginKey: "next-plugin",
+          version: "2.0.0",
+          enabled: true,
+          priority: 30
+        }
+      ]
+    });
+    const client: AdminApiClient = {
+      resolveSession: baseClient.resolveSession,
+      getDashboard: () =>
+        Promise.resolve({
+          ...initial,
+          cursors: { installations: "signed.cursor" }
+        }),
+      getDashboardSection,
+      clearSession: vi.fn()
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Load more installations" }));
+
+    await expect(screen.findByText("next-plugin")).resolves.toBeInTheDocument();
+    expect(getDashboardSection).toHaveBeenCalledWith("installations", "signed.cursor");
+    expect(screen.queryByRole("button", { name: "Load more installations" })).not.toBeInTheDocument();
   });
 
   it("renders disabled and failing operational states", async () => {
