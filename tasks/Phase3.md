@@ -48,7 +48,7 @@
 
 ## チャンク C: security 仕上げ(T08–T12)
 
-- [ ] **P3-T08**(M)threat model 文書
+- [x] **P3-T08**(M)threat model 文書
   - 内容: 信頼境界図、攻撃面の列挙、各 mitigation と対応テストの対応表(security suite と1対1で紐付け)
   - DoD: `docs/security/threat-model.md` 公開。suite に対応漏れの攻撃面がない
 
@@ -61,7 +61,7 @@
   - 内容: スコープ定義(loader / broker / egress / RBAC)、指摘のトリアージと修正
   - DoD: いずれかの経路でレビューが実施され、CRITICAL/HIGH ゼロ。指摘→修正→regression テスト追加まで完了
 
-- [ ] **P3-T11**(M)fuzzing
+- [x] **P3-T11**(M)fuzzing
   - RED: manifest パーサ・hook payload・config への fuzz(構造化 fuzz)でクラッシュ・hang・カタストロフィック backtracking ゼロ
   - DoD: fuzz ジョブが nightly CI に常設
 

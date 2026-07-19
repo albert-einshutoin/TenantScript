@@ -1,6 +1,6 @@
 # Security suite v2 threat map
 
-TenantScriptのTier 1 security suiteは、Cloudflare accountやrepository secretを使わず、fork Pull Requestでも主要な信頼境界を検証する。これはPhase 3で予定する完全なthreat modelの前段となる、Phase 1攻撃面のsource of truthである。
+TenantScriptのTier 1 security suiteは、Cloudflare accountやrepository secretを使わず、fork Pull Requestでも主要な信頼境界を検証する。この文書はPhase 1時点のsuite v2対応表であり、Phase 3を含む現在の正規モデルは[threat model](threat-model.md)を参照する。
 
 ## Trust boundaries
 
