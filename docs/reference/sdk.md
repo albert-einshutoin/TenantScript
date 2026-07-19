@@ -89,4 +89,4 @@ pnpm typecheck
 pnpm test:security
 ```
 
-Manifest/hook schemaを変更する場合は`ext schema diff`でbreaking changeを確認し、quickstartとreferenceのsnippetも同じPRで更新する。
+Manifest/hook schemaを変更する場合は`ext schema diff`でbreaking changeを確認し、quickstartとreferenceのsnippetも同じPRで更新する。CIのexit code、warning、入力失敗の扱いは[Schema diff in CI](schema-diff-ci.md)を参照する。
