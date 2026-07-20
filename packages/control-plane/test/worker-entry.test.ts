@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { D1DatabaseLike, D1PreparedStatementLike } from "../src/index.js";
-import worker, { runScheduledTelemetry } from "../src/worker-entry.js";
+import worker, {
+  runScheduledExecutionRetention,
+  runScheduledTelemetry,
+  scheduleMaintenanceTasks
+} from "../src/worker-entry.js";
 
 const validIdentities = JSON.stringify({
   "manager-token": {
@@ -219,6 +223,119 @@ describe("Control Plane scheduled telemetry", () => {
   });
 });
 
+describe("Control Plane scheduled execution retention", () => {
+  it("is disabled without an explicit policy and does not touch storage", async () => {
+    const prepare = vi.fn(() => {
+      throw new Error("D1 must not be touched");
+    });
+
+    await expect(
+      runScheduledExecutionRetention({ DB: { prepare }, EXECUTION_ARCHIVE: archiveBucket() })
+    ).resolves.toEqual({ archivedScopes: 0, scannedScopes: 0, status: "disabled" });
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("archives one bounded batch per stable tenant scope", async () => {
+    const scopes = Array.from({ length: 51 }, (_, index) => ({
+      app_id: `app_${String(index).padStart(2, "0")}`,
+      id: `tenant_${String(index).padStart(2, "0")}`
+    }));
+    const all = vi.fn().mockResolvedValue({ results: scopes });
+    const statement: D1PreparedStatementLike = {
+      bind: vi.fn(() => statement),
+      all,
+      first: vi.fn(() => Promise.resolve(null)),
+      run: vi.fn(() => Promise.resolve(null))
+    };
+    const prepare = vi.fn(() => statement);
+    const archiveScope = vi.fn().mockResolvedValue(indexedManifest());
+    const now = new Date("2026-07-20T02:00:00.000Z");
+
+    await expect(
+      runScheduledExecutionRetention(
+        {
+          DB: { prepare },
+          EXECUTION_ARCHIVE: archiveBucket(),
+          EXECUTION_ARCHIVE_HOT_RETENTION_DAYS: "30"
+        },
+        { archiveScope, now: () => now }
+      )
+    ).resolves.toEqual({ archivedScopes: 50, scannedScopes: 50, status: "completed" });
+
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("WHERE EXISTS"));
+    expect(statement.bind).toHaveBeenCalledWith("2026-06-20T02:00:00.000Z", 50);
+    expect(archiveScope).toHaveBeenCalledTimes(50);
+    expect(archiveScope).toHaveBeenNthCalledWith(1, {
+      appId: "app_00",
+      tenantId: "tenant_00",
+      now
+    });
+    expect(archiveScope).not.toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: "tenant_50" })
+    );
+  });
+
+  it.each(["0", "1.5", "3651", "secret-sentinel"])(
+    "rejects unsafe retention configuration before storage access: %s",
+    async (hotRetentionDays) => {
+      const prepare = vi.fn();
+      await expect(
+        runScheduledExecutionRetention({
+          DB: { prepare },
+          EXECUTION_ARCHIVE: archiveBucket(),
+          EXECUTION_ARCHIVE_HOT_RETENTION_DAYS: hotRetentionDays
+        })
+      ).rejects.toThrow("execution retention configuration is invalid");
+      expect(prepare).not.toHaveBeenCalled();
+    }
+  );
+
+  it("fails closed when an explicit policy is missing its R2 binding", async () => {
+    const prepare = vi.fn();
+
+    await expect(
+      runScheduledExecutionRetention({
+        DB: { prepare },
+        EXECUTION_ARCHIVE_HOT_RETENTION_DAYS: "30"
+      })
+    ).rejects.toThrow("execution retention configuration is invalid");
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid schedule time before reading tenant scopes", async () => {
+    const prepare = vi.fn();
+
+    await expect(
+      runScheduledExecutionRetention(
+        {
+          DB: { prepare },
+          EXECUTION_ARCHIVE: archiveBucket(),
+          EXECUTION_ARCHIVE_HOT_RETENTION_DAYS: "30"
+        },
+        { now: () => new Date(Number.NaN) }
+      )
+    ).rejects.toThrow("execution retention configuration is invalid");
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("starts telemetry and retention independently while preserving failure visibility", async () => {
+    const telemetryRunner = vi.fn().mockRejectedValue(new Error("telemetry unavailable"));
+    const retentionRunner = vi.fn().mockResolvedValue({ status: "disabled" });
+    const tasks: Promise<unknown>[] = [];
+
+    scheduleMaintenanceTasks({}, (task) => tasks.push(task), {
+      retentionRunner,
+      telemetryRunner
+    });
+    await expect(Promise.allSettled(tasks)).resolves.toEqual([
+      expect.objectContaining({ status: "rejected" }),
+      expect.objectContaining({ status: "fulfilled" })
+    ]);
+    expect(telemetryRunner).toHaveBeenCalledOnce();
+    expect(retentionRunner).toHaveBeenCalledOnce();
+  });
+});
+
 function sessionRequest(token: string, includeOrigin: boolean): Request {
   const headers = new Headers({ Authorization: `Bearer ${token}` });
   if (includeOrigin) {
@@ -260,4 +377,16 @@ function aggregateDatabase(): D1DatabaseLike {
       return statement;
     }
   };
+}
+
+function archiveBucket() {
+  return {
+    get: vi.fn(),
+    head: vi.fn(),
+    put: vi.fn()
+  };
+}
+
+function indexedManifest() {
+  return { id: "archive" };
 }

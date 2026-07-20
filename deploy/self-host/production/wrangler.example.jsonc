@@ -11,6 +11,18 @@
       "migrations_dir": "../../../packages/control-plane/migrations"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "EXECUTION_ARCHIVE",
+      "bucket_name": "tenantscript-execution-archive-80f22958350acd4f73696f7b"
+    }
+  ],
+  "vars": {
+    "EXECUTION_ARCHIVE_HOT_RETENTION_DAYS": "30"
+  },
+  "triggers": {
+    "crons": ["0 2 * * *"]
+  },
   "durable_objects": {
     "bindings": [
       {

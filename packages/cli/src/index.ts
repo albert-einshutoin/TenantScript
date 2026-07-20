@@ -129,7 +129,9 @@ export {
   deriveControlPlaneWorkerName,
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
-  type ProductionWranglerInputV1
+  type ProductionWranglerInput,
+  type ProductionWranglerInputV1,
+  type ProductionWranglerInputV2
 } from "./wrangler-template.js";
 
 export {

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { link, open, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { deriveSetupOperationIdempotencyKey } from "./setup-executor.js";
+import { deriveCloudflareR2BucketName } from "./cloudflare-r2-setup-adapter.js";
 
 const CONTROL_PLANE_WORKER_OPERATION_ID = "create:control-plane-worker";
 
@@ -16,35 +17,70 @@ export interface ProductionWranglerInputV1 {
   };
 }
 
-export function parseProductionWranglerInput(value: unknown): ProductionWranglerInputV1 {
+export interface ProductionWranglerInputV2 {
+  version: 2;
+  baseWorkerName: string;
+  setupRunId: string;
+  compatibilityDate: string;
+  database: {
+    name: string;
+    id: string;
+  };
+  executionArchive: {
+    baseBucketName: string;
+    hotRetentionDays: number;
+  };
+}
+
+export type ProductionWranglerInput = ProductionWranglerInputV1 | ProductionWranglerInputV2;
+
+export function parseProductionWranglerInput(value: unknown): ProductionWranglerInput {
+  if (!isRecord(value)) throw invalidInput();
+  const commonKeys = ["version", "baseWorkerName", "setupRunId", "compatibilityDate", "database"];
   if (
+    value.version === 1 &&
+    isExactRecord(value, commonKeys) &&
+    hasValidCommonWranglerInput(value)
+  ) {
+    return {
+      version: 1,
+      baseWorkerName: value.baseWorkerName,
+      setupRunId: value.setupRunId,
+      compatibilityDate: value.compatibilityDate,
+      database: { name: value.database.name, id: value.database.id }
+    };
+  }
+  if (
+    value.version !== 2 ||
     !isExactRecord(value, [
       "version",
       "baseWorkerName",
       "setupRunId",
       "compatibilityDate",
-      "database"
-    ])
+      "database",
+      "executionArchive"
+    ]) ||
+    !hasValidCommonWranglerInput(value)
   ) {
     throw invalidInput();
   }
   if (
-    value.version !== 1 ||
-    !isWorkerBaseName(value.baseWorkerName) ||
-    !isSetupRunId(value.setupRunId) ||
-    !isUtcDate(value.compatibilityDate) ||
-    !isExactRecord(value.database, ["name", "id"]) ||
-    !isDatabaseName(value.database.name) ||
-    !isDatabaseId(value.database.id)
+    !isExactRecord(value.executionArchive, ["baseBucketName", "hotRetentionDays"]) ||
+    !isR2BaseName(value.executionArchive.baseBucketName) ||
+    !isHotRetentionDays(value.executionArchive.hotRetentionDays)
   ) {
     throw invalidInput();
   }
   return {
-    version: 1,
+    version: 2,
     baseWorkerName: value.baseWorkerName,
     setupRunId: value.setupRunId,
     compatibilityDate: value.compatibilityDate,
-    database: { name: value.database.name, id: value.database.id }
+    database: { name: value.database.name, id: value.database.id },
+    executionArchive: {
+      baseBucketName: value.executionArchive.baseBucketName,
+      hotRetentionDays: value.executionArchive.hotRetentionDays
+    }
   };
 }
 
@@ -63,7 +99,7 @@ export function deriveControlPlaneWorkerName(baseName: string, setupRunId: strin
   return `${baseName}-${suffix}`;
 }
 
-export function renderProductionWranglerConfig(input: ProductionWranglerInputV1): string {
+export function renderProductionWranglerConfig(input: ProductionWranglerInput): string {
   const parsed = parseProductionWranglerInput(input);
   // Build an exact deployment DTO instead of merging operator input. This keeps credentials and
   // future, not-yet-wired bindings from accidentally crossing into the generated config.
@@ -80,6 +116,24 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInputV1)
         migrations_dir: "packages/control-plane/migrations"
       }
     ],
+    ...(parsed.version === 1
+      ? {}
+      : {
+          r2_buckets: [
+            {
+              binding: "EXECUTION_ARCHIVE",
+              bucket_name: deriveCloudflareR2BucketName(
+                parsed.executionArchive.baseBucketName,
+                parsed.setupRunId,
+                "create:execution-archive-r2"
+              )
+            }
+          ],
+          vars: {
+            EXECUTION_ARCHIVE_HOT_RETENTION_DAYS: String(parsed.executionArchive.hotRetentionDays)
+          },
+          triggers: { crons: ["0 2 * * *"] }
+        }),
     durable_objects: {
       bindings: [
         {
@@ -130,6 +184,27 @@ function isExactRecord(value: unknown, keys: readonly string[]): value is Record
   return actual.length === keys.length && actual.every((key) => keys.includes(key));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasValidCommonWranglerInput(value: Record<string, unknown>): value is Record<
+  string,
+  unknown
+> &
+  Record<"baseWorkerName" | "setupRunId" | "compatibilityDate", string> & {
+    database: { name: string; id: string };
+  } {
+  return (
+    isWorkerBaseName(value.baseWorkerName) &&
+    isSetupRunId(value.setupRunId) &&
+    isUtcDate(value.compatibilityDate) &&
+    isExactRecord(value.database, ["name", "id"]) &&
+    isDatabaseName(value.database.name) &&
+    isDatabaseId(value.database.id)
+  );
+}
+
 function isWorkerBaseName(value: unknown): value is string {
   return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,36}[a-z0-9])?$/u.test(value);
 }
@@ -152,6 +227,14 @@ function isDatabaseName(value: unknown): value is string {
 
 function isDatabaseId(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{32}$/u.test(value);
+}
+
+function isR2BaseName(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z][a-z0-9-]{0,36}[a-z0-9]$/u.test(value);
+}
+
+function isHotRetentionDays(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 3650;
 }
 
 function isUtcDate(value: unknown): value is string {

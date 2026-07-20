@@ -13,7 +13,7 @@ public custom domain.
 {
   "r2_buckets": [
     {
-      "binding": "EXECUTION_ARCHIVES",
+      "binding": "EXECUTION_ARCHIVE",
       "bucket_name": "tenantscript-execution-archives"
     }
   ]
@@ -24,7 +24,7 @@ The application-level policy should be explicit and reviewed with the customer's
 regional requirements:
 
 ```ts
-const archives = createD1R2ExecutionArchiveStore(env.DB, env.EXECUTION_ARCHIVES, {
+const archives = createD1R2ExecutionArchiveStore(env.DB, env.EXECUTION_ARCHIVE, {
   hotRetentionDays: 30,
   batchSize: 100
 });
@@ -40,6 +40,14 @@ Run one tenant/app scope per job invocation. Rows whose `created_at` is strictly
 calculated cutoff are eligible; a row exactly at the cutoff remains hot until the next run. Keep
 the batch small enough for the Worker CPU and D1 statement limits. Re-run until the method returns
 `null` to drain a backlog.
+
+The production Worker template schedules this path daily when
+`EXECUTION_ARCHIVE_HOT_RETENTION_DAYS` is explicitly configured. One invocation reads at most 50
+tenant/app scopes that have expired rows in stable order and archives one batch per scope; drained
+scopes leave the candidate set so later invocations continue the remaining backlog. The current
+generated composition reads scopes from the compatibility `DB` binding only.
+Do not claim retention coverage for databases routed through `APP_DATABASE_ROUTES_JSON` until a
+shard-aware scheduler is implemented and verified.
 
 ## Failure and consistency contract
 
