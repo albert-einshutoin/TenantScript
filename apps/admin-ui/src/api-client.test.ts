@@ -872,6 +872,42 @@ describe("Admin API environment selection", () => {
     expect(requestUrl(url)).not.toContain("tenantId");
   });
 
+  it("normalizes contract-valid blank optional connection metadata as unreported", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            {
+              provider: "slack",
+              id: "connection_1",
+              workspaceId: "workspace_1",
+              workspaceName: "",
+              botUserId: "",
+              connectedAt: "2026-07-21T00:00:00.000Z"
+            }
+          ]
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getProviderConnections()).resolves.toEqual([
+      {
+        provider: "slack",
+        id: "connection_1",
+        workspaceId: "workspace_1",
+        connectedAt: new Date("2026-07-21T00:00:00.000Z")
+      }
+    ]);
+  });
+
   it("rejects provider connections containing a secret reference", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

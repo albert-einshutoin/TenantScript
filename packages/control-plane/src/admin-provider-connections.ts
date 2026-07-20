@@ -38,12 +38,23 @@ export function createD1AdminProviderConnectionStore(
         provider: "slack",
         id: row.id,
         workspaceId: row.workspace_id,
-        ...(row.workspace_name === null ? {} : { workspaceName: row.workspace_name }),
-        ...(row.bot_user_id === null ? {} : { botUserId: row.bot_user_id }),
+        ...optionalNonBlank("workspaceName", row.workspace_name),
+        ...optionalNonBlank("botUserId", row.bot_user_id),
         connectedAt: row.connected_at
       }));
     }
   };
+}
+
+function optionalNonBlank<Key extends "workspaceName" | "botUserId">(
+  key: Key,
+  value: string | null
+): Partial<Record<Key, string>> {
+  // OAuth providers may omit optional profile metadata as NULL or a blank string. Normalizing both
+  // forms keeps the public read model stable and prevents an empty label from hiding UI fallbacks.
+  return value === null || value.trim().length === 0
+    ? {}
+    : ({ [key]: value } as Record<Key, string>);
 }
 
 interface ProviderConnectionRow {

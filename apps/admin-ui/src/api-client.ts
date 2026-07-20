@@ -459,8 +459,8 @@ const providerConnectionsSchema = z
           provider: z.literal("slack"),
           id: z.string().min(1),
           workspaceId: z.string().min(1),
-          workspaceName: z.string().min(1).optional(),
-          botUserId: z.string().min(1).optional(),
+          workspaceName: z.string().optional(),
+          botUserId: z.string().optional(),
           connectedAt: z.coerce.date()
         })
         .strict()
@@ -1226,10 +1226,12 @@ export function createAdminApiClient(params: {
         provider: connection.provider,
         id: connection.id,
         workspaceId: connection.workspaceId,
-        ...(connection.workspaceName === undefined
+        ...(connection.workspaceName === undefined || connection.workspaceName.trim().length === 0
           ? {}
           : { workspaceName: connection.workspaceName }),
-        ...(connection.botUserId === undefined ? {} : { botUserId: connection.botUserId }),
+        ...(connection.botUserId === undefined || connection.botUserId.trim().length === 0
+          ? {}
+          : { botUserId: connection.botUserId }),
         connectedAt: connection.connectedAt
       }));
     },

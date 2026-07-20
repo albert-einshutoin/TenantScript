@@ -57,6 +57,19 @@ describe("D1 Admin provider connection inventory", () => {
       connectedAt: new Date("2026-07-21T00:30:00.000Z")
     });
     await slackConnections.upsertSlackConnection({
+      id: "connection_own_with_blank_optional_metadata",
+      tenantId: "tenant_1",
+      workspaceId: "workspace_own_with_blank_optional_metadata",
+      workspaceName: "",
+      botUserId: "",
+      secretRef: {
+        tenantId: "tenant_1",
+        provider: "slack",
+        secretId: "secret-own-with-blank-optional-metadata"
+      },
+      connectedAt: new Date("2026-07-21T00:45:00.000Z")
+    });
+    await slackConnections.upsertSlackConnection({
       id: "connection_other_tenant",
       tenantId: "tenant_2",
       workspaceId: "workspace_other_tenant",
@@ -83,6 +96,12 @@ describe("D1 Admin provider connection inventory", () => {
     const result = await inventory.readConnections({ appId: "app_1", tenantId: "tenant_1" });
 
     expect(result).toEqual([
+      {
+        provider: "slack",
+        id: "connection_own_with_blank_optional_metadata",
+        workspaceId: "workspace_own_with_blank_optional_metadata",
+        connectedAt: "2026-07-21T00:45:00.000Z"
+      },
       {
         provider: "slack",
         id: "connection_own_without_optional_metadata",
