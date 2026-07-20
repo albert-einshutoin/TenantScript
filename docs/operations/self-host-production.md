@@ -70,7 +70,8 @@ rotation runbook. The template does not guess or generate secrets.
 - **Budget:** choose Admin mutation rate limits and runtime budgets from observed workload behavior;
   alert before provider or Cloudflare limits are exhausted.
 - **Retention:** document D1 hot retention and legal-hold requirements before enabling R2 archival.
-  R2 remains unwired in this baseline, so do not claim long-term archive coverage.
+  The accountless [R2 setup adapter](cloudflare-r2-setup-adapter.md) can reconcile separate buckets,
+  but they remain unwired in the generated Worker baseline. Do not claim long-term archive coverage.
 - **Telemetry:** TenantScript telemetry remains opt-in and off by default. Review the privacy contract
   before enabling it.
 - **Recovery:** retain the setup plan and operator-owned resource journal. Never delete an adopted
@@ -78,15 +79,17 @@ rotation runbook. The template does not guess or generate secrets.
   [setup run journal recovery contract](setup-run-journal.md) and the
   [Cloudflare transport boundary](cloudflare-api-transport.md). The
   [D1 setup adapter](cloudflare-d1-setup-adapter.md) and
-  [migration adapter](cloudflare-d1-migrations.md) are accountless resource slices; full live
+  [migration adapter](cloudflare-d1-migrations.md), together with the
+  [R2 setup adapter](cloudflare-r2-setup-adapter.md), are accountless resource slices; full live
   Cloudflare apply remains unimplemented.
 - **Verification:** run accountless `pnpm verify`, Wrangler dry-run, migration inspection, the
   secret-free doctor flow, and a live tenant-isolation smoke test in the operator account.
 
 ## Known integration gaps
 
-The following planned resources are absent because their Worker composition is incomplete: artifact
-R2, execution archive R2, provider secret-store Durable Object, approval Workflow, Analytics Engine
-usage, and tenant runtime/dispatch binding. Track the remaining setup/IaC/Tier 2 work in
+Artifact and execution archive R2 now have an accountless create/adopt/cleanup adapter, but their
+Worker bindings and lifecycle policies remain absent from this baseline. Other missing composition
+includes the provider secret-store Durable Object, approval Workflow, Analytics Engine usage, and
+tenant runtime/dispatch binding. Track the remaining setup/IaC/Tier 2 work in
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34). Their absence must remain
 visible in reviews and release evidence.

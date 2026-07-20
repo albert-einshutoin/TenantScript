@@ -6,9 +6,11 @@ path segments, not a URL, and every request is rooted at
 `https://api.cloudflare.com/client/v4/accounts/<account-id>/`.
 
 This transport does not provision resources by itself. The ownership-aware
-[D1 setup adapter](cloudflare-d1-setup-adapter.md) implements the first create/adopt/cleanup slice;
-R2, Workers, Workflows, Analytics Engine, D1 migrations, full composition, and Tier 2 live
-verification remain before `ext setup` can claim a successful deployment.
+[D1 setup adapter](cloudflare-d1-setup-adapter.md) and
+[R2 setup adapter](cloudflare-r2-setup-adapter.md) implement ownership-aware resource slices, while
+the [D1 migration adapter](cloudflare-d1-migrations.md) pins resumable schema history. Workers,
+Workflows, Analytics Engine, live composition, and Tier 2 verification remain before `ext setup` can
+claim a successful deployment.
 
 ## Credential and permission boundary
 
@@ -22,6 +24,7 @@ Grant only permissions required by the selected adapter. Current Cloudflare refe
 | Adapter action               | Official endpoint reference                                                                                                             | Required permission shown by Cloudflare |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | Create D1 database           | [Create D1 database](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/create/)                          | `D1 Write`                              |
+| Create R2 bucket             | [Create R2 bucket](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/create/)                             | `Workers R2 Storage Write`              |
 | Delete R2 bucket             | [Delete R2 bucket](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/delete/)                             | `Workers R2 Storage Write`              |
 | Upload Worker script content | [Put script content](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/) | `Workers Scripts Write`                 |
 
@@ -63,6 +66,10 @@ Callers receive only these stable error codes:
 | `cloudflare_api_request_failed`   | Other Cloudflare rejection or `success: false`.                          |
 
 Do not wrap these errors with provider response bodies, request bodies, account IDs, or tokens.
+
+The only provider-specific header surface is the optional closed `r2Jurisdiction` request property.
+It accepts `default`, `eu`, or `fedramp`, is projected to `cf-r2-jurisdiction`, and is rejected for
+non-R2 bucket paths. Callers cannot inject arbitrary headers.
 
 ## Accountless verification
 

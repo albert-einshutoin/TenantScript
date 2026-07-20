@@ -64,7 +64,7 @@ pnpm --filter @tenantscript/cli test:security
 pnpm verify
 ```
 
-The composition contract test uses the real D1 adapter with an injected synthetic transport. It
+The composition contract test uses the real D1 and R2 adapters with an injected synthetic transport. It
 proves exact routing and fail-closed handling without making a live Cloudflare request. Track the
 remaining setup implementation and Tier 2 evidence in
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34).
