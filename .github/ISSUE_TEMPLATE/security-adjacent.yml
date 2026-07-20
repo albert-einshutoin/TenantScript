@@ -1,0 +1,40 @@
+name: Security hardening suggestion
+description: Propose public defense-in-depth work that is not an undisclosed vulnerability.
+title: "[Security hardening] "
+labels: ["area:security"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not disclose vulnerabilities, exploit steps, secrets, or affected deployments here.
+        Use the private reporting process in SECURITY.md for any suspected exploitable weakness.
+  - type: checkboxes
+    id: disclosure_boundary
+    attributes:
+      label: Disclosure boundary
+      options:
+        - label: This is defense-in-depth or threat-model work, not an undisclosed exploitable vulnerability.
+          required: true
+        - label: This issue contains no exploit payload, credential, customer/tenant data, account identifier, or private URL.
+          required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Trust boundary and rationale
+      description: Identify the public trust boundary and why additional hardening helps.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Proposed adversarial test
+      description: Describe a safe synthetic RED test and the expected invariant.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and operational impact
+      description: Note public API, runtime, migration, and self-host effects.
+    validations:
+      required: true

@@ -419,6 +419,13 @@ function AdminShell({
             <span>{session.subject}</span>
             <strong>{session.role}</strong>
           </div>
+          <div
+            className={`telemetry-chip ${snapshot?.telemetry.enabled === true ? "enabled" : "disabled"}`}
+            aria-label="Anonymous telemetry setting"
+          >
+            <span>Anonymous telemetry</span>
+            <strong>{snapshot?.telemetry.enabled === true ? "On" : "Off"}</strong>
+          </div>
           <button type="button" className="secondary-button" onClick={onLogout}>
             Sign out
           </button>

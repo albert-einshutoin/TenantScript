@@ -18,6 +18,14 @@ import {
 import { createControlPlaneHttpHandler } from "./http-api.js";
 import { parsePublishedHookSchemaCatalog } from "./schema-migrations.js";
 import {
+  createD1TelemetrySnapshotSource,
+  createHttpTelemetrySink,
+  parseTelemetryConfiguration,
+  publicTelemetryStatus,
+  runTelemetrySchedule,
+  type TelemetryScheduleResult
+} from "./telemetry.js";
+import {
   createD1ServiceTokenStore,
   createServiceTokenAwareIdentityResolver,
   createServiceTokenIdentityResolver,
@@ -33,6 +41,10 @@ interface ControlPlaneWorkerEnv {
   ADMIN_MUTATION_RATE_LIMIT?: string;
   ADMIN_MUTATION_RATE_WINDOW_SECONDS?: string;
   ADMIN_MUTATION_RATE_LIMITER_DO?: DurableObjectNamespace;
+  TENANTSCRIPT_TELEMETRY_ENABLED?: string;
+  TENANTSCRIPT_TELEMETRY_ENDPOINT?: string;
+  TENANTSCRIPT_PRODUCT_VERSION?: string;
+  TENANTSCRIPT_RUNTIME_PRIMITIVE?: string;
   DB?: D1DatabaseLike;
 }
 
@@ -93,6 +105,7 @@ export default {
     const serviceTokenStore = env.DB === undefined ? undefined : createD1ServiceTokenStore(env.DB);
     let handler;
     try {
+      const telemetryConfiguration = parseWorkerTelemetryConfiguration(env);
       const schemaCatalog = parseSchemaCatalogConfiguration(env.ADMIN_HOOK_SCHEMA_CATALOG_JSON);
       const dashboardStore =
         env.DB === undefined ? undefined : createD1AdminDashboardStore(env.DB, schemaCatalog);
@@ -142,6 +155,7 @@ export default {
           : { serviceTokenManager: createServiceTokenManager({ store: serviceTokenStore }) }),
         ...(rateLimiter === undefined ? {} : { adminMutationRateLimiter: rateLimiter }),
         ...(cursorCodec === undefined ? {} : { cursorCodec }),
+        telemetryStatus: publicTelemetryStatus(telemetryConfiguration),
         allowedOrigins
       });
     } catch {
@@ -158,8 +172,38 @@ export default {
       );
     }
     return handler(request);
+  },
+
+  scheduled(
+    _controller: ScheduledController,
+    env: ControlPlaneWorkerEnv,
+    context: ExecutionContext
+  ): void {
+    context.waitUntil(runScheduledTelemetry(env));
   }
 };
+
+export async function runScheduledTelemetry(
+  env: ControlPlaneWorkerEnv,
+  options: { fetcher?: typeof fetch; now?: () => Date } = {}
+): Promise<TelemetryScheduleResult> {
+  const configuration = parseWorkerTelemetryConfiguration(env);
+  if (!configuration.enabled) {
+    return { sent: false, reason: "disabled" };
+  }
+  if (env.DB === undefined) {
+    throw new Error("telemetry aggregate database is unavailable");
+  }
+  return runTelemetrySchedule({
+    configuration,
+    source: createD1TelemetrySnapshotSource(env.DB),
+    sink: createHttpTelemetrySink({
+      endpoint: configuration.endpoint,
+      ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher })
+    }),
+    ...(options.now === undefined ? {} : { now: options.now })
+  });
+}
 
 function parseIdentityConfiguration(
   serialized: string | undefined
@@ -223,6 +267,23 @@ function parseSchemaCatalogConfiguration(serialized: string | undefined) {
     return {};
   }
   return parsePublishedHookSchemaCatalog(JSON.parse(serialized) as unknown);
+}
+
+function parseWorkerTelemetryConfiguration(env: ControlPlaneWorkerEnv) {
+  return parseTelemetryConfiguration({
+    ...(env.TENANTSCRIPT_TELEMETRY_ENABLED === undefined
+      ? {}
+      : { enabled: env.TENANTSCRIPT_TELEMETRY_ENABLED }),
+    ...(env.TENANTSCRIPT_TELEMETRY_ENDPOINT === undefined
+      ? {}
+      : { endpoint: env.TENANTSCRIPT_TELEMETRY_ENDPOINT }),
+    ...(env.TENANTSCRIPT_PRODUCT_VERSION === undefined
+      ? {}
+      : { productVersion: env.TENANTSCRIPT_PRODUCT_VERSION }),
+    ...(env.TENANTSCRIPT_RUNTIME_PRIMITIVE === undefined
+      ? {}
+      : { runtimePrimitive: env.TENANTSCRIPT_RUNTIME_PRIMITIVE })
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

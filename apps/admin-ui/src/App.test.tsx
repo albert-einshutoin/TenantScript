@@ -37,6 +37,9 @@ describe("Admin UI auth foundation", () => {
 
     await expect(screen.findByText("ops-manager")).resolves.toBeInTheDocument();
     expect(screen.getByLabelText("signed in as manager")).toHaveTextContent("manager");
+    expect(screen.getByLabelText("Anonymous telemetry setting")).toHaveTextContent(
+      "Anonymous telemetryOff"
+    );
     expect(screen.getByRole("button", { name: "Approval queue" })).toBeInTheDocument();
     await expect(screen.findByText("Recent executions")).resolves.toBeInTheDocument();
     const migrations = screen.getByRole("region", { name: "Schema migrations" });
@@ -47,6 +50,30 @@ describe("Admin UI auth foundation", () => {
     expect(
       within(migrations).getByText("Upgrade blockers before removing 1.0.0")
     ).toBeInTheDocument();
+  });
+
+  it("shows explicit opt-in without exposing the telemetry endpoint", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const snapshot = await baseClient.getDashboard(session);
+    const client: AdminApiClient = {
+      ...baseClient,
+      getDashboard: () =>
+        Promise.resolve({
+          ...snapshot,
+          telemetry: { enabled: true, mode: "anonymous-aggregate", schemaVersion: 1 }
+        })
+    };
+
+    render(<App client={client} />);
+    await login("manager-token");
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Anonymous telemetry setting")).toHaveTextContent(
+        "Anonymous telemetryOn"
+      );
+    });
+    expect(document.body.textContent).not.toContain("telemetry.example.com");
   });
 
   it("routes between operational panels and signs out", async () => {

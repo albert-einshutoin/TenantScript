@@ -109,11 +109,11 @@
 
 ## チャンク G: telemetry & community(T21–T24)
 
-- [ ] **P2-T21**(M)opt-in telemetry
+- [x] **P2-T21**(M)opt-in telemetry
   - RED: opt-in しない限り一切送信されない(ネットワーク監視テスト)/ 送信内容に payload・secret・PII が含まれない
   - DoD: プライバシーテスト green、送信スキーマを公開ドキュメント化
 
-- [ ] **P2-T22**(S)ADOPTERS.md + フィードバック導線
+- [x] **P2-T22**(S)ADOPTERS.md + フィードバック導線
   - DoD: 採用報告の PR テンプレと issue テンプレが整備されている
 
 - [ ] **P2-T23**(M)GOVERNANCE.md / CONTRIBUTING.md

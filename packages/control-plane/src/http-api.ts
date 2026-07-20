@@ -26,6 +26,7 @@ import {
 } from "./rbac.js";
 import { ServiceTokenError, type ServiceTokenManager } from "./service-tokens.js";
 import { UsageMeterQueryError, type UsageMeter } from "./usage-meter.js";
+import type { TelemetryStatus } from "./telemetry.js";
 
 export type AdminRole = SupportedRbacRole;
 
@@ -49,6 +50,7 @@ export interface ControlPlaneHttpHandlerOptions {
   serviceTokenManager?: ServiceTokenManager;
   adminMutationRateLimiter?: AdminMutationRateLimiter;
   usageMeter?: UsageMeter;
+  telemetryStatus?: TelemetryStatus;
   allowedOrigins?: readonly string[];
   now?: () => Date;
 }
@@ -1357,7 +1359,12 @@ async function resolveDashboard(
           approvals: requireSerializedSection(serialized, "approvals"),
           executions: requireSerializedSection(serialized, "executions"),
           usage,
-          schemaMigrations
+          schemaMigrations,
+          telemetry: options.telemetryStatus ?? {
+            enabled: false,
+            mode: "disabled",
+            schemaVersion: 1
+          }
         },
         corsHeaders
       );

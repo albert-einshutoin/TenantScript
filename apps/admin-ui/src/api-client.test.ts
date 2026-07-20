@@ -1009,6 +1009,7 @@ function dashboardPayload() {
     approvals: { items: [] },
     executions: { items: [] },
     usage: { date: "2026-07-19", executions: 1, runtimeMs: 12 },
+    telemetry: { enabled: false, mode: "disabled", schemaVersion: 1 },
     schemaMigrations: [
       {
         hookName: "invoice.created",

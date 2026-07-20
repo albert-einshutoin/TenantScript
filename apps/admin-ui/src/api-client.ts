@@ -3,7 +3,8 @@ import { RBAC_ROLES, type SupportedRbacRole } from "@tenantscript/control-plane/
 import type {
   AdminDashboardSection,
   AuthenticatedIdentity,
-  SchemaMigrationStatus
+  SchemaMigrationStatus,
+  TelemetryStatus
 } from "@tenantscript/control-plane";
 
 export type AdminRole = SupportedRbacRole;
@@ -175,6 +176,7 @@ export interface DashboardSnapshot {
   executions: readonly ExecutionView[];
   usage: DailyUsageSummaryView;
   schemaMigrations: readonly SchemaMigrationStatus[];
+  telemetry: TelemetryStatus;
   cursors: Partial<Record<AdminDashboardSection, string>>;
 }
 
@@ -405,7 +407,14 @@ const dashboardSchema = z
     approvals: collectionSchema(approvalSchema),
     executions: collectionSchema(executionSchema),
     usage: usageSummarySchema,
-    schemaMigrations: z.array(schemaMigrationSchema)
+    schemaMigrations: z.array(schemaMigrationSchema),
+    telemetry: z
+      .object({
+        enabled: z.boolean(),
+        mode: z.enum(["disabled", "anonymous-aggregate"]),
+        schemaVersion: z.literal(1)
+      })
+      .strict()
   })
   .strict();
 
@@ -638,6 +647,7 @@ const dashboardFixture: DashboardSnapshot = {
     }
   ],
   usage: { date: "2026-06-16", executions: 34, runtimeMs: 742 },
+  telemetry: { enabled: false, mode: "disabled", schemaVersion: 1 },
   schemaMigrations: [
     {
       hookName: "invoice.created",
@@ -1327,6 +1337,7 @@ function dashboardSnapshot(data: z.infer<typeof dashboardSchema>): DashboardSnap
     executions: data.executions.items,
     usage: data.usage,
     schemaMigrations: data.schemaMigrations,
+    telemetry: data.telemetry,
     cursors: {
       ...(data.installations.nextCursor === undefined
         ? {}

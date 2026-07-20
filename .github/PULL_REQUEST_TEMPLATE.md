@@ -24,6 +24,9 @@ Fixes #
 
 <!-- State which tenant, identity, capability, egress, audit, persistence, or supply-chain boundaries are affected. Write "No boundary change" with a reason when none are affected. -->
 
+- Runtime primitive and self-host configuration impact:
+- Security impact and private-report assessment:
+
 - [ ] I assessed the security impact and added adversarial tests where a boundary changes.
 - [ ] I assessed public API, manifest/schema, storage, and operational compatibility.
 - [ ] Logs, errors, fixtures, screenshots, and documentation use synthetic or redacted data.

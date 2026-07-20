@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security report
+    url: https://github.com/albert-einshutoin/TenantScript/security/policy
+    about: Report suspected vulnerabilities without public disclosure.
+  - name: Project roadmap
+    url: https://github.com/albert-einshutoin/TenantScript/issues/41
+    about: Review current phases and implementation tasks before proposing broad scope.

@@ -13,6 +13,8 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Hook schema migration運用](docs/operations/schema-migrations.md) — app全体の利用追跡、廃止ゲート、Admin UI
 - [Runaway installation隔離](docs/operations/runaway-quarantine.md) — 連続失敗・timeout、自動disable、明示復旧
 - [Incident response runbook](docs/operations/incident-response.md) — plugin・capability・budget・D1/R2障害の封じ込め、復旧、公開drill契約
+- [Opt-in telemetry and privacy](docs/privacy/telemetry.md) — default-off、匿名集計schema、receiver制約、Admin UI表示
+- [Adopters](ADOPTERS.md) — 明示同意による公開採用報告と匿名feedback導線
 - [Rollback troubleshooting](docs/operations/rollback-troubleshooting.md) — 検知、復旧、実行確認、MTTR drill
 - [Contributing](CONTRIBUTING.md) — 開発環境、TDD、security、issue・PRレビュー手順
 - [Governance](GOVERNANCE.md) — maintainer責任、ADR意思決定、co-maintainerへの経路

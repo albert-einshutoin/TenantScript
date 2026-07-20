@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible TenantScript defect without sensitive deployment data.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        This issue is public. Remove credentials, account identifiers, customer/tenant data,
+        payloads, private URLs, and provider responses. Report suspected vulnerabilities through SECURITY.md.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and impact
+      description: Explain the observed behavior and who is affected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide deterministic steps or a synthetic fixture and the expected behavior.
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime primitive
+      options:
+        - Accountless local or workerd
+        - Cloudflare Workers
+        - Dynamic Workers
+        - Workers for Platforms
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: self_host
+    attributes:
+      label: Redacted self-host configuration
+      description: List versions and relevant feature flags only. Do not paste environment values or bindings.
+    validations:
+      required: true
+  - type: dropdown
+    id: security_impact
+    attributes:
+      label: Security impact
+      description: If exploitation or data exposure is suspected, stop and use SECURITY.md instead.
+      options:
+        - None known
+        - Availability or hardening only
+        - Suspected vulnerability - I will report privately instead
+    validations:
+      required: true
+  - type: checkboxes
+    id: public_safety
+    attributes:
+      label: Public safety confirmation
+      options:
+        - label: I removed secrets, credentials, customer/tenant data, account identifiers, and private URLs.
+          required: true
