@@ -229,26 +229,60 @@ async function resolveRequestDatabase(params: {
     return undefined;
   }
   const token = bearerToken(params.request.headers.get("Authorization"));
-  if (token === null || params.identityResolver === undefined) return undefined;
+  if (token === null) return workerUnauthorizedResponse(origin);
+  if (params.identityResolver === undefined) return identityUnavailableResponse(origin);
   const identity = await params.identityResolver.resolveToken(token);
-  if (identity?.appId === undefined) return undefined;
+  if (identity === null) return workerUnauthorizedResponse(origin);
+  if (identity.appId === undefined) return undefined;
   const database = params.resolveDatabase(identity.appId);
   if (database !== null) return database;
 
   // Never retry against the compatibility DB: an incomplete provisioning route must not become
   // a cross-app data-placement failure.
+  return workerErrorResponse({
+    status: 503,
+    code: "app_database_unavailable",
+    message: "App database unavailable",
+    origin
+  });
+}
+
+function workerUnauthorizedResponse(origin: string | null): Response {
+  return workerErrorResponse({
+    status: 401,
+    code: "unauthorized",
+    message: "valid bearer token required",
+    origin,
+    headers: { "WWW-Authenticate": "Bearer" }
+  });
+}
+
+function identityUnavailableResponse(origin: string | null): Response {
+  return workerErrorResponse({
+    status: 503,
+    code: "identity_resolver_unavailable",
+    message: "identity service unavailable",
+    origin
+  });
+}
+
+function workerErrorResponse(params: {
+  status: number;
+  code: string;
+  message: string;
+  origin: string | null;
+  headers?: Record<string, string>;
+}): Response {
   return Response.json(
+    { error: { code: params.code, message: params.message } },
     {
-      error: {
-        code: "app_database_unavailable",
-        message: "App database unavailable"
-      }
-    },
-    {
-      status: 503,
+      status: params.status,
       headers: {
         "Cache-Control": "no-store",
-        ...(origin === null ? {} : { "Access-Control-Allow-Origin": origin, Vary: "Origin" })
+        ...(params.origin === null
+          ? {}
+          : { "Access-Control-Allow-Origin": params.origin, Vary: "Origin" }),
+        ...params.headers
       }
     }
   );

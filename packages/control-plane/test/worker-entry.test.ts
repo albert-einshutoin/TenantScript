@@ -152,6 +152,24 @@ describe("Control Plane Worker configuration", () => {
       }
     });
   });
+
+  it("rejects an unauthenticated sharded request before touching any database", async () => {
+    const appDatabase = failingDatabase("app database");
+    const authenticationDatabase = failingDatabase("authentication database");
+
+    const response = await worker.fetch(adminRequest("unknown-token"), {
+      ADMIN_CURSOR_SECRET: "worker-routing-test-secret-with-32-bytes",
+      ADMIN_IDENTITIES_JSON: validIdentities,
+      APP_DATABASE_ROUTES_JSON: JSON.stringify({ app_1: "APP_ONE_DB" }),
+      APP_ONE_DB: appDatabase.database,
+      DB: authenticationDatabase.database
+    });
+
+    expect(response.status).toBe(401);
+    expect(appDatabase.prepare).not.toHaveBeenCalled();
+    expect(authenticationDatabase.prepare).not.toHaveBeenCalled();
+    expect(response.headers.get("www-authenticate")).toBe("Bearer");
+  });
 });
 
 describe("Control Plane scheduled telemetry", () => {
