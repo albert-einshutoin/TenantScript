@@ -14,7 +14,7 @@ export type SetupResourceKind =
 export interface SetupOperation {
   id: string;
   kind: SetupResourceKind;
-  action: "create" | "declare" | "apply" | "bind";
+  action: "create" | "declare" | "apply";
   logicalName: string;
   implementationStatus: "implemented" | "integration-required";
   dependsOn: string[];
@@ -125,9 +125,9 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
       ["create:control-plane-d1"]
     ),
     operation(
-      "bind:control-plane-worker",
+      "create:control-plane-worker",
       "worker",
-      "bind",
+      "create",
       "TENANTSCRIPT_CONTROL_PLANE",
       "integration-required",
       [
