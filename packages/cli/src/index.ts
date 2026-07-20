@@ -117,6 +117,7 @@ export {
 } from "./wrangler-worker-deploy-process.js";
 
 export {
+  deriveControlPlaneWorkerName,
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   type ProductionWranglerInputV1

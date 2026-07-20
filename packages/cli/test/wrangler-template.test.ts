@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  deriveControlPlaneWorkerName,
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   runExtCli,
@@ -13,7 +14,8 @@ import {
 
 const validInput: ProductionWranglerInputV1 = {
   version: 1,
-  workerName: "tenantscript-control-plane",
+  baseWorkerName: "tenantscript-control-plane",
+  setupRunId: "run-owned-worker",
   compatibilityDate: "2026-07-20",
   database: {
     name: "tenantscript-control-plane",
@@ -34,13 +36,41 @@ afterEach(async () => {
 });
 
 describe("production Wrangler template", () => {
+  it("derives one stable non-reflective Worker target from the reconcile key", () => {
+    const first = deriveControlPlaneWorkerName(validInput.baseWorkerName, validInput.setupRunId);
+    const second = deriveControlPlaneWorkerName(validInput.baseWorkerName, validInput.setupRunId);
+    const differentRun = deriveControlPlaneWorkerName(validInput.baseWorkerName, "another-run");
+
+    expect(first).toBe(second);
+    expect(first).toBe("tenantscript-control-plane-3e4cec91c270a29d79d819be");
+    expect(first).not.toContain(validInput.setupRunId);
+    expect(differentRun).not.toBe(first);
+  });
+
+  it("keeps the derived Worker target within Cloudflare's 63 character limit", () => {
+    const target = deriveControlPlaneWorkerName("a".repeat(38), validInput.setupRunId);
+
+    expect(target).toHaveLength(63);
+  });
+
+  it.each([
+    ["uppercase base", "TenantScript", validInput.setupRunId],
+    ["oversized base", "a".repeat(39), validInput.setupRunId],
+    ["unsafe run id", "tenantscript", "run id"],
+    ["credential-shaped run id", "tenantscript", "secret-sentinel"]
+  ])("rejects %s without reflecting target input", (_name, baseName, runId) => {
+    expect(() => deriveControlPlaneWorkerName(baseName, runId)).toThrow(
+      "Control Plane Worker target is invalid"
+    );
+  });
+
   it("renders only Worker bindings that production composition currently consumes", () => {
     const first = renderProductionWranglerConfig(validInput);
     const second = renderProductionWranglerConfig(validInput);
 
     expect(first).toBe(second);
     expect(JSON.parse(first)).toMatchObject({
-      name: "tenantscript-control-plane",
+      name: deriveControlPlaneWorkerName(validInput.baseWorkerName, validInput.setupRunId),
       main: "packages/control-plane/src/worker-entry.ts",
       compatibility_date: "2026-07-20",
       d1_databases: [
@@ -75,7 +105,21 @@ describe("production Wrangler template", () => {
   it.each([
     ["unknown field", { ...validInput, apiToken: "secret-sentinel" }],
     ["missing database", { ...validInput, database: undefined }],
-    ["invalid worker name", { ...validInput, workerName: "Tenant Script" }],
+    ["invalid worker base name", { ...validInput, baseWorkerName: "Tenant Script" }],
+    ["invalid setup run id", { ...validInput, setupRunId: "secret-sentinel" }],
+    [
+      "operator-selected reconcile key",
+      { ...validInput, setupRunId: undefined, reconcileIdempotencyKey: `tssetup-${"a".repeat(64)}` }
+    ],
+    [
+      "operator-selected final worker name",
+      {
+        version: validInput.version,
+        workerName: "tenantscript-control-plane",
+        compatibilityDate: validInput.compatibilityDate,
+        database: validInput.database
+      }
+    ],
     [
       "unresolved database id",
       { ...validInput, database: { ...validInput.database, id: "${CONTROL_PLANE_D1_ID}" } }
@@ -110,7 +154,7 @@ describe("production Wrangler template", () => {
 
     expect(stderr).toEqual([]);
     expect(JSON.parse(stdout[0] ?? "null")).toMatchObject({
-      name: "tenantscript-control-plane",
+      name: deriveControlPlaneWorkerName(validInput.baseWorkerName, validInput.setupRunId),
       d1_databases: [{ binding: "DB" }]
     });
   });
@@ -141,7 +185,9 @@ describe("production Wrangler template", () => {
       )
     ).resolves.toBe(0);
     const generated = await readFile(outputPath, "utf8");
-    expect(JSON.parse(generated)).toMatchObject({ name: "tenantscript-control-plane" });
+    expect(JSON.parse(generated)).toMatchObject({
+      name: deriveControlPlaneWorkerName(validInput.baseWorkerName, validInput.setupRunId)
+    });
 
     const stdout: string[] = [];
     const stderr: string[] = [];

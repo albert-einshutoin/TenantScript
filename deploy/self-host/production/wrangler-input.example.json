@@ -1,6 +1,7 @@
 {
   "version": 1,
-  "workerName": "tenantscript-control-plane",
+  "baseWorkerName": "tenantscript-control-plane",
+  "setupRunId": "replace-with-the-persisted-setup-run-id",
   "compatibilityDate": "2026-07-20",
   "database": {
     "name": "tenantscript-control-plane",

@@ -1,9 +1,14 @@
+import { createHash } from "node:crypto";
 import { link, open, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { deriveSetupOperationIdempotencyKey } from "./setup-executor.js";
+
+const CONTROL_PLANE_WORKER_OPERATION_ID = "create:control-plane-worker";
 
 export interface ProductionWranglerInputV1 {
   version: 1;
-  workerName: string;
+  baseWorkerName: string;
+  setupRunId: string;
   compatibilityDate: string;
   database: {
     name: string;
@@ -12,12 +17,21 @@ export interface ProductionWranglerInputV1 {
 }
 
 export function parseProductionWranglerInput(value: unknown): ProductionWranglerInputV1 {
-  if (!isExactRecord(value, ["version", "workerName", "compatibilityDate", "database"])) {
+  if (
+    !isExactRecord(value, [
+      "version",
+      "baseWorkerName",
+      "setupRunId",
+      "compatibilityDate",
+      "database"
+    ])
+  ) {
     throw invalidInput();
   }
   if (
     value.version !== 1 ||
-    !isWorkerName(value.workerName) ||
+    !isWorkerBaseName(value.baseWorkerName) ||
+    !isSetupRunId(value.setupRunId) ||
     !isUtcDate(value.compatibilityDate) ||
     !isExactRecord(value.database, ["name", "id"]) ||
     !isDatabaseName(value.database.name) ||
@@ -27,10 +41,26 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
   }
   return {
     version: 1,
-    workerName: value.workerName,
+    baseWorkerName: value.baseWorkerName,
+    setupRunId: value.setupRunId,
     compatibilityDate: value.compatibilityDate,
     database: { name: value.database.name, id: value.database.id }
   };
+}
+
+export function deriveControlPlaneWorkerName(baseName: string, setupRunId: string): string {
+  if (!isWorkerBaseName(baseName) || !isSetupRunId(setupRunId)) {
+    throw new Error("Control Plane Worker target is invalid");
+  }
+  const reconcileIdempotencyKey = deriveSetupOperationIdempotencyKey(
+    setupRunId,
+    CONTROL_PLANE_WORKER_OPERATION_ID,
+    "reconcile"
+  );
+  // Cloudflare does not expose a mutation idempotency key for Wrangler deploy. A 96-bit digest
+  // creates one stable crash-resume target without publishing the persisted setup key as a name.
+  const suffix = createHash("sha256").update(reconcileIdempotencyKey).digest("hex").slice(0, 24);
+  return `${baseName}-${suffix}`;
 }
 
 export function renderProductionWranglerConfig(input: ProductionWranglerInputV1): string {
@@ -39,7 +69,7 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInputV1)
   // future, not-yet-wired bindings from accidentally crossing into the generated config.
   const config = {
     $schema: "./node_modules/wrangler/config-schema.json",
-    name: parsed.workerName,
+    name: deriveControlPlaneWorkerName(parsed.baseWorkerName, parsed.setupRunId),
     main: "packages/control-plane/src/worker-entry.ts",
     compatibility_date: parsed.compatibilityDate,
     d1_databases: [
@@ -100,8 +130,18 @@ function isExactRecord(value: unknown, keys: readonly string[]): value is Record
   return actual.length === keys.length && actual.every((key) => keys.includes(key));
 }
 
-function isWorkerName(value: unknown): value is string {
-  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(value);
+function isWorkerBaseName(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,36}[a-z0-9])?$/u.test(value);
+}
+
+function isSetupRunId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 128 &&
+    /^[A-Za-z0-9][A-Za-z0-9:._/-]*$/u.test(value) &&
+    !/(?:secret-sentinel|bearer|eyJ[A-Za-z0-9_-]*\.|(?:^|:)sk[-_])/iu.test(value)
+  );
 }
 
 function isDatabaseName(value: unknown): value is string {

@@ -23,8 +23,12 @@ templates and live evidence.
 
 Create a production D1 database through the operator's normal Cloudflare process. Copy
 `deploy/self-host/production/wrangler-input.example.json` to an ignored local file, replace the
-synthetic database name/ID, and run the command documented in the deployment README. Resource IDs are
-deployment metadata, but the repository still does not commit account-specific values.
+synthetic setup run ID and database name/ID, and run the command documented in the deployment
+README. The Worker name is derived from the base name and a 96-bit digest of the internally derived
+reconcile key, so deploy and future ownership-aware cleanup share one stable target without exposing
+the run ID or full key.
+Resource IDs are deployment metadata, but the repository still does not commit account-specific
+values.
 
 The renderer uses an exact input schema and emits only:
 
