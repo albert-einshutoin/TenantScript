@@ -16,6 +16,7 @@ import {
   parseAdminMutationRateLimitConfiguration
 } from "./admin-mutation-rate-limit.js";
 import { createControlPlaneHttpHandler } from "./http-api.js";
+import { parsePublishedHookSchemaCatalog } from "./schema-migrations.js";
 import {
   createD1ServiceTokenStore,
   createServiceTokenAwareIdentityResolver,
@@ -28,6 +29,7 @@ interface ControlPlaneWorkerEnv {
   ADMIN_ALLOWED_ORIGINS?: string;
   ADMIN_CURSOR_SECRET?: string;
   ADMIN_IDENTITIES_JSON?: string;
+  ADMIN_HOOK_SCHEMA_CATALOG_JSON?: string;
   ADMIN_MUTATION_RATE_LIMIT?: string;
   ADMIN_MUTATION_RATE_WINDOW_SECONDS?: string;
   ADMIN_MUTATION_RATE_LIMITER_DO?: DurableObjectNamespace;
@@ -75,7 +77,6 @@ export default {
   fetch(request: Request, env: ControlPlaneWorkerEnv) {
     const identities = parseIdentityConfiguration(env.ADMIN_IDENTITIES_JSON);
     const allowedOrigins = parseAllowedOrigins(env.ADMIN_ALLOWED_ORIGINS);
-    const dashboardStore = env.DB === undefined ? undefined : createD1AdminDashboardStore(env.DB);
     const installationDetailStore =
       env.DB === undefined ? undefined : createD1AdminInstallationDetailStore(env.DB);
     const installationCommandStore =
@@ -92,6 +93,9 @@ export default {
     const serviceTokenStore = env.DB === undefined ? undefined : createD1ServiceTokenStore(env.DB);
     let handler;
     try {
+      const schemaCatalog = parseSchemaCatalogConfiguration(env.ADMIN_HOOK_SCHEMA_CATALOG_JSON);
+      const dashboardStore =
+        env.DB === undefined ? undefined : createD1AdminDashboardStore(env.DB, schemaCatalog);
       const cursorCodec =
         env.ADMIN_CURSOR_SECRET === undefined
           ? undefined
@@ -212,6 +216,13 @@ function parseAllowedOrigins(serialized: string | undefined): readonly string[] 
   } catch {
     return [];
   }
+}
+
+function parseSchemaCatalogConfiguration(serialized: string | undefined) {
+  if (serialized === undefined) {
+    return {};
+  }
+  return parsePublishedHookSchemaCatalog(JSON.parse(serialized) as unknown);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

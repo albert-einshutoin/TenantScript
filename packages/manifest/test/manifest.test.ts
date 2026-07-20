@@ -75,6 +75,7 @@ describe("parseManifest", () => {
       "configSchema.properties.dryRun.default"
     ],
     ["empty hooks", { hooks: [] }, "hooks"],
+    ["duplicate hook names", { hooks: [validManifest.hooks[0], validManifest.hooks[0]] }, "hooks"],
     ["unknown top-level key", { unknown: true }, ""],
     ["invalid version format", { version: "v1" }, "version"],
     [

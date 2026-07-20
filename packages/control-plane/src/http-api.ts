@@ -1325,7 +1325,7 @@ async function resolveDashboard(
         "approvals",
         "executions"
       ];
-      const [pages, usage] = await Promise.all([
+      const [pages, usage, schemaMigrations] = await Promise.all([
         Promise.all(
           sections.map((section) =>
             dashboardStore.readSection({
@@ -1340,7 +1340,11 @@ async function resolveDashboard(
           appId: identity.appId,
           tenantId: identity.tenantId,
           date: (options.now?.() ?? new Date()).toISOString().slice(0, 10)
-        })
+        }),
+        canReadAppWideSchemaMigrations(identity) &&
+        dashboardStore.readSchemaMigrations !== undefined
+          ? dashboardStore.readSchemaMigrations({ appId: identity.appId })
+          : Promise.resolve([])
       ]);
       const serialized = await Promise.all(
         pages.map((page) => serializeSectionPage(page, identity, cursorCodec))
@@ -1352,7 +1356,8 @@ async function resolveDashboard(
           pluginVersions: requireSerializedSection(serialized, "pluginVersions"),
           approvals: requireSerializedSection(serialized, "approvals"),
           executions: requireSerializedSection(serialized, "executions"),
-          usage
+          usage,
+          schemaMigrations
         },
         corsHeaders
       );
@@ -1594,6 +1599,11 @@ function isDashboardSection(value: string): value is AdminDashboardSection {
     value === "approvals" ||
     value === "executions"
   );
+}
+
+function canReadAppWideSchemaMigrations(identity: TenantScopedAdminIdentity): boolean {
+  const role = normalizeRbacRole(identity.role);
+  return role === "owner" || role === "admin";
 }
 
 function bearerToken(authorization: string | null): string | null {

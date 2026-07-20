@@ -304,6 +304,17 @@ export {
 } from "./admin-executions.js";
 
 export {
+  SchemaMigrationBlockedError,
+  createD1SchemaMigrationTracker,
+  parsePublishedHookSchemaCatalog,
+  type PublishedHookSchemaCatalog,
+  type SchemaMigrationBlocker,
+  type SchemaMigrationStatus,
+  type SchemaMigrationTracker,
+  type SchemaMigrationVersionStatus
+} from "./schema-migrations.js";
+
+export {
   createD1AdminInstallationCommandStore,
   createD1AdminInstallationDetailStore,
   type AdminInstallationCommandResult,

@@ -208,7 +208,29 @@ describe("control-plane security suite", () => {
     );
     const dashboardStore: AdminDashboardStore = {
       readSection,
-      readUsageSummary: () => Promise.resolve({ date: "2026-07-19", executions: 1, runtimeMs: 12 })
+      readUsageSummary: () => Promise.resolve({ date: "2026-07-19", executions: 1, runtimeMs: 12 }),
+      readSchemaMigrations: () =>
+        Promise.resolve([
+          {
+            hookName: "invoice.created",
+            incompatibleInstallations: [],
+            versions: [
+              {
+                version: "1.0.0",
+                installationCount: 1,
+                removable: false,
+                blockingInstallations: [
+                  {
+                    installationId: "app-wide-installation",
+                    pluginKey: "safe-plugin",
+                    pluginVersion: "1.0.0",
+                    schemaRange: "^1.0.0"
+                  }
+                ]
+              }
+            ]
+          }
+        ])
     };
     const handler = createControlPlaneHttpHandler({
       identityResolver: createStaticTokenIdentityResolver({
@@ -237,12 +259,21 @@ describe("control-plane security suite", () => {
     );
     const body: {
       installations: { nextCursor: string };
+      schemaMigrations: unknown[];
     } = await initial.json();
 
     expect(initial.status).toBe(200);
     expect(readSection).toHaveBeenCalledWith(
       expect.objectContaining({ appId: "app_1", tenantId: "tenant_1" })
     );
+    expect(body.schemaMigrations).toHaveLength(1);
+
+    const viewerDashboard = await handler(
+      dashboardRequest("tenant2", "https://api.example.com/v1/admin/dashboard")
+    );
+    const viewerBody: { schemaMigrations: unknown[] } = await viewerDashboard.json();
+    expect(viewerBody.schemaMigrations).toEqual([]);
+    expect(JSON.stringify(viewerBody)).not.toContain("app-wide-installation");
 
     const replay = await handler(
       dashboardRequest(
