@@ -1,0 +1,2200 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "name": "@tenantscript/capabilities",
+      "subpaths": [
+        {
+          "subpath": ".",
+          "exports": [
+            {
+              "name": "ApprovalLifecyclePlan",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalRecord",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalState",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalStore",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalWorkflowEngine",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityAuditRecord",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityAuditSink",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityBroker",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityCallJournal",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityCallJournalEntry",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityCallJournalStorage",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityDeniedError",
+              "kind": "type+value"
+            },
+            {
+              "name": "CapabilityGrant",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityGrants",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityJournalConflictError",
+              "kind": "type+value"
+            },
+            {
+              "name": "CapabilityProvider",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityProviderError",
+              "kind": "type+value"
+            },
+            {
+              "name": "CapabilityRateLimit",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityRateLimitBucket",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityRateLimitDecision",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityRateLimiter",
+              "kind": "type"
+            },
+            {
+              "name": "CapabilityRateLimiterStorage",
+              "kind": "type"
+            },
+            {
+              "name": "createApprovalLifecyclePlan",
+              "kind": "value"
+            },
+            {
+              "name": "createApprovalsRequestProvider",
+              "kind": "value"
+            },
+            {
+              "name": "createCapabilityBroker",
+              "kind": "value"
+            },
+            {
+              "name": "createDurableObjectCapabilityCallJournal",
+              "kind": "value"
+            },
+            {
+              "name": "createDurableObjectCapabilityRateLimiter",
+              "kind": "value"
+            },
+            {
+              "name": "createEmailSendProvider",
+              "kind": "value"
+            },
+            {
+              "name": "createGitHubIssueCreateProvider",
+              "kind": "value"
+            },
+            {
+              "name": "createHttpFetchProvider",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemoryCapabilityCallJournal",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemoryCapabilityRateLimiter",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemoryKvStateStorage",
+              "kind": "value"
+            },
+            {
+              "name": "createInvoiceReadProvider",
+              "kind": "value"
+            },
+            {
+              "name": "createKvStateProvider",
+              "kind": "value"
+            },
+            {
+              "name": "createMockSlackSendProvider",
+              "kind": "value"
+            },
+            {
+              "name": "createPluginCapabilityContext",
+              "kind": "value"
+            },
+            {
+              "name": "createRotatingTokenCapabilityProvider",
+              "kind": "value"
+            },
+            {
+              "name": "createWebFetchHttpTransport",
+              "kind": "value"
+            },
+            {
+              "name": "EmailDelivery",
+              "kind": "type"
+            },
+            {
+              "name": "EmailTemplate",
+              "kind": "type"
+            },
+            {
+              "name": "expireApproval",
+              "kind": "value"
+            },
+            {
+              "name": "GitHubIssueCreateProviderOptions",
+              "kind": "type"
+            },
+            {
+              "name": "GitHubIssueCreateRequest",
+              "kind": "type"
+            },
+            {
+              "name": "GitHubIssueCreateResult",
+              "kind": "type"
+            },
+            {
+              "name": "HttpFetchCredential",
+              "kind": "type"
+            },
+            {
+              "name": "HttpFetchTransportRequest",
+              "kind": "type"
+            },
+            {
+              "name": "HttpFetchTransportResponse",
+              "kind": "type"
+            },
+            {
+              "name": "InvoiceRecord",
+              "kind": "type"
+            },
+            {
+              "name": "InvoiceStore",
+              "kind": "type"
+            },
+            {
+              "name": "KvStateJsonValue",
+              "kind": "type"
+            },
+            {
+              "name": "KvStateLimits",
+              "kind": "type"
+            },
+            {
+              "name": "KvStateOperation",
+              "kind": "type"
+            },
+            {
+              "name": "KvStateScope",
+              "kind": "type"
+            },
+            {
+              "name": "KvStateStorage",
+              "kind": "type"
+            },
+            {
+              "name": "KvStateTransaction",
+              "kind": "type"
+            },
+            {
+              "name": "PluginCapabilityContext",
+              "kind": "type"
+            },
+            {
+              "name": "ProviderCredentialRejectedError",
+              "kind": "type+value"
+            },
+            {
+              "name": "ProviderToken",
+              "kind": "type"
+            },
+            {
+              "name": "ProviderTokenRotationError",
+              "kind": "type+value"
+            },
+            {
+              "name": "ProviderTokenRotationErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "ProviderTokenRotationSnapshot",
+              "kind": "type"
+            },
+            {
+              "name": "RotatingTokenCapabilityProviderOptions",
+              "kind": "type"
+            },
+            {
+              "name": "WebFetchFunction",
+              "kind": "type"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@tenantscript/cli",
+      "subpaths": [
+        {
+          "subpath": ".",
+          "exports": [
+            {
+              "name": "AdminApprovalDecisionCommand",
+              "kind": "type"
+            },
+            {
+              "name": "AdminApprovalDecisionResponse",
+              "kind": "type"
+            },
+            {
+              "name": "AdminMutationClient",
+              "kind": "type"
+            },
+            {
+              "name": "AdminRollbackCommand",
+              "kind": "type"
+            },
+            {
+              "name": "AdminRollbackResponse",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalDecisionClient",
+              "kind": "type"
+            },
+            {
+              "name": "BinaryAdminClient",
+              "kind": "type"
+            },
+            {
+              "name": "CliIo",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareApiError",
+              "kind": "type+value"
+            },
+            {
+              "name": "CloudflareApiErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareApiTransport",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareD1DatabaseConfiguration",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareD1MigrationSetupAdapterError",
+              "kind": "type+value"
+            },
+            {
+              "name": "CloudflareD1MigrationSetupAdapterErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareD1SetupAdapterError",
+              "kind": "type+value"
+            },
+            {
+              "name": "CloudflareD1SetupAdapterErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareFetch",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareHttpMethod",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareR2BucketConfiguration",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareR2SetupAdapterError",
+              "kind": "type+value"
+            },
+            {
+              "name": "CloudflareR2SetupAdapterErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareR2SetupBucketsConfiguration",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareR2SetupOperationId",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareWorkerConfiguration",
+              "kind": "type"
+            },
+            {
+              "name": "CloudflareWorkerSetupAdapterError",
+              "kind": "type+value"
+            },
+            {
+              "name": "CloudflareWorkerSetupAdapterErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "CONTROL_PLANE_MIGRATION_MANIFEST",
+              "kind": "value"
+            },
+            {
+              "name": "ControlPlaneMigration",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneMigrationCatalog",
+              "kind": "type"
+            },
+            {
+              "name": "createBinaryAdminClient",
+              "kind": "value"
+            },
+            {
+              "name": "createCloudflareApiTransport",
+              "kind": "value"
+            },
+            {
+              "name": "createCloudflareD1MigrationSetupAdapter",
+              "kind": "value"
+            },
+            {
+              "name": "createCloudflareD1SetupAdapter",
+              "kind": "value"
+            },
+            {
+              "name": "createCloudflareR2SetupAdapter",
+              "kind": "value"
+            },
+            {
+              "name": "createCloudflareWorkerSetupAdapter",
+              "kind": "value"
+            },
+            {
+              "name": "createCloudflareWranglerD1MigrationRunner",
+              "kind": "value"
+            },
+            {
+              "name": "createFileSetupRunJournalStore",
+              "kind": "value"
+            },
+            {
+              "name": "createHttpAdminMutationClient",
+              "kind": "value"
+            },
+            {
+              "name": "createHttpRollbackClient",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemorySetupRunJournalStore",
+              "kind": "value"
+            },
+            {
+              "name": "createNodeWranglerD1MigrationProcess",
+              "kind": "value"
+            },
+            {
+              "name": "createNodeWranglerWorkerDeployProcess",
+              "kind": "value"
+            },
+            {
+              "name": "createProductionSetupPlan",
+              "kind": "value"
+            },
+            {
+              "name": "createSetupProviderRouter",
+              "kind": "value"
+            },
+            {
+              "name": "createSetupRunJournal",
+              "kind": "value"
+            },
+            {
+              "name": "D1MigrationRunner",
+              "kind": "type"
+            },
+            {
+              "name": "D1MigrationRunnerError",
+              "kind": "type+value"
+            },
+            {
+              "name": "D1MigrationRunnerErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "DeployClient",
+              "kind": "type"
+            },
+            {
+              "name": "deriveCloudflareR2BucketName",
+              "kind": "value"
+            },
+            {
+              "name": "deriveControlPlaneWorkerName",
+              "kind": "value"
+            },
+            {
+              "name": "deriveSetupOperationIdempotencyKey",
+              "kind": "value"
+            },
+            {
+              "name": "DoctorFinding",
+              "kind": "type"
+            },
+            {
+              "name": "DoctorFindingCode",
+              "kind": "type"
+            },
+            {
+              "name": "DoctorReportV1",
+              "kind": "type"
+            },
+            {
+              "name": "DoctorResult",
+              "kind": "type"
+            },
+            {
+              "name": "DoctorRuntimePrimitive",
+              "kind": "type"
+            },
+            {
+              "name": "evaluateDoctorReport",
+              "kind": "value"
+            },
+            {
+              "name": "executeProductionSetup",
+              "kind": "value"
+            },
+            {
+              "name": "FetchLike",
+              "kind": "type"
+            },
+            {
+              "name": "isSetupRuntimePrimitive",
+              "kind": "value"
+            },
+            {
+              "name": "loadControlPlaneMigrationCatalog",
+              "kind": "value"
+            },
+            {
+              "name": "measureRollbackDrill",
+              "kind": "value"
+            },
+            {
+              "name": "parseDoctorReport",
+              "kind": "value"
+            },
+            {
+              "name": "parseProductionWranglerInput",
+              "kind": "value"
+            },
+            {
+              "name": "parseSetupRunJournal",
+              "kind": "value"
+            },
+            {
+              "name": "ProductionSetupPlanV1",
+              "kind": "type"
+            },
+            {
+              "name": "ProductionWranglerInput",
+              "kind": "type"
+            },
+            {
+              "name": "ProductionWranglerInputV1",
+              "kind": "type"
+            },
+            {
+              "name": "ProductionWranglerInputV2",
+              "kind": "type"
+            },
+            {
+              "name": "renderProductionWranglerConfig",
+              "kind": "value"
+            },
+            {
+              "name": "RollbackClient",
+              "kind": "type"
+            },
+            {
+              "name": "RollbackDrillMeasurement",
+              "kind": "type"
+            },
+            {
+              "name": "RollbackDrillMeasurementRequest",
+              "kind": "type"
+            },
+            {
+              "name": "runExtCli",
+              "kind": "value"
+            },
+            {
+              "name": "SetupCleanupStep",
+              "kind": "type"
+            },
+            {
+              "name": "SetupCostBoundary",
+              "kind": "type"
+            },
+            {
+              "name": "SetupOperation",
+              "kind": "type"
+            },
+            {
+              "name": "SetupOperationDisposition",
+              "kind": "type"
+            },
+            {
+              "name": "SetupOperationPhase",
+              "kind": "type"
+            },
+            {
+              "name": "SetupPermission",
+              "kind": "type"
+            },
+            {
+              "name": "SetupProviderAdapter",
+              "kind": "type"
+            },
+            {
+              "name": "SetupProviderRoute",
+              "kind": "type"
+            },
+            {
+              "name": "SetupProviderRouterError",
+              "kind": "type+value"
+            },
+            {
+              "name": "SetupProviderRouterErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "SetupReconcileResult",
+              "kind": "type"
+            },
+            {
+              "name": "SetupResourceKind",
+              "kind": "type"
+            },
+            {
+              "name": "SetupRunExecutionError",
+              "kind": "type+value"
+            },
+            {
+              "name": "SetupRunJournal",
+              "kind": "type"
+            },
+            {
+              "name": "SetupRunJournalEntry",
+              "kind": "type"
+            },
+            {
+              "name": "SetupRunJournalStore",
+              "kind": "type"
+            },
+            {
+              "name": "SetupRuntimePrimitive",
+              "kind": "type"
+            },
+            {
+              "name": "SetupWarning",
+              "kind": "type"
+            },
+            {
+              "name": "WranglerD1MigrationProcess",
+              "kind": "type"
+            },
+            {
+              "name": "WranglerWorkerDeployProcess",
+              "kind": "type"
+            },
+            {
+              "name": "WranglerWorkerDeployProcessError",
+              "kind": "type+value"
+            },
+            {
+              "name": "WranglerWorkerDeployProcessErrorCode",
+              "kind": "type"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@tenantscript/control-plane",
+      "subpaths": [
+        {
+          "subpath": ".",
+          "exports": [
+            {
+              "name": "ADMIN_HTTP_ENDPOINT_CONTRACTS",
+              "kind": "value"
+            },
+            {
+              "name": "AdminApprovalDecisionError",
+              "kind": "type+value"
+            },
+            {
+              "name": "AdminApprovalDecisionRequest",
+              "kind": "type"
+            },
+            {
+              "name": "AdminApprovalDecisionResult",
+              "kind": "type"
+            },
+            {
+              "name": "AdminApprovalDecisionStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminApprovalSummary",
+              "kind": "type"
+            },
+            {
+              "name": "AdminCapabilityMetadata",
+              "kind": "type"
+            },
+            {
+              "name": "AdminConfigFieldMetadata",
+              "kind": "type"
+            },
+            {
+              "name": "AdminCursorCodec",
+              "kind": "type"
+            },
+            {
+              "name": "AdminCursorPayload",
+              "kind": "type"
+            },
+            {
+              "name": "AdminDashboardScope",
+              "kind": "type"
+            },
+            {
+              "name": "AdminDashboardSection",
+              "kind": "type"
+            },
+            {
+              "name": "AdminDashboardSectionPage",
+              "kind": "type"
+            },
+            {
+              "name": "AdminDashboardStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminEgressMetadata",
+              "kind": "type"
+            },
+            {
+              "name": "AdminExecutionDetail",
+              "kind": "type"
+            },
+            {
+              "name": "AdminExecutionDetailStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminExecutionFilters",
+              "kind": "type"
+            },
+            {
+              "name": "AdminExecutionStatus",
+              "kind": "type"
+            },
+            {
+              "name": "AdminExecutionSummary",
+              "kind": "type"
+            },
+            {
+              "name": "AdminHttpEndpointContract",
+              "kind": "type"
+            },
+            {
+              "name": "AdminHttpEndpointId",
+              "kind": "type"
+            },
+            {
+              "name": "AdminHttpEndpointMatch",
+              "kind": "type"
+            },
+            {
+              "name": "AdminHttpIsolation",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallationCommandResult",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallationCommandStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallationDetail",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallationDetailStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallationSummary",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallCapability",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallConfigField",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallFlowError",
+              "kind": "type+value"
+            },
+            {
+              "name": "AdminInstallFlowStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallPreview",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallRequest",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallRequestResult",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallRequestStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminInstallResult",
+              "kind": "type"
+            },
+            {
+              "name": "AdminMutationFamily",
+              "kind": "type"
+            },
+            {
+              "name": "AdminMutationRateLimiter",
+              "kind": "type"
+            },
+            {
+              "name": "AdminMutationRateLimitRequest",
+              "kind": "type"
+            },
+            {
+              "name": "AdminMutationRateLimitResult",
+              "kind": "type"
+            },
+            {
+              "name": "AdminMutationRateLimitStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminPluginVersionSummary",
+              "kind": "type"
+            },
+            {
+              "name": "AdminRole",
+              "kind": "type"
+            },
+            {
+              "name": "AdminRollbackError",
+              "kind": "type+value"
+            },
+            {
+              "name": "AdminRollbackRequest",
+              "kind": "type"
+            },
+            {
+              "name": "AdminRollbackResult",
+              "kind": "type"
+            },
+            {
+              "name": "AdminRollbackStore",
+              "kind": "type"
+            },
+            {
+              "name": "AdminRoute",
+              "kind": "type"
+            },
+            {
+              "name": "AdminUsageSummary",
+              "kind": "type"
+            },
+            {
+              "name": "AesGcmSecretEncryptionKeyringConfig",
+              "kind": "type"
+            },
+            {
+              "name": "AnalyticsEngineDataPoint",
+              "kind": "type"
+            },
+            {
+              "name": "AnalyticsEngineDatasetLike",
+              "kind": "type"
+            },
+            {
+              "name": "AppDatabaseRoute",
+              "kind": "type"
+            },
+            {
+              "name": "AppDatabaseRouter",
+              "kind": "type"
+            },
+            {
+              "name": "AppendAuditEvent",
+              "kind": "type"
+            },
+            {
+              "name": "AppRecord",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalContinuationRequest",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalDecision",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalDecisionPayload",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalDecisionTransition",
+              "kind": "type"
+            },
+            {
+              "name": "approvalDecisionTransitions",
+              "kind": "value"
+            },
+            {
+              "name": "ApprovalRecord",
+              "kind": "type"
+            },
+            {
+              "name": "ApprovalState",
+              "kind": "type"
+            },
+            {
+              "name": "ArchiveExpiredExecutionsRequest",
+              "kind": "type"
+            },
+            {
+              "name": "ArtifactAlreadyExistsError",
+              "kind": "type+value"
+            },
+            {
+              "name": "ArtifactStore",
+              "kind": "type"
+            },
+            {
+              "name": "AuditEvent",
+              "kind": "type"
+            },
+            {
+              "name": "AuditExportManifest",
+              "kind": "type"
+            },
+            {
+              "name": "AuditExportRequest",
+              "kind": "type"
+            },
+            {
+              "name": "AuditExportResult",
+              "kind": "type"
+            },
+            {
+              "name": "AuditExportService",
+              "kind": "type"
+            },
+            {
+              "name": "AuditExportServiceOptions",
+              "kind": "type"
+            },
+            {
+              "name": "AuditLogStore",
+              "kind": "type"
+            },
+            {
+              "name": "AuditScope",
+              "kind": "type"
+            },
+            {
+              "name": "AuditValue",
+              "kind": "type"
+            },
+            {
+              "name": "AuditVerificationResult",
+              "kind": "type"
+            },
+            {
+              "name": "AuthenticatedIdentity",
+              "kind": "type"
+            },
+            {
+              "name": "BudgetExceededNotification",
+              "kind": "type"
+            },
+            {
+              "name": "BudgetGuardResult",
+              "kind": "type"
+            },
+            {
+              "name": "BudgetGuardStore",
+              "kind": "type"
+            },
+            {
+              "name": "BudgetNotificationSink",
+              "kind": "type"
+            },
+            {
+              "name": "canRolePerform",
+              "kind": "value"
+            },
+            {
+              "name": "CapabilityCallRecord",
+              "kind": "type"
+            },
+            {
+              "name": "CompareAndSwapSecretRequest",
+              "kind": "type"
+            },
+            {
+              "name": "CompareAndSwapSecretResult",
+              "kind": "type"
+            },
+            {
+              "name": "ConnectSlackWorkspaceRequest",
+              "kind": "type"
+            },
+            {
+              "name": "ContinuationRunner",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneApi",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneApiError",
+              "kind": "type+value"
+            },
+            {
+              "name": "ControlPlaneErrorEnvelope",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneErrorResponse",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneErrorStatus",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneExecutionRecord",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneHttpHandler",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneHttpHandlerOptions",
+              "kind": "type"
+            },
+            {
+              "name": "ControlPlaneStore",
+              "kind": "type"
+            },
+            {
+              "name": "createAdminCursorCodec",
+              "kind": "value"
+            },
+            {
+              "name": "createAdminMutationRateLimiter",
+              "kind": "value"
+            },
+            {
+              "name": "createAesGcmSecretEncryptionKeyring",
+              "kind": "value"
+            },
+            {
+              "name": "createAnalyticsEngineUsageSink",
+              "kind": "value"
+            },
+            {
+              "name": "createAppDatabaseRouterFromBindings",
+              "kind": "value"
+            },
+            {
+              "name": "CreateAppRequest",
+              "kind": "type"
+            },
+            {
+              "name": "createAuditExportService",
+              "kind": "value"
+            },
+            {
+              "name": "createControlPlaneApi",
+              "kind": "value"
+            },
+            {
+              "name": "createControlPlaneHttpHandler",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AdminApprovalDecisionStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AdminDashboardStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AdminExecutionDetailStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AdminInstallationCommandStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AdminInstallationDetailStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AdminInstallFlowStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AdminInstallRequestStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AdminRollbackStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1AuditLogStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1ControlPlaneStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1R2ExecutionArchiveStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1RunawayGuardStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1SchemaMigrationTracker",
+              "kind": "value"
+            },
+            {
+              "name": "createD1ServiceTokenStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1SlackConnectionStore",
+              "kind": "value"
+            },
+            {
+              "name": "createD1TelemetrySnapshotSource",
+              "kind": "value"
+            },
+            {
+              "name": "createDurableObjectAdminMutationRateLimitStore",
+              "kind": "value"
+            },
+            {
+              "name": "createDurableObjectDailyUsageCounter",
+              "kind": "value"
+            },
+            {
+              "name": "createDurableObjectSecretStore",
+              "kind": "value"
+            },
+            {
+              "name": "createHttpTelemetrySink",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemoryDailyUsageCounter",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemoryDailyUsageSummaryStore",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemoryExecutionLogStore",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemorySecretStore",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemorySlackConnectionStore",
+              "kind": "value"
+            },
+            {
+              "name": "createInMemoryUsageMeter",
+              "kind": "value"
+            },
+            {
+              "name": "createProviderTokenRotationManager",
+              "kind": "value"
+            },
+            {
+              "name": "createR2ArtifactStore",
+              "kind": "value"
+            },
+            {
+              "name": "createServiceTokenAwareIdentityResolver",
+              "kind": "value"
+            },
+            {
+              "name": "createServiceTokenIdentityResolver",
+              "kind": "value"
+            },
+            {
+              "name": "createServiceTokenManager",
+              "kind": "value"
+            },
+            {
+              "name": "createStaticAppDatabaseRouter",
+              "kind": "value"
+            },
+            {
+              "name": "createStaticTokenIdentityResolver",
+              "kind": "value"
+            },
+            {
+              "name": "CreateTenantRequest",
+              "kind": "type"
+            },
+            {
+              "name": "createUsageMeter",
+              "kind": "value"
+            },
+            {
+              "name": "D1AdminInstallationCommandStoreOptions",
+              "kind": "type"
+            },
+            {
+              "name": "D1AdminInstallFlowStoreOptions",
+              "kind": "type"
+            },
+            {
+              "name": "D1AdminRollbackStoreOptions",
+              "kind": "type"
+            },
+            {
+              "name": "D1DatabaseLike",
+              "kind": "type"
+            },
+            {
+              "name": "D1PreparedStatementLike",
+              "kind": "type"
+            },
+            {
+              "name": "DailyBudget",
+              "kind": "type"
+            },
+            {
+              "name": "DailyUsageCounter",
+              "kind": "type"
+            },
+            {
+              "name": "DailyUsageCounterStorage",
+              "kind": "type"
+            },
+            {
+              "name": "DailyUsageKey",
+              "kind": "type"
+            },
+            {
+              "name": "DailyUsageRecord",
+              "kind": "type"
+            },
+            {
+              "name": "DailyUsageSummary",
+              "kind": "type"
+            },
+            {
+              "name": "DailyUsageSummaryStore",
+              "kind": "type"
+            },
+            {
+              "name": "DecideApprovalRequest",
+              "kind": "type"
+            },
+            {
+              "name": "EncodedSecretEncryptionKey",
+              "kind": "type"
+            },
+            {
+              "name": "enforceBudgetBeforeExecution",
+              "kind": "value"
+            },
+            {
+              "name": "enforceRunawayPolicyAfterExecution",
+              "kind": "value"
+            },
+            {
+              "name": "evaluateFixedWindowReservation",
+              "kind": "value"
+            },
+            {
+              "name": "ExecutionArchiveManifest",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionArchiveScope",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionArchiveSearchQuery",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionArchiveStore",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionArchiveStoreOptions",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionLogStore",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionRecord",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionSearchQuery",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionStatus",
+              "kind": "type"
+            },
+            {
+              "name": "GetDailyUsageSummariesRequest",
+              "kind": "type"
+            },
+            {
+              "name": "GetDailyUsageSummaryRequest",
+              "kind": "type"
+            },
+            {
+              "name": "IdentityResolver",
+              "kind": "type"
+            },
+            {
+              "name": "InspectableSlackConnectionStore",
+              "kind": "type"
+            },
+            {
+              "name": "InstallationRecord",
+              "kind": "type"
+            },
+            {
+              "name": "InstallPluginRequest",
+              "kind": "type"
+            },
+            {
+              "name": "isRbacOperation",
+              "kind": "value"
+            },
+            {
+              "name": "isServiceTokenCredential",
+              "kind": "value"
+            },
+            {
+              "name": "isSupportedRbacRole",
+              "kind": "value"
+            },
+            {
+              "name": "ListPluginVersionsRequest",
+              "kind": "type"
+            },
+            {
+              "name": "matchAdminHttpEndpoint",
+              "kind": "value"
+            },
+            {
+              "name": "normalizeRbacRole",
+              "kind": "value"
+            },
+            {
+              "name": "parseAdminMutationRateLimitConfiguration",
+              "kind": "value"
+            },
+            {
+              "name": "parsePublishedHookSchemaCatalog",
+              "kind": "value"
+            },
+            {
+              "name": "parseTelemetryConfiguration",
+              "kind": "value"
+            },
+            {
+              "name": "PluginRecord",
+              "kind": "type"
+            },
+            {
+              "name": "PluginVersionRecord",
+              "kind": "type"
+            },
+            {
+              "name": "ProviderTokenResolutionSnapshot",
+              "kind": "type"
+            },
+            {
+              "name": "ProviderTokenRotationManager",
+              "kind": "type"
+            },
+            {
+              "name": "ProviderTokenRotationMetadata",
+              "kind": "type"
+            },
+            {
+              "name": "ProviderTokenRotationStateError",
+              "kind": "type+value"
+            },
+            {
+              "name": "ProviderTokenRotationStateErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "ProviderTokenValue",
+              "kind": "type"
+            },
+            {
+              "name": "PublicTelemetryEvent",
+              "kind": "type"
+            },
+            {
+              "name": "publicTelemetryStatus",
+              "kind": "value"
+            },
+            {
+              "name": "PublishedHookSchemaCatalog",
+              "kind": "type"
+            },
+            {
+              "name": "PutSecretRequest",
+              "kind": "type"
+            },
+            {
+              "name": "R2BucketLike",
+              "kind": "type"
+            },
+            {
+              "name": "RBAC_OPERATIONS",
+              "kind": "value"
+            },
+            {
+              "name": "RBAC_ROLES",
+              "kind": "value"
+            },
+            {
+              "name": "RbacOperation",
+              "kind": "type"
+            },
+            {
+              "name": "RbacRole",
+              "kind": "type"
+            },
+            {
+              "name": "RecordExecutionUsageRequest",
+              "kind": "type"
+            },
+            {
+              "name": "RecordUsageMetricRequest",
+              "kind": "type"
+            },
+            {
+              "name": "recoverRunawayInstallation",
+              "kind": "value"
+            },
+            {
+              "name": "reEnableBudgetDisabledInstallation",
+              "kind": "value"
+            },
+            {
+              "name": "RegisterPluginRequest",
+              "kind": "type"
+            },
+            {
+              "name": "RegisterPluginVersionRequest",
+              "kind": "type"
+            },
+            {
+              "name": "resolveApprovalDecisionTransition",
+              "kind": "value"
+            },
+            {
+              "name": "ResolvedInstallation",
+              "kind": "type"
+            },
+            {
+              "name": "RewrapSecretResult",
+              "kind": "type"
+            },
+            {
+              "name": "RollbackAuditRecord",
+              "kind": "type"
+            },
+            {
+              "name": "RollbackInstallationRequest",
+              "kind": "type"
+            },
+            {
+              "name": "RollbackResult",
+              "kind": "type"
+            },
+            {
+              "name": "RunawayExecutionOutcome",
+              "kind": "type"
+            },
+            {
+              "name": "RunawayGuardResult",
+              "kind": "type"
+            },
+            {
+              "name": "RunawayGuardState",
+              "kind": "type"
+            },
+            {
+              "name": "RunawayGuardStore",
+              "kind": "type"
+            },
+            {
+              "name": "RunawayNotificationSink",
+              "kind": "type"
+            },
+            {
+              "name": "RunawayPolicy",
+              "kind": "type"
+            },
+            {
+              "name": "RunawayQuarantineNotification",
+              "kind": "type"
+            },
+            {
+              "name": "RunawayQuarantineReason",
+              "kind": "type"
+            },
+            {
+              "name": "runTelemetrySchedule",
+              "kind": "value"
+            },
+            {
+              "name": "SchemaMigrationBlockedError",
+              "kind": "type+value"
+            },
+            {
+              "name": "SchemaMigrationBlocker",
+              "kind": "type"
+            },
+            {
+              "name": "SchemaMigrationStatus",
+              "kind": "type"
+            },
+            {
+              "name": "SchemaMigrationTracker",
+              "kind": "type"
+            },
+            {
+              "name": "SchemaMigrationVersionStatus",
+              "kind": "type"
+            },
+            {
+              "name": "SecretEncryptionKey",
+              "kind": "type"
+            },
+            {
+              "name": "SecretEncryptionKeyring",
+              "kind": "type"
+            },
+            {
+              "name": "SecretRef",
+              "kind": "type"
+            },
+            {
+              "name": "SecretStore",
+              "kind": "type"
+            },
+            {
+              "name": "SecretStoreError",
+              "kind": "type+value"
+            },
+            {
+              "name": "SecretStoreErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "SecretStoreStorage",
+              "kind": "type"
+            },
+            {
+              "name": "ServiceTokenError",
+              "kind": "type+value"
+            },
+            {
+              "name": "ServiceTokenErrorCode",
+              "kind": "type"
+            },
+            {
+              "name": "ServiceTokenManager",
+              "kind": "type"
+            },
+            {
+              "name": "ServiceTokenRecord",
+              "kind": "type"
+            },
+            {
+              "name": "ServiceTokenStore",
+              "kind": "type"
+            },
+            {
+              "name": "SetInstallationEnabledRequest",
+              "kind": "type"
+            },
+            {
+              "name": "SlackConnectionRecord",
+              "kind": "type"
+            },
+            {
+              "name": "SlackConnectionStore",
+              "kind": "type"
+            },
+            {
+              "name": "SlackOAuthClient",
+              "kind": "type"
+            },
+            {
+              "name": "SlackOAuthTokenResponse",
+              "kind": "type"
+            },
+            {
+              "name": "SupportedRbacRole",
+              "kind": "type"
+            },
+            {
+              "name": "TELEMETRY_SCHEMA_VERSION",
+              "kind": "value"
+            },
+            {
+              "name": "TelemetryAggregateSnapshot",
+              "kind": "type"
+            },
+            {
+              "name": "TelemetryConfiguration",
+              "kind": "type"
+            },
+            {
+              "name": "TelemetryRuntimePrimitive",
+              "kind": "type"
+            },
+            {
+              "name": "TelemetryScheduleResult",
+              "kind": "type"
+            },
+            {
+              "name": "TelemetrySink",
+              "kind": "type"
+            },
+            {
+              "name": "TelemetrySnapshotSource",
+              "kind": "type"
+            },
+            {
+              "name": "TelemetryStatus",
+              "kind": "type"
+            },
+            {
+              "name": "TenantRecord",
+              "kind": "type"
+            },
+            {
+              "name": "TenantScopedAdminIdentity",
+              "kind": "type"
+            },
+            {
+              "name": "toControlPlaneErrorResponse",
+              "kind": "value"
+            },
+            {
+              "name": "UpdateInstallationConfigRequest",
+              "kind": "type"
+            },
+            {
+              "name": "UpdateInstallationPriorityRequest",
+              "kind": "type"
+            },
+            {
+              "name": "UsageEvent",
+              "kind": "type"
+            },
+            {
+              "name": "UsageHookType",
+              "kind": "type"
+            },
+            {
+              "name": "UsageMeter",
+              "kind": "type"
+            },
+            {
+              "name": "UsageMeterFailure",
+              "kind": "type"
+            },
+            {
+              "name": "UsageMeterQueryError",
+              "kind": "type+value"
+            },
+            {
+              "name": "UsageSink",
+              "kind": "type"
+            },
+            {
+              "name": "verifyAuditExport",
+              "kind": "value"
+            }
+          ]
+        },
+        {
+          "subpath": "./rbac",
+          "exports": [
+            {
+              "name": "canRolePerform",
+              "kind": "value"
+            },
+            {
+              "name": "isRbacOperation",
+              "kind": "value"
+            },
+            {
+              "name": "isSupportedRbacRole",
+              "kind": "value"
+            },
+            {
+              "name": "normalizeRbacRole",
+              "kind": "value"
+            },
+            {
+              "name": "RBAC_OPERATIONS",
+              "kind": "value"
+            },
+            {
+              "name": "RBAC_ROLES",
+              "kind": "value"
+            },
+            {
+              "name": "RbacOperation",
+              "kind": "type"
+            },
+            {
+              "name": "RbacRole",
+              "kind": "type"
+            },
+            {
+              "name": "SupportedRbacRole",
+              "kind": "type"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@tenantscript/host-sdk",
+      "subpaths": [
+        {
+          "subpath": ".",
+          "exports": [
+            {
+              "name": "BlockingHookDefinition",
+              "kind": "type"
+            },
+            {
+              "name": "DefinedHook",
+              "kind": "type"
+            },
+            {
+              "name": "defineHooks",
+              "kind": "value"
+            },
+            {
+              "name": "EventHookDefinition",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionMode",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionPlan",
+              "kind": "type"
+            },
+            {
+              "name": "ExecutionStep",
+              "kind": "type"
+            },
+            {
+              "name": "FailurePolicy",
+              "kind": "type"
+            },
+            {
+              "name": "HookDefinition",
+              "kind": "type"
+            },
+            {
+              "name": "HookFailureKind",
+              "kind": "type"
+            },
+            {
+              "name": "hookFailureKinds",
+              "kind": "value"
+            },
+            {
+              "name": "HookPayloadError",
+              "kind": "type"
+            },
+            {
+              "name": "HookRetryPolicy",
+              "kind": "type"
+            },
+            {
+              "name": "HookRetryRunResult",
+              "kind": "type"
+            },
+            {
+              "name": "HookRunResult",
+              "kind": "type"
+            },
+            {
+              "name": "HookSchemaCompatibilityError",
+              "kind": "type+value"
+            },
+            {
+              "name": "HooksDefinition",
+              "kind": "type"
+            },
+            {
+              "name": "HookType",
+              "kind": "type"
+            },
+            {
+              "name": "hookTypes",
+              "kind": "value"
+            },
+            {
+              "name": "Installation",
+              "kind": "type"
+            },
+            {
+              "name": "planExecution",
+              "kind": "value"
+            },
+            {
+              "name": "retryPolicyForHookType",
+              "kind": "value"
+            },
+            {
+              "name": "RoutedHookPayload",
+              "kind": "type"
+            },
+            {
+              "name": "routeHookPayloads",
+              "kind": "value"
+            },
+            {
+              "name": "runHook",
+              "kind": "value"
+            },
+            {
+              "name": "runTransformChain",
+              "kind": "value"
+            },
+            {
+              "name": "runWithRetryPolicy",
+              "kind": "value"
+            },
+            {
+              "name": "SchemaCompatibleInstallation",
+              "kind": "type"
+            },
+            {
+              "name": "shouldRetryHookFailure",
+              "kind": "value"
+            },
+            {
+              "name": "VersionedHookSchema",
+              "kind": "type"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@tenantscript/loader",
+      "subpaths": [
+        {
+          "subpath": ".",
+          "exports": [
+            {
+              "name": "ApprovalContinuationRunnerOptions",
+              "kind": "type"
+            },
+            {
+              "name": "bundlePlugin",
+              "kind": "value"
+            },
+            {
+              "name": "createApprovalContinuationRunner",
+              "kind": "value"
+            },
+            {
+              "name": "PluginBundle",
+              "kind": "type"
+            },
+            {
+              "name": "runScopedHandler",
+              "kind": "value"
+            },
+            {
+              "name": "ScopedRuntimeContext",
+              "kind": "type"
+            },
+            {
+              "name": "ScopedRuntimeLimitError",
+              "kind": "type+value"
+            },
+            {
+              "name": "ScopedRuntimeLimits",
+              "kind": "type"
+            },
+            {
+              "name": "ScopedRuntimeLog",
+              "kind": "type"
+            },
+            {
+              "name": "ScopedRuntimeResult",
+              "kind": "type"
+            },
+            {
+              "name": "ScopedRuntimeTimeoutError",
+              "kind": "type+value"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@tenantscript/manifest",
+      "subpaths": [
+        {
+          "subpath": ".",
+          "exports": [
+            {
+              "name": "configSchemaSpec",
+              "kind": "value"
+            },
+            {
+              "name": "ConfigSchemaSpec",
+              "kind": "type"
+            },
+            {
+              "name": "GrantMap",
+              "kind": "type"
+            },
+            {
+              "name": "InstallationConfig",
+              "kind": "type"
+            },
+            {
+              "name": "parseManifest",
+              "kind": "value"
+            },
+            {
+              "name": "resolveGrants",
+              "kind": "value"
+            },
+            {
+              "name": "TenantScriptManifest",
+              "kind": "type"
+            },
+            {
+              "name": "validateConfig",
+              "kind": "value"
+            },
+            {
+              "name": "ValidationIssue",
+              "kind": "type"
+            },
+            {
+              "name": "ValidationResult",
+              "kind": "type"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@tenantscript/plugin-sdk",
+      "subpaths": [
+        {
+          "subpath": ".",
+          "exports": [
+            {
+              "name": "definePlugin",
+              "kind": "value"
+            },
+            {
+              "name": "DefinePluginInput",
+              "kind": "type"
+            },
+            {
+              "name": "DispatchRequest",
+              "kind": "type"
+            },
+            {
+              "name": "DispatchResult",
+              "kind": "type"
+            },
+            {
+              "name": "PluginContext",
+              "kind": "type"
+            },
+            {
+              "name": "PluginDispatchError",
+              "kind": "type"
+            },
+            {
+              "name": "PluginHandler",
+              "kind": "type"
+            },
+            {
+              "name": "TenantScriptPlugin",
+              "kind": "type"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@tenantscript/proxy",
+      "subpaths": [
+        {
+          "subpath": ".",
+          "exports": [
+            {
+              "name": "createInMemoryProxyMappingStore",
+              "kind": "value"
+            },
+            {
+              "name": "handleWebhookProxy",
+              "kind": "value"
+            },
+            {
+              "name": "ProxyForwardRequest",
+              "kind": "type"
+            },
+            {
+              "name": "ProxyForwardResponse",
+              "kind": "type"
+            },
+            {
+              "name": "ProxyMapping",
+              "kind": "type"
+            },
+            {
+              "name": "ProxyMappingAdminStore",
+              "kind": "type"
+            },
+            {
+              "name": "ProxyMappingStore",
+              "kind": "type"
+            },
+            {
+              "name": "ProxyWebhookBody",
+              "kind": "type"
+            },
+            {
+              "name": "ProxyWebhookRequest",
+              "kind": "type"
+            },
+            {
+              "name": "WebhookProxyResult",
+              "kind": "type"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "controlPlaneRest": [
+    {
+      "id": "approvalDecisionCreate",
+      "path": "/v1/admin/approval-decisions",
+      "methods": ["POST"],
+      "isolation": "tenant-mutation"
+    },
+    {
+      "id": "dashboard",
+      "path": "/v1/admin/dashboard",
+      "methods": ["GET"],
+      "isolation": "tenant-collection"
+    },
+    {
+      "id": "dashboardApprovals",
+      "path": "/v1/admin/dashboard/approvals",
+      "methods": ["GET"],
+      "isolation": "tenant-collection"
+    },
+    {
+      "id": "dashboardExecutions",
+      "path": "/v1/admin/dashboard/executions",
+      "methods": ["GET"],
+      "isolation": "tenant-collection"
+    },
+    {
+      "id": "dashboardInstallations",
+      "path": "/v1/admin/dashboard/installations",
+      "methods": ["GET"],
+      "isolation": "tenant-collection"
+    },
+    {
+      "id": "dashboardPluginVersions",
+      "path": "/v1/admin/dashboard/pluginVersions",
+      "methods": ["GET"],
+      "isolation": "tenant-collection"
+    },
+    {
+      "id": "executionDetail",
+      "path": "/v1/admin/execution-detail",
+      "methods": ["GET"],
+      "isolation": "tenant-resource"
+    },
+    {
+      "id": "installationCommand",
+      "path": "/v1/admin/installation-command",
+      "methods": ["PATCH"],
+      "isolation": "tenant-mutation"
+    },
+    {
+      "id": "installationReview",
+      "path": "/v1/admin/installation-review",
+      "methods": ["GET"],
+      "isolation": "tenant-resource"
+    },
+    {
+      "id": "installCreate",
+      "path": "/v1/admin/installations",
+      "methods": ["POST"],
+      "isolation": "tenant-mutation"
+    },
+    {
+      "id": "installPreview",
+      "path": "/v1/admin/install-preview",
+      "methods": ["GET"],
+      "isolation": "tenant-resource"
+    },
+    {
+      "id": "installRequestCreate",
+      "path": "/v1/admin/installation-requests",
+      "methods": ["POST"],
+      "isolation": "tenant-mutation"
+    },
+    {
+      "id": "rollbackCreate",
+      "path": "/v1/admin/rollbacks",
+      "methods": ["POST"],
+      "isolation": "tenant-mutation"
+    },
+    {
+      "id": "serviceTokenCollection",
+      "path": "/v1/admin/service-tokens",
+      "methods": ["DELETE", "POST"],
+      "isolation": "tenant-mutation"
+    },
+    {
+      "id": "session",
+      "path": "/v1/session",
+      "methods": ["GET"],
+      "isolation": "identity"
+    },
+    {
+      "id": "usage",
+      "path": "/v1/admin/usage",
+      "methods": ["GET"],
+      "isolation": "tenant-collection"
+    }
+  ]
+}

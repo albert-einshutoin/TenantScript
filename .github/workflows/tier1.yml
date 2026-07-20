@@ -27,6 +27,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint:boundaries
       - run: pnpm lint
+      - run: pnpm test:api-surface
       - run: pnpm test:coverage
       - run: pnpm test:security
       # npm retired the audit endpoint used by pnpm 10, so scan the committed lockfile directly.
