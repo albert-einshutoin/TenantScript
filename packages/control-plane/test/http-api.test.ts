@@ -159,6 +159,7 @@ describe("Control Plane Admin dashboard contract", () => {
     expect(store.readSection).toHaveBeenCalledWith(
       expect.objectContaining({ appId: "app_acme", tenantId: "tenant_acme", limit: 2 })
     );
+    expect(store.readSchemaMigrations).toHaveBeenCalledWith({ appId: "app_acme" });
     const body: TestDashboardBody = await response.json();
     expect(body.installations.items).toEqual([
       {
@@ -174,6 +175,9 @@ describe("Control Plane Admin dashboard contract", () => {
     expect(JSON.stringify(body)).not.toContain("customer-payload");
     expect(JSON.stringify(body)).not.toContain("stack trace");
     expect(body.installations.nextCursor).toEqual(expect.any(String));
+    expect(body.schemaMigrations).toEqual([
+      expect.objectContaining({ hookName: "invoice.created" })
+    ]);
   });
 
   it("fails closed for missing store and rejects invalid limits", async () => {
@@ -682,6 +686,22 @@ function dashboardStore() {
   });
   return {
     readSection,
+    readSchemaMigrations: vi
+      .fn<NonNullable<AdminDashboardStore["readSchemaMigrations"]>>()
+      .mockResolvedValue([
+        {
+          hookName: "invoice.created",
+          incompatibleInstallations: [],
+          versions: [
+            {
+              version: "1.0.0",
+              installationCount: 0,
+              removable: true,
+              blockingInstallations: []
+            }
+          ]
+        }
+      ]),
     readUsageSummary: vi.fn<AdminDashboardStore["readUsageSummary"]>().mockResolvedValue({
       date: "2026-07-19",
       executions: 1,
@@ -724,6 +744,7 @@ interface TestDashboardBody {
     items: unknown[];
     nextCursor: string;
   };
+  schemaMigrations: unknown[];
 }
 
 function sessionRequest(params: { token: string; url?: string }): Request {

@@ -39,7 +39,12 @@ const manifestSchema = z
   .object({
     name: z.string().regex(/^[a-z][a-z0-9-]*$/),
     version: z.string().regex(semverPattern, "version must be semver-like, e.g. 1.2.3"),
-    hooks: z.array(hookSchema).min(1),
+    hooks: z
+      .array(hookSchema)
+      .min(1)
+      .refine((hooks) => new Set(hooks.map((hook) => hook.name)).size === hooks.length, {
+        message: "hook names must be unique"
+      }),
     capabilities: z.record(
       z.string().regex(capabilityKeyPattern),
       z.record(z.string(), z.unknown())

@@ -37,6 +37,7 @@ Use these sources for the current boundary:
 - [Typed SDK integration quickstart](docs/quickstarts/sdk-integration.md)
 - [Public SDK reference](docs/reference/sdk.md)
 - [Schema compatibility in CI](docs/reference/schema-diff-ci.md)
+- [Hook schema migration operations](docs/operations/schema-migrations.md)
 - [Rollback operations](docs/operations/rollback-troubleshooting.md)
 
 Quickstart snippets are executable contracts. Update their linked tests in the same change; do not

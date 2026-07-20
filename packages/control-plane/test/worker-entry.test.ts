@@ -77,6 +77,28 @@ describe("Control Plane Worker configuration", () => {
       });
     }
   );
+
+  it.each([
+    "{",
+    JSON.stringify({ "invoice.created": [] }),
+    JSON.stringify({ "invoice.created": ["latest"] })
+  ])(
+    "returns a redacted 503 for invalid hook schema catalog configuration: %s",
+    async (catalog) => {
+      const response = await worker.fetch(sessionRequest("manager-token", false), {
+        ADMIN_HOOK_SCHEMA_CATALOG_JSON: catalog,
+        ADMIN_IDENTITIES_JSON: validIdentities
+      });
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toEqual({
+        error: {
+          code: "admin_configuration_unavailable",
+          message: "Admin API configuration unavailable"
+        }
+      });
+    }
+  );
 });
 
 function sessionRequest(token: string, includeOrigin: boolean): Request {

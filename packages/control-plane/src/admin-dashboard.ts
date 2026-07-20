@@ -1,3 +1,10 @@
+import type { D1DatabaseLike } from "./storage.js";
+import {
+  createD1SchemaMigrationTracker,
+  type PublishedHookSchemaCatalog,
+  type SchemaMigrationStatus
+} from "./schema-migrations.js";
+
 export type AdminDashboardSection = "installations" | "pluginVersions" | "approvals" | "executions";
 
 export interface AdminDashboardScope {
@@ -82,6 +89,7 @@ export interface AdminDashboardStore {
     tenantId: string;
     date: string;
   }) => Promise<AdminUsageSummary>;
+  readSchemaMigrations?: (request: { appId: string }) => Promise<readonly SchemaMigrationStatus[]>;
 }
 
 export interface AdminCursorPayload extends AdminDashboardScope {
@@ -95,7 +103,11 @@ export interface AdminCursorCodec {
   decode: (cursor: string) => Promise<AdminCursorPayload>;
 }
 
-export function createD1AdminDashboardStore(db: D1DatabaseLike): AdminDashboardStore {
+export function createD1AdminDashboardStore(
+  db: D1DatabaseLike,
+  schemaCatalog: PublishedHookSchemaCatalog = {}
+): AdminDashboardStore {
+  const schemaMigrations = createD1SchemaMigrationTracker(db, schemaCatalog);
   return {
     readSection: (request) => {
       switch (request.section) {
@@ -109,7 +121,8 @@ export function createD1AdminDashboardStore(db: D1DatabaseLike): AdminDashboardS
           return readExecutions(db, request);
       }
     },
-    readUsageSummary: (request) => readUsageSummary(db, request)
+    readUsageSummary: (request) => readUsageSummary(db, request),
+    readSchemaMigrations: (request) => schemaMigrations.readStatus(request)
   };
 }
 
@@ -523,4 +536,3 @@ function base64UrlDecode(value: string): Uint8Array<ArrayBuffer> {
   }
   return bytes;
 }
-import type { D1DatabaseLike } from "./storage.js";

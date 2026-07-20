@@ -160,10 +160,16 @@ importers:
       '@tenantscript/manifest':
         specifier: workspace:*
         version: link:../manifest
+      semver:
+        specifier: 7.8.4
+        version: 7.8.4
     devDependencies:
       '@tenantscript/test-config':
         specifier: workspace:*
         version: link:../test-config
+      '@types/semver':
+        specifier: 7.7.1
+        version: 7.7.1
 
   packages/host-sdk:
     dependencies:

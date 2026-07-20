@@ -604,11 +604,92 @@ function OverviewPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
         <Metric label="Executions today" value={String(usage.executions)} />
         <Metric label="Runtime ms today" value={String(usage.runtimeMs)} />
       </section>
+      <SchemaMigrationsPanel migrations={snapshot.schemaMigrations} />
       <section className="data-panel">
         <PanelHeader title="Recent executions" detail="Last 24 hours" />
         <ExecutionTable snapshot={snapshot} />
       </section>
     </div>
+  );
+}
+
+function SchemaMigrationsPanel({
+  migrations
+}: {
+  migrations: DashboardSnapshot["schemaMigrations"];
+}) {
+  return (
+    <section className="data-panel" aria-label="Schema migrations">
+      <PanelHeader title="Schema migrations" detail="App-wide compatibility" />
+      {migrations.length === 0 ? (
+        <p>No schema migrations configured</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Hook</th>
+                <th>Schema version</th>
+                <th>Usage</th>
+                <th>Blocking installations</th>
+                <th>Recommended action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {migrations.flatMap((migration) =>
+                migration.versions.map((version) => {
+                  const blockerLabel = `${String(version.installationCount)} blocking installation${version.installationCount === 1 ? "" : "s"}`;
+                  return (
+                    <tr key={`${migration.hookName}:${version.version}`}>
+                      <td>{migration.hookName}</td>
+                      <td>{version.version}</td>
+                      <td>{blockerLabel}</td>
+                      <td>
+                        {version.blockingInstallations.length === 0 ? (
+                          "None"
+                        ) : (
+                          <ul className="compact-list">
+                            {version.blockingInstallations.map((blocker) => (
+                              <li key={blocker.installationId}>
+                                <code>{blocker.installationId}</code>
+                                <span>
+                                  {blocker.pluginKey}@{blocker.pluginVersion} ·{" "}
+                                  {blocker.schemaRange}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                      <td>
+                        {version.removable
+                          ? `Ready to remove ${version.version}`
+                          : `Upgrade blockers before removing ${version.version}`}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {migrations.some((migration) => migration.incompatibleInstallations.length > 0) ? (
+        <div className="form-error">
+          <p>Some installations have no compatible published schema.</p>
+          <ul className="compact-list">
+            {migrations.flatMap((migration) =>
+              migration.incompatibleInstallations.map((blocker) => (
+                <li key={`${migration.hookName}:${blocker.installationId}`}>
+                  {migration.hookName}: <code>{blocker.installationId}</code> ({blocker.pluginKey}@
+                  {blocker.pluginVersion} · {blocker.schemaRange})
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

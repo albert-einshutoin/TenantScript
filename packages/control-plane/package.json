@@ -21,10 +21,12 @@
     "test:coverage": "vitest run --coverage && vitest run --config vitest.workers.config.ts"
   },
   "devDependencies": {
-    "@tenantscript/test-config": "workspace:*"
+    "@tenantscript/test-config": "workspace:*",
+    "@types/semver": "7.7.1"
   },
   "dependencies": {
     "@tenantscript/host-sdk": "workspace:*",
-    "@tenantscript/manifest": "workspace:*"
+    "@tenantscript/manifest": "workspace:*",
+    "semver": "7.8.4"
   }
 }

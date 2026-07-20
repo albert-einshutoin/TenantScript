@@ -191,7 +191,8 @@ describe("Admin API environment selection", () => {
       tenantId: "tenant_acme"
     });
     await expect(client.getDashboard(session)).resolves.toMatchObject({
-      usage: { executions: 1, runtimeMs: 12 }
+      usage: { executions: 1, runtimeMs: 12 },
+      schemaMigrations: [{ hookName: "invoice.created" }]
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
     const [dashboardUrl, dashboardInit] = fetcher.mock.calls[1] ?? [];
@@ -1007,7 +1008,21 @@ function dashboardPayload() {
     pluginVersions: { items: [] },
     approvals: { items: [] },
     executions: { items: [] },
-    usage: { date: "2026-07-19", executions: 1, runtimeMs: 12 }
+    usage: { date: "2026-07-19", executions: 1, runtimeMs: 12 },
+    schemaMigrations: [
+      {
+        hookName: "invoice.created",
+        incompatibleInstallations: [],
+        versions: [
+          {
+            version: "1.0.0",
+            installationCount: 0,
+            removable: true,
+            blockingInstallations: []
+          }
+        ]
+      }
+    ]
   };
 }
 

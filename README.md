@@ -10,6 +10,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [SDK integration quickstart](docs/quickstarts/sdk-integration.md) — typed hook、plugin、capability、dry-run deployをTDDで接続
 - [SDK reference](docs/reference/sdk.md) — Phase 1 public TypeScript surfaceと安全境界
 - [Schema diff in CI](docs/reference/schema-diff-ci.md) — breaking判定、exit code、warning、CI統合
+- [Hook schema migration運用](docs/operations/schema-migrations.md) — app全体の利用追跡、廃止ゲート、Admin UI
 - [Rollback troubleshooting](docs/operations/rollback-troubleshooting.md) — 検知、復旧、実行確認、MTTR drill
 - [Contributing](CONTRIBUTING.md) — 開発環境、TDD、security、issue・PRレビュー手順
 - [Governance](GOVERNANCE.md) — maintainer責任、ADR意思決定、co-maintainerへの経路
