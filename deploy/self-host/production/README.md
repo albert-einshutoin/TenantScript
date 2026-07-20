@@ -2,7 +2,8 @@
 
 This directory is the accountless, minimal production template for the currently wired
 `cloudflare-workers` Control Plane composition. Start with
-[`wrangler-input.example.json`](wrangler-input.example.json), replace the synthetic D1 name and ID,
+[`wrangler-input.example.json`](wrangler-input.example.json), replace the synthetic setup run ID, D1
+name, and D1 ID,
 then render from the repository root:
 
 ```sh
