@@ -279,6 +279,27 @@ describe("Cloudflare D1 migration setup adapter", () => {
     expect(harness.appliedBatches).toEqual([]);
   });
 
+  it.each([undefined, "retry"])(
+    "rejects invalid reconcile attempt %s before runner mutation",
+    async (attempt) => {
+      const catalog = await canonicalCatalog();
+      const harness = migrationRunner([]);
+      const adapter = createCloudflareD1MigrationSetupAdapter({
+        databaseId,
+        catalog,
+        runner: harness.runner
+      });
+      const request = reconcileRequest(migrationOperation) as Record<string, unknown>;
+      if (attempt === undefined) delete request.attempt;
+      else request.attempt = attempt;
+
+      await expect(adapter.reconcile(request as never)).rejects.toMatchObject({
+        code: "cloudflare_d1_migration_invalid_request"
+      });
+      expect(harness.listCalls).toBe(0);
+    }
+  );
+
   it("rejects invalid database, catalog, or runner configuration", async () => {
     const catalog = await canonicalCatalog();
     const runner = migrationRunner([]).runner;
@@ -377,7 +398,12 @@ async function copyMigrationDirectory(): Promise<string> {
 }
 
 function reconcileRequest(operationValue: SetupOperation) {
-  return { runId, idempotencyKey: key(operationValue, "reconcile"), operation: operationValue };
+  return {
+    attempt: "initial" as const,
+    runId,
+    idempotencyKey: key(operationValue, "reconcile"),
+    operation: operationValue
+  };
 }
 
 function key(operationValue: SetupOperation, action: "reconcile" | "cleanup"): string {

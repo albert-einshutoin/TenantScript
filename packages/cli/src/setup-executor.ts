@@ -52,6 +52,7 @@ export interface SetupProviderAdapter {
   reconcile: (request: {
     runId: string;
     idempotencyKey: string;
+    attempt: "initial" | "resume";
     operation: SetupOperation;
   }) => Promise<SetupReconcileResult> | SetupReconcileResult;
   cleanupCreated: (request: {
@@ -135,6 +136,7 @@ export async function executeProductionSetup(params: {
     if (entry.phase !== "pending" && entry.phase !== "in-progress") {
       throw invalidJournal();
     }
+    const attempt = entry.phase === "in-progress" ? "resume" : "initial";
     if (entry.phase === "pending") {
       journal = await updateJournal(params.journalStore, journal, (draft) => {
         requireEntry(draft, operation.id).phase = "in-progress";
@@ -151,6 +153,7 @@ export async function executeProductionSetup(params: {
           operation.id,
           "reconcile"
         ),
+        attempt,
         operation
       });
       validateReconcileResult(operation, result, journal.approvedAdoptionOperationIds);

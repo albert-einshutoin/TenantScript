@@ -251,6 +251,22 @@ describe("Cloudflare R2 setup adapter", () => {
     expect(requests).toEqual([]);
   });
 
+  it.each([undefined, "retry"])(
+    "rejects invalid reconcile attempt %s before provider access",
+    async (attempt) => {
+      const requests: RecordedRequest[] = [];
+      const adapter = createAdapter(requests, () => null);
+      const request = reconcileRequest(artifacts) as Record<string, unknown>;
+      if (attempt === undefined) delete request.attempt;
+      else request.attempt = attempt;
+
+      await expect(adapter.reconcile(request as never)).rejects.toMatchObject({
+        code: "cloudflare_r2_invalid_request"
+      });
+      expect(requests).toEqual([]);
+    }
+  );
+
   it("rejects a valid but unsupported setup operation without provider access", async () => {
     const requests: RecordedRequest[] = [];
     const adapter = createAdapter(requests, () => null);
@@ -437,7 +453,12 @@ function recordingTransport(
 }
 
 function reconcileRequest(op: SetupOperation) {
-  return { runId, idempotencyKey: key(op, "reconcile"), operation: op };
+  return {
+    attempt: "initial" as const,
+    runId,
+    idempotencyKey: key(op, "reconcile"),
+    operation: op
+  };
 }
 
 function key(op: SetupOperation, action: "reconcile" | "cleanup"): string {

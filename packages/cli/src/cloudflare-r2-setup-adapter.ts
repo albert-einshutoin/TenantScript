@@ -238,10 +238,25 @@ function isBucketConfiguration(value: unknown): value is CloudflareR2BucketConfi
 }
 
 function validateOperationRequest(
-  request: { runId: string; idempotencyKey: string; operation: SetupOperation },
+  request: unknown,
   action: "reconcile" | "cleanup"
-): void {
+): asserts request is {
+  runId: string;
+  idempotencyKey: string;
+  attempt?: "initial" | "resume";
+  operation: SetupOperation;
+} {
   if (
+    !isRecord(request) ||
+    !hasOnlyKeys(
+      request,
+      action === "reconcile"
+        ? ["runId", "idempotencyKey", "attempt", "operation"]
+        : ["runId", "idempotencyKey", "operation", "resourceRef"]
+    ) ||
+    (action === "reconcile"
+      ? request.attempt !== "initial" && request.attempt !== "resume"
+      : request.attempt !== undefined) ||
     !isSafeIdentifier(request.runId, 128) ||
     !isRuntimeSetupOperation(request.operation) ||
     request.idempotencyKey !==

@@ -196,6 +196,7 @@ describe("Cloudflare Wrangler D1 migration runner", () => {
 
     await expect(
       adapter.reconcile({
+        attempt: "initial",
         runId: "setup-run-199",
         idempotencyKey: deriveSetupOperationIdempotencyKey(
           "setup-run-199",
