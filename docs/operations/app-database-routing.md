@@ -40,7 +40,7 @@ Worker retains the single-`DB` compatibility composition for existing self-host 
 For example, a deployment with bindings `APP_ACME_DB` and `APP_EXAMPLE_DB` sets:
 
 ```json
-{"app_acme":"APP_ACME_DB","app_example":"APP_EXAMPLE_DB"}
+{ "app_acme": "APP_ACME_DB", "app_example": "APP_EXAMPLE_DB" }
 ```
 
 as the value of `APP_DATABASE_ROUTES_JSON`. The JSON contains binding names, not Cloudflare database

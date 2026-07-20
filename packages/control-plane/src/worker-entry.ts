@@ -104,7 +104,9 @@ export default {
         ? bootstrapIdentityResolver
         : createServiceTokenAwareIdentityResolver({
             serviceTokens: createServiceTokenIdentityResolver(serviceTokenStore),
-            ...(bootstrapIdentityResolver === undefined ? {} : { bootstrap: bootstrapIdentityResolver })
+            ...(bootstrapIdentityResolver === undefined
+              ? {}
+              : { bootstrap: bootstrapIdentityResolver })
           });
     let requestDatabase = env.DB;
     try {
@@ -136,9 +138,7 @@ export default {
     const installFlowStore =
       requestDatabase === undefined ? undefined : createD1AdminInstallFlowStore(requestDatabase);
     const installRequestStore =
-      requestDatabase === undefined
-        ? undefined
-        : createD1AdminInstallRequestStore(requestDatabase);
+      requestDatabase === undefined ? undefined : createD1AdminInstallRequestStore(requestDatabase);
     const rollbackStore =
       requestDatabase === undefined ? undefined : createD1AdminRollbackStore(requestDatabase);
     const executionDetailStore =
