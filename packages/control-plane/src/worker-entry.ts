@@ -36,7 +36,11 @@ import {
   createServiceTokenIdentityResolver,
   createServiceTokenManager
 } from "./service-tokens.js";
-import type { D1DatabaseLike } from "./storage.js";
+import { createD1R2ExecutionArchiveStore } from "./execution-archive.js";
+import type { ArchiveExpiredExecutionsRequest } from "./execution-archive.js";
+import type { D1DatabaseLike, R2BucketLike } from "./storage.js";
+
+const SCHEDULED_RETENTION_SCOPE_LIMIT = 50;
 
 interface ControlPlaneWorkerEnv {
   ADMIN_ALLOWED_ORIGINS?: string;
@@ -47,6 +51,8 @@ interface ControlPlaneWorkerEnv {
   ADMIN_MUTATION_RATE_WINDOW_SECONDS?: string;
   ADMIN_MUTATION_RATE_LIMITER_DO?: DurableObjectNamespace;
   APP_DATABASE_ROUTES_JSON?: string;
+  EXECUTION_ARCHIVE?: R2BucketLike;
+  EXECUTION_ARCHIVE_HOT_RETENTION_DAYS?: string;
   TENANTSCRIPT_TELEMETRY_ENABLED?: string;
   TENANTSCRIPT_TELEMETRY_ENDPOINT?: string;
   TENANTSCRIPT_PRODUCT_VERSION?: string;
@@ -214,7 +220,9 @@ export default {
     env: ControlPlaneWorkerEnv,
     context: ExecutionContext
   ): void {
-    context.waitUntil(runScheduledTelemetry(env));
+    scheduleMaintenanceTasks(env, (task) => {
+      context.waitUntil(task);
+    });
   }
 };
 
@@ -330,6 +338,106 @@ export async function runScheduledTelemetry(
     }),
     ...(options.now === undefined ? {} : { now: options.now })
   });
+}
+
+export interface ScheduledExecutionRetentionResult {
+  status: "disabled" | "completed";
+  scannedScopes: number;
+  archivedScopes: number;
+}
+
+export async function runScheduledExecutionRetention(
+  env: ControlPlaneWorkerEnv,
+  options: {
+    now?: () => Date;
+    archiveScope?: (request: ArchiveExpiredExecutionsRequest) => Promise<object | null>;
+  } = {}
+): Promise<ScheduledExecutionRetentionResult> {
+  if (env.EXECUTION_ARCHIVE_HOT_RETENTION_DAYS === undefined) {
+    return { status: "disabled", scannedScopes: 0, archivedScopes: 0 };
+  }
+  const hotRetentionDays = parseHotRetentionDays(env.EXECUTION_ARCHIVE_HOT_RETENTION_DAYS);
+  if (env.DB === undefined || env.EXECUTION_ARCHIVE === undefined) {
+    throw new Error("execution retention configuration is invalid");
+  }
+
+  const now = options.now?.() ?? new Date();
+  if (!Number.isFinite(now.getTime())) {
+    throw new Error("execution retention configuration is invalid");
+  }
+  const cutoff = new Date(now.getTime() - hotRetentionDays * 86_400_000);
+  const rows = await env.DB.prepare(
+    `SELECT t.id, t.app_id
+       FROM tenants t
+       WHERE EXISTS (
+         SELECT 1 FROM executions e WHERE e.tenant_id = t.id AND e.created_at < ?
+       )
+       ORDER BY t.app_id ASC, t.id ASC
+       LIMIT ?`
+  )
+    .bind(cutoff.toISOString(), SCHEDULED_RETENTION_SCOPE_LIMIT)
+    .all();
+  // Keep the application-side cap as defense in depth for test doubles or non-D1 adapters that
+  // do not enforce the SQL LIMIT contract exactly.
+  const scopes = rows.results.slice(0, SCHEDULED_RETENTION_SCOPE_LIMIT).map(parseRetentionScope);
+  const archiveScope =
+    options.archiveScope ??
+    createD1R2ExecutionArchiveStore(env.DB, env.EXECUTION_ARCHIVE, {
+      hotRetentionDays
+    }).archiveExpired;
+  let archivedScopes = 0;
+
+  // One ordered batch per bounded scope keeps scheduled work predictable. A later invocation
+  // resumes the backlog without allowing one large tenant to monopolize the Worker event.
+  for (const scope of scopes) {
+    const archived = await archiveScope({ ...scope, now });
+    if (archived !== null) archivedScopes += 1;
+  }
+  return { status: "completed", scannedScopes: scopes.length, archivedScopes };
+}
+
+export function scheduleMaintenanceTasks(
+  env: ControlPlaneWorkerEnv,
+  waitUntil: (task: Promise<unknown>) => void,
+  options: {
+    telemetryRunner?: (env: ControlPlaneWorkerEnv) => Promise<unknown>;
+    retentionRunner?: (env: ControlPlaneWorkerEnv) => Promise<unknown>;
+  } = {}
+): void {
+  const telemetry = Promise.resolve().then(() =>
+    (options.telemetryRunner ?? runScheduledTelemetry)(env)
+  );
+  const retention = Promise.resolve().then(() =>
+    (options.retentionRunner ?? runScheduledExecutionRetention)(env)
+  );
+  // Separate waitUntil registrations preserve each job's lifetime and failure signal. One rejected
+  // task cannot short-circuit the other job before Cloudflare has observed its completion.
+  waitUntil(telemetry);
+  waitUntil(retention);
+}
+
+function parseHotRetentionDays(value: string): number {
+  if (!/^[1-9]\d{0,3}$/u.test(value)) {
+    throw new Error("execution retention configuration is invalid");
+  }
+  const days = Number(value);
+  if (!Number.isSafeInteger(days) || days > 3650) {
+    throw new Error("execution retention configuration is invalid");
+  }
+  return days;
+}
+
+function parseRetentionScope(value: unknown): { appId: string; tenantId: string } {
+  if (
+    !isRecord(value) ||
+    typeof value.app_id !== "string" ||
+    value.app_id.trim() === "" ||
+    typeof value.id !== "string" ||
+    value.id.trim() === ""
+  ) {
+    throw new Error("execution retention scope is invalid");
+  }
+  return { appId: value.app_id, tenantId: value.id };
 }
 
 function parseIdentityConfiguration(
