@@ -54,9 +54,18 @@ suitable for tests and demos only; its records intentionally become unreadable w
 discarded.
 
 Encryption-key rotation writes new records with the current KEK ID while retaining old KEKs for reads.
-Because the secret has its own DEK, a later rotation workflow can rewrap the DEK without re-encrypting
-the secret. Removing an old KEK before every associated envelope is rewrapped makes those records
-unrecoverable.
+`createAesGcmSecretEncryptionKeyring` accepts strict unpadded base64url 32-byte key material at the
+deployment boundary, rejects ambiguous or incomplete configuration, and imports non-extractable
+AES-256-GCM keys. Callers must source the immutable input strings directly from a secret binding and
+must not log, persist, or serialize them.
+
+Because the secret has its own DEK, `rewrapSecret` can authenticate and rewrap that DEK without
+decrypting or changing the provider-token ciphertext. The storage adapter must implement
+`replaceIfUnchanged` as a transactional compare-and-swap: a rotation may never overwrite an OAuth
+reconnect or token refresh that changed the same record concurrently. Removing an old KEK before every
+associated envelope is rewrapped and read-verified makes those records unrecoverable. The normative
+operator sequence and rollback boundary are documented in
+[Secret KEK rotation](../operations/secret-key-rotation.md).
 
 ## Consequences
 
@@ -66,8 +75,9 @@ unrecoverable.
   no Node-only crypto dependency or custom cipher construction is introduced.
 - Deployments must provide an AES-256-GCM keyring. There is deliberately no plaintext or default-key
   fallback when configuration is missing.
-- Key IDs and envelope versions provide the compatibility seam for future key rotation, but key
-  provisioning, bulk re-encryption, rotation drills, and legacy production-data migration remain
+- The repository provides strict key provisioning and a ref-level conflict-safe rewrap primitive.
+  Production adapters still need a transactional compare-and-swap implementation, and production
+  inventory/orchestration, rotation drills, vendor KMS integration, and legacy-data migration remain
   operational work under Issue #31.
 - Provider-token rotation, where old and new SaaS credentials overlap without interrupting capability
   calls, is separate from encryption-key rotation and is not implemented by this decision.

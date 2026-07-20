@@ -226,10 +226,14 @@ export {
 } from "./audit-export.js";
 
 export {
+  createAesGcmSecretEncryptionKeyring,
   createDurableObjectSecretStore,
   createInMemorySecretStore,
   SecretStoreError,
+  type AesGcmSecretEncryptionKeyringConfig,
+  type EncodedSecretEncryptionKey,
   type PutSecretRequest,
+  type RewrapSecretResult,
   type SecretEncryptionKey,
   type SecretEncryptionKeyring,
   type SecretRef,
