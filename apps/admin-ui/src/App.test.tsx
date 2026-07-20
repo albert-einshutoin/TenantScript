@@ -156,6 +156,30 @@ describe("Admin UI auth foundation", () => {
     expect(document.body.textContent).not.toContain("secret-config");
   });
 
+  it("shows secret-safe provider connection metadata", async () => {
+    render(<App client={createDemoAdminApiClient()} />);
+
+    await login("viewer-token");
+    fireEvent.click(await screen.findByRole("button", { name: "Connections" }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "Connections" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "slack" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Acme Operations" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "B123" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("secretRef");
+    expect(document.body.textContent).not.toContain("secret-slack");
+  });
+
+  it("shows an explicit empty provider connection state", async () => {
+    const baseClient = createDemoAdminApiClient();
+    render(<App client={{ ...baseClient, getProviderConnections: () => Promise.resolve([]) }} />);
+
+    await login("viewer-token");
+    fireEvent.click(await screen.findByRole("button", { name: "Connections" }));
+
+    expect(screen.getByText("No provider connections yet")).toBeInTheDocument();
+  });
+
   it("shows the empty audit state and appends a signed-cursor page", async () => {
     const baseClient = createDemoAdminApiClient();
     const nextAudit = {

@@ -13,6 +13,7 @@ import { createD1AdminInstallRequestStore } from "./admin-install-requests.js";
 import { createD1AdminRollbackStore } from "./admin-rollbacks.js";
 import { createD1AdminExecutionDetailStore } from "./admin-executions.js";
 import { createD1AdminApprovalDecisionStore } from "./admin-approvals.js";
+import { createD1AdminProviderConnectionStore } from "./admin-provider-connections.js";
 import {
   createAdminMutationRateLimiter,
   createDurableObjectAdminMutationRateLimitStore,
@@ -161,6 +162,10 @@ export default {
       requestDatabase === undefined
         ? undefined
         : createD1AdminApprovalDecisionStore(requestDatabase);
+    const providerConnectionStore =
+      requestDatabase === undefined
+        ? undefined
+        : createD1AdminProviderConnectionStore(requestDatabase);
     let handler;
     try {
       const telemetryConfiguration = parseWorkerTelemetryConfiguration(env);
@@ -192,6 +197,7 @@ export default {
       handler = createControlPlaneHttpHandler({
         ...(identityResolver === undefined ? {} : { identityResolver }),
         ...(dashboardStore === undefined ? {} : { dashboardStore }),
+        ...(providerConnectionStore === undefined ? {} : { providerConnectionStore }),
         ...(installationDetailStore === undefined ? {} : { installationDetailStore }),
         ...(installationCommandStore === undefined ? {} : { installationCommandStore }),
         ...(installFlowStore === undefined ? {} : { installFlowStore }),

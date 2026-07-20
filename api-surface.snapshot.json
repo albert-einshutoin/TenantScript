@@ -237,6 +237,8 @@
             { "name": "AdminMutationRateLimitStore", "kind": "type" },
             { "name": "AdminOperationalHealthSummary", "kind": "type" },
             { "name": "AdminPluginVersionSummary", "kind": "type" },
+            { "name": "AdminProviderConnectionStore", "kind": "type" },
+            { "name": "AdminProviderConnectionSummary", "kind": "type" },
             { "name": "AdminRole", "kind": "type" },
             { "name": "AdminRollbackError", "kind": "type+value" },
             { "name": "AdminRollbackRequest", "kind": "type" },
@@ -310,6 +312,7 @@
             { "name": "createD1AdminInstallationDetailStore", "kind": "value" },
             { "name": "createD1AdminInstallFlowStore", "kind": "value" },
             { "name": "createD1AdminInstallRequestStore", "kind": "value" },
+            { "name": "createD1AdminProviderConnectionStore", "kind": "value" },
             { "name": "createD1AdminRollbackStore", "kind": "value" },
             { "name": "createD1AuditLogStore", "kind": "value" },
             { "name": "createD1ControlPlaneStore", "kind": "value" },
@@ -717,6 +720,15 @@
       "isolation": "tenant-mutation",
       "success": [
         { "method": "POST", "status": 201, "body": "json", "schema": "installRequestCreate" }
+      ]
+    },
+    {
+      "id": "providerConnections",
+      "path": "/v1/admin/provider-connections",
+      "methods": ["GET"],
+      "isolation": "tenant-collection",
+      "success": [
+        { "method": "GET", "status": 200, "body": "json", "schema": "providerConnections" }
       ]
     },
     {
@@ -1173,6 +1185,29 @@
         "nextCursor": { "type": "string" }
       },
       "required": ["section", "items"],
+      "additionalProperties": false
+    },
+    "providerConnections": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": { "type": "string", "enum": ["slack"] },
+              "id": { "type": "string" },
+              "workspaceId": { "type": "string" },
+              "workspaceName": { "type": "string" },
+              "botUserId": { "type": "string" },
+              "connectedAt": { "type": "string" }
+            },
+            "required": ["provider", "id", "workspaceId", "connectedAt"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["items"],
       "additionalProperties": false
     },
     "installationReview": {

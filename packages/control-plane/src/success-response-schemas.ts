@@ -115,6 +115,18 @@ const approvalPage = page("approvals", approvalSummary);
 const executionPage = page("executions", executionSummary);
 const auditEventPage = page("auditEvents", auditEventSummary);
 
+const providerConnectionSummary = object(
+  {
+    provider: enumString(["slack"]),
+    id: text,
+    workspaceId: text,
+    workspaceName: text,
+    botUserId: text,
+    connectedAt: text
+  },
+  ["workspaceName", "botUserId"]
+);
+
 const schemaMigrationBlocker = object({
   installationId: text,
   pluginKey: text,
@@ -275,6 +287,7 @@ export const CONTROL_PLANE_SUCCESS_RESPONSE_SCHEMAS = deepFreeze({
   dashboardApprovals: approvalPage,
   dashboardExecutions: executionPage,
   dashboardAuditEvents: auditEventPage,
+  providerConnections: object({ items: array(providerConnectionSummary) }),
   installationReview: installationDetail,
   installationCommand: object({
     id: text,

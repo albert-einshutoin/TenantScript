@@ -7,6 +7,7 @@ import type {
   AdminExecutionFilters
 } from "./admin-dashboard.js";
 import type { AdminExecutionDetailStore } from "./admin-executions.js";
+import type { AdminProviderConnectionStore } from "./admin-provider-connections.js";
 import { AdminApprovalDecisionError, type AdminApprovalDecisionStore } from "./admin-approvals.js";
 import type {
   AdminInstallationCommandStore,
@@ -46,6 +47,7 @@ export interface TenantScopedAdminIdentity extends AuthenticatedIdentity {
 export interface ControlPlaneHttpHandlerOptions {
   identityResolver?: IdentityResolver;
   dashboardStore?: AdminDashboardStore;
+  providerConnectionStore?: AdminProviderConnectionStore;
   cursorCodec?: AdminCursorCodec;
   installationDetailStore?: AdminInstallationDetailStore;
   installationCommandStore?: AdminInstallationCommandStore;
@@ -179,6 +181,9 @@ export function createControlPlaneHttpHandler(
     if (route === "usage") {
       return resolveUsage(request, url, options, corsHeaders);
     }
+    if (route === "providerConnections") {
+      return resolveProviderConnections(request, options, corsHeaders);
+    }
     if (typeof route === "object") {
       return resolveInstallationDetail(request, route.id, options, corsHeaders);
     }
@@ -190,6 +195,7 @@ export type AdminRoute =
   | "session"
   | "dashboard"
   | "operations"
+  | "providerConnections"
   | "installationCommand"
   | "installPreview"
   | "installCreate"
@@ -211,6 +217,7 @@ export type AdminHttpEndpointId =
   | "dashboardApprovals"
   | "dashboardExecutions"
   | "dashboardAuditEvents"
+  | "providerConnections"
   | "installationReview"
   | "installationCommand"
   | "installPreview"
@@ -311,6 +318,14 @@ export const ADMIN_HTTP_ENDPOINT_CONTRACTS = [
     isolation: "tenant-collection",
     route: "auditEvents",
     success: { GET: { status: 200, body: "json", schema: "dashboardAuditEvents" } }
+  },
+  {
+    id: "providerConnections",
+    path: "/v1/admin/provider-connections",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "providerConnections",
+    success: { GET: { status: 200, body: "json", schema: "providerConnections" } }
   },
   {
     id: "installationReview",
@@ -1463,6 +1478,7 @@ async function resolveDashboard(
     | "serviceTokenCollection"
     | "executionDetail"
     | "usage"
+    | "providerConnections"
     | { id: string }
   >,
   url: URL,
@@ -1612,6 +1628,45 @@ async function resolveDashboard(
       return errorResponse(400, "invalid_cursor", "invalid dashboard cursor", corsHeaders);
     }
     // Store and cursor-provider failures can include SQL, bindings, or customer data.
+    return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
+  }
+}
+
+async function resolveProviderConnections(
+  request: Request,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  if (options.providerConnectionStore === undefined) {
+    return errorResponse(
+      503,
+      "provider_connection_store_unavailable",
+      "provider connection store unavailable",
+      corsHeaders
+    );
+  }
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(
+    identity,
+    "dashboard:read",
+    "provider_connections_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
+  try {
+    return jsonResponse(
+      200,
+      {
+        items: await options.providerConnectionStore.readConnections({
+          appId: identity.appId,
+          tenantId: identity.tenantId
+        })
+      },
+      corsHeaders
+    );
+  } catch {
+    // Storage failures may contain provider metadata or SQL details and remain server-side only.
     return errorResponse(500, "internal_error", "internal control-plane error", corsHeaders);
   }
 }

@@ -134,6 +134,53 @@ describe("Control Plane Worker configuration", () => {
     expect(await response.text()).not.toContain("selected app database");
   });
 
+  it("wires the provider connection inventory to the authenticated app database", async () => {
+    const all = vi.fn().mockResolvedValue({
+      results: [
+        {
+          id: "connection_1",
+          workspace_id: "T123",
+          workspace_name: "Acme Operations",
+          bot_user_id: "B123",
+          connected_at: "2026-07-21T00:00:00.000Z"
+        }
+      ]
+    });
+    const statement: D1PreparedStatementLike = {
+      bind: vi.fn(() => statement),
+      all,
+      first: vi.fn(() => Promise.resolve(null)),
+      run: vi.fn(() => Promise.reject(new Error("unexpected run")))
+    };
+    const prepare = vi.fn(() => statement);
+    const request = new Request("https://control-plane.example.com/v1/admin/provider-connections", {
+      headers: { Authorization: "Bearer manager-token" }
+    });
+
+    const response = await worker.fetch(request, {
+      ADMIN_IDENTITIES_JSON: validIdentities,
+      APP_DATABASE_ROUTES_JSON: JSON.stringify({ app_1: "APP_ONE_DB" }),
+      APP_ONE_DB: { prepare }
+    });
+
+    expect(response.status).toBe(200);
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("FROM slack_connections"));
+    expect(prepare).not.toHaveBeenCalledWith(expect.stringContaining("secret_ref_json"));
+    expect(statement.bind).toHaveBeenCalledWith("tenant_1", "app_1");
+    await expect(response.json()).resolves.toEqual({
+      items: [
+        {
+          provider: "slack",
+          id: "connection_1",
+          workspaceId: "T123",
+          workspaceName: "Acme Operations",
+          botUserId: "B123",
+          connectedAt: "2026-07-21T00:00:00.000Z"
+        }
+      ]
+    });
+  });
+
   it("fails closed without touching D1 when the authenticated app is not provisioned", async () => {
     const appDatabase = failingDatabase("other app database");
     const compatibilityDatabase = failingDatabase("compatibility database");

@@ -6,6 +6,7 @@ export const routes = [
   "versions",
   "approvals",
   "executions",
+  "connections",
   "audit"
 ] as const;
 

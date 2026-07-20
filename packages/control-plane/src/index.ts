@@ -327,6 +327,12 @@ export {
 } from "./admin-executions.js";
 
 export {
+  createD1AdminProviderConnectionStore,
+  type AdminProviderConnectionStore,
+  type AdminProviderConnectionSummary
+} from "./admin-provider-connections.js";
+
+export {
   SchemaMigrationBlockedError,
   createD1SchemaMigrationTracker,
   parsePublishedHookSchemaCatalog,

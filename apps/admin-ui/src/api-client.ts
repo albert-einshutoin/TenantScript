@@ -198,6 +198,15 @@ export interface OperationalHealthView {
   budgetExceededExecutions: number;
 }
 
+export interface ProviderConnectionView {
+  provider: "slack";
+  id: string;
+  workspaceId: string;
+  workspaceName?: string;
+  botUserId?: string;
+  connectedAt: Date;
+}
+
 export interface DashboardSnapshot {
   installations: readonly InstallationView[];
   pluginVersions: readonly PluginVersionView[];
@@ -205,6 +214,7 @@ export interface DashboardSnapshot {
   executions: readonly ExecutionView[];
   auditEvents: readonly AuditEventView[];
   operationalHealth: OperationalHealthView;
+  providerConnections: readonly ProviderConnectionView[];
   usage: DailyUsageSummaryView;
   schemaMigrations: readonly SchemaMigrationStatus[];
   telemetry: TelemetryStatus;
@@ -215,6 +225,7 @@ export interface AdminApiClient extends AdminSessionClient {
   getDashboard: (session: AdminSession) => Promise<DashboardSnapshot>;
   getAuditEvents: () => Promise<Extract<DashboardSectionPage, { section: "auditEvents" }>>;
   getOperationalHealth: () => Promise<OperationalHealthView>;
+  getProviderConnections: () => Promise<readonly ProviderConnectionView[]>;
   getDashboardSection: (
     section: AdminDashboardSection,
     cursor: string
@@ -437,6 +448,23 @@ const operationalHealthSchema = z
     timeoutExecutions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     egressDeniedExecutions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     budgetExceededExecutions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+  })
+  .strict();
+
+const providerConnectionsSchema = z
+  .object({
+    items: z.array(
+      z
+        .object({
+          provider: z.literal("slack"),
+          id: z.string().min(1),
+          workspaceId: z.string().min(1),
+          workspaceName: z.string().optional(),
+          botUserId: z.string().optional(),
+          connectedAt: z.coerce.date()
+        })
+        .strict()
+    )
   })
   .strict();
 
@@ -740,6 +768,16 @@ const dashboardFixture: DashboardSnapshot = {
     egressDeniedExecutions: 1,
     budgetExceededExecutions: 1
   },
+  providerConnections: [
+    {
+      provider: "slack",
+      id: "connection_slack_acme",
+      workspaceId: "T123",
+      workspaceName: "Acme Operations",
+      botUserId: "B123",
+      connectedAt: new Date("2026-06-16T00:00:00.000Z")
+    }
+  ],
   usage: { date: "2026-06-16", executions: 34, runtimeMs: 742 },
   telemetry: { enabled: false, mode: "disabled", schemaVersion: 1 },
   schemaMigrations: [
@@ -817,6 +855,7 @@ export function createDemoAdminApiClient(): AdminApiClient {
       }),
     getAuditEvents: () => Promise.resolve({ section: "auditEvents", items: snapshot.auditEvents }),
     getOperationalHealth: () => Promise.resolve(snapshot.operationalHealth),
+    getProviderConnections: () => Promise.resolve(snapshot.providerConnections),
     getDashboardSection: () =>
       Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
     searchExecutions: (request) => {
@@ -1057,6 +1096,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     getDashboard: unavailable,
     getAuditEvents: unavailable,
     getOperationalHealth: unavailable,
+    getProviderConnections: unavailable,
     getDashboardSection: unavailable,
     searchExecutions: unavailable,
     getExecutionDetail: unavailable,
@@ -1131,6 +1171,11 @@ export function createAdminApiClient(params: {
     "/v1/admin/approval-decisions",
     params.isDevelopment
   );
+  const providerConnectionsUrl = apiEndpoint(
+    params.controlPlaneUrl,
+    "/v1/admin/provider-connections",
+    params.isDevelopment
+  );
   const fetcher = params.fetcher ?? fetch;
   let credential: string | undefined;
 
@@ -1168,6 +1213,27 @@ export function createAdminApiClient(params: {
       const operationalHealth = operationalHealthSchema.safeParse(payload);
       if (!operationalHealth.success) throw invalidResponse();
       return operationalHealth.data;
+    },
+    getProviderConnections: async () => {
+      const payload = await fetchAdminJson(
+        providerConnectionsUrl,
+        requireCredential(credential),
+        fetcher
+      );
+      const connections = providerConnectionsSchema.safeParse(payload);
+      if (!connections.success) throw invalidResponse();
+      return connections.data.items.map((connection) => ({
+        provider: connection.provider,
+        id: connection.id,
+        workspaceId: connection.workspaceId,
+        ...(connection.workspaceName === undefined || connection.workspaceName.trim().length === 0
+          ? {}
+          : { workspaceName: connection.workspaceName }),
+        ...(connection.botUserId === undefined || connection.botUserId.trim().length === 0
+          ? {}
+          : { botUserId: connection.botUserId }),
+        connectedAt: connection.connectedAt
+      }));
     },
     getDashboardSection: async (section, cursor) => {
       const url = new URL(`${dashboardUrl}/${section}`);
@@ -1456,6 +1522,7 @@ function dashboardSnapshot(data: z.infer<typeof dashboardSchema>): DashboardSnap
     executions: data.executions.items,
     auditEvents: [],
     operationalHealth: emptyOperationalHealth(data.usage.date),
+    providerConnections: [],
     usage: data.usage,
     schemaMigrations: data.schemaMigrations,
     telemetry: data.telemetry,
