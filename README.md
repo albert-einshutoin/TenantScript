@@ -11,6 +11,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Proxy mode quickstart](docs/quickstarts/zero-integration-proxy-mode.md) — host改修なしでwebhook変換を15分で再現
 - [SDK integration quickstart](docs/quickstarts/sdk-integration.md) — typed hook、plugin、capability、dry-run deployをTDDで接続
 - [SDK reference](docs/reference/sdk.md) — Phase 1 public TypeScript surfaceと安全境界
+- [Canonical glossary](docs/reference/glossary.md) — app、tenant、plugin、installation、capabilityなどの権限境界
 - [Schema diff in CI](docs/reference/schema-diff-ci.md) — breaking判定、exit code、warning、CI統合
 - [Hook schema migration運用](docs/operations/schema-migrations.md) — app全体の利用追跡、廃止ゲート、Admin UI
 - [App database routing](docs/operations/app-database-routing.md) — app単位D1、fail-closed router、endpoint isolation matrix
