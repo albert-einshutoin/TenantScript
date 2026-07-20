@@ -31,6 +31,7 @@
 - [ ] **P3-T04**(S)UI パフォーマンス
   - 内容: 大量 executions(10万行想定)でのページング・仮想化。バンドルサイズ予算(app ページ < 300kb gz)を CI で監視
   - DoD: 予算超過で CI fail
+  - Progress: Issue #241でVite manifest由来の初期page 300 KiB gzip予算と全JS/CSS 450 KiB予算、chunk split回避、closed output検証をTier 1へ常設。browser runtime性能と10万行virtualizationの独立証跡は未完了
 
 ## チャンク B: secret broker 強化(T05–T07)
 

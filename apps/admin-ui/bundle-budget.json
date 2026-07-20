@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "maxInitialPageGzipBytes": 307200,
+  "maxTotalJavaScriptAndCssGzipBytes": 460800
+}

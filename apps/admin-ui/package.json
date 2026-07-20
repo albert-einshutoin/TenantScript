@@ -10,6 +10,7 @@
     "test": "vitest run && playwright test",
     "test:security": "vitest run src/security-suite.test.tsx",
     "test:coverage": "vitest run --coverage",
+    "test:bundle-budget": "node ../../scripts/admin-ui-bundle-budget.test.mjs && vite build && node ../../scripts/admin-ui-bundle-budget.mjs dist bundle-budget.json",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1"
