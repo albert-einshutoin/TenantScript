@@ -41,6 +41,7 @@ Use these sources for the current boundary:
 - [Zero-integration proxy quickstart](docs/quickstarts/zero-integration-proxy-mode.md)
 - [Typed SDK integration quickstart](docs/quickstarts/sdk-integration.md)
 - [Public SDK reference](docs/reference/sdk.md)
+- [CLI command and exit-code reference](docs/reference/cli.md)
 - [Schema compatibility in CI](docs/reference/schema-diff-ci.md)
 - [Hook schema migration operations](docs/operations/schema-migrations.md)
 - [App database routing and endpoint isolation](docs/operations/app-database-routing.md)
