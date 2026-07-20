@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [catalog, httpApi, workerEntry, readme] = await Promise.all([
+const [catalog, httpApi, workerEntry, serviceTokens, readme] = await Promise.all([
   readFile(new URL("../docs/reference/control-plane-errors.md", import.meta.url), "utf8"),
   readFile(new URL("../packages/control-plane/src/http-api.ts", import.meta.url), "utf8"),
   readFile(new URL("../packages/control-plane/src/worker-entry.ts", import.meta.url), "utf8"),
+  readFile(new URL("../packages/control-plane/src/service-tokens.ts", import.meta.url), "utf8"),
   readFile(new URL("../README.md", import.meta.url), "utf8")
 ]);
 
@@ -13,7 +14,7 @@ const nonErrorSnakeCaseLiterals = new Set(["budget_exceeded", "egress_denied", "
 
 function sourceErrorCodes() {
   const snakeCase = [
-    ...(httpApi + workerEntry).matchAll(/["']([a-z][a-z0-9]*(?:_[a-z0-9]+)+)["']/gu)
+    ...(httpApi + workerEntry + serviceTokens).matchAll(/["']([a-z][a-z0-9]*(?:_[a-z0-9]+)+)["']/gu)
   ]
     .map((match) => match[1])
     .filter((code) => !nonErrorSnakeCaseLiterals.has(code));
@@ -48,6 +49,16 @@ test("keeps literal errorResponse status values aligned with the catalog", () =>
   const statuses = new Map(catalogRows().map(({ code, status }) => [code, status]));
   for (const match of httpApi.matchAll(/errorResponse\(\s*(\d+),\s*"([a-z][a-z0-9_]*)"/gu)) {
     assert.equal(statuses.get(match[2]), Number(match[1]), `${match[2]} status drifted`);
+  }
+});
+
+test("keeps service-token manager errors aligned with their HTTP mapping", () => {
+  const statuses = new Map(catalogRows().map(({ code, status }) => [code, status]));
+  const codes = [...serviceTokens.matchAll(/new ServiceTokenError\("([a-z][a-z0-9_]*)"\)/gu)].map(
+    (match) => match[1]
+  );
+  for (const code of new Set(codes)) {
+    assert.equal(statuses.get(code), code === "invalid_service_token" ? 400 : 403);
   }
 });
 
