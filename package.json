@@ -22,7 +22,7 @@
     "test:advisory-drills": "node --test scripts/check-security-advisory-drills.test.mjs",
     "test:incident-drills": "node --test scripts/check-incident-drills.test.mjs",
     "test:security-reviews": "node --test scripts/check-security-review-campaigns.test.mjs",
-    "test:docs": "node --test scripts/agent-onboarding-doc-contract.test.mjs scripts/check-doc-command-contracts.test.mjs scripts/check-doc-integrity.test.mjs scripts/configuration-doc-contract.test.mjs scripts/environment-limitations-doc-contract.test.mjs scripts/oss-security-entrypoints-doc-contract.test.mjs scripts/phase0-gate-evidence-doc-contract.test.mjs scripts/rollback-drill-doc-contract.test.mjs scripts/schema-diff-doc-contract.test.mjs",
+    "test:docs": "node --test scripts/agent-onboarding-doc-contract.test.mjs scripts/check-doc-command-contracts.test.mjs scripts/check-doc-integrity.test.mjs scripts/configuration-doc-contract.test.mjs scripts/control-plane-error-catalog.test.mjs scripts/environment-limitations-doc-contract.test.mjs scripts/oss-security-entrypoints-doc-contract.test.mjs scripts/phase0-gate-evidence-doc-contract.test.mjs scripts/rollback-drill-doc-contract.test.mjs scripts/schema-diff-doc-contract.test.mjs",
     "test:fuzz": "pnpm --filter @tenantscript/manifest test:fuzz && pnpm --filter @tenantscript/host-sdk test:fuzz",
     "test:security-program": "node --test scripts/security-program-contract.test.mjs",
     "test:community-governance": "node --test scripts/community-governance-contract.test.mjs",
