@@ -2,6 +2,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { format, resolveConfig } from "prettier";
 
 const snapshotFileName = "api-surface.snapshot.json";
 
@@ -50,8 +51,8 @@ export async function checkPublicApiSurface(rootDirectory) {
   }
   if (!isPublicApiSurface(expected)) throw invalidSnapshot();
   const actual = await collectPublicApiSurface(root);
-  const expectedText = serializePublicApiSurface(expected);
-  const actualText = serializePublicApiSurface(actual);
+  const expectedText = await serializePublicApiSurface(expected);
+  const actualText = await serializePublicApiSurface(actual);
   if (expectedText !== actualText) {
     throw new Error(
       `Public API surface drift detected. Review semver and migration impact before running pnpm api-surface:write.\nExpected:\n${expectedText}Actual:\n${actualText}`
@@ -59,8 +60,11 @@ export async function checkPublicApiSurface(rootDirectory) {
   }
 }
 
-export function serializePublicApiSurface(surface) {
-  return `${JSON.stringify(surface, null, 2)}\n`;
+export async function serializePublicApiSurface(surface) {
+  return await format(JSON.stringify(surface), {
+    ...(await resolveConfig(resolve(process.cwd(), snapshotFileName))),
+    parser: "json"
+  });
 }
 
 async function collectPackageEntries(root) {
@@ -347,7 +351,7 @@ async function main() {
   const root = process.cwd();
   if (process.argv.slice(2).includes("--write")) {
     const surface = await collectPublicApiSurface(root);
-    await writeFile(join(root, snapshotFileName), serializePublicApiSurface(surface));
+    await writeFile(join(root, snapshotFileName), await serializePublicApiSurface(surface));
     console.log(`Updated ${snapshotFileName}.`);
     return;
   }

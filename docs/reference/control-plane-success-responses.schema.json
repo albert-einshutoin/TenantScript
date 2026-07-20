@@ -4,33 +4,15 @@
     "session": {
       "type": "object",
       "properties": {
-        "subject": {
-          "type": "string"
-        },
+        "subject": { "type": "string" },
         "role": {
           "type": "string",
-          "enum": [
-            "owner",
-            "admin",
-            "operator",
-            "viewer",
-            "tenant-admin",
-            "manager"
-          ]
+          "enum": ["owner", "admin", "operator", "viewer", "tenant-admin", "manager"]
         },
-        "appId": {
-          "type": "string"
-        },
-        "tenantId": {
-          "type": "string"
-        }
+        "appId": { "type": "string" },
+        "tenantId": { "type": "string" }
       },
-      "required": [
-        "subject",
-        "role",
-        "appId",
-        "tenantId"
-      ],
+      "required": ["subject", "role", "appId", "tenantId"],
       "additionalProperties": false
     },
     "dashboard": {
@@ -44,45 +26,20 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "pluginKey": {
-                    "type": "string"
-                  },
-                  "version": {
-                    "type": "string"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  },
-                  "priority": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "revision": {
-                    "type": "integer",
-                    "minimum": 0
-                  }
+                  "id": { "type": "string" },
+                  "pluginKey": { "type": "string" },
+                  "version": { "type": "string" },
+                  "enabled": { "type": "boolean" },
+                  "priority": { "type": "integer", "minimum": 0 },
+                  "revision": { "type": "integer", "minimum": 0 }
                 },
-                "required": [
-                  "id",
-                  "pluginKey",
-                  "version",
-                  "enabled",
-                  "priority",
-                  "revision"
-                ],
+                "required": ["id", "pluginKey", "version", "enabled", "priority", "revision"],
                 "additionalProperties": false
               }
             },
-            "nextCursor": {
-              "type": "string"
-            }
+            "nextCursor": { "type": "string" }
           },
-          "required": [
-            "items"
-          ],
+          "required": ["items"],
           "additionalProperties": false
         },
         "pluginVersions": {
@@ -93,43 +50,20 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "pluginId": {
-                    "type": "string"
-                  },
-                  "pluginKey": {
-                    "type": "string"
-                  },
-                  "version": {
-                    "type": "string"
-                  },
-                  "artifactHash": {
-                    "type": "string"
-                  },
-                  "createdAt": {
-                    "type": "string"
-                  }
+                  "id": { "type": "string" },
+                  "pluginId": { "type": "string" },
+                  "pluginKey": { "type": "string" },
+                  "version": { "type": "string" },
+                  "artifactHash": { "type": "string" },
+                  "createdAt": { "type": "string" }
                 },
-                "required": [
-                  "id",
-                  "pluginId",
-                  "pluginKey",
-                  "version",
-                  "artifactHash",
-                  "createdAt"
-                ],
+                "required": ["id", "pluginId", "pluginKey", "version", "artifactHash", "createdAt"],
                 "additionalProperties": false
               }
             },
-            "nextCursor": {
-              "type": "string"
-            }
+            "nextCursor": { "type": "string" }
           },
-          "required": [
-            "items"
-          ],
+          "required": ["items"],
           "additionalProperties": false
         },
         "approvals": {
@@ -140,33 +74,16 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "pluginId": {
-                    "type": "string"
-                  },
-                  "role": {
-                    "type": "string"
-                  },
-                  "resumeHook": {
-                    "type": "string"
-                  },
+                  "id": { "type": "string" },
+                  "pluginId": { "type": "string" },
+                  "role": { "type": "string" },
+                  "resumeHook": { "type": "string" },
                   "state": {
                     "type": "string",
-                    "enum": [
-                      "pending",
-                      "approved",
-                      "rejected",
-                      "expired"
-                    ]
+                    "enum": ["pending", "approved", "rejected", "expired"]
                   },
-                  "expiresAt": {
-                    "type": "string"
-                  },
-                  "createdAt": {
-                    "type": "string"
-                  }
+                  "expiresAt": { "type": "string" },
+                  "createdAt": { "type": "string" }
                 },
                 "required": [
                   "id",
@@ -180,13 +97,9 @@
                 "additionalProperties": false
               }
             },
-            "nextCursor": {
-              "type": "string"
-            }
+            "nextCursor": { "type": "string" }
           },
-          "required": [
-            "items"
-          ],
+          "required": ["items"],
           "additionalProperties": false
         },
         "executions": {
@@ -197,41 +110,17 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "pluginId": {
-                    "type": "string"
-                  },
-                  "hookName": {
-                    "type": "string"
-                  },
-                  "version": {
-                    "type": "string"
-                  },
+                  "id": { "type": "string" },
+                  "pluginId": { "type": "string" },
+                  "hookName": { "type": "string" },
+                  "version": { "type": "string" },
                   "status": {
                     "type": "string",
-                    "enum": [
-                      "success",
-                      "error",
-                      "timeout",
-                      "egress_denied",
-                      "budget_exceeded"
-                    ]
+                    "enum": ["success", "error", "timeout", "egress_denied", "budget_exceeded"]
                   },
-                  "durationMs": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "capabilityNames": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "createdAt": {
-                    "type": "string"
-                  }
+                  "durationMs": { "type": "integer", "minimum": 0 },
+                  "capabilityNames": { "type": "array", "items": { "type": "string" } },
+                  "createdAt": { "type": "string" }
                 },
                 "required": [
                   "id",
@@ -246,35 +135,19 @@
                 "additionalProperties": false
               }
             },
-            "nextCursor": {
-              "type": "string"
-            }
+            "nextCursor": { "type": "string" }
           },
-          "required": [
-            "items"
-          ],
+          "required": ["items"],
           "additionalProperties": false
         },
         "usage": {
           "type": "object",
           "properties": {
-            "date": {
-              "type": "string"
-            },
-            "executions": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "runtimeMs": {
-              "type": "integer",
-              "minimum": 0
-            }
+            "date": { "type": "string" },
+            "executions": { "type": "integer", "minimum": 0 },
+            "runtimeMs": { "type": "integer", "minimum": 0 }
           },
-          "required": [
-            "date",
-            "executions",
-            "runtimeMs"
-          ],
+          "required": ["date", "executions", "runtimeMs"],
           "additionalProperties": false
         },
         "schemaMigrations": {
@@ -282,48 +155,26 @@
           "items": {
             "type": "object",
             "properties": {
-              "hookName": {
-                "type": "string"
-              },
+              "hookName": { "type": "string" },
               "versions": {
                 "type": "array",
                 "items": {
                   "type": "object",
                   "properties": {
-                    "version": {
-                      "type": "string"
-                    },
-                    "installationCount": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "removable": {
-                      "type": "boolean"
-                    },
+                    "version": { "type": "string" },
+                    "installationCount": { "type": "integer", "minimum": 0 },
+                    "removable": { "type": "boolean" },
                     "blockingInstallations": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "installationId": {
-                            "type": "string"
-                          },
-                          "pluginKey": {
-                            "type": "string"
-                          },
-                          "pluginVersion": {
-                            "type": "string"
-                          },
-                          "schemaRange": {
-                            "type": "string"
-                          }
+                          "installationId": { "type": "string" },
+                          "pluginKey": { "type": "string" },
+                          "pluginVersion": { "type": "string" },
+                          "schemaRange": { "type": "string" }
                         },
-                        "required": [
-                          "installationId",
-                          "pluginKey",
-                          "pluginVersion",
-                          "schemaRange"
-                        ],
+                        "required": ["installationId", "pluginKey", "pluginVersion", "schemaRange"],
                         "additionalProperties": false
                       }
                     }
@@ -342,59 +193,28 @@
                 "items": {
                   "type": "object",
                   "properties": {
-                    "installationId": {
-                      "type": "string"
-                    },
-                    "pluginKey": {
-                      "type": "string"
-                    },
-                    "pluginVersion": {
-                      "type": "string"
-                    },
-                    "schemaRange": {
-                      "type": "string"
-                    }
+                    "installationId": { "type": "string" },
+                    "pluginKey": { "type": "string" },
+                    "pluginVersion": { "type": "string" },
+                    "schemaRange": { "type": "string" }
                   },
-                  "required": [
-                    "installationId",
-                    "pluginKey",
-                    "pluginVersion",
-                    "schemaRange"
-                  ],
+                  "required": ["installationId", "pluginKey", "pluginVersion", "schemaRange"],
                   "additionalProperties": false
                 }
               }
             },
-            "required": [
-              "hookName",
-              "versions",
-              "incompatibleInstallations"
-            ],
+            "required": ["hookName", "versions", "incompatibleInstallations"],
             "additionalProperties": false
           }
         },
         "telemetry": {
           "type": "object",
           "properties": {
-            "enabled": {
-              "type": "boolean"
-            },
-            "mode": {
-              "type": "string",
-              "enum": [
-                "disabled",
-                "anonymous-aggregate"
-              ]
-            },
-            "schemaVersion": {
-              "const": 1
-            }
+            "enabled": { "type": "boolean" },
+            "mode": { "type": "string", "enum": ["disabled", "anonymous-aggregate"] },
+            "schemaVersion": { "const": 1 }
           },
-          "required": [
-            "enabled",
-            "mode",
-            "schemaVersion"
-          ],
+          "required": ["enabled", "mode", "schemaVersion"],
           "additionalProperties": false
         }
       },
@@ -412,214 +232,99 @@
     "dashboardInstallations": {
       "type": "object",
       "properties": {
-        "section": {
-          "const": "installations"
-        },
+        "section": { "const": "installations" },
         "items": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": {
-                "type": "string"
-              },
-              "pluginKey": {
-                "type": "string"
-              },
-              "version": {
-                "type": "string"
-              },
-              "enabled": {
-                "type": "boolean"
-              },
-              "priority": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "revision": {
-                "type": "integer",
-                "minimum": 0
-              }
+              "id": { "type": "string" },
+              "pluginKey": { "type": "string" },
+              "version": { "type": "string" },
+              "enabled": { "type": "boolean" },
+              "priority": { "type": "integer", "minimum": 0 },
+              "revision": { "type": "integer", "minimum": 0 }
             },
-            "required": [
-              "id",
-              "pluginKey",
-              "version",
-              "enabled",
-              "priority",
-              "revision"
-            ],
+            "required": ["id", "pluginKey", "version", "enabled", "priority", "revision"],
             "additionalProperties": false
           }
         },
-        "nextCursor": {
-          "type": "string"
-        }
+        "nextCursor": { "type": "string" }
       },
-      "required": [
-        "section",
-        "items"
-      ],
+      "required": ["section", "items"],
       "additionalProperties": false
     },
     "dashboardPluginVersions": {
       "type": "object",
       "properties": {
-        "section": {
-          "const": "pluginVersions"
-        },
+        "section": { "const": "pluginVersions" },
         "items": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": {
-                "type": "string"
-              },
-              "pluginId": {
-                "type": "string"
-              },
-              "pluginKey": {
-                "type": "string"
-              },
-              "version": {
-                "type": "string"
-              },
-              "artifactHash": {
-                "type": "string"
-              },
-              "createdAt": {
-                "type": "string"
-              }
+              "id": { "type": "string" },
+              "pluginId": { "type": "string" },
+              "pluginKey": { "type": "string" },
+              "version": { "type": "string" },
+              "artifactHash": { "type": "string" },
+              "createdAt": { "type": "string" }
             },
-            "required": [
-              "id",
-              "pluginId",
-              "pluginKey",
-              "version",
-              "artifactHash",
-              "createdAt"
-            ],
+            "required": ["id", "pluginId", "pluginKey", "version", "artifactHash", "createdAt"],
             "additionalProperties": false
           }
         },
-        "nextCursor": {
-          "type": "string"
-        }
+        "nextCursor": { "type": "string" }
       },
-      "required": [
-        "section",
-        "items"
-      ],
+      "required": ["section", "items"],
       "additionalProperties": false
     },
     "dashboardApprovals": {
       "type": "object",
       "properties": {
-        "section": {
-          "const": "approvals"
-        },
+        "section": { "const": "approvals" },
         "items": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": {
-                "type": "string"
-              },
-              "pluginId": {
-                "type": "string"
-              },
-              "role": {
-                "type": "string"
-              },
-              "resumeHook": {
-                "type": "string"
-              },
-              "state": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "approved",
-                  "rejected",
-                  "expired"
-                ]
-              },
-              "expiresAt": {
-                "type": "string"
-              },
-              "createdAt": {
-                "type": "string"
-              }
+              "id": { "type": "string" },
+              "pluginId": { "type": "string" },
+              "role": { "type": "string" },
+              "resumeHook": { "type": "string" },
+              "state": { "type": "string", "enum": ["pending", "approved", "rejected", "expired"] },
+              "expiresAt": { "type": "string" },
+              "createdAt": { "type": "string" }
             },
-            "required": [
-              "id",
-              "pluginId",
-              "role",
-              "resumeHook",
-              "state",
-              "expiresAt",
-              "createdAt"
-            ],
+            "required": ["id", "pluginId", "role", "resumeHook", "state", "expiresAt", "createdAt"],
             "additionalProperties": false
           }
         },
-        "nextCursor": {
-          "type": "string"
-        }
+        "nextCursor": { "type": "string" }
       },
-      "required": [
-        "section",
-        "items"
-      ],
+      "required": ["section", "items"],
       "additionalProperties": false
     },
     "dashboardExecutions": {
       "type": "object",
       "properties": {
-        "section": {
-          "const": "executions"
-        },
+        "section": { "const": "executions" },
         "items": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "id": {
-                "type": "string"
-              },
-              "pluginId": {
-                "type": "string"
-              },
-              "hookName": {
-                "type": "string"
-              },
-              "version": {
-                "type": "string"
-              },
+              "id": { "type": "string" },
+              "pluginId": { "type": "string" },
+              "hookName": { "type": "string" },
+              "version": { "type": "string" },
               "status": {
                 "type": "string",
-                "enum": [
-                  "success",
-                  "error",
-                  "timeout",
-                  "egress_denied",
-                  "budget_exceeded"
-                ]
+                "enum": ["success", "error", "timeout", "egress_denied", "budget_exceeded"]
               },
-              "durationMs": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "capabilityNames": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "createdAt": {
-                "type": "string"
-              }
+              "durationMs": { "type": "integer", "minimum": 0 },
+              "capabilityNames": { "type": "array", "items": { "type": "string" } },
+              "createdAt": { "type": "string" }
             },
             "required": [
               "id",
@@ -634,72 +339,32 @@
             "additionalProperties": false
           }
         },
-        "nextCursor": {
-          "type": "string"
-        }
+        "nextCursor": { "type": "string" }
       },
-      "required": [
-        "section",
-        "items"
-      ],
+      "required": ["section", "items"],
       "additionalProperties": false
     },
     "installationReview": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "pluginKey": {
-          "type": "string"
-        },
-        "version": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "priority": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "revision": {
-          "type": "integer",
-          "minimum": 0
-        },
+        "id": { "type": "string" },
+        "pluginKey": { "type": "string" },
+        "version": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "priority": { "type": "integer", "minimum": 0 },
+        "revision": { "type": "integer", "minimum": 0 },
         "configFields": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "string",
-                  "number",
-                  "boolean"
-                ]
-              },
-              "required": {
-                "type": "boolean"
-              },
-              "configured": {
-                "type": "boolean"
-              },
-              "hasDefault": {
-                "type": "boolean"
-              }
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["string", "number", "boolean"] },
+              "required": { "type": "boolean" },
+              "configured": { "type": "boolean" },
+              "hasDefault": { "type": "boolean" }
             },
-            "required": [
-              "name",
-              "type",
-              "required",
-              "configured",
-              "hasDefault"
-            ],
+            "required": ["name", "type", "required", "configured", "hasDefault"],
             "additionalProperties": false
           }
         },
@@ -708,57 +373,22 @@
           "items": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "granted",
-                  "missing"
-                ]
-              },
-              "scopeKeys": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "configReferences": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
+              "name": { "type": "string" },
+              "status": { "type": "string", "enum": ["granted", "missing"] },
+              "scopeKeys": { "type": "array", "items": { "type": "string" } },
+              "configReferences": { "type": "array", "items": { "type": "string" } }
             },
-            "required": [
-              "name",
-              "status",
-              "scopeKeys",
-              "configReferences"
-            ],
+            "required": ["name", "status", "scopeKeys", "configReferences"],
             "additionalProperties": false
           }
         },
         "egress": {
           "type": "object",
           "properties": {
-            "mode": {
-              "type": "string",
-              "enum": [
-                "deny",
-                "allowlist"
-              ]
-            },
-            "allowlistedHostCount": {
-              "type": "integer",
-              "minimum": 0
-            }
+            "mode": { "type": "string", "enum": ["deny", "allowlist"] },
+            "allowlistedHostCount": { "type": "integer", "minimum": 0 }
           },
-          "required": [
-            "mode",
-            "allowlistedHostCount"
-          ],
+          "required": ["mode", "allowlistedHostCount"],
           "additionalProperties": false
         }
       },
@@ -778,70 +408,31 @@
     "installationCommand": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "priority": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "revision": {
-          "type": "integer",
-          "minimum": 0
-        }
+        "id": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "priority": { "type": "integer", "minimum": 0 },
+        "revision": { "type": "integer", "minimum": 0 }
       },
-      "required": [
-        "id",
-        "enabled",
-        "priority",
-        "revision"
-      ],
+      "required": ["id", "enabled", "priority", "revision"],
       "additionalProperties": false
     },
     "installPreview": {
       "type": "object",
       "properties": {
-        "versionId": {
-          "type": "string"
-        },
-        "pluginKey": {
-          "type": "string"
-        },
-        "version": {
-          "type": "string"
-        },
+        "versionId": { "type": "string" },
+        "pluginKey": { "type": "string" },
+        "version": { "type": "string" },
         "configFields": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "string",
-                  "number",
-                  "boolean"
-                ]
-              },
-              "required": {
-                "type": "boolean"
-              },
-              "hasDefault": {
-                "type": "boolean"
-              }
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["string", "number", "boolean"] },
+              "required": { "type": "boolean" },
+              "hasDefault": { "type": "boolean" }
             },
-            "required": [
-              "name",
-              "type",
-              "required",
-              "hasDefault"
-            ],
+            "required": ["name", "type", "required", "hasDefault"],
             "additionalProperties": false
           }
         },
@@ -850,159 +441,64 @@
           "items": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string"
-              },
-              "scopeKeys": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "configReferences": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
+              "name": { "type": "string" },
+              "scopeKeys": { "type": "array", "items": { "type": "string" } },
+              "configReferences": { "type": "array", "items": { "type": "string" } }
             },
-            "required": [
-              "name",
-              "scopeKeys",
-              "configReferences"
-            ],
+            "required": ["name", "scopeKeys", "configReferences"],
             "additionalProperties": false
           }
         },
         "egress": {
           "type": "object",
           "properties": {
-            "mode": {
-              "type": "string",
-              "enum": [
-                "deny",
-                "allowlist"
-              ]
-            },
-            "allowlistedHostCount": {
-              "type": "integer",
-              "minimum": 0
-            }
+            "mode": { "type": "string", "enum": ["deny", "allowlist"] },
+            "allowlistedHostCount": { "type": "integer", "minimum": 0 }
           },
-          "required": [
-            "mode",
-            "allowlistedHostCount"
-          ],
+          "required": ["mode", "allowlistedHostCount"],
           "additionalProperties": false
         }
       },
-      "required": [
-        "versionId",
-        "pluginKey",
-        "version",
-        "configFields",
-        "capabilities",
-        "egress"
-      ],
+      "required": ["versionId", "pluginKey", "version", "configFields", "capabilities", "egress"],
       "additionalProperties": false
     },
     "installCreate": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "versionId": {
-          "type": "string"
-        },
-        "pluginKey": {
-          "type": "string"
-        },
-        "version": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "priority": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "revision": {
-          "const": 0
-        }
+        "id": { "type": "string" },
+        "versionId": { "type": "string" },
+        "pluginKey": { "type": "string" },
+        "version": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "priority": { "type": "integer", "minimum": 0 },
+        "revision": { "const": 0 }
       },
-      "required": [
-        "id",
-        "versionId",
-        "pluginKey",
-        "version",
-        "enabled",
-        "priority",
-        "revision"
-      ],
+      "required": ["id", "versionId", "pluginKey", "version", "enabled", "priority", "revision"],
       "additionalProperties": false
     },
     "installRequestCreate": {
       "type": "object",
       "properties": {
-        "approvalId": {
-          "type": "string"
-        },
-        "state": {
-          "const": "pending"
-        },
-        "pluginKey": {
-          "type": "string"
-        },
-        "version": {
-          "type": "string"
-        },
-        "capabilities": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "expiresAt": {
-          "type": "string"
-        }
+        "approvalId": { "type": "string" },
+        "state": { "const": "pending" },
+        "pluginKey": { "type": "string" },
+        "version": { "type": "string" },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "expiresAt": { "type": "string" }
       },
-      "required": [
-        "approvalId",
-        "state",
-        "pluginKey",
-        "version",
-        "capabilities",
-        "expiresAt"
-      ],
+      "required": ["approvalId", "state", "pluginKey", "version", "capabilities", "expiresAt"],
       "additionalProperties": false
     },
     "rollbackCreate": {
       "type": "object",
       "properties": {
-        "installationId": {
-          "type": "string"
-        },
-        "pluginKey": {
-          "type": "string"
-        },
-        "fromVersion": {
-          "type": "string"
-        },
-        "toVersion": {
-          "type": "string"
-        },
-        "revision": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "auditId": {
-          "type": "string"
-        },
-        "completedAt": {
-          "type": "string"
-        }
+        "installationId": { "type": "string" },
+        "pluginKey": { "type": "string" },
+        "fromVersion": { "type": "string" },
+        "toVersion": { "type": "string" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "auditId": { "type": "string" },
+        "completedAt": { "type": "string" }
       },
       "required": [
         "installationId",
@@ -1018,68 +514,32 @@
     "executionDetail": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "pluginId": {
-          "type": "string"
-        },
-        "hookName": {
-          "type": "string"
-        },
-        "version": {
-          "type": "string"
-        },
+        "id": { "type": "string" },
+        "pluginId": { "type": "string" },
+        "hookName": { "type": "string" },
+        "version": { "type": "string" },
         "status": {
           "type": "string",
-          "enum": [
-            "success",
-            "error",
-            "timeout",
-            "egress_denied",
-            "budget_exceeded"
-          ]
+          "enum": ["success", "error", "timeout", "egress_denied", "budget_exceeded"]
         },
-        "durationMs": {
-          "type": "integer",
-          "minimum": 0
-        },
+        "durationMs": { "type": "integer", "minimum": 0 },
         "errorCode": {
           "type": "string",
-          "enum": [
-            "execution_failed",
-            "execution_timeout",
-            "egress_denied",
-            "budget_exceeded"
-          ]
+          "enum": ["execution_failed", "execution_timeout", "egress_denied", "budget_exceeded"]
         },
         "capabilityCalls": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "success",
-                  "denied",
-                  "error"
-                ]
-              }
+              "name": { "type": "string" },
+              "status": { "type": "string", "enum": ["success", "denied", "error"] }
             },
-            "required": [
-              "name",
-              "status"
-            ],
+            "required": ["name", "status"],
             "additionalProperties": false
           }
         },
-        "createdAt": {
-          "type": "string"
-        }
+        "createdAt": { "type": "string" }
       },
       "required": [
         "id",
@@ -1101,31 +561,13 @@
           "items": {
             "type": "object",
             "properties": {
-              "tenantId": {
-                "type": "string"
-              },
-              "pluginId": {
-                "type": "string"
-              },
-              "date": {
-                "type": "string"
-              },
-              "executions": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "cpuMs": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "subrequests": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "workflowRuns": {
-                "type": "integer",
-                "minimum": 0
-              }
+              "tenantId": { "type": "string" },
+              "pluginId": { "type": "string" },
+              "date": { "type": "string" },
+              "executions": { "type": "integer", "minimum": 0 },
+              "cpuMs": { "type": "integer", "minimum": 0 },
+              "subrequests": { "type": "integer", "minimum": 0 },
+              "workflowRuns": { "type": "integer", "minimum": 0 }
             },
             "required": [
               "tenantId",
@@ -1140,55 +582,26 @@
           }
         }
       },
-      "required": [
-        "items"
-      ],
+      "required": ["items"],
       "additionalProperties": false
     },
     "approvalDecisionCreate": {
       "type": "object",
       "properties": {
-        "approvalId": {
-          "type": "string"
-        },
-        "state": {
-          "type": "string",
-          "enum": [
-            "approved",
-            "rejected"
-          ]
-        },
-        "auditId": {
-          "type": "string"
-        },
-        "decidedAt": {
-          "type": "string"
-        },
+        "approvalId": { "type": "string" },
+        "state": { "type": "string", "enum": ["approved", "rejected"] },
+        "auditId": { "type": "string" },
+        "decidedAt": { "type": "string" },
         "installation": {
           "type": "object",
           "properties": {
-            "id": {
-              "type": "string"
-            },
-            "versionId": {
-              "type": "string"
-            },
-            "pluginKey": {
-              "type": "string"
-            },
-            "version": {
-              "type": "string"
-            },
-            "enabled": {
-              "type": "boolean"
-            },
-            "priority": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "revision": {
-              "const": 0
-            }
+            "id": { "type": "string" },
+            "versionId": { "type": "string" },
+            "pluginKey": { "type": "string" },
+            "version": { "type": "string" },
+            "enabled": { "type": "boolean" },
+            "priority": { "type": "integer", "minimum": 0 },
+            "revision": { "const": 0 }
           },
           "required": [
             "id",
@@ -1202,58 +615,24 @@
           "additionalProperties": false
         }
       },
-      "required": [
-        "approvalId",
-        "state",
-        "auditId",
-        "decidedAt"
-      ],
+      "required": ["approvalId", "state", "auditId", "decidedAt"],
       "additionalProperties": false
     },
     "serviceTokenIssue": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "token": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        },
+        "id": { "type": "string" },
+        "token": { "type": "string" },
+        "label": { "type": "string" },
         "role": {
           "type": "string",
-          "enum": [
-            "owner",
-            "admin",
-            "operator",
-            "viewer",
-            "tenant-admin"
-          ]
+          "enum": ["owner", "admin", "operator", "viewer", "tenant-admin"]
         },
-        "scopes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "createdAt": {
-          "type": "string"
-        },
-        "expiresAt": {
-          "type": "string"
-        }
+        "scopes": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
       },
-      "required": [
-        "id",
-        "token",
-        "label",
-        "role",
-        "scopes",
-        "createdAt",
-        "expiresAt"
-      ],
+      "required": ["id", "token", "label", "role", "scopes", "createdAt", "expiresAt"],
       "additionalProperties": false
     }
   }

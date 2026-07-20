@@ -146,5 +146,8 @@ async function writeHttpContract(root, method) {
 
 async function writeSnapshot(root) {
   const surface = await collectPublicApiSurface(root);
-  await writeFile(join(root, "api-surface.snapshot.json"), serializePublicApiSurface(surface));
+  await writeFile(
+    join(root, "api-surface.snapshot.json"),
+    await serializePublicApiSurface(surface)
+  );
 }
