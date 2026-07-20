@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    [
+      "@tenantscript/capabilities",
+      "@tenantscript/cli",
+      "@tenantscript/control-plane",
+      "@tenantscript/host-sdk",
+      "@tenantscript/loader",
+      "@tenantscript/manifest",
+      "@tenantscript/plugin-sdk",
+      "@tenantscript/proxy"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}

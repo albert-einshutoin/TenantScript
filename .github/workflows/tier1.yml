@@ -28,6 +28,7 @@ jobs:
       - run: pnpm lint:boundaries
       - run: pnpm lint
       - run: pnpm test:api-surface
+      - run: pnpm test:release-policy
       - run: pnpm test:packages
       - run: pnpm test:coverage
       - run: pnpm test:security
