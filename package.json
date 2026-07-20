@@ -7,6 +7,9 @@
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "build": "node scripts/publishable-packages.mjs build",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "changeset:version": "changeset version",
     "pack:check": "node scripts/publishable-packages.mjs check",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm lint:adr && pnpm lint:license && pnpm lint:boundaries && pnpm lint:advisory-drills && pnpm lint:incident-drills && pnpm lint:security-reviews && pnpm lint:docs && pnpm -r lint",
@@ -17,7 +20,7 @@
     "lint:incident-drills": "node scripts/check-incident-drills.mjs",
     "lint:security-reviews": "node scripts/check-security-review-campaigns.mjs",
     "lint:docs": "node scripts/check-doc-command-contracts.mjs && node scripts/check-doc-integrity.mjs",
-    "test": "pnpm lint:adr && pnpm lint:license && pnpm lint:boundaries && pnpm lint:advisory-drills && pnpm lint:incident-drills && pnpm lint:security-reviews && pnpm lint:docs && pnpm test:adr && pnpm test:license && pnpm test:boundaries && pnpm test:advisory-drills && pnpm test:incident-drills && pnpm test:security-reviews && pnpm test:api-surface && pnpm test:packages && pnpm test:docs && pnpm test:security-program && pnpm test:community-governance && pnpm test:telemetry-contract && pnpm test:chaos-contract && pnpm test:verification && pnpm test:wrangler-template && pnpm -r test",
+    "test": "pnpm lint:adr && pnpm lint:license && pnpm lint:boundaries && pnpm lint:advisory-drills && pnpm lint:incident-drills && pnpm lint:security-reviews && pnpm lint:docs && pnpm test:adr && pnpm test:license && pnpm test:boundaries && pnpm test:advisory-drills && pnpm test:incident-drills && pnpm test:security-reviews && pnpm test:api-surface && pnpm test:release-policy && pnpm test:packages && pnpm test:docs && pnpm test:security-program && pnpm test:community-governance && pnpm test:telemetry-contract && pnpm test:chaos-contract && pnpm test:verification && pnpm test:wrangler-template && pnpm -r test",
     "test:adr": "node --test scripts/check-adr-metadata.test.mjs",
     "test:license": "node --test scripts/check-package-license-metadata.test.mjs",
     "test:boundaries": "node --test scripts/check-package-boundaries.test.mjs",
@@ -25,6 +28,7 @@
     "test:incident-drills": "node --test scripts/check-incident-drills.test.mjs",
     "test:security-reviews": "node --test scripts/check-security-review-campaigns.test.mjs",
     "test:api-surface": "node --test scripts/public-api-surface.test.mjs && pnpm api-surface:check",
+    "test:release-policy": "node --test scripts/release-policy.test.mjs && node scripts/release-policy.mjs && pnpm changeset:status",
     "test:packages": "node --test scripts/publishable-packages.test.mjs",
     "test:docs": "node --test scripts/agent-onboarding-doc-contract.test.mjs scripts/check-doc-command-contracts.test.mjs scripts/check-doc-integrity.test.mjs scripts/cli-reference-doc-contract.test.mjs scripts/configuration-doc-contract.test.mjs scripts/control-plane-error-catalog.test.mjs scripts/docs-landing-page-contract.test.mjs scripts/environment-limitations-doc-contract.test.mjs scripts/glossary-doc-contract.test.mjs scripts/operator-troubleshooting-index.test.mjs scripts/oss-security-entrypoints-doc-contract.test.mjs scripts/phase0-gate-evidence-doc-contract.test.mjs scripts/rollback-drill-doc-contract.test.mjs scripts/schema-diff-doc-contract.test.mjs scripts/test-selection-doc-contract.test.mjs",
     "test:fuzz": "pnpm --filter @tenantscript/manifest test:fuzz && pnpm --filter @tenantscript/host-sdk test:fuzz",
@@ -45,6 +49,7 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:coverage && pnpm test:security && pnpm audit --audit-level high && pnpm format"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "@cloudflare/vitest-pool-workers": "^0.18.6",
     "@cloudflare/workers-types": "^5.20260714.1",
     "@eslint/js": "^9.29.0",
