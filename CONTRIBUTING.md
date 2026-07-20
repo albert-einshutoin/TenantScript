@@ -79,6 +79,11 @@ Preserve the dependency direction in [tasks/README.md](tasks/README.md). In part
 
 Architecture changes require an ADR proposal or an update to an existing ADR. Do not silently overturn an accepted decision in an implementation pull request.
 
+When adding or changing an Admin HTTP endpoint, update the endpoint registry and exhaustive
+tenant-isolation matrix described in
+[App database routing](docs/operations/app-database-routing.md). A route is incomplete until every
+method proves identity-derived scope and cross-scope resource concealment in the security suite.
+
 ### Add or change a capability
 
 Every capability must join the shared contract in `packages/capabilities/test/capability-contracts.test.ts`. Add a fixture that proves a granted call succeeds, capability-specific scope is enforced, journal replay is idempotent, rate limiting occurs before provider execution, audit records contain metadata only, and provider failures use a stable error shape.
