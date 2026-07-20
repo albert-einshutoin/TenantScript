@@ -11,6 +11,17 @@ import {
 } from "./api-client.js";
 
 describe("Admin UI auth foundation", () => {
+  it("exposes a keyboard skip link to a focusable main landmark", () => {
+    render(<App client={createDemoAdminApiClient()} />);
+
+    expect(screen.getByRole("link", { name: "Skip to main content" })).toHaveAttribute(
+      "href",
+      "#main-content"
+    );
+    expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
+    expect(screen.getByRole("main")).toHaveAttribute("tabindex", "-1");
+  });
+
   it("masks the bearer token while it is entered", () => {
     render(<App client={createDemoAdminApiClient()} />);
 
@@ -42,6 +53,8 @@ describe("Admin UI auth foundation", () => {
     );
     expect(screen.getByRole("button", { name: "Approval queue" })).toBeInTheDocument();
     await expect(screen.findByText("Recent executions")).resolves.toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveAttribute("id", "main-content");
+    expect(screen.getByRole("main")).toHaveAttribute("tabindex", "-1");
     const migrations = screen.getByRole("region", { name: "Schema migrations" });
     expect(within(migrations).getAllByText("invoice.created")).toHaveLength(2);
     expect(within(migrations).getAllByText("1 blocking installation")).toHaveLength(2);

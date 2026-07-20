@@ -31,9 +31,14 @@ export function App({ client = defaultClient }: { client?: AdminApiClient }) {
   const [session, setSession] = useState<AdminSession | null>(null);
 
   return (
-    <main className="app-shell">
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       {session === null ? (
-        <LoginPanel client={client} onLogin={setSession} />
+        <main id="main-content" tabIndex={-1}>
+          <LoginPanel client={client} onLogin={setSession} />
+        </main>
       ) : (
         <AdminShell
           client={client}
@@ -44,7 +49,7 @@ export function App({ client = defaultClient }: { client?: AdminApiClient }) {
           }}
         />
       )}
-    </main>
+    </div>
   );
 }
 
@@ -409,7 +414,7 @@ function AdminShell({
           ))}
         </nav>
       </aside>
-      <div className="workspace">
+      <main id="main-content" className="workspace" tabIndex={-1}>
         <header className="topbar">
           <div>
             <p className="eyebrow">Acme Production</p>
@@ -463,7 +468,7 @@ function AdminShell({
             onApprovalDecision={decideApproval}
           />
         )}
-      </div>
+      </main>
     </section>
   );
 }
