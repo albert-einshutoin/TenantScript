@@ -251,6 +251,13 @@ export {
 } from "./provider-secret-store-do.js";
 
 export {
+  createSlackOAuthClient,
+  SlackOAuthExchangeError,
+  type SlackOAuthExchangeErrorCode,
+  type SlackOAuthClientConfiguration
+} from "./slack-oauth-client.js";
+
+export {
   createProviderTokenRotationManager,
   ProviderTokenRotationStateError,
   type ProviderTokenResolutionSnapshot,
