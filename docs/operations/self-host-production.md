@@ -21,19 +21,25 @@ templates and live evidence.
 
 ## 2. Create D1 and render Wrangler config
 
-Create a production D1 database through the operator's normal Cloudflare process. Copy
+Create a production D1 database and private execution archive R2 bucket through the operator's
+normal Cloudflare process. Copy
 `deploy/self-host/production/wrangler-input.example.json` to an ignored local file, replace the
-synthetic setup run ID and database name/ID, and run the command documented in the deployment
-README. The Worker name is derived from the base name and a 96-bit digest of the internally derived
-reconcile key, so deploy and future ownership-aware cleanup share one stable target without exposing
-the run ID or full key.
+synthetic setup run ID, database name/ID, archive base bucket name, and reviewed hot-retention days,
+then run the command documented in the deployment README. Worker and R2 names are derived from their
+base names and 96-bit digests of operation-specific reconcile keys, so deploy and future
+ownership-aware cleanup share stable targets without exposing the run ID or full keys.
 Resource IDs are deployment metadata, but the repository still does not commit account-specific
 values.
+
+Use input schema version 2 for this retention composition. Version 1 remains readable for existing
+operators and deliberately renders the earlier D1/Worker-only baseline without an R2 binding or
+scheduled trigger; upgrading the schema never enables data movement implicitly.
 
 The renderer uses an exact input schema and emits only:
 
 - the Control Plane Worker entrypoint;
 - D1 binding `DB` and its migration directory;
+- private R2 binding `EXECUTION_ARCHIVE`, the explicit hot-retention value, and a daily trigger;
 - SQLite Durable Object binding `ADMIN_MUTATION_RATE_LIMITER_DO` and declarative `exports` lifecycle.
 
 It writes an explicit `.jsonc` output only at the repository root and only when the target does not
@@ -92,7 +98,10 @@ rotation runbook. The template does not guess or generate secrets.
   alert before provider or Cloudflare limits are exhausted.
 - **Retention:** document D1 hot retention and legal-hold requirements before enabling R2 archival.
   The accountless [R2 setup adapter](cloudflare-r2-setup-adapter.md) can reconcile separate buckets,
-  but they remain unwired in the generated Worker baseline. Do not claim long-term archive coverage.
+  and the generated baseline now wires only the execution archive bucket. Each daily invocation
+  processes at most one archive batch for each of 50 stable tenant/app scopes with expired rows
+  from `DB`; drained scopes leave the candidate set and later runs continue the backlog. This is not
+  sharded app-database or live long-term archive evidence.
 - **Telemetry:** TenantScript telemetry remains opt-in and off by default. Review the privacy contract
   before enabling it.
 - **Recovery:** retain the setup plan and operator-owned resource journal. Never delete an adopted
@@ -108,9 +117,10 @@ rotation runbook. The template does not guess or generate secrets.
 
 ## Known integration gaps
 
-Artifact and execution archive R2 now have an accountless create/adopt/cleanup adapter, but their
-Worker bindings and lifecycle policies remain absent from this baseline. Other missing composition
-includes the provider secret-store Durable Object, approval Workflow, Analytics Engine usage, and
-tenant runtime/dispatch binding. Track the remaining setup/IaC/Tier 2 work in
+Artifact and execution archive R2 have an accountless create/adopt/cleanup adapter. Execution
+archive R2 is wired for the compatibility `DB`; artifact storage and sharded retention composition
+remain absent. Other missing composition includes the provider secret-store Durable Object,
+approval Workflow, Analytics Engine usage, and tenant runtime/dispatch binding. Track the remaining
+setup/IaC/Tier 2 work in
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34). Their absence must remain
 visible in reviews and release evidence.

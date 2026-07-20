@@ -3,23 +3,28 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  deriveCloudflareR2BucketName,
   deriveControlPlaneWorkerName,
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   runExtCli,
   type CliIo,
-  type ProductionWranglerInputV1,
+  type ProductionWranglerInputV2,
   type RollbackClient
 } from "../src/index.js";
 
-const validInput: ProductionWranglerInputV1 = {
-  version: 1,
+const validInput: ProductionWranglerInputV2 = {
+  version: 2,
   baseWorkerName: "tenantscript-control-plane",
   setupRunId: "run-owned-worker",
   compatibilityDate: "2026-07-20",
   database: {
     name: "tenantscript-control-plane",
     id: "0123456789abcdef0123456789abcdef"
+  },
+  executionArchive: {
+    baseBucketName: "tenantscript-execution-archive",
+    hotRetentionDays: 30
   }
 };
 
@@ -36,6 +41,20 @@ afterEach(async () => {
 });
 
 describe("production Wrangler template", () => {
+  it("keeps version 1 inputs compatible without enabling retention implicitly", () => {
+    const legacy = renderProductionWranglerConfig({
+      version: 1,
+      baseWorkerName: validInput.baseWorkerName,
+      setupRunId: validInput.setupRunId,
+      compatibilityDate: validInput.compatibilityDate,
+      database: validInput.database
+    });
+
+    expect(JSON.parse(legacy)).not.toHaveProperty("r2_buckets");
+    expect(JSON.parse(legacy)).not.toHaveProperty("triggers");
+    expect(legacy).not.toContain("EXECUTION_ARCHIVE_HOT_RETENTION_DAYS");
+  });
+
   it("derives one stable non-reflective Worker target from the reconcile key", () => {
     const first = deriveControlPlaneWorkerName(validInput.baseWorkerName, validInput.setupRunId);
     const second = deriveControlPlaneWorkerName(validInput.baseWorkerName, validInput.setupRunId);
@@ -81,6 +100,20 @@ describe("production Wrangler template", () => {
           migrations_dir: "packages/control-plane/migrations"
         }
       ],
+      r2_buckets: [
+        {
+          binding: "EXECUTION_ARCHIVE",
+          bucket_name: deriveCloudflareR2BucketName(
+            validInput.executionArchive.baseBucketName,
+            validInput.setupRunId,
+            "create:execution-archive-r2"
+          )
+        }
+      ],
+      vars: {
+        EXECUTION_ARCHIVE_HOT_RETENTION_DAYS: "30"
+      },
+      triggers: { crons: ["0 2 * * *"] },
       durable_objects: {
         bindings: [
           {
@@ -98,7 +131,7 @@ describe("production Wrangler template", () => {
     });
     expect(JSON.parse(first)).not.toHaveProperty("migrations");
     expect(first).not.toMatch(
-      /ARTIFACTS|EXECUTION_ARCHIVE|PROVIDER_SECRET_STORE_DO|APPROVAL_WORKFLOW|USAGE_ANALYTICS/u
+      /ARTIFACTS|PROVIDER_SECRET_STORE_DO|APPROVAL_WORKFLOW|USAGE_ANALYTICS/u
     );
     expect(first).not.toMatch(/token|secret|account_id/iu);
   });
@@ -125,7 +158,27 @@ describe("production Wrangler template", () => {
       "unresolved database id",
       { ...validInput, database: { ...validInput.database, id: "${CONTROL_PLANE_D1_ID}" } }
     ],
-    ["invalid date", { ...validInput, compatibilityDate: "2026-02-30" }]
+    ["invalid date", { ...validInput, compatibilityDate: "2026-02-30" }],
+    [
+      "operator-selected archive target",
+      {
+        ...validInput,
+        executionArchive: {
+          bucketName: "operator-selected-target",
+          hotRetentionDays: 30
+        }
+      }
+    ],
+    [
+      "invalid hot retention",
+      {
+        ...validInput,
+        executionArchive: {
+          ...validInput.executionArchive,
+          hotRetentionDays: 0
+        }
+      }
+    ]
   ])("rejects %s without reflecting input", (_name, input) => {
     expect(() => parseProductionWranglerInput(input)).toThrow("wrangler input is invalid");
   });
