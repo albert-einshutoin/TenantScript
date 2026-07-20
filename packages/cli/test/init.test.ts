@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runExtCli, type CliIo, type RollbackClient } from "../src/index.js";
+import { renderPluginPackageJson } from "../src/plugin-scaffold.js";
 
 const tempDirs: string[] = [];
 
@@ -42,6 +43,12 @@ describe("ext init", () => {
     await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
       'hookName: "invoice.created"'
     );
+    await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
+      'hookName: "invoice.undeclared"'
+    );
+    await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
+      "expect(capability).not.toHaveBeenCalled()"
+    );
     expect(stdout).toEqual([
       JSON.stringify({
         name: "large-invoice-notify",
@@ -57,6 +64,44 @@ describe("ext init", () => {
     ]);
     expect(stderr).toEqual([]);
   });
+
+  it("pins generated TenantScript dependencies to the exact CLI package version", () => {
+    const packageJson = JSON.parse(
+      renderPluginPackageJson(
+        {
+          name: "large-invoice-notify",
+          directory: "/tmp/not-written",
+          hookName: "invoice.created",
+          hookType: "event"
+        },
+        "1.2.3"
+      )
+    ) as {
+      dependencies: Record<string, string>;
+    };
+
+    expect(packageJson.dependencies).toEqual({
+      "@tenantscript/manifest": "1.2.3",
+      "@tenantscript/plugin-sdk": "1.2.3"
+    });
+  });
+
+  it.each(["latest", "^1.2.3", "1.2", "1.2.3 || 2.0.0"])(
+    "rejects unsafe CLI package version metadata %s",
+    (version) => {
+      expect(() =>
+        renderPluginPackageJson(
+          {
+            name: "large-invoice-notify",
+            directory: "/tmp/not-written",
+            hookName: "invoice.created",
+            hookType: "event"
+          },
+          version
+        )
+      ).toThrow("CLI package version is invalid");
+    }
+  );
 
   it("supports transform hook scaffolds", async () => {
     const root = await createTempDir();

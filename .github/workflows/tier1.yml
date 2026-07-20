@@ -30,6 +30,7 @@ jobs:
       - run: pnpm test:api-surface
       - run: pnpm test:release-policy
       - run: pnpm test:release-automation
+      - run: pnpm test:agent-scaffold
       - run: pnpm test:packages
       - run: pnpm test:sbom
       - run: pnpm sbom:generate
