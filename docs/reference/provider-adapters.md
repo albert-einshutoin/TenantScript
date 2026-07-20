@@ -33,6 +33,17 @@ pluginへ公開してはいけません。
 `tenantscript/core`のgrantは`tenantscript/core-private`を許可しません。pluginは`authorization`等の
 追加fieldを渡せず、transportがtokenや余分なresponse dataを返した場合もfail closedになります。
 
+## Slack OAuth exchange
+
+`createSlackOAuthClient`はSlackの一時authorization codeをbot access tokenへ交換するtrusted transport
+です。固定origin、HTTP Basic client認証、exact HTTPS redirect allowlist、one-shot non-retry、64 KiB
+response上限を持ちます。providerの完全な成功responseを検証した後、tokenとworkspace metadataだけを
+既存`connectSlackWorkspace`境界へ渡します。refresh tokenやprovider errorは公開結果に含めません。
+
+これはprovider capabilityそのものでも公開callbackでもありません。stateの発行・検証を省略して直接
+公開routeから呼び出してはいけません。詳細と未実装境界は
+[Slack OAuth v2 exchange boundary](../operations/slack-oauth-exchange.md)を参照してください。
+
 ## 検証境界
 
 ```sh
@@ -40,6 +51,7 @@ pluginへ公開してはいけません。
 # expected-exit: 0
 pnpm --filter @tenantscript/capabilities exec vitest run test/github-provider.test.ts test/capability-contracts.test.ts
 pnpm --filter @tenantscript/capabilities test:security
+pnpm --filter @tenantscript/control-plane exec vitest run test/slack-oauth-client.test.ts
 ```
 
 これはaccountlessなadapter contractです。GitHub OAuth callback、GitHub App installation token発行、
