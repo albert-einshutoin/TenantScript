@@ -146,7 +146,11 @@ export async function executeProductionSetup(params: {
     try {
       result = await params.adapter.reconcile({
         runId: journal.runId,
-        idempotencyKey: idempotencyKey(journal.runId, operation.id, "reconcile"),
+        idempotencyKey: deriveSetupOperationIdempotencyKey(
+          journal.runId,
+          operation.id,
+          "reconcile"
+        ),
         operation
       });
       validateReconcileResult(operation, result, journal.approvedAdoptionOperationIds);
@@ -278,7 +282,7 @@ async function cleanupAndThrow(
     try {
       await params.adapter.cleanupCreated({
         runId: journal.runId,
-        idempotencyKey: idempotencyKey(journal.runId, operation.id, "cleanup"),
+        idempotencyKey: deriveSetupOperationIdempotencyKey(journal.runId, operation.id, "cleanup"),
         operation,
         resourceRef
       });
@@ -544,7 +548,7 @@ function fingerprintPlan(plan: ProductionSetupPlanV1): string {
     .digest("hex");
 }
 
-function idempotencyKey(
+export function deriveSetupOperationIdempotencyKey(
   runId: string,
   operationId: string,
   action: "reconcile" | "cleanup"
