@@ -48,7 +48,8 @@
   "dependencies": {
     "@tenantscript/control-plane": "workspace:*",
     "@tenantscript/loader": "workspace:*",
-    "@tenantscript/manifest": "workspace:*"
+    "@tenantscript/manifest": "workspace:*",
+    "jsonc-parser": "3.3.1"
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*"

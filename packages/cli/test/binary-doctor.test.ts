@@ -24,21 +24,7 @@ describe("binary Cloudflare doctor composition", () => {
         : CONTROL_PLANE_MIGRATION_MANIFEST.map(({ name }) => ({ name }));
       return Promise.resolve(response([{ success: true, results: rows, meta: {} }]));
     });
-    const readFile = vi.fn(() =>
-      Promise.resolve(
-        JSON.stringify({
-          d1_databases: [{ binding: "DB", database_id: databaseId }],
-          durable_objects: {
-            bindings: [
-              {
-                name: "ADMIN_MUTATION_RATE_LIMITER_DO",
-                class_name: "AdminMutationRateLimitDurableObject"
-              }
-            ]
-          }
-        })
-      )
-    );
+    const readFile = vi.fn(() => Promise.resolve(validWranglerConfig()));
     const runtime = createBinaryDoctorRuntime(
       { CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_API_TOKEN: apiToken },
       fetchImpl,
@@ -154,17 +140,19 @@ function d1Response(init: RequestInit): Response {
 }
 
 function validWranglerConfig(): string {
-  return JSON.stringify({
-    d1_databases: [{ binding: "DB", database_id: databaseId }],
-    durable_objects: {
-      bindings: [
-        {
-          name: "ADMIN_MUTATION_RATE_LIMITER_DO",
-          class_name: "AdminMutationRateLimitDurableObject"
-        }
-      ]
-    }
-  });
+  return `{
+    // The setup renderer emits JSON, but operators may maintain standard JSONC.
+    "d1_databases": [{
+      "binding": "DB",
+      "database_id": "${databaseId.replaceAll("-", "")}",
+    }],
+    "durable_objects": {
+      "bindings": [{
+        "name": "ADMIN_MUTATION_RATE_LIMITER_DO",
+        "class_name": "AdminMutationRateLimitDurableObject",
+      }],
+    },
+  }`;
 }
 
 async function captureError(promise: Promise<unknown>): Promise<Error & { code?: string }> {

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { parse, type ParseError } from "jsonc-parser";
 import {
   CloudflareApiError,
   createCloudflareApiTransport,
@@ -75,7 +76,12 @@ function parseWranglerBindingPresence(
   databaseId: string
 ): { DB: boolean; ADMIN_MUTATION_RATE_LIMITER_DO: boolean } {
   if (Buffer.byteLength(source, "utf8") > 65_536) throw new Error("invalid Wrangler config");
-  const value: unknown = JSON.parse(source);
+  const parseErrors: ParseError[] = [];
+  const value: unknown = parse(source, parseErrors, {
+    allowTrailingComma: true,
+    disallowComments: false
+  });
+  if (parseErrors.length > 0) throw new Error("invalid Wrangler config");
   if (!isRecord(value)) throw new Error("invalid Wrangler config");
   const databases = value.d1_databases ?? [];
   const durableObjects = isRecord(value.durable_objects)
@@ -85,7 +91,11 @@ function parseWranglerBindingPresence(
     throw new Error("invalid Wrangler config");
   }
   const matchingDatabases = databases.filter(
-    (entry) => isRecord(entry) && entry.binding === "DB" && entry.database_id === databaseId
+    (entry) =>
+      isRecord(entry) &&
+      entry.binding === "DB" &&
+      typeof entry.database_id === "string" &&
+      normalizeDatabaseId(entry.database_id) === normalizeDatabaseId(databaseId)
   );
   const targetDatabaseBindings = databases.filter(
     (entry) => isRecord(entry) && entry.binding === "DB"
@@ -106,6 +116,10 @@ function parseWranglerBindingPresence(
     DB: matchingDatabases.length === 1,
     ADMIN_MUTATION_RATE_LIMITER_DO: matchingDurableObjects.length === 1
   };
+}
+
+function normalizeDatabaseId(value: string): string {
+  return value.replaceAll("-", "");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
