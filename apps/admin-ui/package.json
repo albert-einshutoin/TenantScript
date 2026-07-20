@@ -7,7 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run && playwright test",
+    "test": "vitest run && playwright test --grep-invert @visual",
     "test:security": "vitest run src/security-suite.test.tsx",
     "test:coverage": "vitest run --coverage",
     "test:bundle-budget": "node ../../scripts/admin-ui-bundle-budget.test.mjs && vite build && node ../../scripts/admin-ui-bundle-budget.mjs dist bundle-budget.json",

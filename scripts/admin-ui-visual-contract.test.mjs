@@ -21,6 +21,7 @@ const states = ["empty", "loading", "error", "large-dataset", "confirmation-dial
 test("wires the deterministic visual suite into the Admin UI, root gate, and Tier 1", async () => {
   const adminPackage = await readJson("apps/admin-ui/package.json");
   assert.equal(adminPackage.devDependencies["@playwright/test"], "1.61.1");
+  assert.match(adminPackage.scripts.test, /--grep-invert @visual/u);
   assert.equal(adminPackage.scripts["test:visual"], "playwright test test/e2e/visual.spec.ts");
   assert.equal(
     adminPackage.scripts["test:visual:update:linux"],
@@ -57,6 +58,7 @@ test("fixes the viewport, route, state, and pixel comparison contracts", async (
     assert.ok(spec.includes(required), `visual E2E must include ${required}`);
   }
   assert.match(spec, /toHaveScreenshot/u);
+  assert.match(spec, /tag: "@visual"/u);
   assert.match(spec, /scrollWidth/u);
   assert.match(spec, /clientWidth/u);
   assert.match(spec, /reducedMotion: "reduce"/u);

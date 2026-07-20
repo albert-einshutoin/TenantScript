@@ -17,74 +17,78 @@ const surfaces = [
   { name: "audit-log", route: "Audit log" }
 ] as const;
 
-test.beforeEach(async ({ page }) => {
-  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
-});
+test.describe("visual regression", { tag: "@visual" }, () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  });
 
-for (const viewport of viewports) {
-  test(`matches every primary surface at ${String(viewport.width)}px`, async ({ page }) => {
-    await page.setViewportSize(viewport);
-    await page.goto("/");
-    await prepareForScreenshot(page);
-    await expect(page).toHaveScreenshot(`login-${String(viewport.width)}.png`, { fullPage: true });
-
-    await signIn(page);
-    for (const surface of surfaces) {
-      await page.getByRole("button", { name: surface.route }).click();
-      await expect(page.getByRole("heading", { level: 1, name: surface.route })).toBeVisible();
-      await expectRouteLoaded(page, surface.route);
-      if (viewport.width === 320) await expectMobileOverflowContained(page);
+  for (const viewport of viewports) {
+    test(`matches every primary surface at ${String(viewport.width)}px`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
       await prepareForScreenshot(page);
-      await expect(page).toHaveScreenshot(`${surface.name}-${String(viewport.width)}.png`, {
+      await expect(page).toHaveScreenshot(`login-${String(viewport.width)}.png`, {
         fullPage: true
       });
-    }
-  });
-}
 
-test.describe("major visual states", () => {
-  test.use({ viewport: { width: 1024, height: 900 } });
+      await signIn(page);
+      for (const surface of surfaces) {
+        await page.getByRole("button", { name: surface.route }).click();
+        await expect(page.getByRole("heading", { level: 1, name: surface.route })).toBeVisible();
+        await expectRouteLoaded(page, surface.route);
+        if (viewport.width === 320) await expectMobileOverflowContained(page);
+        await prepareForScreenshot(page);
+        await expect(page).toHaveScreenshot(`${surface.name}-${String(viewport.width)}.png`, {
+          fullPage: true
+        });
+      }
+    });
+  }
 
-  test("matches the empty state", async ({ page }) => {
-    await openVisualScenario(page, "empty");
-    await page.getByRole("button", { name: "Connections" }).click();
-    await expect(page.getByText("No provider connections yet")).toBeVisible();
-    await prepareForScreenshot(page);
-    await expect(page).toHaveScreenshot("empty-1024.png", { fullPage: true });
-  });
+  test.describe("major visual states", () => {
+    test.use({ viewport: { width: 1024, height: 900 } });
 
-  test("matches the loading state", async ({ page }) => {
-    await openVisualScenario(page, "loading");
-    await expect(page.getByText("Loading", { exact: true })).toBeVisible();
-    await prepareForScreenshot(page);
-    await expect(page).toHaveScreenshot("loading-1024.png", { fullPage: true });
-  });
+    test("matches the empty state", async ({ page }) => {
+      await openVisualScenario(page, "empty");
+      await page.getByRole("button", { name: "Connections" }).click();
+      await expect(page.getByText("No provider connections yet")).toBeVisible();
+      await prepareForScreenshot(page);
+      await expect(page).toHaveScreenshot("empty-1024.png", { fullPage: true });
+    });
 
-  test("matches the error state", async ({ page }) => {
-    await openVisualScenario(page, "error");
-    await expect(page.getByText("Dashboard unavailable")).toBeVisible();
-    await prepareForScreenshot(page);
-    await expect(page).toHaveScreenshot("error-1024.png", { fullPage: true });
-  });
+    test("matches the loading state", async ({ page }) => {
+      await openVisualScenario(page, "loading");
+      await expect(page.getByText("Loading", { exact: true })).toBeVisible();
+      await prepareForScreenshot(page);
+      await expect(page).toHaveScreenshot("loading-1024.png", { fullPage: true });
+    });
 
-  test("matches a large dataset without page overflow", async ({ page }) => {
-    await openVisualScenario(page, "large-dataset");
-    await page.getByRole("button", { name: "Installations" }).click();
-    await expect(page.getByText("visual-plugin-35-with-bounded-synthetic-name")).toBeVisible();
-    await prepareForScreenshot(page);
-    await expect(page).toHaveScreenshot("large-dataset-1024.png", { fullPage: true });
-  });
+    test("matches the error state", async ({ page }) => {
+      await openVisualScenario(page, "error");
+      await expect(page.getByText("Dashboard unavailable")).toBeVisible();
+      await prepareForScreenshot(page);
+      await expect(page).toHaveScreenshot("error-1024.png", { fullPage: true });
+    });
 
-  test("matches a privileged confirmation dialog", async ({ page }) => {
-    await openVisualScenario(page, "default");
-    await page.getByRole("button", { name: "Versions" }).click();
-    await page
-      .getByRole("button", { name: "Rollback large-invoice-notify from 1.3.0 to 1.2.2" })
-      .first()
-      .click();
-    await expect(page.getByRole("dialog", { name: "Confirm plugin rollback" })).toBeVisible();
-    await prepareForScreenshot(page);
-    await expect(page).toHaveScreenshot("confirmation-dialog-1024.png", { fullPage: true });
+    test("matches a large dataset without page overflow", async ({ page }) => {
+      await openVisualScenario(page, "large-dataset");
+      await page.getByRole("button", { name: "Installations" }).click();
+      await expect(page.getByText("visual-plugin-35-with-bounded-synthetic-name")).toBeVisible();
+      await prepareForScreenshot(page);
+      await expect(page).toHaveScreenshot("large-dataset-1024.png", { fullPage: true });
+    });
+
+    test("matches a privileged confirmation dialog", async ({ page }) => {
+      await openVisualScenario(page, "default");
+      await page.getByRole("button", { name: "Versions" }).click();
+      await page
+        .getByRole("button", { name: "Rollback large-invoice-notify from 1.3.0 to 1.2.2" })
+        .first()
+        .click();
+      await expect(page.getByRole("dialog", { name: "Confirm plugin rollback" })).toBeVisible();
+      await prepareForScreenshot(page);
+      await expect(page).toHaveScreenshot("confirmation-dialog-1024.png", { fullPage: true });
+    });
   });
 });
 
