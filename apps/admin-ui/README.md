@@ -31,6 +31,11 @@ tenant, plugin, current version, and target version. The UI waits for the audite
 refreshes the dashboard before treating the operation as complete, and exposes the audit ID,
 completion timestamp, UI duration, and execution-log navigation needed by the rollback drill.
 
+The Overview screen shows app-wide hook schema migration usage to `owner`, `admin`, and the legacy
+`manager` claim. `operator` and `viewer` do not receive blocker details. A zero count is operational
+evidence only; the host publishing workflow must still use the removal gate documented in
+[`docs/operations/schema-migrations.md`](../../docs/operations/schema-migrations.md).
+
 ## Control Plane connection
 
 Set the Pages build variable to the HTTPS Worker origin (loopback HTTP is accepted for local
@@ -48,6 +53,8 @@ Configure these Worker bindings:
   `subject`, `role` (`manager` or `viewer`), `appId`, and `tenantId`.
 - `ADMIN_CURSOR_SECRET`: secret with at least 32 bytes used to authenticate tenant- and
   section-scoped pagination cursors.
+- `ADMIN_HOOK_SCHEMA_CATALOG_JSON`: JSON object mapping each hook name to every published stable
+  schema version. Use the same catalog as host payload routing.
 - `DB`: D1 binding with every migration in `packages/control-plane/migrations/` applied in order.
 
 `ADMIN_IDENTITIES_JSON` and `ADMIN_CURSOR_SECRET` are design-partner bootstrap secrets and must be

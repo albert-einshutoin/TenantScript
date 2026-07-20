@@ -67,8 +67,9 @@ an invalid range, duplicate published versions, or invalid adapter output blocks
 silently skipping an installation.
 
 Run `ext schema diff` before adding the candidate publication. Keep the old publication until
-migration tracking reports no installations whose range requires it; the deprecation/removal gate is
-tracked by Phase 2 P2-T17.
+migration tracking reports no installations whose range requires it. Follow the
+[hook schema migration operations](../operations/schema-migrations.md) runbook for the app-wide
+Admin UI evidence and the mandatory removal assertion.
 
 ## Field removal
 

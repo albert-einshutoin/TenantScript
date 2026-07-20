@@ -89,7 +89,7 @@
   - RED: hook schema v1/v2 並行配信中、plugin の互換 range に応じて正しい schema の payload が届く
   - DoD: 並行配信テスト green
 
-- [ ] **P2-T17**(M)migration tracking
+- [x] **P2-T17**(M)migration tracking
   - RED: 全 installation の対応 schema version が集計され、v1 利用ゼロになるまで v1 廃止操作がブロックされる
   - DoD: 追跡・ブロックのテスト green(Admin UI に表示)
 
