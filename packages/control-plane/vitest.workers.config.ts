@@ -25,7 +25,8 @@ export default defineConfig({
         r2Buckets: ["ARTIFACTS"],
         durableObjects: {
           PROBE_DO: "ProbeDurableObject",
-          ADMIN_MUTATION_RATE_LIMITER_DO: "AdminMutationRateLimitDurableObject"
+          ADMIN_MUTATION_RATE_LIMITER_DO: "AdminMutationRateLimitDurableObject",
+          PROVIDER_SECRET_STORE_DO: "ProviderSecretStoreDurableObject"
         },
         bindings: {
           ADMIN_ALLOWED_ORIGINS: '["https://admin.example.com"]',
@@ -34,6 +35,10 @@ export default defineConfig({
             '{"worker-manager-token":{"subject":"worker-manager","role":"manager","appId":"app_worker","tenantId":"tenant_worker"},"worker-operator-token":{"subject":"worker-operator","role":"operator","appId":"app_worker","tenantId":"tenant_worker"}}',
           ADMIN_MUTATION_RATE_LIMIT: "2",
           ADMIN_MUTATION_RATE_WINDOW_SECONDS: "60",
+          PROVIDER_SECRET_KEYRING_JSON: JSON.stringify({
+            currentKeyId: "test-key-v1",
+            keys: [{ id: "test-key-v1", material: "A".repeat(43) }]
+          }),
           // This independent snapshot prevents edits to old canonical migrations from silently
           // redefining the data shape that the upgrade compatibility test starts from.
           BASELINE_MIGRATIONS: await readD1Migrations(

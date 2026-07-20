@@ -46,6 +46,7 @@ import {
   createUsageMeter,
   type AnalyticsEngineDatasetLike
 } from "./usage-meter.js";
+export { ProviderSecretStoreDurableObject } from "./provider-secret-store-do.js";
 
 const SCHEDULED_RETENTION_SCOPE_LIMIT = 50;
 
@@ -60,6 +61,8 @@ interface ControlPlaneWorkerEnv {
   APP_DATABASE_ROUTES_JSON?: string;
   EXECUTION_ARCHIVE?: R2BucketLike;
   EXECUTION_ARCHIVE_HOT_RETENTION_DAYS?: string;
+  PROVIDER_SECRET_KEYRING_JSON?: string;
+  PROVIDER_SECRET_STORE_DO?: DurableObjectNamespace;
   TENANTSCRIPT_TELEMETRY_ENABLED?: string;
   TENANTSCRIPT_TELEMETRY_ENDPOINT?: string;
   TENANTSCRIPT_PRODUCT_VERSION?: string;
