@@ -59,6 +59,15 @@ export {
 } from "./setup-executor.js";
 
 export {
+  CloudflareApiError,
+  createCloudflareApiTransport,
+  type CloudflareApiErrorCode,
+  type CloudflareApiTransport,
+  type CloudflareFetch,
+  type CloudflareHttpMethod
+} from "./cloudflare-api-transport.js";
+
+export {
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   type ProductionWranglerInputV1

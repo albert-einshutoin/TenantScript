@@ -17,7 +17,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:security": "vitest run test/setup-executor.test.ts test/wrangler-template.test.ts",
+    "test:security": "vitest run test/cloudflare-api-transport.test.ts test/setup-executor.test.ts test/wrangler-template.test.ts",
     "rollback:drill": "node scripts/rollback-drill.mjs"
   },
   "dependencies": {
