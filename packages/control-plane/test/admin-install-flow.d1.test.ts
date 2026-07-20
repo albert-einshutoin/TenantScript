@@ -224,7 +224,7 @@ function versionRow(manifest: TenantScriptManifest): VersionRow {
 const baseManifest = {
   name: "invoice-notify",
   version: "1.0.0",
-  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
   egress: { mode: "deny" },
   limits: { cpuMs: 50, timeoutMs: 500 }
 } satisfies Omit<TenantScriptManifest, "capabilities" | "configSchema">;

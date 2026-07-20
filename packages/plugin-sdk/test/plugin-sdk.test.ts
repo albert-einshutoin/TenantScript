@@ -6,9 +6,9 @@ const manifest = {
   name: "workflow-plugin",
   version: "0.1.0",
   hooks: [
-    { name: "invoice.created", type: "event", timeoutMs: 250 },
-    { name: "webhook.outbound", type: "transform", timeoutMs: 250 },
-    { name: "invoice.approve", type: "policy", timeoutMs: 250 }
+    { name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" },
+    { name: "webhook.outbound", type: "transform", timeoutMs: 250, schemaVersionRange: "^1.0.0" },
+    { name: "invoice.approve", type: "policy", timeoutMs: 250, schemaVersionRange: "^1.0.0" }
   ],
   capabilities: {
     "slack.send": { channel: "C123" }

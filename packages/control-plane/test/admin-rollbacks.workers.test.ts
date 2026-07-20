@@ -221,7 +221,9 @@ function manifest(version: string): TenantScriptManifest {
   return {
     name: "invoice-notify",
     version,
-    hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+    hooks: [
+      { name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }
+    ],
     capabilities: { "slack.send": { channel: "$config.notifyChannel" } },
     configSchema: {
       properties: { notifyChannel: { type: "string" } },

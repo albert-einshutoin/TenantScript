@@ -1069,7 +1069,7 @@ function manifestTemplate(request: InitRequest): string {
 export const manifest = {
   name: "${request.name}",
   version: "0.1.0",
-  hooks: [{ name: "${request.hookName}", type: "${request.hookType}", timeoutMs: 250 }],
+  hooks: [{ name: "${request.hookName}", type: "${request.hookType}", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
   capabilities: {},
   configSchema: {
     properties: {},

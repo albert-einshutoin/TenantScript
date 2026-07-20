@@ -53,6 +53,23 @@ No Cloudflare account, network access, or secret is required for the comparison.
 Tier 1. Publishing the accepted schema or exercising it against a live Cloudflare runtime belongs
 in a maintainer-controlled Tier 2 job.
 
+## Dual-publish compatibility ranges
+
+Each plugin manifest hook declares a semver `schemaVersionRange`, such as `^1.0.0`. This range is
+the host payload contract and is independent from the plugin package `version`. During a breaking
+schema migration, the host publishes old and new `VersionedHookSchema` entries together and uses
+`routeHookPayloads` to choose the highest compatible stable version for every enabled installation.
+
+The projection adapter starts from the host's canonical payload and produces the selected older or
+newer shape. Tenant identity and host-only metadata must not be synthesized from plugin input. The
+adapter output is validated against the selected Zod schema before dispatch; no compatible version,
+an invalid range, duplicate published versions, or invalid adapter output blocks dispatch instead of
+silently skipping an installation.
+
+Run `ext schema diff` before adding the candidate publication. Keep the old publication until
+migration tracking reports no installations whose range requires it; the deprecation/removal gate is
+tracked by Phase 2 P2-T17.
+
 ## Field removal
 
 Removing `memo` is breaking because an existing plugin may still read it.

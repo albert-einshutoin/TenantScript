@@ -2,17 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   defineHooks,
+  HookSchemaCompatibilityError,
   hookFailureKinds,
   retryPolicyForHookType,
   shouldRetryHookFailure,
   planExecution,
   runHook,
+  routeHookPayloads,
   runTransformChain,
   runWithRetryPolicy,
   type HookType,
   type HookDefinition,
   type HooksDefinition,
-  type Installation
+  type SchemaCompatibleInstallation
 } from "../src/index.js";
 
 const invoicePayloadSchema = z.object({
@@ -90,6 +92,178 @@ describe("runHook", () => {
     }));
 
     expect(result).toEqual({ ok: true, value: { accepted: true } });
+  });
+});
+
+describe("schema dual-publish routing", () => {
+  const schemaV1 = {
+    version: "1.0.0",
+    payloadSchema: z.object({ invoiceId: z.string() }).strict(),
+    project: (payload: { invoiceId: string; amountCents: number }) => ({
+      invoiceId: payload.invoiceId
+    })
+  };
+  const schemas = [
+    schemaV1,
+    {
+      version: "2.0.0",
+      payloadSchema: invoicePayloadSchema.strict(),
+      project: (payload: { invoiceId: string; amountCents: number }) => payload
+    }
+  ];
+
+  it("delivers the highest compatible payload schema to each installation", () => {
+    const deliveries = routeHookPayloads({
+      hookName: "invoice.created",
+      payload: { invoiceId: "inv_1", amountCents: 5_000 },
+      schemas,
+      installations: [
+        installation({
+          id: "v1-only",
+          hookSchemaRanges: { "invoice.created": "^1.0.0" }
+        }),
+        installation({
+          id: "v2-only",
+          hookSchemaRanges: { "invoice.created": "^2.0.0" }
+        }),
+        installation({
+          id: "both",
+          hookSchemaRanges: { "invoice.created": ">=1.0.0 <3.0.0" }
+        })
+      ]
+    });
+
+    expect(deliveries).toEqual([
+      {
+        installationId: "v1-only",
+        pluginId: "plugin",
+        schemaVersion: "1.0.0",
+        payload: { invoiceId: "inv_1" }
+      },
+      {
+        installationId: "v2-only",
+        pluginId: "plugin",
+        schemaVersion: "2.0.0",
+        payload: { invoiceId: "inv_1", amountCents: 5_000 }
+      },
+      {
+        installationId: "both",
+        pluginId: "plugin",
+        schemaVersion: "2.0.0",
+        payload: { invoiceId: "inv_1", amountCents: 5_000 }
+      }
+    ]);
+  });
+
+  it("fails closed when an enabled installation has no compatible published schema", () => {
+    expect(() =>
+      routeHookPayloads({
+        hookName: "invoice.created",
+        payload: { invoiceId: "inv_1", amountCents: 5_000 },
+        schemas,
+        installations: [
+          installation({
+            id: "v3-only",
+            hookSchemaRanges: { "invoice.created": "^3.0.0" }
+          })
+        ]
+      })
+    ).toThrow(
+      new HookSchemaCompatibilityError(
+        "installation v3-only has no compatible invoice.created schema for range ^3.0.0"
+      )
+    );
+  });
+
+  it("rejects adapter output that does not satisfy the selected schema", () => {
+    expect(() =>
+      routeHookPayloads({
+        hookName: "invoice.created",
+        payload: { invoiceId: "inv_1", amountCents: 5_000 },
+        schemas: [
+          {
+            version: "1.0.0",
+            payloadSchema: z.object({ invoiceId: z.string() }).strict(),
+            project: () => ({ invoiceId: 42 })
+          }
+        ],
+        installations: [
+          installation({
+            id: "invalid-projection",
+            hookSchemaRanges: { "invoice.created": "^1.0.0" }
+          })
+        ]
+      })
+    ).toThrow("schema adapter produced an invalid invoice.created@1.0.0 payload");
+  });
+
+  it.each([
+    {
+      name: "invalid",
+      schemas: [{ ...schemaV1, version: "v1" }],
+      message: "published invoice.created schema version v1 is invalid"
+    },
+    {
+      name: "duplicate",
+      schemas: [schemaV1, schemaV1],
+      message: "published invoice.created schema version 1.0.0 is duplicated"
+    }
+  ])("rejects $name published schema versions", ({ schemas: invalidSchemas, message }) => {
+    expect(() =>
+      routeHookPayloads({
+        hookName: "invoice.created",
+        payload: { invoiceId: "inv_1", amountCents: 5_000 },
+        schemas: invalidSchemas,
+        installations: []
+      })
+    ).toThrow(message);
+  });
+
+  it("does not reflect adapter errors or payloads across the host boundary", () => {
+    expect(() =>
+      routeHookPayloads({
+        hookName: "invoice.created",
+        payload: { invoiceId: "customer-secret", amountCents: 5_000 },
+        schemas: [
+          {
+            ...schemaV1,
+            project: () => {
+              throw new Error("customer-secret");
+            }
+          }
+        ],
+        installations: [
+          installation({
+            id: "adapter-failure",
+            hookSchemaRanges: { "invoice.created": "^1.0.0" }
+          })
+        ]
+      })
+    ).toThrow("schema adapter failed for invoice.created@1.0.0");
+  });
+
+  it("requires a valid range for every enabled hook installation", () => {
+    expect(() =>
+      routeHookPayloads({
+        hookName: "invoice.created",
+        payload: { invoiceId: "inv_1", amountCents: 5_000 },
+        schemas,
+        installations: [installation({ hookSchemaRanges: {} })]
+      })
+    ).toThrow("installation inst has no valid invoice.created schema range");
+  });
+
+  it("projects each selected schema once per hook routing call", () => {
+    const project = vi.fn(schemaV1.project);
+
+    routeHookPayloads({
+      hookName: "invoice.created",
+      payload: { invoiceId: "inv_1", amountCents: 5_000 },
+      schemas: [{ ...schemaV1, project }],
+      installations: [installation({ id: "first" }), installation({ id: "second" })]
+    });
+
+    expect(project).toHaveBeenCalledOnce();
   });
 });
 
@@ -207,7 +381,9 @@ describe("planExecution", () => {
   });
 });
 
-function installation(overrides: Partial<Installation>): Installation {
+function installation(
+  overrides: Partial<SchemaCompatibleInstallation>
+): SchemaCompatibleInstallation {
   return {
     id: "inst",
     tenantId: "tenant_1",
@@ -215,6 +391,7 @@ function installation(overrides: Partial<Installation>): Installation {
     enabled: true,
     priority: 10,
     hooks: ["invoice.created"],
+    hookSchemaRanges: { "invoice.created": "^1.0.0" },
     ...overrides
   };
 }

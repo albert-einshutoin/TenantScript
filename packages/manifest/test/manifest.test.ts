@@ -10,7 +10,14 @@ import {
 const validManifest = {
   name: "large-invoice-notify",
   version: "1.2.3",
-  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+  hooks: [
+    {
+      name: "invoice.created",
+      type: "event",
+      timeoutMs: 250,
+      schemaVersionRange: "^1.0.0"
+    }
+  ],
   capabilities: {
     "slack.send": {
       channel: "$config.notifyChannel",
@@ -51,6 +58,11 @@ describe("parseManifest", () => {
       { hooks: [{ name: "invoice.created", type: "event" }] },
       "hooks.0.timeoutMs"
     ],
+    [
+      "missing hook schema range",
+      { hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }] },
+      "hooks.0.schemaVersionRange"
+    ],
     ["invalid egress mode", { egress: { mode: "open" } }, "egress.mode"],
     [
       "config default not matching declared type",
@@ -64,7 +76,21 @@ describe("parseManifest", () => {
     ],
     ["empty hooks", { hooks: [] }, "hooks"],
     ["unknown top-level key", { unknown: true }, ""],
-    ["invalid version format", { version: "v1" }, "version"]
+    ["invalid version format", { version: "v1" }, "version"],
+    [
+      "invalid hook schema range",
+      {
+        hooks: [
+          {
+            name: "invoice.created",
+            type: "event",
+            timeoutMs: 250,
+            schemaVersionRange: "latest"
+          }
+        ]
+      },
+      "hooks.0.schemaVersionRange"
+    ]
   ])("rejects %s", (_name, override, path) => {
     const result = parseManifest({ ...validManifest, ...override });
 
