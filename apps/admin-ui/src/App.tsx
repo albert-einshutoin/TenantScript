@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode
+} from "react";
 import {
   createUnavailableAdminApiClient,
   AdminApiError,
@@ -651,7 +659,7 @@ function ConnectionsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
       {snapshot.providerConnections.length === 0 ? (
         <p className="empty-state">No provider connections yet</p>
       ) : (
-        <div className="table-wrap">
+        <TableViewport label="Provider connection table">
           <table>
             <thead>
               <tr>
@@ -674,7 +682,7 @@ function ConnectionsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableViewport>
       )}
     </section>
   );
@@ -695,7 +703,7 @@ function AuditPanel({
       {snapshot.auditEvents.length === 0 ? (
         <p className="empty-state">No audit events yet</p>
       ) : (
-        <div className="table-wrap">
+        <TableViewport label="Tenant audit event table">
           <table>
             <thead>
               <tr>
@@ -722,7 +730,7 @@ function AuditPanel({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableViewport>
       )}
       <LoadMoreButton
         section="audit events"
@@ -802,7 +810,7 @@ function SchemaMigrationsPanel({
       {migrations.length === 0 ? (
         <p>No schema migrations configured</p>
       ) : (
-        <div className="table-wrap">
+        <TableViewport label="Schema migration table">
           <table>
             <thead>
               <tr>
@@ -850,7 +858,7 @@ function SchemaMigrationsPanel({
               )}
             </tbody>
           </table>
-        </div>
+        </TableViewport>
       )}
       {migrations.some((migration) => migration.incompatibleInstallations.length > 0) ? (
         <div className="form-error">
@@ -901,7 +909,7 @@ function InstallationsPanel({
   return (
     <section className="data-panel">
       <PanelHeader title="Installations" detail="Tenant scoped plugins" />
-      <div className="table-wrap">
+      <TableViewport label="Installation table">
         <table>
           <thead>
             <tr>
@@ -953,7 +961,7 @@ function InstallationsPanel({
             ))}
           </tbody>
         </table>
-      </div>
+      </TableViewport>
       <LoadMoreButton
         section="installations"
         cursor={snapshot.cursors.installations}
@@ -1068,7 +1076,13 @@ function InstallationCommandPanel({
       </button>
       {error === null ? null : <p className="form-error">{error}</p>}
       {!confirming ? null : (
-        <div role="dialog" aria-modal="true" aria-label="Confirm installation change">
+        <ModalDialog
+          label="Confirm installation change"
+          cancelDisabled={commandInFlight}
+          onCancel={() => {
+            setConfirming(false);
+          }}
+        >
           <p>
             Change enabled to {String(enabled)} and priority to {String(parsedPriority)}?
           </p>
@@ -1084,7 +1098,7 @@ function InstallationCommandPanel({
           >
             Cancel
           </button>
-        </div>
+        </ModalDialog>
       )}
     </section>
   );
@@ -1209,7 +1223,7 @@ function VersionsPanel({
   return (
     <section className="data-panel">
       <PanelHeader title="Versions" detail="Pinned artifacts" />
-      <div className="table-wrap">
+      <TableViewport label="Plugin version table">
         <table>
           <thead>
             <tr>
@@ -1281,7 +1295,7 @@ function VersionsPanel({
             })}
           </tbody>
         </table>
-      </div>
+      </TableViewport>
       <LoadMoreButton
         section="versions"
         cursor={snapshot.cursors.pluginVersions}
@@ -1301,7 +1315,13 @@ function VersionsPanel({
       )}
       {rollbackError === null ? null : <p className="form-error">{rollbackError}</p>}
       {rollbackTarget === null ? null : (
-        <div role="dialog" aria-modal="true" aria-label="Confirm plugin rollback">
+        <ModalDialog
+          label="Confirm plugin rollback"
+          cancelDisabled={rollbackInFlight}
+          onCancel={() => {
+            setRollbackTarget(null);
+          }}
+        >
           <p>Tenant: {tenantId}</p>
           <p>Plugin: {rollbackTarget.version.pluginKey}</p>
           <p>From: {rollbackTarget.installation.version}</p>
@@ -1318,7 +1338,7 @@ function VersionsPanel({
           >
             Cancel
           </button>
-        </div>
+        </ModalDialog>
       )}
       {rollbackResult === null ? null : (
         <section aria-label="Rollback result">
@@ -1521,14 +1541,16 @@ function InstallFlowPanel({
         </section>
       )}
       {!confirming ? null : (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={
+        <ModalDialog
+          label={
             mode === "install"
               ? "Confirm plugin installation"
               : "Confirm installation approval request"
           }
+          cancelDisabled={installInFlight}
+          onCancel={() => {
+            setConfirming(false);
+          }}
         >
           <p>
             Install {preview.pluginKey} {preview.version} with {String(preview.capabilities.length)}{" "}
@@ -1552,7 +1574,7 @@ function InstallFlowPanel({
           >
             Cancel
           </button>
-        </div>
+        </ModalDialog>
       )}
     </section>
   );
@@ -1682,7 +1704,14 @@ function ApprovalsPanel({
       </div>
       {decisionError === null ? null : <p className="form-error">{decisionError}</p>}
       {confirmation === null ? null : (
-        <div role="dialog" aria-modal="true" aria-label="Confirm approval decision">
+        <ModalDialog
+          label="Confirm approval decision"
+          cancelDisabled={submitting}
+          onCancel={() => {
+            setConfirmation(null);
+            setReason("");
+          }}
+        >
           <p>Tenant: {tenantId}</p>
           <p>Approval: {confirmation.approval.id}</p>
           <p>Decision: {confirmation.decision}</p>
@@ -1709,7 +1738,7 @@ function ApprovalsPanel({
           >
             Cancel
           </button>
-        </div>
+        </ModalDialog>
       )}
       {result === null ? null : (
         <section aria-label="Approval decision result">
@@ -2022,6 +2051,84 @@ function PanelHeader({ title, detail }: { title: string; detail: string }) {
       <span>{detail}</span>
     </div>
   );
+}
+
+function TableViewport({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="table-wrap" role="region" aria-label={label} tabIndex={0}>
+      {children}
+    </div>
+  );
+}
+
+function ModalDialog({
+  label,
+  children,
+  cancelDisabled,
+  onCancel
+}: {
+  label: string;
+  children: ReactNode;
+  cancelDisabled: boolean;
+  onCancel: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const returnTarget =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = requestAnimationFrame(() => {
+      focusableDialogElements(dialogRef.current)[0]?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (returnTarget?.isConnected === true) returnTarget.focus();
+    };
+  }, []);
+
+  const trapFocus = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const focusable = focusableDialogElements(dialogRef.current);
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (first === undefined || last === undefined) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }, []);
+
+  return (
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !cancelDisabled) {
+          event.preventDefault();
+          onCancel();
+          return;
+        }
+        trapFocus(event);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function focusableDialogElements(dialog: HTMLDivElement | null): HTMLElement[] {
+  if (dialog === null) return [];
+  // Dialog focus must stay on interactive, enabled controls; hidden or disabled actions cannot be
+  // safe focus targets while a privileged operation is in flight.
+  return Array.from(
+    dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((element) => element.getClientRects().length > 0);
 }
 
 function adminMutationErrorMessage(cause: unknown, fallback: string): string {
