@@ -64,6 +64,25 @@ describe("setup provider router", () => {
     expect(calls).toEqual([`d1:cleanup:${createD1.id}:r2:attacker-controlled`]);
   });
 
+  it("forwards reconcile attempt context unchanged to the exact owner", async () => {
+    const attempts: string[] = [];
+    const adapter: SetupProviderAdapter = {
+      reconcile: (request) => {
+        attempts.push(request.attempt);
+        return { disposition: "created", resourceRef: "d1:owned" };
+      },
+      cleanupCreated: () => undefined
+    };
+    const router = createSetupProviderRouter({
+      requiredOperationIds: [createD1.id],
+      routes: [{ operationIds: [createD1.id], adapter }]
+    });
+
+    await router.reconcile({ ...reconcileRequest(createD1), attempt: "resume" });
+
+    expect(attempts).toEqual(["resume"]);
+  });
+
   it("fails closed for an unregistered operation without calling a delegate", async () => {
     const calls: string[] = [];
     const router = createSetupProviderRouter({
@@ -314,6 +333,7 @@ function recordingAdapter(name: string, calls: string[]): SetupProviderAdapter {
 
 function reconcileRequest(operationValue: SetupOperation) {
   return {
+    attempt: "initial" as const,
     runId,
     idempotencyKey: key(operationValue, "reconcile"),
     operation: operationValue

@@ -31,7 +31,12 @@ describe("Cloudflare D1 setup adapter", () => {
     });
 
     await expect(
-      adapter.reconcile({ runId, idempotencyKey: reconcileKey, operation: createOperation })
+      adapter.reconcile({
+        attempt: "initial",
+        runId,
+        idempotencyKey: reconcileKey,
+        operation: createOperation
+      })
     ).resolves.toEqual({ disposition: "created", resourceRef: `d1:${databaseId}` });
 
     expect(requests).toHaveLength(2);
@@ -60,7 +65,12 @@ describe("Cloudflare D1 setup adapter", () => {
       }),
       database: { mode: "create", baseName: "tenantscript-control-plane" }
     });
-    await initial.reconcile({ runId, idempotencyKey: reconcileKey, operation: createOperation });
+    await initial.reconcile({
+      attempt: "initial",
+      runId,
+      idempotencyKey: reconcileKey,
+      operation: createOperation
+    });
 
     const resumedRequests: RecordedRequest[] = [];
     const resumed = createCloudflareD1SetupAdapter({
@@ -71,7 +81,12 @@ describe("Cloudflare D1 setup adapter", () => {
     });
 
     await expect(
-      resumed.reconcile({ runId, idempotencyKey: reconcileKey, operation: createOperation })
+      resumed.reconcile({
+        attempt: "initial",
+        runId,
+        idempotencyKey: reconcileKey,
+        operation: createOperation
+      })
     ).resolves.toEqual({ disposition: "created", resourceRef: `d1:${databaseId}` });
     expect(resumedRequests).toEqual([
       {
@@ -93,7 +108,12 @@ describe("Cloudflare D1 setup adapter", () => {
     });
 
     await expect(
-      adapter.reconcile({ runId, idempotencyKey: reconcileKey, operation: createOperation })
+      adapter.reconcile({
+        attempt: "initial",
+        runId,
+        idempotencyKey: reconcileKey,
+        operation: createOperation
+      })
     ).resolves.toEqual({ disposition: "adopted", resourceRef: `d1:${databaseId}` });
     expect(requests).toEqual([
       {
@@ -115,6 +135,7 @@ describe("Cloudflare D1 setup adapter", () => {
 
     await expect(
       adapter.reconcile({
+        attempt: "initial",
         runId,
         idempotencyKey: deriveSetupOperationIdempotencyKey(runId, declareOperation.id, "reconcile"),
         operation: declareOperation
@@ -149,7 +170,12 @@ describe("Cloudflare D1 setup adapter", () => {
       });
 
       const error = await captureAdapterError(
-        adapter.reconcile({ runId, idempotencyKey: reconcileKey, operation: createOperation })
+        adapter.reconcile({
+          attempt: "initial",
+          runId,
+          idempotencyKey: reconcileKey,
+          operation: createOperation
+        })
       );
       expect(error.code).toBe("cloudflare_d1_invalid_response");
       expect(JSON.stringify(error)).not.toContain("operator-secret");
@@ -166,7 +192,12 @@ describe("Cloudflare D1 setup adapter", () => {
     });
 
     const error = await captureAdapterError(
-      adapter.reconcile({ runId, idempotencyKey: reconcileKey, operation: createOperation })
+      adapter.reconcile({
+        attempt: "initial",
+        runId,
+        idempotencyKey: reconcileKey,
+        operation: createOperation
+      })
     );
     expect(error.code).toBe("cloudflare_d1_invalid_response");
     expect(JSON.stringify(error)).not.toContain("operator-secret");
@@ -181,6 +212,7 @@ describe("Cloudflare D1 setup adapter", () => {
 
     const error = await captureAdapterError(
       adapter.reconcile({
+        attempt: "initial",
         runId,
         idempotencyKey: `tssetup-${"0".repeat(64)}`,
         operation: createOperation
@@ -189,6 +221,32 @@ describe("Cloudflare D1 setup adapter", () => {
     expect(error.code).toBe("cloudflare_d1_invalid_request");
     expect(requests).toEqual([]);
   });
+
+  it.each([
+    { runId, idempotencyKey: reconcileKey, operation: createOperation },
+    { runId, idempotencyKey: reconcileKey, attempt: "retry", operation: createOperation },
+    {
+      runId,
+      idempotencyKey: reconcileKey,
+      attempt: "initial",
+      operation: createOperation,
+      secret: "secret-sentinel"
+    }
+  ])(
+    "rejects missing, unknown, or widened reconcile attempt before provider access",
+    async (request) => {
+      const requests: RecordedRequest[] = [];
+      const adapter = createCloudflareD1SetupAdapter({
+        transport: recordingTransport(requests, () => null),
+        database: { mode: "create", baseName: "tenantscript-control-plane" }
+      });
+
+      await expect(adapter.reconcile(request as never)).rejects.toMatchObject({
+        code: "cloudflare_d1_invalid_request"
+      });
+      expect(requests).toEqual([]);
+    }
+  );
 
   it("does not replay D1 create through the real transport after a provider failure", async () => {
     const methods: string[] = [];
@@ -217,7 +275,12 @@ describe("Cloudflare D1 setup adapter", () => {
     });
 
     const error = await captureApiError(
-      adapter.reconcile({ runId, idempotencyKey: reconcileKey, operation: createOperation })
+      adapter.reconcile({
+        attempt: "initial",
+        runId,
+        idempotencyKey: reconcileKey,
+        operation: createOperation
+      })
     );
     expect(error.code).toBe("cloudflare_api_unavailable");
     expect(methods).toEqual(["GET", "POST"]);
@@ -234,6 +297,7 @@ describe("Cloudflare D1 setup adapter", () => {
     const unsupported = operation("create:artifact-r2");
     const error = await captureAdapterError(
       adapter.reconcile({
+        attempt: "initial",
         runId,
         idempotencyKey: deriveSetupOperationIdempotencyKey(runId, unsupported.id, "reconcile"),
         operation: unsupported
@@ -261,7 +325,12 @@ describe("Cloudflare D1 setup adapter", () => {
       transport,
       database: { mode: "create", baseName: "tenantscript-control-plane" }
     });
-    await adapter.reconcile({ runId, idempotencyKey: reconcileKey, operation: createOperation });
+    await adapter.reconcile({
+      attempt: "initial",
+      runId,
+      idempotencyKey: reconcileKey,
+      operation: createOperation
+    });
     requests.length = 0;
 
     await expect(

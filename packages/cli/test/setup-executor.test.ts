@@ -106,9 +106,11 @@ describe("production setup executor", () => {
     const baseStore = createInMemorySetupRunJournalStore();
     const store = failOneSaveAfterReconcile(baseStore);
     const keys: string[] = [];
+    const attempts: unknown[] = [];
     const adapter = adapterFrom({
-      reconcile: (operation, idempotencyKey) => {
+      reconcile: (operation, idempotencyKey, attempt) => {
         keys.push(idempotencyKey);
+        attempts.push(attempt);
         store.armFailure();
         return operation.action === "create"
           ? { disposition: "created", resourceRef: `created:${operation.id}` }
@@ -124,6 +126,8 @@ describe("production setup executor", () => {
     await executeProductionSetup({ plan, runId: "run-crash", adapter, journalStore: store });
     expect(keys[0]).toMatch(/^tssetup-[0-9a-f]{64}$/u);
     expect(keys[1]).toBe(keys[0]);
+    expect(attempts.slice(0, 2)).toEqual(["initial", "resume"]);
+    expect(attempts.slice(2)).toEqual(plan.operations.slice(1).map(() => "initial"));
   });
 
   it("cleans up only resources created by this run and never adopted resources", async () => {
@@ -326,7 +330,8 @@ describe("setup run journal", () => {
 function adapterFrom(params: {
   reconcile: (
     operation: SetupOperation,
-    idempotencyKey: string
+    idempotencyKey: string,
+    attempt?: unknown
   ) => SetupReconcileResult | Promise<SetupReconcileResult>;
   cleanup?: (
     operation: SetupOperation,
@@ -335,7 +340,8 @@ function adapterFrom(params: {
   ) => void | Promise<void>;
 }): SetupProviderAdapter {
   return {
-    reconcile: ({ operation, idempotencyKey }) => params.reconcile(operation, idempotencyKey),
+    reconcile: (request) =>
+      params.reconcile(request.operation, request.idempotencyKey, request.attempt),
     cleanupCreated: ({ operation, resourceRef, idempotencyKey }) =>
       params.cleanup?.(operation, resourceRef, idempotencyKey)
   };
