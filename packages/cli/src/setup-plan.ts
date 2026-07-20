@@ -82,13 +82,6 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
     operation("create:artifact-r2", "r2", "create", "ARTIFACTS", "implemented"),
     operation("create:execution-archive-r2", "r2", "create", "EXECUTION_ARCHIVE", "implemented"),
     operation(
-      "create:admin-rate-limiter-do",
-      "durable-object",
-      "create",
-      "ADMIN_MUTATION_RATE_LIMITER_DO",
-      "implemented"
-    ),
-    operation(
       "create:secret-store-do",
       "durable-object",
       "create",
@@ -134,7 +127,6 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
         "create:control-plane-d1",
         "create:artifact-r2",
         "create:execution-archive-r2",
-        "create:admin-rate-limiter-do",
         "create:secret-store-do",
         "create:approval-workflow",
         "create:usage-analytics-engine",

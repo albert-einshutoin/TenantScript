@@ -24,7 +24,7 @@ wrangler deploy \
 ```
 
 Cloudflare documents `--strict` as the defensive deploy mode that stops potential remote-setting
-overrides. Wrangler 4.100.0 enables experimental autoconfiguration by default, so TenantScript
+overrides. Wrangler 4.112.0 enables experimental autoconfiguration by default, so TenantScript
 disables it explicitly rather than allowing framework detection to widen a reviewed deployment.
 
 - [Wrangler Worker commands](https://developers.cloudflare.com/workers/wrangler/commands/workers/)

@@ -34,7 +34,7 @@ The renderer uses an exact input schema and emits only:
 
 - the Control Plane Worker entrypoint;
 - D1 binding `DB` and its migration directory;
-- SQLite Durable Object binding `ADMIN_MUTATION_RATE_LIMITER_DO` and class declaration.
+- SQLite Durable Object binding `ADMIN_MUTATION_RATE_LIMITER_DO` and declarative `exports` lifecycle.
 
 It writes an explicit `.jsonc` output only at the repository root and only when the target does not
 exist. Wrangler resolves entrypoint and migration paths from the config location, so nested or
@@ -66,6 +66,11 @@ the selected tenant runtime Worker. The accountless
 [Worker setup adapter](cloudflare-worker-setup-adapter.md) now provides deterministic create/resume
 and ownership-verified cleanup. It is not yet composed into a credential-bearing `ext setup`
 command, and it is not live Cloudflare evidence.
+
+The rate-limiter Durable Object is not a separately created setup resource. Its binding and SQLite
+class lifecycle are reconciled atomically by the Control Plane Worker deploy through Wrangler
+`exports`. Automatic rollback never emits a destructive Durable Object tombstone, and deleting the
+Worker must not be reported as proof that Durable Object data was deleted.
 
 Do not treat `deploy --dry-run` as live resource, permission, migration, or request-path evidence.
 After deployment, collect a secret-free doctor report through a trusted adapter and evaluate it with

@@ -18,7 +18,6 @@ const OPERATION_DEPENDENCIES = [
   "create:control-plane-d1",
   "create:artifact-r2",
   "create:execution-archive-r2",
-  "create:admin-rate-limiter-do",
   "create:secret-store-do",
   "create:approval-workflow",
   "create:usage-analytics-engine",

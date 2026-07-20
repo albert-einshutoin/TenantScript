@@ -88,12 +88,12 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInputV1)
         }
       ]
     },
-    migrations: [
-      {
-        tag: "v1",
-        new_sqlite_classes: ["AdminMutationRateLimitDurableObject"]
+    exports: {
+      AdminMutationRateLimitDurableObject: {
+        type: "durable-object",
+        storage: "sqlite"
       }
-    ]
+    }
   };
   return `${JSON.stringify(config, null, 2)}\n`;
 }

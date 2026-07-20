@@ -214,6 +214,19 @@ describe("Cloudflare Worker setup adapter", () => {
         operation: { ...operation, dependsOn: [] }
       })
     ).rejects.toMatchObject({ code: "cloudflare_worker_invalid_request" });
+    await expect(
+      adapter.reconcile({
+        ...reconcileRequest("initial"),
+        operation: {
+          ...operation,
+          dependsOn: [
+            ...operation.dependsOn.slice(0, 3),
+            "create:admin-rate-limiter-do",
+            ...operation.dependsOn.slice(3)
+          ]
+        }
+      })
+    ).rejects.toMatchObject({ code: "cloudflare_worker_invalid_request" });
     expect(requests).toEqual([]);
     expect(deployments).toEqual([]);
   });
