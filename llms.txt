@@ -42,6 +42,7 @@ Use these sources for the current boundary:
 - [Schema compatibility in CI](docs/reference/schema-diff-ci.md)
 - [Hook schema migration operations](docs/operations/schema-migrations.md)
 - [App database routing and endpoint isolation](docs/operations/app-database-routing.md)
+- [Public configuration reference](docs/reference/configuration.md)
 - [Runaway installation quarantine](docs/operations/runaway-quarantine.md)
 - [Incident response and synthetic drills](docs/operations/incident-response.md)
 - [Opt-in telemetry and privacy](docs/privacy/telemetry.md)
