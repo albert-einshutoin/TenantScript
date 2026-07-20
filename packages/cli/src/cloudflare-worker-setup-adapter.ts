@@ -18,7 +18,7 @@ const OPERATION_DEPENDENCIES = [
   "create:control-plane-d1",
   "create:artifact-r2",
   "create:execution-archive-r2",
-  "create:secret-store-do",
+  "declare:provider-secret-store-do-binding",
   "create:approval-workflow",
   "declare:usage-analytics-engine-binding",
   "create:runtime-worker",

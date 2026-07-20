@@ -219,6 +219,19 @@ describe("Cloudflare Worker setup adapter", () => {
         ...reconcileRequest("initial"),
         operation: {
           ...operation,
+          dependsOn: operation.dependsOn.map((dependency) =>
+            dependency === "declare:provider-secret-store-do-binding"
+              ? "create:secret-store-do"
+              : dependency
+          )
+        }
+      })
+    ).rejects.toMatchObject({ code: "cloudflare_worker_invalid_request" });
+    await expect(
+      adapter.reconcile({
+        ...reconcileRequest("initial"),
+        operation: {
+          ...operation,
           dependsOn: [
             ...operation.dependsOn.slice(0, 3),
             "create:admin-rate-limiter-do",

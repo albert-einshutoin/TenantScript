@@ -34,11 +34,19 @@
       {
         "name": "ADMIN_MUTATION_RATE_LIMITER_DO",
         "class_name": "AdminMutationRateLimitDurableObject"
+      },
+      {
+        "name": "PROVIDER_SECRET_STORE_DO",
+        "class_name": "ProviderSecretStoreDurableObject"
       }
     ]
   },
   "exports": {
     "AdminMutationRateLimitDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "ProviderSecretStoreDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
     }

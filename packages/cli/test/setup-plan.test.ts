@@ -22,7 +22,7 @@ describe("ext setup production dry-run", () => {
       "declare:app-database-boundary",
       "create:artifact-r2",
       "create:execution-archive-r2",
-      "create:secret-store-do",
+      "declare:provider-secret-store-do-binding",
       "create:approval-workflow",
       "declare:usage-analytics-engine-binding",
       "create:runtime-worker",
@@ -41,7 +41,7 @@ describe("ext setup production dry-run", () => {
       "create:control-plane-d1",
       "create:artifact-r2",
       "create:execution-archive-r2",
-      "create:secret-store-do",
+      "declare:provider-secret-store-do-binding",
       "create:approval-workflow",
       "declare:usage-analytics-engine-binding",
       "create:runtime-worker",
@@ -75,6 +75,8 @@ describe("ext setup production dry-run", () => {
     expect(JSON.stringify(plan.cleanup)).not.toContain("declare:app-database-boundary");
     expect(JSON.stringify(plan.cleanup)).not.toContain("apply:control-plane-migrations");
     expect(JSON.stringify(plan.cleanup)).not.toContain("admin-rate-limiter-do");
+    expect(JSON.stringify(plan.cleanup)).not.toContain("provider-secret-store-do");
+    expect(JSON.stringify(plan.cleanup)).not.toContain("secret-store-do");
     expect(JSON.stringify(plan.cleanup)).not.toContain("usage-analytics-engine");
     expect(plan.cleanup[0]?.targetOperationId).toBe("create:control-plane-worker");
     expect(

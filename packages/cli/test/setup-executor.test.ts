@@ -134,7 +134,7 @@ describe("production setup executor", () => {
     const cleanup: string[] = [];
     const adapter = adapterFrom({
       reconcile: (operation) => {
-        if (operation.id === "create:secret-store-do") {
+        if (operation.id === "declare:provider-secret-store-do-binding") {
           throw new Error("provider secret-sentinel");
         }
         if (operation.action !== "create") return { disposition: "applied" };
@@ -168,7 +168,9 @@ describe("production setup executor", () => {
     const cleanup: string[] = [];
     const adapter = adapterFrom({
       reconcile: (operation) => {
-        if (operation.id === "create:secret-store-do") throw new Error("apply failed");
+        if (operation.id === "declare:provider-secret-store-do-binding") {
+          throw new Error("apply failed");
+        }
         return operation.action === "create"
           ? { disposition: "created", resourceRef: `created:${operation.id}` }
           : { disposition: "applied" };
@@ -230,7 +232,9 @@ describe("production setup executor", () => {
     const cleanupKeys: string[] = [];
     const adapter: SetupProviderAdapter = {
       reconcile: ({ operation }) => {
-        if (operation.id === "create:secret-store-do") throw new Error("apply failed");
+        if (operation.id === "declare:provider-secret-store-do-binding") {
+          throw new Error("apply failed");
+        }
         return operation.action === "create"
           ? { disposition: "created", resourceRef: `created:${operation.id}` }
           : { disposition: "applied" };

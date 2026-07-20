@@ -50,10 +50,29 @@ export interface ProductionWranglerInputV3 {
   };
 }
 
+export interface ProductionWranglerInputV4 {
+  version: 4;
+  baseWorkerName: string;
+  setupRunId: string;
+  compatibilityDate: string;
+  database: {
+    name: string;
+    id: string;
+  };
+  executionArchive: {
+    baseBucketName: string;
+    hotRetentionDays: number;
+  };
+  usageAnalytics: {
+    dataset: string;
+  };
+}
+
 export type ProductionWranglerInput =
   | ProductionWranglerInputV1
   | ProductionWranglerInputV2
-  | ProductionWranglerInputV3;
+  | ProductionWranglerInputV3
+  | ProductionWranglerInputV4;
 
 export function parseProductionWranglerInput(value: unknown): ProductionWranglerInput {
   if (!isRecord(value)) throw invalidInput();
@@ -72,7 +91,7 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
     };
   }
   if (
-    (value.version !== 2 && value.version !== 3) ||
+    (value.version !== 2 && value.version !== 3 && value.version !== 4) ||
     !isExactRecord(value, [
       "version",
       "baseWorkerName",
@@ -80,7 +99,7 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
       "compatibilityDate",
       "database",
       "executionArchive",
-      ...(value.version === 3 ? ["usageAnalytics"] : [])
+      ...(value.version === 3 || value.version === 4 ? ["usageAnalytics"] : [])
     ]) ||
     !hasValidCommonWranglerInput(value)
   ) {
@@ -94,7 +113,7 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
     throw invalidInput();
   }
   if (
-    value.version === 3 &&
+    (value.version === 3 || value.version === 4) &&
     (!isExactRecord(value.usageAnalytics, ["dataset"]) ||
       !isAnalyticsDatasetName(value.usageAnalytics.dataset))
   ) {
@@ -112,7 +131,11 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
   };
   if (value.version === 2) return { version: 2, ...common };
   const usageAnalytics = value.usageAnalytics as { dataset: string };
-  return { version: 3, ...common, usageAnalytics: { dataset: usageAnalytics.dataset } };
+  return {
+    version: value.version,
+    ...common,
+    usageAnalytics: { dataset: usageAnalytics.dataset }
+  };
 }
 
 export function deriveControlPlaneWorkerName(baseName: string, setupRunId: string): string {
@@ -165,7 +188,7 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInput): 
           },
           triggers: { crons: ["0 2 * * *"] }
         }),
-    ...(parsed.version === 3
+    ...(parsed.version === 3 || parsed.version === 4
       ? {
           analytics_engine_datasets: [
             { binding: "USAGE_ANALYTICS", dataset: parsed.usageAnalytics.dataset }
@@ -177,14 +200,30 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInput): 
         {
           name: "ADMIN_MUTATION_RATE_LIMITER_DO",
           class_name: "AdminMutationRateLimitDurableObject"
-        }
+        },
+        ...(parsed.version === 4
+          ? [
+              {
+                name: "PROVIDER_SECRET_STORE_DO",
+                class_name: "ProviderSecretStoreDurableObject"
+              }
+            ]
+          : [])
       ]
     },
     exports: {
       AdminMutationRateLimitDurableObject: {
         type: "durable-object",
         storage: "sqlite"
-      }
+      },
+      ...(parsed.version === 4
+        ? {
+            ProviderSecretStoreDurableObject: {
+              type: "durable-object",
+              storage: "sqlite"
+            }
+          }
+        : {})
     }
   };
   return `${JSON.stringify(config, null, 2)}\n`;
