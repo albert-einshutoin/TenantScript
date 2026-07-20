@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "baseWorkerName": "tenantscript-control-plane",
   "setupRunId": "replace-with-the-persisted-setup-run-id",
   "compatibilityDate": "2026-07-20",

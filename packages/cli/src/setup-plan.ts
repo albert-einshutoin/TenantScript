@@ -89,6 +89,13 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
       "implemented"
     ),
     operation(
+      "declare:oauth-state-store-do-binding",
+      "durable-object",
+      "declare",
+      "OAUTH_STATE_STORE_DO",
+      "implemented"
+    ),
+    operation(
       "create:approval-workflow",
       "workflow",
       "create",
@@ -128,6 +135,7 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
         "create:artifact-r2",
         "create:execution-archive-r2",
         "declare:provider-secret-store-do-binding",
+        "declare:oauth-state-store-do-binding",
         "create:approval-workflow",
         "declare:usage-analytics-engine-binding",
         "create:runtime-worker",

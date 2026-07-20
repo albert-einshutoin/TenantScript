@@ -9,6 +9,7 @@ import {
   renderProductionWranglerConfig,
   runExtCli,
   type CliIo,
+  type ProductionWranglerInputV5,
   type ProductionWranglerInputV4,
   type ProductionWranglerInputV3,
   type RollbackClient
@@ -35,6 +36,11 @@ const validInput: ProductionWranglerInputV3 = {
 const validV4Input: ProductionWranglerInputV4 = {
   ...validInput,
   version: 4
+};
+
+const validV5Input: ProductionWranglerInputV5 = {
+  ...validV4Input,
+  version: 5
 };
 
 const temporaryDirectories: string[] = [];
@@ -112,6 +118,37 @@ describe("production Wrangler template", () => {
       }
     });
     expect(JSON.stringify(config)).not.toContain("PROVIDER_SECRET_KEYRING_JSON");
+    expect(JSON.stringify(config)).not.toContain("OAUTH_STATE_STORE_DO");
+    expect(JSON.stringify(config)).not.toContain("OAuthStateStoreDurableObject");
+  });
+
+  it("adds the one-time OAuth state store only in version 5", () => {
+    const config = JSON.parse(renderProductionWranglerConfig(validV5Input)) as unknown;
+
+    expect(config).toMatchObject({
+      durable_objects: {
+        bindings: [
+          {
+            name: "ADMIN_MUTATION_RATE_LIMITER_DO",
+            class_name: "AdminMutationRateLimitDurableObject"
+          },
+          {
+            name: "PROVIDER_SECRET_STORE_DO",
+            class_name: "ProviderSecretStoreDurableObject"
+          },
+          {
+            name: "OAUTH_STATE_STORE_DO",
+            class_name: "OAuthStateStoreDurableObject"
+          }
+        ]
+      },
+      exports: {
+        OAuthStateStoreDurableObject: {
+          type: "durable-object",
+          storage: "sqlite"
+        }
+      }
+    });
   });
 
   it("derives one stable non-reflective Worker target from the reconcile key", () => {

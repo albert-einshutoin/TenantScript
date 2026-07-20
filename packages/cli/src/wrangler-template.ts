@@ -68,11 +68,16 @@ export interface ProductionWranglerInputV4 {
   };
 }
 
+export type ProductionWranglerInputV5 = Omit<ProductionWranglerInputV4, "version"> & {
+  version: 5;
+};
+
 export type ProductionWranglerInput =
   | ProductionWranglerInputV1
   | ProductionWranglerInputV2
   | ProductionWranglerInputV3
-  | ProductionWranglerInputV4;
+  | ProductionWranglerInputV4
+  | ProductionWranglerInputV5;
 
 export function parseProductionWranglerInput(value: unknown): ProductionWranglerInput {
   if (!isRecord(value)) throw invalidInput();
@@ -91,7 +96,7 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
     };
   }
   if (
-    (value.version !== 2 && value.version !== 3 && value.version !== 4) ||
+    (value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5) ||
     !isExactRecord(value, [
       "version",
       "baseWorkerName",
@@ -99,7 +104,9 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
       "compatibilityDate",
       "database",
       "executionArchive",
-      ...(value.version === 3 || value.version === 4 ? ["usageAnalytics"] : [])
+      ...(value.version === 3 || value.version === 4 || value.version === 5
+        ? ["usageAnalytics"]
+        : [])
     ]) ||
     !hasValidCommonWranglerInput(value)
   ) {
@@ -113,7 +120,7 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
     throw invalidInput();
   }
   if (
-    (value.version === 3 || value.version === 4) &&
+    (value.version === 3 || value.version === 4 || value.version === 5) &&
     (!isExactRecord(value.usageAnalytics, ["dataset"]) ||
       !isAnalyticsDatasetName(value.usageAnalytics.dataset))
   ) {
@@ -188,7 +195,7 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInput): 
           },
           triggers: { crons: ["0 2 * * *"] }
         }),
-    ...(parsed.version === 3 || parsed.version === 4
+    ...(parsed.version === 3 || parsed.version === 4 || parsed.version === 5
       ? {
           analytics_engine_datasets: [
             { binding: "USAGE_ANALYTICS", dataset: parsed.usageAnalytics.dataset }
@@ -201,12 +208,20 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInput): 
           name: "ADMIN_MUTATION_RATE_LIMITER_DO",
           class_name: "AdminMutationRateLimitDurableObject"
         },
-        ...(parsed.version === 4
+        ...(parsed.version === 4 || parsed.version === 5
           ? [
               {
                 name: "PROVIDER_SECRET_STORE_DO",
                 class_name: "ProviderSecretStoreDurableObject"
-              }
+              },
+              ...(parsed.version === 5
+                ? [
+                    {
+                      name: "OAUTH_STATE_STORE_DO",
+                      class_name: "OAuthStateStoreDurableObject"
+                    }
+                  ]
+                : [])
             ]
           : [])
       ]
@@ -216,12 +231,20 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInput): 
         type: "durable-object",
         storage: "sqlite"
       },
-      ...(parsed.version === 4
+      ...(parsed.version === 4 || parsed.version === 5
         ? {
             ProviderSecretStoreDurableObject: {
               type: "durable-object",
               storage: "sqlite"
-            }
+            },
+            ...(parsed.version === 5
+              ? {
+                  OAuthStateStoreDurableObject: {
+                    type: "durable-object",
+                    storage: "sqlite"
+                  }
+                }
+              : {})
           }
         : {})
     }
