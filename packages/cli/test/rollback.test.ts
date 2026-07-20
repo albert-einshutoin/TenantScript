@@ -347,7 +347,7 @@ describe("ext rollback", () => {
         ok: false,
         status: 409,
         json: () => Promise.resolve({}),
-        text: () => Promise.resolve("version conflict")
+        text: () => Promise.resolve("version conflict with fixture-secret")
       });
 
     await expect(
@@ -359,7 +359,7 @@ describe("ext rollback", () => {
         auditId: "audit_1",
         actor: "ops@example.com"
       })
-    ).rejects.toThrow("rollback request failed with HTTP 409: version conflict");
+    ).rejects.toThrow(/^rollback request failed with HTTP 409$/u);
   });
 });
 

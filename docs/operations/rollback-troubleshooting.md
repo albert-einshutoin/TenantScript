@@ -56,8 +56,14 @@ timeoutやnetwork切断では、成功した処理を重複させないため、
 Admin UIに到達できない場合のみ、CLIの同じrollback契約を使う。実行前にapp、plugin、installation、target version、audit IDをインシデント記録と照合する。
 
 ```text
-ext rollback --app <app-id> --plugin <plugin-key> --installation <installation-id> --to <known-good-version> --audit-id <audit-id> --actor <operator-id> --reason <incident-reference>
+ext rollback --installation <installation-id> --target-version <known-good-version-id> --expected-revision <current-revision> --idempotency-key <stable-request-key>
 ```
+
+Set `TENANTSCRIPT_CONTROL_PLANE_URL` and the secret `TENANTSCRIPT_CONTROL_PLANE_TOKEN` through the
+operator-controlled environment before running the command. The token identity supplies app,
+tenant, and actor authority; the CLI deliberately rejects those values as flags. Reuse the same
+16–128 character idempotency key only when reconciling the exact same intent after an ambiguous
+response. The CLI never retries a mutation automatically.
 
 CLIの引数検証、HTTP error、出力契約はrepository testで再現できる。tokenをコマンドライン引数やshell historyへ含めない。
 

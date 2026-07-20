@@ -7,6 +7,7 @@ const [
   workerEntry,
   adminEnv,
   cliBin,
+  cliBinaryClient,
   runtimeWrangler,
   proxySource,
   exampleSource,
@@ -17,6 +18,7 @@ const [
   readFile(new URL("../packages/control-plane/src/worker-entry.ts", import.meta.url), "utf8"),
   readFile(new URL("../apps/admin-ui/src/vite-env.d.ts", import.meta.url), "utf8"),
   readFile(new URL("../packages/cli/src/bin.ts", import.meta.url), "utf8"),
+  readFile(new URL("../packages/cli/src/binary-client.ts", import.meta.url), "utf8"),
   readFile(new URL("../apps/runtime-bench/wrangler.jsonc", import.meta.url), "utf8"),
   readFile(new URL("../packages/proxy/src/index.ts", import.meta.url), "utf8"),
   readFile(new URL("../apps/example-saas/src/index.ts", import.meta.url), "utf8"),
@@ -38,6 +40,9 @@ test("documents Admin UI, CLI, runtime benchmark, Proxy, and example app configu
     assert.ok(reference.includes("`" + name + "`"));
   }
   for (const [, name] of cliBin.matchAll(/process\.env\.([A-Z][A-Z0-9_]+)/gu)) {
+    assert.ok(reference.includes("`" + name + "`"));
+  }
+  for (const [, name] of cliBinaryClient.matchAll(/environment\.([A-Z][A-Z0-9_]+)/gu)) {
     assert.ok(reference.includes("`" + name + "`"));
   }
   const runtimeBindings = [...runtimeWrangler.matchAll(/"binding":\s*"([A-Z][A-Z0-9_]*)"/gu)];
