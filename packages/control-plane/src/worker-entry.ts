@@ -1,4 +1,8 @@
-import { createStaticTokenIdentityResolver, type AuthenticatedIdentity } from "./api.js";
+import {
+  createStaticTokenIdentityResolver,
+  type AuthenticatedIdentity,
+  type IdentityResolver
+} from "./api.js";
 import { createAdminCursorCodec, createD1AdminDashboardStore } from "./admin-dashboard.js";
 import {
   createD1AdminInstallationCommandStore,
@@ -15,7 +19,8 @@ import {
   evaluateFixedWindowReservation,
   parseAdminMutationRateLimitConfiguration
 } from "./admin-mutation-rate-limit.js";
-import { createControlPlaneHttpHandler } from "./http-api.js";
+import { createAppDatabaseRouterFromBindings } from "./app-database-router.js";
+import { createControlPlaneHttpHandler, matchAdminHttpEndpoint } from "./http-api.js";
 import { parsePublishedHookSchemaCatalog } from "./schema-migrations.js";
 import {
   createD1TelemetrySnapshotSource,
@@ -41,11 +46,13 @@ interface ControlPlaneWorkerEnv {
   ADMIN_MUTATION_RATE_LIMIT?: string;
   ADMIN_MUTATION_RATE_WINDOW_SECONDS?: string;
   ADMIN_MUTATION_RATE_LIMITER_DO?: DurableObjectNamespace;
+  APP_DATABASE_ROUTES_JSON?: string;
   TENANTSCRIPT_TELEMETRY_ENABLED?: string;
   TENANTSCRIPT_TELEMETRY_ENDPOINT?: string;
   TENANTSCRIPT_PRODUCT_VERSION?: string;
   TENANTSCRIPT_RUNTIME_PRIMITIVE?: string;
   DB?: D1DatabaseLike;
+  [binding: string]: unknown;
 }
 
 export class ProbeDurableObject {
@@ -86,29 +93,70 @@ export class AdminMutationRateLimitDurableObject {
 }
 
 export default {
-  fetch(request: Request, env: ControlPlaneWorkerEnv) {
+  async fetch(request: Request, env: ControlPlaneWorkerEnv) {
     const identities = parseIdentityConfiguration(env.ADMIN_IDENTITIES_JSON);
     const allowedOrigins = parseAllowedOrigins(env.ADMIN_ALLOWED_ORIGINS);
-    const installationDetailStore =
-      env.DB === undefined ? undefined : createD1AdminInstallationDetailStore(env.DB);
-    const installationCommandStore =
-      env.DB === undefined ? undefined : createD1AdminInstallationCommandStore(env.DB);
-    const installFlowStore =
-      env.DB === undefined ? undefined : createD1AdminInstallFlowStore(env.DB);
-    const installRequestStore =
-      env.DB === undefined ? undefined : createD1AdminInstallRequestStore(env.DB);
-    const rollbackStore = env.DB === undefined ? undefined : createD1AdminRollbackStore(env.DB);
-    const executionDetailStore =
-      env.DB === undefined ? undefined : createD1AdminExecutionDetailStore(env.DB);
-    const approvalDecisionStore =
-      env.DB === undefined ? undefined : createD1AdminApprovalDecisionStore(env.DB);
     const serviceTokenStore = env.DB === undefined ? undefined : createD1ServiceTokenStore(env.DB);
+    const bootstrapIdentityResolver =
+      identities === undefined ? undefined : createStaticTokenIdentityResolver(identities);
+    const identityResolver =
+      serviceTokenStore === undefined
+        ? bootstrapIdentityResolver
+        : createServiceTokenAwareIdentityResolver({
+            serviceTokens: createServiceTokenIdentityResolver(serviceTokenStore),
+            ...(bootstrapIdentityResolver === undefined
+              ? {}
+              : { bootstrap: bootstrapIdentityResolver })
+          });
+    let requestDatabase = env.DB;
+    try {
+      if (env.APP_DATABASE_ROUTES_JSON !== undefined) {
+        const router = createAppDatabaseRouterFromBindings({
+          serializedRoutes: env.APP_DATABASE_ROUTES_JSON,
+          bindings: env
+        });
+        const routed = await resolveRequestDatabase({
+          request,
+          identityResolver,
+          allowedOrigins,
+          resolveDatabase: router.resolve
+        });
+        if (routed instanceof Response) return routed;
+        requestDatabase = routed;
+      }
+    } catch {
+      return configurationUnavailableResponse();
+    }
+    const installationDetailStore =
+      requestDatabase === undefined
+        ? undefined
+        : createD1AdminInstallationDetailStore(requestDatabase);
+    const installationCommandStore =
+      requestDatabase === undefined
+        ? undefined
+        : createD1AdminInstallationCommandStore(requestDatabase);
+    const installFlowStore =
+      requestDatabase === undefined ? undefined : createD1AdminInstallFlowStore(requestDatabase);
+    const installRequestStore =
+      requestDatabase === undefined ? undefined : createD1AdminInstallRequestStore(requestDatabase);
+    const rollbackStore =
+      requestDatabase === undefined ? undefined : createD1AdminRollbackStore(requestDatabase);
+    const executionDetailStore =
+      requestDatabase === undefined
+        ? undefined
+        : createD1AdminExecutionDetailStore(requestDatabase);
+    const approvalDecisionStore =
+      requestDatabase === undefined
+        ? undefined
+        : createD1AdminApprovalDecisionStore(requestDatabase);
     let handler;
     try {
       const telemetryConfiguration = parseWorkerTelemetryConfiguration(env);
       const schemaCatalog = parseSchemaCatalogConfiguration(env.ADMIN_HOOK_SCHEMA_CATALOG_JSON);
       const dashboardStore =
-        env.DB === undefined ? undefined : createD1AdminDashboardStore(env.DB, schemaCatalog);
+        requestDatabase === undefined
+          ? undefined
+          : createD1AdminDashboardStore(requestDatabase, schemaCatalog);
       const cursorCodec =
         env.ADMIN_CURSOR_SECRET === undefined
           ? undefined
@@ -128,17 +176,6 @@ export default {
                   ? {}
                   : { windowSeconds: env.ADMIN_MUTATION_RATE_WINDOW_SECONDS })
               })
-            });
-      const bootstrapIdentityResolver =
-        identities === undefined ? undefined : createStaticTokenIdentityResolver(identities);
-      const identityResolver =
-        serviceTokenStore === undefined
-          ? bootstrapIdentityResolver
-          : createServiceTokenAwareIdentityResolver({
-              serviceTokens: createServiceTokenIdentityResolver(serviceTokenStore),
-              ...(bootstrapIdentityResolver === undefined
-                ? {}
-                : { bootstrap: bootstrapIdentityResolver })
             });
       handler = createControlPlaneHttpHandler({
         ...(identityResolver === undefined ? {} : { identityResolver }),
@@ -161,15 +198,7 @@ export default {
     } catch {
       // Binding errors can contain deployment values. Return a stable response without
       // reflecting invalid origin or secret configuration into the public Worker response.
-      return Response.json(
-        {
-          error: {
-            code: "admin_configuration_unavailable",
-            message: "Admin API configuration unavailable"
-          }
-        },
-        { status: 503, headers: { "Cache-Control": "no-store" } }
-      );
+      return configurationUnavailableResponse();
     }
     return handler(request);
   },
@@ -182,6 +211,98 @@ export default {
     context.waitUntil(runScheduledTelemetry(env));
   }
 };
+
+async function resolveRequestDatabase(params: {
+  request: Request;
+  identityResolver: IdentityResolver | undefined;
+  allowedOrigins: readonly string[];
+  resolveDatabase: (appId: string) => D1DatabaseLike | null;
+}): Promise<D1DatabaseLike | Response | undefined> {
+  const origin = params.request.headers.get("Origin");
+  const endpoint = matchAdminHttpEndpoint(new URL(params.request.url));
+  if (
+    endpoint === null ||
+    params.request.method === "OPTIONS" ||
+    !endpoint.contract.methods.some((method) => method === params.request.method) ||
+    (origin !== null && !params.allowedOrigins.includes(origin))
+  ) {
+    return undefined;
+  }
+  const token = bearerToken(params.request.headers.get("Authorization"));
+  if (token === null) return workerUnauthorizedResponse(origin);
+  if (params.identityResolver === undefined) return identityUnavailableResponse(origin);
+  const identity = await params.identityResolver.resolveToken(token);
+  if (identity === null) return workerUnauthorizedResponse(origin);
+  if (identity.appId === undefined) return undefined;
+  const database = params.resolveDatabase(identity.appId);
+  if (database !== null) return database;
+
+  // Never retry against the compatibility DB: an incomplete provisioning route must not become
+  // a cross-app data-placement failure.
+  return workerErrorResponse({
+    status: 503,
+    code: "app_database_unavailable",
+    message: "App database unavailable",
+    origin
+  });
+}
+
+function workerUnauthorizedResponse(origin: string | null): Response {
+  return workerErrorResponse({
+    status: 401,
+    code: "unauthorized",
+    message: "valid bearer token required",
+    origin,
+    headers: { "WWW-Authenticate": "Bearer" }
+  });
+}
+
+function identityUnavailableResponse(origin: string | null): Response {
+  return workerErrorResponse({
+    status: 503,
+    code: "identity_resolver_unavailable",
+    message: "identity service unavailable",
+    origin
+  });
+}
+
+function workerErrorResponse(params: {
+  status: number;
+  code: string;
+  message: string;
+  origin: string | null;
+  headers?: Record<string, string>;
+}): Response {
+  return Response.json(
+    { error: { code: params.code, message: params.message } },
+    {
+      status: params.status,
+      headers: {
+        "Cache-Control": "no-store",
+        ...(params.origin === null
+          ? {}
+          : { "Access-Control-Allow-Origin": params.origin, Vary: "Origin" }),
+        ...params.headers
+      }
+    }
+  );
+}
+
+function bearerToken(authorization: string | null): string | null {
+  return authorization?.match(/^Bearer ([^\s]+)$/i)?.[1] ?? null;
+}
+
+function configurationUnavailableResponse(): Response {
+  return Response.json(
+    {
+      error: {
+        code: "admin_configuration_unavailable",
+        message: "Admin API configuration unavailable"
+      }
+    },
+    { status: 503, headers: { "Cache-Control": "no-store" } }
+  );
+}
 
 export async function runScheduledTelemetry(
   env: ControlPlaneWorkerEnv,

@@ -57,5 +57,6 @@ content, or provider secret.
   checked before onboarding many apps.
 - A single Worker cannot represent an unbounded app population through bindings; deployment-level
   partitioning is the scale-out path.
-- The existing single-`DB` Worker composition remains a compatibility path until setup and identity
-  directory integration is completed. It must not be described as physically sharded.
+- The Worker enables physical app routing only when `APP_DATABASE_ROUTES_JSON` is configured. Its
+  global `DB` is then limited to authentication-directory and telemetry-aggregate responsibilities;
+  omitting the setting retains the single-`DB` compatibility path.

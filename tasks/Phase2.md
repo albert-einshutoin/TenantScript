@@ -16,11 +16,11 @@
 
 ## チャンク A: multi-app / multi-tenant 強化(T01–T04)
 
-- [ ] **P2-T01**(L→分割)D1 の app 単位シャーディング(セットアップ時プロビジョニング)
+- [x] **P2-T01**(L→分割)D1 の app 単位シャーディング(セットアップ時プロビジョニング)
   - 注意: D1 binding は wrangler 設定の静的宣言であり、実行時の動的プロビジョニングは素直にできない。`ext setup` 時の事前プロビジョニング + ルーティング層(app → D1 解決)として設計し、**先行スパイクで binding 戦略(複数 binding / D1 HTTP API)を検証してから実装する**
   - RED: app ごとに別 D1 へ書き込まれ、app 間でクエリが物理分離される(10GB 上限対策)
   - DoD: スパイク結果が ADR 化され、シャーディング下で全 integration テスト green
-  - 2026-07-20: ADR-004とfail-closed routerは実装済み。default Worker compositionとsetup provisioningの統合はIssue #22で継続。
+  - 2026-07-20: ADR-004、fail-closed router、認証済みappIdからD1を選択するdefault Worker compositionを実装。provisioningは明示的なsetup-time手順として固定。
 
 - [x] **P2-T02**(L→分割)tenant 越境の網羅テスト
   - RED: 全エンドポイント × 越境アクセスのマトリクステストを自動生成(エンドポイント追加時にテスト漏れすると fail する仕組み)
