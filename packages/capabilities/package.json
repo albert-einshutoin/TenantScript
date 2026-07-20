@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:security": "vitest run test/security-suite.test.ts test/provider-token-rotation.test.ts",
+    "test:security": "vitest run test/security-suite.test.ts test/provider-token-rotation.test.ts test/github-provider.test.ts",
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {

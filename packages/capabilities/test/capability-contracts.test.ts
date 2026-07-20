@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import {
   createApprovalsRequestProvider,
   createEmailSendProvider,
+  createGitHubIssueCreateProvider,
   createHttpFetchProvider,
   createInvoiceReadProvider,
   createInMemoryKvStateStorage,
@@ -119,6 +120,37 @@ runCapabilityContract({
   expectedAllowedResult: { ok: true, provider: "mock-slack" },
   expectedDeniedMessage: "slack.send channel C999 is outside granted scope",
   sensitiveValue: "xoxb-contract-secret"
+});
+
+runCapabilityContract({
+  capability: "github.issue.create",
+  grant: { repositories: ["tenantscript/core"] },
+  allowedInput: {
+    repository: "tenantscript/core",
+    title: "Contract issue",
+    body: "Created by the accountless contract fixture."
+  },
+  deniedInput: {
+    repository: "tenantscript/core-private",
+    title: "Must be denied"
+  },
+  createProvider: () =>
+    createGitHubIssueCreateProvider({
+      resolveTokens: () => ({
+        active: { id: "github-contract-v1", value: "github-contract-secret" }
+      }),
+      createIssue: vi.fn().mockResolvedValue({
+        number: 42,
+        url: "https://github.com/tenantscript/core/issues/42"
+      })
+    }),
+  expectedAllowedResult: {
+    number: 42,
+    url: "https://github.com/tenantscript/core/issues/42"
+  },
+  expectedDeniedMessage:
+    "github.issue.create repository tenantscript/core-private is outside granted scope",
+  sensitiveValue: "github-contract-secret"
 });
 
 runCapabilityContract({
