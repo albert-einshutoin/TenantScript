@@ -32,7 +32,28 @@ export interface ProductionWranglerInputV2 {
   };
 }
 
-export type ProductionWranglerInput = ProductionWranglerInputV1 | ProductionWranglerInputV2;
+export interface ProductionWranglerInputV3 {
+  version: 3;
+  baseWorkerName: string;
+  setupRunId: string;
+  compatibilityDate: string;
+  database: {
+    name: string;
+    id: string;
+  };
+  executionArchive: {
+    baseBucketName: string;
+    hotRetentionDays: number;
+  };
+  usageAnalytics: {
+    dataset: string;
+  };
+}
+
+export type ProductionWranglerInput =
+  | ProductionWranglerInputV1
+  | ProductionWranglerInputV2
+  | ProductionWranglerInputV3;
 
 export function parseProductionWranglerInput(value: unknown): ProductionWranglerInput {
   if (!isRecord(value)) throw invalidInput();
@@ -51,14 +72,15 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
     };
   }
   if (
-    value.version !== 2 ||
+    (value.version !== 2 && value.version !== 3) ||
     !isExactRecord(value, [
       "version",
       "baseWorkerName",
       "setupRunId",
       "compatibilityDate",
       "database",
-      "executionArchive"
+      "executionArchive",
+      ...(value.version === 3 ? ["usageAnalytics"] : [])
     ]) ||
     !hasValidCommonWranglerInput(value)
   ) {
@@ -71,8 +93,14 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
   ) {
     throw invalidInput();
   }
-  return {
-    version: 2,
+  if (
+    value.version === 3 &&
+    (!isExactRecord(value.usageAnalytics, ["dataset"]) ||
+      !isAnalyticsDatasetName(value.usageAnalytics.dataset))
+  ) {
+    throw invalidInput();
+  }
+  const common = {
     baseWorkerName: value.baseWorkerName,
     setupRunId: value.setupRunId,
     compatibilityDate: value.compatibilityDate,
@@ -82,6 +110,9 @@ export function parseProductionWranglerInput(value: unknown): ProductionWrangler
       hotRetentionDays: value.executionArchive.hotRetentionDays
     }
   };
+  if (value.version === 2) return { version: 2, ...common };
+  const usageAnalytics = value.usageAnalytics as { dataset: string };
+  return { version: 3, ...common, usageAnalytics: { dataset: usageAnalytics.dataset } };
 }
 
 export function deriveControlPlaneWorkerName(baseName: string, setupRunId: string): string {
@@ -134,6 +165,13 @@ export function renderProductionWranglerConfig(input: ProductionWranglerInput): 
           },
           triggers: { crons: ["0 2 * * *"] }
         }),
+    ...(parsed.version === 3
+      ? {
+          analytics_engine_datasets: [
+            { binding: "USAGE_ANALYTICS", dataset: parsed.usageAnalytics.dataset }
+          ]
+        }
+      : {}),
     durable_objects: {
       bindings: [
         {
@@ -235,6 +273,10 @@ function isR2BaseName(value: unknown): value is string {
 
 function isHotRetentionDays(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= 3650;
+}
+
+function isAnalyticsDatasetName(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z][A-Za-z0-9_]{0,62}$/u.test(value);
 }
 
 function isUtcDate(value: unknown): value is string {

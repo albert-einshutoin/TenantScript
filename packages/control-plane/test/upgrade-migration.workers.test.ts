@@ -17,7 +17,8 @@ const baselineName = "0001_pre_v1_0010.sql";
 const latestSuffixNames = [
   "0011_immutable_audit_log.sql",
   "0012_execution_archives.sql",
-  "0013_runaway_quarantine.sql"
+  "0013_runaway_quarantine.sql",
+  "0014_usage_daily_summaries.sql"
 ];
 
 beforeEach(async () => {

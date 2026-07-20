@@ -37,7 +37,8 @@ const expectedNames = [
   "0010_admin_approval_threshold.sql",
   "0011_immutable_audit_log.sql",
   "0012_execution_archives.sql",
-  "0013_runaway_quarantine.sql"
+  "0013_runaway_quarantine.sql",
+  "0014_usage_daily_summaries.sql"
 ] as const;
 const temporaryDirectories: string[] = [];
 
@@ -54,7 +55,7 @@ describe("control plane migration catalog", () => {
     const catalog = await loadControlPlaneMigrationCatalog({ directory: migrationDirectory });
 
     expect(catalog.migrations.map((migration) => migration.name)).toEqual(expectedNames);
-    expect(catalog.migrations).toHaveLength(13);
+    expect(catalog.migrations).toHaveLength(14);
     for (const migration of catalog.migrations) {
       expect(migration.byteLength).toBeGreaterThan(0);
       expect(migration.sha256).toMatch(/^[0-9a-f]{64}$/u);
@@ -317,7 +318,7 @@ describe("Cloudflare D1 migration setup adapter", () => {
     expect(() =>
       createCloudflareD1MigrationSetupAdapter({
         databaseId,
-        catalog: { migrations: new Array(13) as ControlPlaneMigrationCatalog["migrations"] },
+        catalog: { migrations: new Array(14) as ControlPlaneMigrationCatalog["migrations"] },
         runner
       })
     ).toThrow(expect.objectContaining({ code: "cloudflare_d1_migration_invalid_configuration" }));

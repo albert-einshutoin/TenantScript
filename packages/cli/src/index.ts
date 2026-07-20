@@ -176,7 +176,8 @@ export {
   renderProductionWranglerConfig,
   type ProductionWranglerInput,
   type ProductionWranglerInputV1,
-  type ProductionWranglerInputV2
+  type ProductionWranglerInputV2,
+  type ProductionWranglerInputV3
 } from "./wrangler-template.js";
 
 export {

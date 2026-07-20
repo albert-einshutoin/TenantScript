@@ -20,7 +20,7 @@ const OPERATION_DEPENDENCIES = [
   "create:execution-archive-r2",
   "create:secret-store-do",
   "create:approval-workflow",
-  "create:usage-analytics-engine",
+  "declare:usage-analytics-engine-binding",
   "create:runtime-worker",
   "apply:control-plane-migrations"
 ] as const;

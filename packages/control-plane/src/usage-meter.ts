@@ -1,4 +1,5 @@
 import type { ExecutionStatus } from "./index.js";
+import type { D1DatabaseLike } from "./storage.js";
 
 export interface AnalyticsEngineDataPoint {
   indexes?: ((ArrayBuffer | string) | null)[];
@@ -190,6 +191,116 @@ export function createInMemoryDailyUsageSummaryStore(): DailyUsageSummaryStore {
           .map(cloneSummary)
       )
   };
+}
+
+export function createD1DailyUsageSummaryStore(db: D1DatabaseLike): DailyUsageSummaryStore {
+  return {
+    async incrementDailyUsage(request) {
+      const key = metricSummaryKey(request);
+      // A single UPSERT avoids lost updates when concurrent executions finish in separate Worker
+      // isolates; an application-level read/modify/write lock cannot protect that boundary.
+      const row = await db
+        .prepare(
+          [
+            "INSERT INTO usage_daily_summaries",
+            "(tenant_id, plugin_id, usage_date, executions, cpu_ms, subrequests, workflow_runs)",
+            "VALUES (?, ?, ?, 1, ?, ?, ?)",
+            "ON CONFLICT (tenant_id, plugin_id, usage_date) DO UPDATE SET",
+            "executions = executions + 1,",
+            "cpu_ms = cpu_ms + excluded.cpu_ms,",
+            "subrequests = subrequests + excluded.subrequests,",
+            "workflow_runs = workflow_runs + excluded.workflow_runs",
+            "RETURNING tenant_id, plugin_id, usage_date, executions, cpu_ms, subrequests, workflow_runs"
+          ].join(" ")
+        )
+        .bind(
+          key.tenantId,
+          key.pluginId,
+          key.date,
+          request.cpuMs,
+          request.subrequests,
+          request.workflowRuns
+        )
+        .first<DailyUsageSummaryRow>();
+      return dailyUsageSummaryFromRow(row);
+    },
+    async getDailyUsageSummary(request) {
+      const row = await db
+        .prepare(
+          [
+            "SELECT tenant_id, plugin_id, usage_date, executions, cpu_ms, subrequests, workflow_runs",
+            "FROM usage_daily_summaries",
+            "WHERE tenant_id = ? AND plugin_id = ? AND usage_date = ?"
+          ].join(" ")
+        )
+        .bind(request.tenantId, request.pluginId, request.date)
+        .first<DailyUsageSummaryRow>();
+      return row === null ? emptySummary(request) : dailyUsageSummaryFromRow(row);
+    },
+    async getDailyUsageSummaries(request) {
+      const pluginPredicate = request.pluginId === undefined ? "" : " AND plugin_id = ?";
+      const statement = db
+        .prepare(
+          [
+            "SELECT tenant_id, plugin_id, usage_date, executions, cpu_ms, subrequests, workflow_runs",
+            "FROM usage_daily_summaries",
+            `WHERE tenant_id = ? AND usage_date >= ? AND usage_date <= ?${pluginPredicate}`,
+            "ORDER BY usage_date ASC, plugin_id ASC"
+          ].join(" ")
+        )
+        .bind(
+          request.tenantId,
+          request.fromDate,
+          request.toDate,
+          ...(request.pluginId === undefined ? [] : [request.pluginId])
+        );
+      const rows = await statement.all();
+      return rows.results.map((row) => dailyUsageSummaryFromRow(row));
+    }
+  };
+}
+
+interface DailyUsageSummaryRow {
+  tenant_id: string;
+  plugin_id: string;
+  usage_date: string;
+  executions: number;
+  cpu_ms: number;
+  subrequests: number;
+  workflow_runs: number;
+}
+
+function dailyUsageSummaryFromRow(row: unknown): DailyUsageSummary {
+  if (!isDailyUsageSummaryRow(row)) {
+    throw new Error("usage summary storage returned invalid data");
+  }
+  return {
+    tenantId: row.tenant_id,
+    pluginId: row.plugin_id,
+    date: row.usage_date,
+    executions: row.executions,
+    cpuMs: row.cpu_ms,
+    subrequests: row.subrequests,
+    workflowRuns: row.workflow_runs
+  };
+}
+
+function isDailyUsageSummaryRow(row: unknown): row is DailyUsageSummaryRow {
+  if (typeof row !== "object" || row === null || Array.isArray(row)) return false;
+  const value = row as Record<string, unknown>;
+  return (
+    typeof value.tenant_id === "string" &&
+    typeof value.plugin_id === "string" &&
+    typeof value.usage_date === "string" &&
+    isNonNegativeNumber(value.executions) &&
+    isNonNegativeNumber(value.cpu_ms) &&
+    isNonNegativeNumber(value.subrequests) &&
+    isNonNegativeNumber(value.workflow_runs)
+  );
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function toUsageEvent(request: RecordUsageMetricRequest): UsageEvent {

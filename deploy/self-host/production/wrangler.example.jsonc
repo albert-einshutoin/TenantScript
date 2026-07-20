@@ -23,6 +23,12 @@
   "triggers": {
     "crons": ["0 2 * * *"]
   },
+  "analytics_engine_datasets": [
+    {
+      "binding": "USAGE_ANALYTICS",
+      "dataset": "tenantscript_usage"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {

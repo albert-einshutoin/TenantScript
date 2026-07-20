@@ -40,6 +40,12 @@ import {
 import { createD1R2ExecutionArchiveStore } from "./execution-archive.js";
 import type { ArchiveExpiredExecutionsRequest } from "./execution-archive.js";
 import type { D1DatabaseLike, R2BucketLike } from "./storage.js";
+import {
+  createAnalyticsEngineUsageSink,
+  createD1DailyUsageSummaryStore,
+  createUsageMeter,
+  type AnalyticsEngineDatasetLike
+} from "./usage-meter.js";
 
 const SCHEDULED_RETENTION_SCOPE_LIMIT = 50;
 
@@ -58,6 +64,7 @@ interface ControlPlaneWorkerEnv {
   TENANTSCRIPT_TELEMETRY_ENDPOINT?: string;
   TENANTSCRIPT_PRODUCT_VERSION?: string;
   TENANTSCRIPT_RUNTIME_PRIMITIVE?: string;
+  USAGE_ANALYTICS?: AnalyticsEngineDatasetLike;
   DB?: D1DatabaseLike;
   [binding: string]: unknown;
 }
@@ -194,6 +201,15 @@ export default {
                   : { windowSeconds: env.ADMIN_MUTATION_RATE_WINDOW_SECONDS })
               })
             });
+      const usageMeter =
+        requestDatabase === undefined
+          ? undefined
+          : createUsageMeter({
+              summaries: createD1DailyUsageSummaryStore(requestDatabase),
+              ...(env.USAGE_ANALYTICS === undefined
+                ? {}
+                : { sink: createAnalyticsEngineUsageSink(env.USAGE_ANALYTICS) })
+            });
       handler = createControlPlaneHttpHandler({
         ...(identityResolver === undefined ? {} : { identityResolver }),
         ...(dashboardStore === undefined ? {} : { dashboardStore }),
@@ -209,6 +225,7 @@ export default {
           ? {}
           : { serviceTokenManager: createServiceTokenManager({ store: serviceTokenStore }) }),
         ...(rateLimiter === undefined ? {} : { adminMutationRateLimiter: rateLimiter }),
+        ...(usageMeter === undefined ? {} : { usageMeter }),
         ...(cursorCodec === undefined ? {} : { cursorCodec }),
         telemetryStatus: publicTelemetryStatus(telemetryConfiguration),
         allowedOrigins
