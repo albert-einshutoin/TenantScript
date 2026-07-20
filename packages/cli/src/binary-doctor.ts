@@ -1,11 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { parse, type ParseError } from "jsonc-parser";
-import {
-  CloudflareApiError,
-  createCloudflareApiTransport,
-  type CloudflareApiTransport,
-  type CloudflareFetch
-} from "./cloudflare-api-transport.js";
+import { createCloudflareApiTransport, type CloudflareFetch } from "./cloudflare-api-transport.js";
 import { createCloudflareDoctorCollector } from "./cloudflare-doctor-collector.js";
 import { createCloudflareD1MigrationReader } from "./cloudflare-wrangler-d1-migration-runner.js";
 import type { CliRuntime } from "./cli-runtime.js";
@@ -22,7 +17,7 @@ export function createBinaryDoctorRuntime(
   try {
     const transport = createCloudflareApiTransport({ accountId, apiToken, fetch: fetchImpl });
     return {
-      collectCloudflareDoctor: ({ workerName, databaseId, configPath, runtime }) =>
+      collectCloudflareDoctor: ({ databaseId, configPath, adminCursorSecretPresent, runtime }) =>
         createCloudflareDoctorCollector({
           databaseId,
           bindingPresence: {
@@ -30,7 +25,9 @@ export function createBinaryDoctorRuntime(
               parseWranglerBindingPresence(await readConfig(configPath, "utf8"), expectedDatabaseId)
           },
           migrationReader: createCloudflareD1MigrationReader({ transport, databaseId }),
-          secretPresence: createSecretPresence(transport, workerName),
+          // Cloudflare secret response schemas may include secret text. The binary therefore
+          // accepts only an operator-provided boolean and never probes any Worker secret endpoint.
+          secretPresence: { has: () => adminCursorSecretPresent },
           // This composition inspects one ordinary Worker deployment. Other runtime primitives
           // remain visible as unsupported until their own authoritative collectors exist.
           runtime: { configured: runtime, supported: ["cloudflare-workers"] }
@@ -41,34 +38,6 @@ export function createBinaryDoctorRuntime(
     // represented only by the absence of the live dependency and never reflected by the CLI.
     return {};
   }
-}
-
-function createSecretPresence(
-  transport: CloudflareApiTransport,
-  workerName: string
-): { has: (name: "ADMIN_CURSOR_SECRET") => Promise<boolean> } {
-  return {
-    has: async (name) => {
-      try {
-        const result = await transport.request({
-          method: "GET",
-          pathSegments: ["workers", "scripts", workerName, "secrets", name]
-        });
-        if (
-          !isRecord(result) ||
-          !hasExactKeys(result, ["name", "type"]) ||
-          result.name !== name ||
-          result.type !== "secret_text"
-        ) {
-          throw new Error("invalid secret metadata");
-        }
-        return true;
-      } catch (error) {
-        if (error instanceof CloudflareApiError && error.status === 404) return false;
-        throw error;
-      }
-    }
-  };
 }
 
 function parseWranglerBindingPresence(
@@ -124,9 +93,4 @@ function normalizeDatabaseId(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  const actual = Object.keys(value);
-  return actual.length === keys.length && actual.every((key) => keys.includes(key));
 }

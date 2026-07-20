@@ -7,16 +7,12 @@ import {
 
 const accountId = "0123456789abcdef0123456789abcdef";
 const apiToken = "fixture-cloudflare-token";
-const workerName = "tenantscript-control-plane";
 const databaseId = "123e4567-e89b-12d3-a456-426614174000";
 
 describe("binary Cloudflare doctor composition", () => {
   it("collects one secret-free snapshot through the read-only Cloudflare APIs", async () => {
     const fetchImpl = vi.fn<CloudflareFetch>((input, init) => {
-      const url = new URL(input);
-      if (url.pathname.endsWith(`/workers/scripts/${workerName}/secrets/ADMIN_CURSOR_SECRET`)) {
-        return Promise.resolve(response({ name: "ADMIN_CURSOR_SECRET", type: "secret_text" }));
-      }
+      expect(new URL(input).pathname).not.toContain("/workers/");
       if (typeof init.body !== "string") throw new Error("expected JSON request body");
       const requestBody = JSON.parse(init.body) as { sql?: string };
       const rows = requestBody.sql?.includes("sqlite_schema")
@@ -32,10 +28,10 @@ describe("binary Cloudflare doctor composition", () => {
     );
 
     const report = await runtime.collectCloudflareDoctor?.({
-      workerName,
       databaseId,
       runtime: "cloudflare-workers",
-      configPath: "wrangler.jsonc"
+      configPath: "wrangler.jsonc",
+      adminCursorSecretPresent: true
     });
 
     expect(report).toMatchObject({
@@ -49,7 +45,7 @@ describe("binary Cloudflare doctor composition", () => {
       }
     });
     expect(JSON.stringify(report)).not.toContain("secret-sentinel");
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(readFile).toHaveBeenCalledWith("wrangler.jsonc", "utf8");
     expect(fetchImpl.mock.calls.map(([input]) => input)).not.toEqual(
       expect.arrayContaining([expect.stringContaining("/settings")])
@@ -74,13 +70,8 @@ describe("binary Cloudflare doctor composition", () => {
     ).toEqual({});
   });
 
-  it("reports a missing secret from the value-omitting metadata endpoint", async () => {
-    const fetchImpl = vi.fn<CloudflareFetch>((input, init) => {
-      if (new URL(input).pathname.includes("/secrets/ADMIN_CURSOR_SECRET")) {
-        return Promise.resolve(new Response(null, { status: 404 }));
-      }
-      return Promise.resolve(d1Response(init));
-    });
+  it("reports a missing secret from an explicit value-free operator attestation", async () => {
+    const fetchImpl = vi.fn<CloudflareFetch>((_input, init) => Promise.resolve(d1Response(init)));
     const runtime = createBinaryDoctorRuntime(
       { CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_API_TOKEN: apiToken },
       fetchImpl,
@@ -89,40 +80,15 @@ describe("binary Cloudflare doctor composition", () => {
 
     await expect(
       runtime.collectCloudflareDoctor?.({
-        workerName,
         databaseId,
         configPath: "wrangler.jsonc",
-        runtime: "cloudflare-workers"
+        runtime: "cloudflare-workers",
+        adminCursorSecretPresent: false
       })
     ).resolves.toMatchObject({ secrets: { ADMIN_CURSOR_SECRET: false } });
-  });
-
-  it("fails closed if secret metadata contains an undocumented value field", async () => {
-    const fetchImpl = vi.fn<CloudflareFetch>((input, init) => {
-      if (new URL(input).pathname.includes("/secrets/ADMIN_CURSOR_SECRET")) {
-        return Promise.resolve(
-          response({ name: "ADMIN_CURSOR_SECRET", type: "secret_text", text: "secret-sentinel" })
-        );
-      }
-      return Promise.resolve(d1Response(init));
-    });
-    const runtime = createBinaryDoctorRuntime(
-      { CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_API_TOKEN: apiToken },
-      fetchImpl,
-      () => Promise.resolve(validWranglerConfig())
+    expect(fetchImpl.mock.calls.map(([input]) => input)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("/workers/")])
     );
-
-    const error = await captureError(
-      runtime.collectCloudflareDoctor?.({
-        workerName,
-        databaseId,
-        configPath: "wrangler.jsonc",
-        runtime: "cloudflare-workers"
-      }) ?? Promise.resolve()
-    );
-
-    expect(error).toMatchObject({ code: "cloudflare_doctor_collection_failed" });
-    expect(JSON.stringify(error)).not.toContain("secret-sentinel");
   });
 });
 
@@ -153,13 +119,4 @@ function validWranglerConfig(): string {
       }],
     },
   }`;
-}
-
-async function captureError(promise: Promise<unknown>): Promise<Error & { code?: string }> {
-  try {
-    await promise;
-  } catch (error) {
-    if (error instanceof Error) return error;
-  }
-  throw new Error("expected collector failure");
 }

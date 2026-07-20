@@ -202,8 +202,8 @@ describe("ext doctor", () => {
         [
           "doctor",
           "--cloudflare",
-          "--worker",
-          "tenantscript-control-plane",
+          "--admin-cursor-secret-present",
+          "true",
           "--database-id",
           "123e4567-e89b-12d3-a456-426614174000",
           "--config",
@@ -219,7 +219,7 @@ describe("ext doctor", () => {
 
     expect(collectCloudflareDoctor).toHaveBeenCalledOnce();
     expect(collectCloudflareDoctor).toHaveBeenCalledWith({
-      workerName: "tenantscript-control-plane",
+      adminCursorSecretPresent: true,
       databaseId: "123e4567-e89b-12d3-a456-426614174000",
       configPath: "wrangler.jsonc",
       runtime: "cloudflare-workers"
@@ -241,7 +241,7 @@ describe("ext doctor", () => {
 
     await expect(
       runExtCli(
-        ["doctor", "--cloudflare", "--worker", "secret-sentinel"],
+        ["doctor", "--cloudflare", "--admin-cursor-secret-present", "secret-sentinel"],
         rollbackOnlyClient,
         captureIo([], stderr),
         { collectCloudflareDoctor }
@@ -273,8 +273,8 @@ describe("ext doctor", () => {
           [
             "doctor",
             "--cloudflare",
-            "--worker",
-            "tenantscript-control-plane",
+            "--admin-cursor-secret-present",
+            "true",
             "--database-id",
             "123e4567-e89b-12d3-a456-426614174000",
             "--config",

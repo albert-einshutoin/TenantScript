@@ -84,8 +84,9 @@ After deployment, collect a secret-free doctor report through a trusted adapter 
 
 The public `createCloudflareDoctorCollector` helper composes value-free binding and secret presence
 readers with a trusted migration-history reader. The binary reads DB/DO presence from the reviewed
-local Wrangler config and uses Cloudflare's value-omitting single-secret metadata endpoint; it never
-requests Worker settings or secret-list payloads. It intentionally reports Cloudflare
+local Wrangler config and requires the operator to attest only whether `ADMIN_CURSOR_SECRET` was
+provisioned. Cloudflare Worker settings and secret response schemas may contain secret text, so the
+binary never requests any Worker or secret endpoint. It intentionally reports Cloudflare
 permission evidence as `unverified`: a successful resource read does not prove the exact write
 authority required for deployment. See the canonical [doctor report contract](../reference/doctor-report.md#cloudflare-read-only-collector).
 

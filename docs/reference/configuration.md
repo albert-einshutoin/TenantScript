@@ -51,12 +51,12 @@ contain bearer tokens, account identifiers, customer data, or other credentials.
 
 ## CLI
 
-| Name                               | Default | Required when                                      | Secret | Purpose                                                                                                                                             |
-| ---------------------------------- | ------- | -------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TENANTSCRIPT_CONTROL_PLANE_URL`   | Unset   | Running `ext rollback` or `ext approvals` live     | No     | Exact HTTPS Control Plane origin without path, query, fragment, or userinfo. Loopback HTTP is accepted only for local development.                  |
-| `TENANTSCRIPT_CONTROL_PLANE_TOKEN` | Unset   | Running an authenticated Admin mutation from `ext` | Yes    | Bearer service token supplied only through the request header. Never place it in the URL, arguments, committed configuration, logs, or issues.      |
-| `CLOUDFLARE_ACCOUNT_ID`            | Unset   | Running `ext doctor --cloudflare`                  | Yes    | Account-scoped API identifier read only by the binary composition root. It is never accepted as a CLI argument or emitted in diagnostics.           |
-| `CLOUDFLARE_API_TOKEN`             | Unset   | Running `ext doctor --cloudflare`                  | Yes    | Least-privilege token with D1 Read and Workers Scripts Read. It is used only in the Authorization header and never accepted in arguments or output. |
+| Name                               | Default | Required when                                      | Secret | Purpose                                                                                                                                                                         |
+| ---------------------------------- | ------- | -------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TENANTSCRIPT_CONTROL_PLANE_URL`   | Unset   | Running `ext rollback` or `ext approvals` live     | No     | Exact HTTPS Control Plane origin without path, query, fragment, or userinfo. Loopback HTTP is accepted only for local development.                                              |
+| `TENANTSCRIPT_CONTROL_PLANE_TOKEN` | Unset   | Running an authenticated Admin mutation from `ext` | Yes    | Bearer service token supplied only through the request header. Never place it in the URL, arguments, committed configuration, logs, or issues.                                  |
+| `CLOUDFLARE_ACCOUNT_ID`            | Unset   | Running `ext doctor --cloudflare`                  | Yes    | Account-scoped API identifier read only by the binary composition root. It is never accepted as a CLI argument or emitted in diagnostics.                                       |
+| `CLOUDFLARE_API_TOKEN`             | Unset   | Running `ext doctor --cloudflare`                  | Yes    | Least-privilege token with D1 Read. The live doctor does not call Worker or secret APIs. It is used only in the Authorization header and never accepted in arguments or output. |
 
 ## Runtime benchmark
 

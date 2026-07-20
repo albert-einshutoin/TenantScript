@@ -451,7 +451,7 @@ async function runCloudflareDoctor(
     if (
       name === undefined ||
       value === undefined ||
-      !["--worker", "--database-id", "--config", "--runtime"].includes(name) ||
+      !["--database-id", "--config", "--admin-cursor-secret-present", "--runtime"].includes(name) ||
       options.has(name)
     ) {
       io.stderr("invalid doctor options");
@@ -459,17 +459,16 @@ async function runCloudflareDoctor(
     }
     options.set(name, value);
   }
-  const workerName = options.get("--worker");
   const databaseId = options.get("--database-id");
   const configPath = options.get("--config");
+  const secretPresence = options.get("--admin-cursor-secret-present");
   const primitive = options.get("--runtime");
   if (
-    workerName === undefined ||
-    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(workerName) ||
     databaseId === undefined ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(databaseId) ||
     configPath === undefined ||
     !isSafeDoctorConfigPath(configPath) ||
+    (secretPresence !== "true" && secretPresence !== "false") ||
     !isSetupRuntimePrimitive(primitive)
   ) {
     io.stderr("invalid doctor options");
@@ -482,9 +481,9 @@ async function runCloudflareDoctor(
   try {
     const report = parseSupportedDoctorReport(
       await runtime.collectCloudflareDoctor({
-        workerName,
         databaseId,
         configPath,
+        adminCursorSecretPresent: secretPresence === "true",
         runtime: primitive
       })
     );
