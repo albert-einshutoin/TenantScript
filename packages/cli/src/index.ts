@@ -41,7 +41,10 @@ export {
   parseDoctorReport,
   type DoctorFinding,
   type DoctorFindingCode,
+  type DoctorPermissionEvidence,
+  type DoctorReport,
   type DoctorReportV1,
+  type DoctorReportV2,
   type DoctorResult,
   type DoctorRuntimePrimitive
 } from "./doctor.js";

@@ -28,13 +28,34 @@ export interface DoctorReportV1 {
   };
 }
 
+export type DoctorPermissionEvidence = "granted" | "denied" | "unverified";
+
+export interface DoctorReportV2 {
+  version: 2;
+  profile: "production";
+  bindings: DoctorReportV1["bindings"];
+  migrations: DoctorReportV1["migrations"];
+  permissions: {
+    D1_READ: DoctorPermissionEvidence;
+    D1_WRITE: DoctorPermissionEvidence;
+    WORKERS_SCRIPTS_WRITE: DoctorPermissionEvidence;
+  };
+  runtime: DoctorReportV1["runtime"];
+  secrets: DoctorReportV1["secrets"];
+}
+
+export type DoctorReport = DoctorReportV1 | DoctorReportV2;
+
 export type DoctorFindingCode =
   | "doctor_binding_db_missing"
   | "doctor_binding_rate_limiter_missing"
   | "doctor_migrations_pending"
   | "doctor_permission_d1_read_missing"
+  | "doctor_permission_d1_read_unverified"
   | "doctor_permission_d1_write_missing"
+  | "doctor_permission_d1_write_unverified"
   | "doctor_permission_workers_scripts_write_missing"
+  | "doctor_permission_workers_scripts_write_unverified"
   | "doctor_runtime_primitive_unsupported"
   | "doctor_secret_admin_cursor_missing";
 
@@ -58,7 +79,7 @@ const runtimePrimitives: readonly DoctorRuntimePrimitive[] = [
   "workers-for-platforms"
 ];
 
-export function parseDoctorReport(value: unknown): DoctorReportV1 {
+export function parseDoctorReport(value: unknown): DoctorReport {
   if (
     !isClosedRecord(value, [
       "version",
@@ -72,37 +93,48 @@ export function parseDoctorReport(value: unknown): DoctorReportV1 {
   ) {
     throw invalidReport();
   }
-  if (value.version !== 1) throw invalidReport();
+  if (value.version !== 1 && value.version !== 2) throw invalidReport();
   if (value.profile !== "production") throw invalidReport();
   const bindings = parseBooleanRecord(value.bindings, ["DB", "ADMIN_MUTATION_RATE_LIMITER_DO"]);
-  const permissions = parseBooleanRecord(value.permissions, [
-    "D1_READ",
-    "D1_WRITE",
-    "WORKERS_SCRIPTS_WRITE"
-  ]);
   const secrets = parseBooleanRecord(value.secrets, ["ADMIN_CURSOR_SECRET"]);
   const migrations = parseMigrations(value.migrations);
   const runtime = parseRuntime(value.runtime);
-  return {
-    version: 1,
-    profile: "production",
+  const common = {
+    profile: "production" as const,
     bindings: {
       DB: bindings.DB ?? false,
       ADMIN_MUTATION_RATE_LIMITER_DO: bindings.ADMIN_MUTATION_RATE_LIMITER_DO ?? false
     },
     migrations,
-    permissions: {
-      D1_READ: permissions.D1_READ ?? false,
-      D1_WRITE: permissions.D1_WRITE ?? false,
-      WORKERS_SCRIPTS_WRITE: permissions.WORKERS_SCRIPTS_WRITE ?? false
-    },
     runtime,
     secrets: { ADMIN_CURSOR_SECRET: secrets.ADMIN_CURSOR_SECRET ?? false }
   };
+  if (value.version === 1) {
+    const permissions = parseBooleanRecord(value.permissions, [
+      "D1_READ",
+      "D1_WRITE",
+      "WORKERS_SCRIPTS_WRITE"
+    ]);
+    return {
+      version: 1,
+      ...common,
+      permissions: {
+        D1_READ: permissions.D1_READ ?? false,
+        D1_WRITE: permissions.D1_WRITE ?? false,
+        WORKERS_SCRIPTS_WRITE: permissions.WORKERS_SCRIPTS_WRITE ?? false
+      }
+    };
+  }
+  return {
+    version: 2,
+    ...common,
+    permissions: parsePermissionEvidenceRecord(value.permissions)
+  };
 }
 
-export function evaluateDoctorReport(report: DoctorReportV1): DoctorResult {
+export function evaluateDoctorReport(report: DoctorReport): DoctorResult {
   const findings: DoctorFinding[] = [];
+  const permissions = normalizePermissionEvidence(report);
   if (!report.bindings.DB) {
     findings.push(
       finding(
@@ -133,36 +165,9 @@ export function evaluateDoctorReport(report: DoctorReportV1): DoctorResult {
       )
     );
   }
-  if (!report.permissions.D1_READ) {
-    findings.push(
-      finding(
-        "doctor_permission_d1_read_missing",
-        "permission",
-        "The deployment identity cannot read D1 resources.",
-        "docs/reference/configuration.md#control-plane-worker"
-      )
-    );
-  }
-  if (!report.permissions.D1_WRITE) {
-    findings.push(
-      finding(
-        "doctor_permission_d1_write_missing",
-        "permission",
-        "The deployment identity cannot apply D1 changes.",
-        "docs/reference/configuration.md#control-plane-worker"
-      )
-    );
-  }
-  if (!report.permissions.WORKERS_SCRIPTS_WRITE) {
-    findings.push(
-      finding(
-        "doctor_permission_workers_scripts_write_missing",
-        "permission",
-        "The deployment identity cannot publish Worker scripts.",
-        "docs/reference/configuration.md#control-plane-worker"
-      )
-    );
-  }
+  pushPermissionFinding(findings, "D1_READ", permissions.D1_READ);
+  pushPermissionFinding(findings, "D1_WRITE", permissions.D1_WRITE);
+  pushPermissionFinding(findings, "WORKERS_SCRIPTS_WRITE", permissions.WORKERS_SCRIPTS_WRITE);
   if (!report.runtime.supported.includes(report.runtime.configured)) {
     findings.push(
       finding(
@@ -184,6 +189,79 @@ export function evaluateDoctorReport(report: DoctorReportV1): DoctorResult {
     );
   }
   return { version: 1, healthy: findings.length === 0, findings };
+}
+
+function parsePermissionEvidenceRecord(value: unknown): DoctorReportV2["permissions"] {
+  const keys = ["D1_READ", "D1_WRITE", "WORKERS_SCRIPTS_WRITE"] as const;
+  if (!isClosedRecord(value, keys) || Object.keys(value).length !== keys.length) {
+    throw invalidReport();
+  }
+  const d1Read = value.D1_READ;
+  const d1Write = value.D1_WRITE;
+  const workersScriptsWrite = value.WORKERS_SCRIPTS_WRITE;
+  if (
+    !isPermissionEvidence(d1Read) ||
+    !isPermissionEvidence(d1Write) ||
+    !isPermissionEvidence(workersScriptsWrite)
+  ) {
+    throw invalidReport();
+  }
+  return {
+    D1_READ: d1Read,
+    D1_WRITE: d1Write,
+    WORKERS_SCRIPTS_WRITE: workersScriptsWrite
+  };
+}
+
+function isPermissionEvidence(value: unknown): value is DoctorPermissionEvidence {
+  return value === "granted" || value === "denied" || value === "unverified";
+}
+
+function normalizePermissionEvidence(report: DoctorReport): DoctorReportV2["permissions"] {
+  if (report.version === 2) return report.permissions;
+  return {
+    D1_READ: report.permissions.D1_READ ? "granted" : "denied",
+    D1_WRITE: report.permissions.D1_WRITE ? "granted" : "denied",
+    WORKERS_SCRIPTS_WRITE: report.permissions.WORKERS_SCRIPTS_WRITE ? "granted" : "denied"
+  };
+}
+
+function pushPermissionFinding(
+  findings: DoctorFinding[],
+  permission: keyof DoctorReportV2["permissions"],
+  evidence: DoctorPermissionEvidence
+): void {
+  if (evidence === "granted") return;
+  const definitions = {
+    D1_READ: {
+      missing: "doctor_permission_d1_read_missing" as const,
+      unverified: "doctor_permission_d1_read_unverified" as const,
+      capability: "read D1 resources"
+    },
+    D1_WRITE: {
+      missing: "doctor_permission_d1_write_missing" as const,
+      unverified: "doctor_permission_d1_write_unverified" as const,
+      capability: "apply D1 changes"
+    },
+    WORKERS_SCRIPTS_WRITE: {
+      missing: "doctor_permission_workers_scripts_write_missing" as const,
+      unverified: "doctor_permission_workers_scripts_write_unverified" as const,
+      capability: "publish Worker scripts"
+    }
+  };
+  const definition = definitions[permission];
+  // An unverified read-only observation must never be promoted to deployment authority. Keeping
+  // it distinct from an explicit denial lets a future live collector remain honest and fail closed.
+  findings.push(
+    finding(
+      evidence === "denied" ? definition.missing : definition.unverified,
+      "permission",
+      evidence === "denied"
+        ? `The deployment identity cannot ${definition.capability}.`
+        : `The deployment identity permission to ${definition.capability} has not been verified.`,
+      "docs/reference/configuration.md#control-plane-worker"
+    )
+  );
 }
 
 function parseMigrations(value: unknown): DoctorReportV1["migrations"] {
