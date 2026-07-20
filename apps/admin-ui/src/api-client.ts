@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { RBAC_ROLES, type SupportedRbacRole } from "@tenantscript/control-plane/rbac";
-import type { AdminDashboardSection, AuthenticatedIdentity } from "@tenantscript/control-plane";
+import type {
+  AdminDashboardSection,
+  AuthenticatedIdentity,
+  SchemaMigrationStatus
+} from "@tenantscript/control-plane";
 
 export type AdminRole = SupportedRbacRole;
 
@@ -170,6 +174,7 @@ export interface DashboardSnapshot {
   approvals: readonly ApprovalView[];
   executions: readonly ExecutionView[];
   usage: DailyUsageSummaryView;
+  schemaMigrations: readonly SchemaMigrationStatus[];
   cursors: Partial<Record<AdminDashboardSection, string>>;
 }
 
@@ -364,6 +369,32 @@ const usageSummarySchema = z
   })
   .strict();
 
+const schemaMigrationBlockerSchema = z
+  .object({
+    installationId: z.string().min(1),
+    pluginKey: z.string().min(1),
+    pluginVersion: z.string().min(1),
+    schemaRange: z.string().min(1)
+  })
+  .strict();
+
+const schemaMigrationSchema = z
+  .object({
+    hookName: z.string().min(1),
+    incompatibleInstallations: z.array(schemaMigrationBlockerSchema),
+    versions: z.array(
+      z
+        .object({
+          version: z.string().min(1),
+          installationCount: z.number().int().nonnegative(),
+          removable: z.boolean(),
+          blockingInstallations: z.array(schemaMigrationBlockerSchema)
+        })
+        .strict()
+    )
+  })
+  .strict();
+
 const collectionSchema = <T extends z.ZodType>(item: T) =>
   z.object({ items: z.array(item), nextCursor: z.string().optional() }).strict();
 
@@ -373,7 +404,8 @@ const dashboardSchema = z
     pluginVersions: collectionSchema(pluginVersionSchema),
     approvals: collectionSchema(approvalSchema),
     executions: collectionSchema(executionSchema),
-    usage: usageSummarySchema
+    usage: usageSummarySchema,
+    schemaMigrations: z.array(schemaMigrationSchema)
   })
   .strict();
 
@@ -606,6 +638,40 @@ const dashboardFixture: DashboardSnapshot = {
     }
   ],
   usage: { date: "2026-06-16", executions: 34, runtimeMs: 742 },
+  schemaMigrations: [
+    {
+      hookName: "invoice.created",
+      incompatibleInstallations: [],
+      versions: [
+        {
+          version: "1.0.0",
+          installationCount: 1,
+          removable: false,
+          blockingInstallations: [
+            {
+              installationId: "inst_large_invoice",
+              pluginKey: "large-invoice-notify",
+              pluginVersion: "1.3.0",
+              schemaRange: "^1.0.0"
+            }
+          ]
+        },
+        {
+          version: "2.0.0",
+          installationCount: 1,
+          removable: false,
+          blockingInstallations: [
+            {
+              installationId: "inst_payload_transformer",
+              pluginKey: "payload-transformer",
+              pluginVersion: "0.9.1",
+              schemaRange: ">=1.0.0 <3.0.0"
+            }
+          ]
+        }
+      ]
+    }
+  ],
   cursors: {}
 };
 
@@ -637,7 +703,14 @@ export function createDemoAdminApiClient(): AdminApiClient {
       }
       return Promise.resolve(session);
     },
-    getDashboard: () => Promise.resolve(snapshot),
+    getDashboard: (session) =>
+      Promise.resolve({
+        ...snapshot,
+        schemaMigrations:
+          session.role === "owner" || session.role === "admin" || session.role === "manager"
+            ? snapshot.schemaMigrations
+            : []
+      }),
     getDashboardSection: () =>
       Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
     searchExecutions: (request) => {
@@ -1253,6 +1326,7 @@ function dashboardSnapshot(data: z.infer<typeof dashboardSchema>): DashboardSnap
     approvals: data.approvals.items,
     executions: data.executions.items,
     usage: data.usage,
+    schemaMigrations: data.schemaMigrations,
     cursors: {
       ...(data.installations.nextCursor === undefined
         ? {}

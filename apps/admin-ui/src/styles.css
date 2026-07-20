@@ -304,6 +304,19 @@ select:focus-visible {
   overflow-x: auto;
 }
 
+.compact-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.compact-list li span {
+  display: block;
+  color: #667085;
+}
+
 .tenant-context {
   margin: 0 0 12px;
   color: #475467;

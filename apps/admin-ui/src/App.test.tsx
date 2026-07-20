@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App.js";
 import {
@@ -39,6 +39,14 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByLabelText("signed in as manager")).toHaveTextContent("manager");
     expect(screen.getByRole("button", { name: "Approval queue" })).toBeInTheDocument();
     await expect(screen.findByText("Recent executions")).resolves.toBeInTheDocument();
+    const migrations = screen.getByRole("region", { name: "Schema migrations" });
+    expect(within(migrations).getAllByText("invoice.created")).toHaveLength(2);
+    expect(within(migrations).getAllByText("1 blocking installation")).toHaveLength(2);
+    expect(within(migrations).getByText("inst_large_invoice")).toBeInTheDocument();
+    expect(within(migrations).getByText("large-invoice-notify@1.3.0 · ^1.0.0")).toBeInTheDocument();
+    expect(
+      within(migrations).getByText("Upgrade blockers before removing 1.0.0")
+    ).toBeInTheDocument();
   });
 
   it("routes between operational panels and signs out", async () => {
@@ -61,6 +69,15 @@ describe("Admin UI auth foundation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(screen.getByRole("heading", { name: "Admin Console" })).toBeInTheDocument();
+  });
+
+  it("does not expose app-wide schema blockers to tenant viewers", async () => {
+    render(<App client={createDemoAdminApiClient()} />);
+
+    await login("viewer-token");
+
+    await expect(screen.findByText("No schema migrations configured")).resolves.toBeInTheDocument();
+    expect(screen.queryByText("Upgrade blockers before removing 1.0.0")).not.toBeInTheDocument();
   });
 
   it("opens a read-only permission review from an installation row", async () => {
