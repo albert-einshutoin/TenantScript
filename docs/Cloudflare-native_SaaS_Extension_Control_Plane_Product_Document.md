@@ -224,8 +224,8 @@ await extensions.run("invoice.created", { tenantId, payload });
   "name": "large-invoice-approval",
   "version": "1.0.3",
   "hooks": [
-    { "name": "invoice.created", "type": "event", "timeoutMs": 250 },
-    { "name": "onInvoiceApprovalDecided", "type": "event", "timeoutMs": 250 }
+    { "name": "invoice.created", "type": "event", "timeoutMs": 250, "schemaVersionRange": "^1.0.0" },
+    { "name": "onInvoiceApprovalDecided", "type": "event", "timeoutMs": 250, "schemaVersionRange": "^1.0.0" }
   ],
   "configSchema": {
     "properties": {

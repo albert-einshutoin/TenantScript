@@ -85,7 +85,7 @@
 
 ## チャンク E: schema evolution 運用(T16–T17)
 
-- [ ] **P2-T16**(M)dual-publish
+- [x] **P2-T16**(M)dual-publish
   - RED: hook schema v1/v2 並行配信中、plugin の互換 range に応じて正しい schema の payload が届く
   - DoD: 並行配信テスト green
 

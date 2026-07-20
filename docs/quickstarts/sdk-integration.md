@@ -44,7 +44,7 @@ pnpm --filter @tenantscript/host-sdk test
 
 ## 2. Plugin: manifestをhandlerより先に固定する
 
-manifestのhook名はhostと完全一致させ、raw provider tokenではなく必要なcapability scopeだけを宣言する。
+manifestのhook名はhostと完全一致させ、`schemaVersionRange`には対応できるhost payload schemaのsemver rangeを宣言する。plugin packageのversion rangeではない。raw provider tokenではなく必要なcapability scopeだけを宣言する。
 
 ```ts
 import type { TenantScriptManifest } from "@tenantscript/manifest";
@@ -52,7 +52,7 @@ import type { TenantScriptManifest } from "@tenantscript/manifest";
 export const manifest = {
   name: "large-invoice-notify",
   version: "1.0.0",
-  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
   capabilities: { "slack.send": { channel: "$config.notifyChannel" } },
   configSchema: {
     properties: { notifyChannel: { type: "string" } },
