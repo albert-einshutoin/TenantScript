@@ -72,8 +72,9 @@ rotation runbook. The template does not guess or generate secrets.
 - **Recovery:** retain the setup plan and operator-owned resource journal. Never delete an adopted
   resource merely because it appears in a cleanup example. Follow the
   [setup run journal recovery contract](setup-run-journal.md) and the
-  [Cloudflare transport boundary](cloudflare-api-transport.md); resource-specific live Cloudflare
-  apply remains unimplemented.
+  [Cloudflare transport boundary](cloudflare-api-transport.md). The
+  [D1 setup adapter](cloudflare-d1-setup-adapter.md) is the first resource slice; full live
+  Cloudflare apply remains unimplemented.
 - **Verification:** run accountless `pnpm verify`, Wrangler dry-run, migration inspection, the
   secret-free doctor flow, and a live tenant-isolation smoke test in the operator account.
 

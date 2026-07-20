@@ -5,9 +5,10 @@ transport is intentionally narrower than a general Cloudflare client: callers pr
 path segments, not a URL, and every request is rooted at
 `https://api.cloudflare.com/client/v4/accounts/<account-id>/`.
 
-This transport does not provision resources by itself. D1, R2, Workers, Workflows, and Analytics
-Engine adapters must still implement reconciliation, ownership proof, cleanup, and Tier 2 live
-verification before `ext setup` can claim a successful deployment.
+This transport does not provision resources by itself. The ownership-aware
+[D1 setup adapter](cloudflare-d1-setup-adapter.md) implements the first create/adopt/cleanup slice;
+R2, Workers, Workflows, Analytics Engine, D1 migrations, full composition, and Tier 2 live
+verification remain before `ext setup` can claim a successful deployment.
 
 ## Credential and permission boundary
 
