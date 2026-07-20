@@ -2,6 +2,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
+import { format, resolveConfig } from "prettier";
 
 const snapshotFileName = "api-surface.snapshot.json";
 
@@ -35,7 +36,8 @@ export async function collectPublicApiSurface(rootDirectory) {
         exports: collectModuleExports(program, checker, source)
       }))
     })),
-    controlPlaneRest: await collectRestSurface(root)
+    controlPlaneRest: await collectRestSurface(root),
+    controlPlaneSuccessResponses: await collectControlPlaneSuccessResponses(root)
   };
 }
 
@@ -49,8 +51,8 @@ export async function checkPublicApiSurface(rootDirectory) {
   }
   if (!isPublicApiSurface(expected)) throw invalidSnapshot();
   const actual = await collectPublicApiSurface(root);
-  const expectedText = serializePublicApiSurface(expected);
-  const actualText = serializePublicApiSurface(actual);
+  const expectedText = await serializePublicApiSurface(expected);
+  const actualText = await serializePublicApiSurface(actual);
   if (expectedText !== actualText) {
     throw new Error(
       `Public API surface drift detected. Review semver and migration impact before running pnpm api-surface:write.\nExpected:\n${expectedText}Actual:\n${actualText}`
@@ -58,8 +60,11 @@ export async function checkPublicApiSurface(rootDirectory) {
   }
 }
 
-export function serializePublicApiSurface(surface) {
-  return `${JSON.stringify(surface, null, 2)}\n`;
+export async function serializePublicApiSurface(surface) {
+  return await format(JSON.stringify(surface), {
+    ...(await resolveConfig(resolve(process.cwd(), snapshotFileName))),
+    parser: "json"
+  });
 }
 
 async function collectPackageEntries(root) {
@@ -185,7 +190,62 @@ function parseRestContract(node) {
     throw new Error("Control Plane REST contract is invalid");
   }
   const methods = methodsNode.elements.map((method) => stringLiteral(unwrapExpression(method)));
-  return { id, path, methods: methods.sort(), isolation };
+  const successNode = properties.get("success");
+  if (!ts.isObjectLiteralExpression(successNode)) {
+    throw new Error("Control Plane REST contract is invalid");
+  }
+  const success = successNode.properties
+    .map((property) => parseSuccessContract(property))
+    .sort((left, right) => left.method.localeCompare(right.method));
+  return { id, path, methods: methods.sort(), isolation, success };
+}
+
+function parseSuccessContract(property) {
+  if (!ts.isPropertyAssignment(property)) {
+    throw new Error("Control Plane REST contract is invalid");
+  }
+  const method = propertyName(property.name);
+  const node = unwrapExpression(property.initializer);
+  if (method === undefined || !ts.isObjectLiteralExpression(node)) {
+    throw new Error("Control Plane REST contract is invalid");
+  }
+  const properties = new Map();
+  for (const nested of node.properties) {
+    if (!ts.isPropertyAssignment(nested)) continue;
+    const name = propertyName(nested.name);
+    if (name !== undefined) properties.set(name, unwrapExpression(nested.initializer));
+  }
+  const status = numberLiteral(properties.get("status"));
+  const body = stringLiteral(properties.get("body"));
+  const schemaNode = properties.get("schema");
+  return {
+    method,
+    status,
+    body,
+    ...(schemaNode === undefined ? {} : { schema: stringLiteral(schemaNode) })
+  };
+}
+
+async function collectControlPlaneSuccessResponses(root) {
+  let artifact;
+  try {
+    artifact = JSON.parse(
+      await readFile(
+        join(root, "docs/reference/control-plane-success-responses.schema.json"),
+        "utf8"
+      )
+    );
+  } catch {
+    throw new Error("Control Plane success response schema artifact is invalid");
+  }
+  if (
+    !hasExactKeys(artifact, ["$schema", "$defs"]) ||
+    artifact.$schema !== "https://json-schema.org/draft/2020-12/schema" ||
+    !isRecord(artifact.$defs)
+  ) {
+    throw new Error("Control Plane success response schema artifact is invalid");
+  }
+  return artifact.$defs;
 }
 
 function unwrapExpression(node) {
@@ -209,11 +269,29 @@ function stringLiteral(node) {
   return node.text;
 }
 
+function numberLiteral(node) {
+  if (!ts.isNumericLiteral(node)) throw new Error("Control Plane REST contract is invalid");
+  return Number(node.text);
+}
+
 function isPublicApiSurface(value) {
-  if (!hasExactKeys(value, ["version", "packages", "controlPlaneRest"]) || value.version !== 1) {
+  if (
+    !hasExactKeys(value, [
+      "version",
+      "packages",
+      "controlPlaneRest",
+      "controlPlaneSuccessResponses"
+    ]) ||
+    value.version !== 1
+  ) {
     return false;
   }
-  if (!Array.isArray(value.packages) || !Array.isArray(value.controlPlaneRest)) return false;
+  if (
+    !Array.isArray(value.packages) ||
+    !Array.isArray(value.controlPlaneRest) ||
+    !isRecord(value.controlPlaneSuccessResponses)
+  )
+    return false;
   return (
     value.packages.every(
       (entry) =>
@@ -235,11 +313,21 @@ function isPublicApiSurface(value) {
     ) &&
     value.controlPlaneRest.every(
       (endpoint) =>
-        hasExactKeys(endpoint, ["id", "path", "methods", "isolation"]) &&
+        hasExactKeys(endpoint, ["id", "path", "methods", "isolation", "success"]) &&
         typeof endpoint.id === "string" &&
         typeof endpoint.path === "string" &&
         Array.isArray(endpoint.methods) &&
         endpoint.methods.every((method) => typeof method === "string") &&
+        Array.isArray(endpoint.success) &&
+        endpoint.success.every(
+          (success) =>
+            (hasExactKeys(success, ["method", "status", "body"]) ||
+              hasExactKeys(success, ["method", "status", "body", "schema"])) &&
+            typeof success.method === "string" &&
+            typeof success.status === "number" &&
+            typeof success.body === "string" &&
+            (success.schema === undefined || typeof success.schema === "string")
+        ) &&
         typeof endpoint.isolation === "string"
     )
   );
@@ -263,7 +351,7 @@ async function main() {
   const root = process.cwd();
   if (process.argv.slice(2).includes("--write")) {
     const surface = await collectPublicApiSurface(root);
-    await writeFile(join(root, snapshotFileName), serializePublicApiSurface(surface));
+    await writeFile(join(root, snapshotFileName), await serializePublicApiSurface(surface));
     console.log(`Updated ${snapshotFileName}.`);
     return;
   }

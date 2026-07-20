@@ -396,10 +396,15 @@ export {
 
 export {
   ADMIN_HTTP_ENDPOINT_CONTRACTS,
+  CONTROL_PLANE_SUCCESS_RESPONSE_SCHEMAS,
   matchAdminHttpEndpoint,
   type AdminHttpEndpointContract,
   type AdminHttpEndpointId,
   type AdminHttpEndpointMatch,
   type AdminHttpIsolation,
-  type AdminRoute
+  type AdminHttpMethod,
+  type AdminHttpSuccessResponseContract,
+  type AdminRoute,
+  type ControlPlaneJsonSchema,
+  type ControlPlaneSuccessResponseSchemaId
 } from "./http-api.js";

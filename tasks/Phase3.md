@@ -83,7 +83,7 @@
 - [ ] **P3-T14**(M)API freeze + semver ポリシー
   - 内容: 公開 API(SDK / manifest / control-plane REST)の表面を明文化し、breaking change 検知を CI 化(`ext schema diff` の自プロダクト適用)
   - DoD: API surface スナップショットテスト常設
-  - Progress: Issue #223で公開package symbol/subpathとControl Plane REST route/method/isolationのsnapshot gateを実装。Issue #227で削除/kind/REST互換性破壊をmajor Changesetとmigration guideへ機械的に連携。Issue #233でparser同源の公開manifest draft-07 JSON Schemaと構造snapshotを実装。Control Plane response body schemaは未完了
+  - Progress: Issue #223で公開package symbol/subpathとControl Plane REST route/method/isolationのsnapshot gateを実装。Issue #227で削除/kind/REST互換性破壊をmajor Changesetとmigration guideへ機械的に連携。Issue #233でparser同源の公開manifest draft-07 JSON Schemaと構造snapshotを実装。Issue #235で全16 endpoint・17 methodの成功status/body schema、実handler検証、release policy連携を実装
 
 - [x] **P3-T15**(M)upgrade guide + migration テスト
   - RED: 「前 minor → 最新」のアップグレードが、データ(D1/R2/DO)を保持したまま通る自動テスト

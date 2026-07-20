@@ -14,6 +14,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Canonical glossary](docs/reference/glossary.md) — app、tenant、plugin、installation、capabilityなどの権限境界
 - [Schema diff in CI](docs/reference/schema-diff-ci.md) — breaking判定、exit code、warning、CI統合
 - [Public API stability](docs/reference/public-api-stability.md) — package exportとControl Plane REST surfaceのsemver gate
+- [Control Plane success response schemas](docs/reference/control-plane-success-responses.md) — 成功status/bodyの機械可読契約と実handler検証
 - [npm package release contract](docs/reference/npm-package-release.md) — source-only build、clean tarball、install/import smoke、publish境界
 - [Hook schema migration運用](docs/operations/schema-migrations.md) — app全体の利用追跡、廃止ゲート、Admin UI
 - [App database routing](docs/operations/app-database-routing.md) — app単位D1、fail-closed router、endpoint isolation matrix

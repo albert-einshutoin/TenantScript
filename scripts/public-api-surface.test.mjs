@@ -41,9 +41,13 @@ test("collects public package exports and REST contracts deterministically", asy
         id: "session",
         path: "/v1/session",
         methods: ["GET"],
-        isolation: "identity"
+        isolation: "identity",
+        success: [{ method: "GET", status: 200, body: "json", schema: "session" }]
       }
-    ]
+    ],
+    controlPlaneSuccessResponses: {
+      session: { type: "object" }
+    }
   });
 });
 
@@ -102,6 +106,7 @@ async function createFixtureRepository() {
   const root = await mkdtemp(join(tmpdir(), "tenantscript-api-surface-"));
   temporaryDirectories.push(root);
   await mkdir(join(root, "packages/control-plane/src"), { recursive: true });
+  await mkdir(join(root, "docs/reference"), { recursive: true });
   await writeFile(
     join(root, "packages/control-plane/package.json"),
     JSON.stringify({
@@ -122,17 +127,27 @@ async function createFixtureRepository() {
     'export interface PublicType { readonly id: string }\nexport const publicValue = "stable";\n'
   );
   await writeHttpContract(root, "GET");
+  await writeFile(
+    join(root, "docs/reference/control-plane-success-responses.schema.json"),
+    JSON.stringify({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $defs: { session: { type: "object" } }
+    })
+  );
   return root;
 }
 
 async function writeHttpContract(root, method) {
   await writeFile(
     join(root, "packages/control-plane/src/http-api.ts"),
-    `export const ADMIN_HTTP_ENDPOINT_CONTRACTS = [\n  { id: "session", path: "/v1/session", methods: ["${method}"], isolation: "identity", route: "session" }\n] as const;\n`
+    `export const ADMIN_HTTP_ENDPOINT_CONTRACTS = [\n  { id: "session", path: "/v1/session", methods: ["${method}"], isolation: "identity", route: "session", success: { ${method}: { status: 200, body: "json", schema: "session" } } }\n] as const;\n`
   );
 }
 
 async function writeSnapshot(root) {
   const surface = await collectPublicApiSurface(root);
-  await writeFile(join(root, "api-surface.snapshot.json"), serializePublicApiSurface(surface));
+  await writeFile(
+    join(root, "api-surface.snapshot.json"),
+    await serializePublicApiSurface(surface)
+  );
 }

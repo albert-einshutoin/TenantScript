@@ -108,8 +108,41 @@ export function collectBreakingChanges(baseSurface, currentSurface) {
         `removed REST methods ${removedMethods.join(",")} from ${baseEndpoint.id}`
       );
     }
+    if (Array.isArray(baseEndpoint.success)) {
+      const currentSuccess = new Map(
+        (Array.isArray(currentEndpoint.success) ? currentEndpoint.success : []).map((entry) => [
+          entry.method,
+          entry
+        ])
+      );
+      for (const baseSuccess of baseEndpoint.success) {
+        const current = currentSuccess.get(baseSuccess.method);
+        if (current === undefined || JSON.stringify(current) !== JSON.stringify(baseSuccess)) {
+          addChange(
+            changes,
+            controlPlanePackage,
+            `changed REST success response ${baseEndpoint.id} ${baseSuccess.method}`
+          );
+        }
+      }
+    }
+  }
+
+  if (isRecord(baseSurface.controlPlaneSuccessResponses)) {
+    const currentSchemas = isRecord(currentSurface.controlPlaneSuccessResponses)
+      ? currentSurface.controlPlaneSuccessResponses
+      : {};
+    for (const [schemaId, baseSchema] of Object.entries(baseSurface.controlPlaneSuccessResponses)) {
+      if (JSON.stringify(currentSchemas[schemaId]) !== JSON.stringify(baseSchema)) {
+        addChange(changes, controlPlanePackage, `changed REST success schema ${schemaId}`);
+      }
+    }
   }
   return changes;
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseChangeset({ path, content }) {
