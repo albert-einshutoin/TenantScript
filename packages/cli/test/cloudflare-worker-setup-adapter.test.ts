@@ -227,6 +227,19 @@ describe("Cloudflare Worker setup adapter", () => {
         }
       })
     ).rejects.toMatchObject({ code: "cloudflare_worker_invalid_request" });
+    await expect(
+      adapter.reconcile({
+        ...reconcileRequest("initial"),
+        operation: {
+          ...operation,
+          dependsOn: operation.dependsOn.map((dependency) =>
+            dependency === "declare:usage-analytics-engine-binding"
+              ? "create:usage-analytics-engine"
+              : dependency
+          )
+        }
+      })
+    ).rejects.toMatchObject({ code: "cloudflare_worker_invalid_request" });
     expect(requests).toEqual([]);
     expect(deployments).toEqual([]);
   });
