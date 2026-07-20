@@ -16,6 +16,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [App database routing](docs/operations/app-database-routing.md) — app単位D1、fail-closed router、endpoint isolation matrix
 - [Public configuration reference](docs/reference/configuration.md) — Worker bindings、環境変数、default、secret境界の正本
 - [Control Plane error catalog](docs/reference/control-plane-errors.md) — stable code、HTTP status、retry/client action、安全な404境界
+- [CLI command reference](docs/reference/cli.md) — 実装済みcommand、必須option、JSON output、exit code
 - [Runaway installation隔離](docs/operations/runaway-quarantine.md) — 連続失敗・timeout、自動disable、明示復旧
 - [Incident response runbook](docs/operations/incident-response.md) — plugin・capability・budget・D1/R2障害の封じ込め、復旧、公開drill契約
 - [Opt-in telemetry and privacy](docs/privacy/telemetry.md) — default-off、匿名集計schema、receiver制約、Admin UI表示
