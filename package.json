@@ -8,7 +8,7 @@
   "scripts": {
     "build": "node scripts/publishable-packages.mjs build",
     "changeset": "changeset",
-    "changeset:status": "changeset status",
+    "changeset:status": "changeset status --since origin/main",
     "changeset:version": "changeset version",
     "pack:check": "node scripts/publishable-packages.mjs check",
     "typecheck": "pnpm -r typecheck",
