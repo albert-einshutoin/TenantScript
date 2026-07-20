@@ -54,7 +54,7 @@ export function createCloudflareDoctorCollector(params: {
   workerName: string;
   databaseId: string;
   migrationReader: CloudflareDoctorMigrationReader;
-  secretPresence: CloudflareDoctorSecretPresence;
+  secretPresence?: CloudflareDoctorSecretPresence;
   runtime: {
     configured: DoctorRuntimePrimitive;
     supported: readonly DoctorRuntimePrimitive[];
@@ -63,28 +63,32 @@ export function createCloudflareDoctorCollector(params: {
   validateConfiguration(params);
   const expectedNames = CONTROL_PLANE_MIGRATION_MANIFEST.map(({ name }) => name);
   const expected = expectedNames.map((_, index) => index + 1);
+  const hasSecretOverride = params.secretPresence !== undefined;
 
   return {
     collect: async (): Promise<DoctorReportV2> => {
       try {
         // These independent reads are joined before parsing so the report is emitted atomically:
         // callers never receive a partially collected snapshot after one trusted source fails.
-        const [settings, appliedNames, adminCursorSecret] = await Promise.all([
+        const [settings, appliedNames, secretOverride] = await Promise.all([
           params.transport.request({
             method: "GET",
             pathSegments: ["workers", "scripts", params.workerName, "settings"]
           }),
           params.migrationReader.listApplied(params.databaseId),
-          params.secretPresence.has("ADMIN_CURSOR_SECRET")
+          params.secretPresence?.has("ADMIN_CURSOR_SECRET")
         ]);
-        const bindings = parseBindings(settings, params.databaseId);
+        const workerSnapshot = parseBindings(settings, params.databaseId);
         const applied = parseAppliedMigrations(appliedNames, expectedNames);
-        if (typeof adminCursorSecret !== "boolean") throw invalidResponse();
+        if (hasSecretOverride && typeof secretOverride !== "boolean") throw invalidResponse();
+        const adminCursorSecret = hasSecretOverride
+          ? (secretOverride as boolean)
+          : workerSnapshot.adminCursorSecret;
 
         return parseDoctorReportV2({
           version: 2,
           profile: "production",
-          bindings,
+          bindings: workerSnapshot.bindings,
           migrations: { expected, applied },
           // Cloudflare's read endpoints accept overlapping read/write permission sets. A successful
           // request therefore proves resource visibility, not the exact deployment authority.
@@ -107,7 +111,10 @@ export function createCloudflareDoctorCollector(params: {
   };
 }
 
-function parseBindings(value: unknown, databaseId: string): DoctorReportV2["bindings"] {
+function parseBindings(
+  value: unknown,
+  databaseId: string
+): { bindings: DoctorReportV2["bindings"]; adminCursorSecret: boolean } {
   if (!isRecord(value) || !hasOnlyKeys(value, SETTINGS_KEYS)) {
     throw invalidResponse();
   }
@@ -118,6 +125,7 @@ function parseBindings(value: unknown, databaseId: string): DoctorReportV2["bind
 
   let database = false;
   let rateLimiter = false;
+  let adminCursorSecret = false;
   for (const binding of bindingValues as unknown[]) {
     if (!isRecord(binding) || !isBindingName(binding.name) || !isBindingType(binding.type)) {
       throw invalidResponse();
@@ -152,8 +160,23 @@ function parseBindings(value: unknown, databaseId: string): DoctorReportV2["bind
       }
       rateLimiter = true;
     }
+    if (binding.name === "ADMIN_CURSOR_SECRET") {
+      if (
+        adminCursorSecret ||
+        binding.type !== "secret_text" ||
+        !hasOnlyKeys(binding, ["name", "type", "text"])
+      ) {
+        throw invalidResponse();
+      }
+      // The settings response may contain provider-managed secret metadata. Presence is the only
+      // diagnostic fact retained; the value is never read, copied, serialized, or logged.
+      adminCursorSecret = true;
+    }
   }
-  return { DB: database, ADMIN_MUTATION_RATE_LIMITER_DO: rateLimiter };
+  return {
+    bindings: { DB: database, ADMIN_MUTATION_RATE_LIMITER_DO: rateLimiter },
+    adminCursorSecret
+  };
 }
 
 function parseAppliedMigrations(value: unknown, expectedNames: readonly string[]): number[] {
@@ -169,7 +192,7 @@ function parseAppliedMigrations(value: unknown, expectedNames: readonly string[]
 function validateConfiguration(value: unknown): void {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, [
+    !hasOnlyKeys(value, [
       "transport",
       "workerName",
       "databaseId",
@@ -177,14 +200,17 @@ function validateConfiguration(value: unknown): void {
       "secretPresence",
       "runtime"
     ]) ||
+    !["transport", "workerName", "databaseId", "migrationReader", "runtime"].every(
+      (key) => key in value
+    ) ||
     !isRecord(value.transport) ||
     typeof value.transport.request !== "function" ||
     !isWorkerName(value.workerName) ||
     !isDatabaseId(value.databaseId) ||
     !isRecord(value.migrationReader) ||
     typeof value.migrationReader.listApplied !== "function" ||
-    !isRecord(value.secretPresence) ||
-    typeof value.secretPresence.has !== "function" ||
+    (value.secretPresence !== undefined &&
+      (!isRecord(value.secretPresence) || typeof value.secretPresence.has !== "function")) ||
     !isRecord(value.runtime) ||
     !hasExactKeys(value.runtime, ["configured", "supported"]) ||
     !isRuntimePrimitive(value.runtime.configured) ||
