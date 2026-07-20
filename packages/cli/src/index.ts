@@ -17,6 +17,7 @@ import type {
 } from "./admin-http-client.js";
 import { runRollbackDrill } from "./rollback-drill.js";
 import { evaluateSupportedDoctorReport, parseSupportedDoctorReport } from "./doctor.js";
+import type { CliRuntime } from "./cli-runtime.js";
 import { writePluginScaffold, type PluginScaffoldRequest } from "./plugin-scaffold.js";
 import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
 import {
@@ -35,6 +36,10 @@ export {
 } from "./admin-http-client.js";
 
 export { createBinaryAdminClient, type BinaryAdminClient } from "./binary-client.js";
+
+export { createBinaryDoctorRuntime } from "./binary-doctor.js";
+
+export type { CliRuntime } from "./cli-runtime.js";
 
 export {
   evaluateDoctorReport,
@@ -131,6 +136,7 @@ export {
 } from "./cloudflare-d1-migration-setup-adapter.js";
 
 export {
+  createCloudflareD1MigrationReader,
   createCloudflareWranglerD1MigrationRunner,
   createNodeWranglerD1MigrationProcess,
   type WranglerD1MigrationProcess
@@ -218,7 +224,8 @@ export async function runExtCli(
     Partial<ApprovalDecisionClient> &
     Partial<DeployClient> &
     Partial<AdminMutationClient>,
-  io: CliIo = consoleIo
+  io: CliIo = consoleIo,
+  runtime: CliRuntime = {}
 ): Promise<number> {
   const [command, ...args] = argv;
   if (command === "init") {
@@ -252,7 +259,7 @@ export async function runExtCli(
     return await runApprovalDecision(args, client, io);
   }
   if (command === "doctor") {
-    return await runDoctor(args, io);
+    return await runDoctor(args, io, runtime);
   }
   if (command === "setup") {
     return await runSetup(args, io);
@@ -404,7 +411,10 @@ async function runSetup(args: readonly string[], io: CliIo): Promise<number> {
   return 0;
 }
 
-async function runDoctor(args: readonly string[], io: CliIo): Promise<number> {
+async function runDoctor(args: readonly string[], io: CliIo, runtime: CliRuntime): Promise<number> {
+  if (args[0] === "--cloudflare") {
+    return runCloudflareDoctor(args, io, runtime);
+  }
   if (args.length === 0) {
     io.stderr("missing required doctor option: --report");
     return 2;
@@ -420,6 +430,62 @@ async function runDoctor(args: readonly string[], io: CliIo): Promise<number> {
     return result.healthy ? 0 : 1;
   } catch (error) {
     io.stderr(error instanceof SyntaxError ? "doctor report is invalid" : doctorDiagnostic(error));
+    return 2;
+  }
+}
+
+async function runCloudflareDoctor(
+  args: readonly string[],
+  io: CliIo,
+  runtime: CliRuntime
+): Promise<number> {
+  if (args.length !== 7) {
+    io.stderr("invalid doctor options");
+    return 2;
+  }
+  const options = new Map<string, string>();
+  for (let index = 1; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (
+      name === undefined ||
+      value === undefined ||
+      !["--worker", "--database-id", "--runtime"].includes(name) ||
+      options.has(name)
+    ) {
+      io.stderr("invalid doctor options");
+      return 2;
+    }
+    options.set(name, value);
+  }
+  const workerName = options.get("--worker");
+  const databaseId = options.get("--database-id");
+  const primitive = options.get("--runtime");
+  if (
+    workerName === undefined ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(workerName) ||
+    databaseId === undefined ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(databaseId) ||
+    !isSetupRuntimePrimitive(primitive)
+  ) {
+    io.stderr("invalid doctor options");
+    return 2;
+  }
+  if (runtime.collectCloudflareDoctor === undefined) {
+    io.stderr("cloudflare doctor is not configured");
+    return 2;
+  }
+  try {
+    const report = parseSupportedDoctorReport(
+      await runtime.collectCloudflareDoctor({ workerName, databaseId, runtime: primitive })
+    );
+    const result = evaluateSupportedDoctorReport(report);
+    io.stdout(JSON.stringify(result));
+    return result.healthy ? 0 : 1;
+  } catch {
+    // Provider errors can include account, resource, or credential context. The CLI exposes one
+    // stable diagnostic and relies on the closed Doctor result for all repair guidance.
+    io.stderr("cloudflare doctor collection failed");
     return 2;
   }
 }

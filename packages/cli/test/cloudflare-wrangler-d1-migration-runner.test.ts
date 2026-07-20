@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   CONTROL_PLANE_MIGRATION_MANIFEST,
   D1MigrationRunnerError,
+  createCloudflareD1MigrationReader,
   createCloudflareD1MigrationSetupAdapter,
   createCloudflareWranglerD1MigrationRunner,
   createNodeWranglerD1MigrationProcess,
@@ -33,6 +34,21 @@ afterEach(async () => {
 });
 
 describe("Cloudflare Wrangler D1 migration runner", () => {
+  it("exposes a read-only migration reader without a Wrangler process", async () => {
+    const requests: RecordedRequest[] = [];
+    const applied = expectedNames.slice(0, 4);
+    const reader = createCloudflareD1MigrationReader({
+      transport: historyTransport(requests, applied),
+      databaseId
+    });
+
+    await expect(reader.listApplied(databaseId)).resolves.toEqual(applied);
+    expect(requests.map((request) => request.body)).toEqual([
+      { sql: tableQuery },
+      { sql: historyQuery }
+    ]);
+  });
+
   it("returns an empty history when the migration table does not exist", async () => {
     const requests: RecordedRequest[] = [];
     const runner = createRunner({
