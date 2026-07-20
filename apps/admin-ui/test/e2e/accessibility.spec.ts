@@ -21,6 +21,7 @@ test("login and every primary Admin route have no axe violations", async ({ page
   for (const route of authenticatedRoutes) {
     await page.getByRole("button", { name: route }).click();
     await expect(page.getByRole("heading", { level: 1, name: route })).toBeVisible();
+    await expectRouteLoaded(page, route);
     await expectNoAxeViolations(page, route);
   }
 });
@@ -85,6 +86,22 @@ test("manager completes install, rollback, and approval using only the keyboard"
 async function expectNoAxeViolations(page: Page, state: string): Promise<void> {
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations, `${state}: ${formatViolations(results.violations)}`).toEqual([]);
+}
+
+async function expectRouteLoaded(
+  page: Page,
+  route: (typeof authenticatedRoutes)[number]
+): Promise<void> {
+  const routeContent = {
+    Overview: () => page.getByRole("region", { name: "Operations summary" }),
+    Installations: () => page.getByRole("region", { name: "Installation table" }),
+    Versions: () => page.getByRole("region", { name: "Plugin version table" }),
+    "Approval queue": () => page.getByRole("button", { name: "Approve" }).first(),
+    Executions: () => page.getByRole("button", { name: "Search executions" }),
+    Connections: () => page.getByRole("region", { name: "Provider connections" }),
+    "Audit log": () => page.getByRole("region", { name: "Tenant audit log" })
+  } satisfies Record<(typeof authenticatedRoutes)[number], () => ReturnType<Page["locator"]>>;
+  await expect(routeContent[route]()).toBeVisible();
 }
 
 function formatViolations(

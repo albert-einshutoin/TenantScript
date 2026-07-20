@@ -45,6 +45,11 @@ test("keeps axe unfiltered and covers every primary route plus privileged keyboa
   }
   assert.doesNotMatch(spec, /\.disableRules\s*\(/u);
   assert.doesNotMatch(spec, /\.exclude\s*\(/u);
+  assert.match(
+    spec,
+    /await expectRouteLoaded\(page, route\);[\s\S]*await expectNoAxeViolations\(page, route\);/u,
+    "axe must scan each route only after route-specific content has loaded"
+  );
   assert.match(await readText("apps/admin-ui/src/styles.css"), /\.table-wrap:focus-visible/u);
 });
 
