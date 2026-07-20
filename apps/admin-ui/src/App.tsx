@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   createUnavailableAdminApiClient,
   AdminApiError,
@@ -23,7 +23,9 @@ import {
 } from "./api-client.js";
 import type { AdminDashboardSection } from "@tenantscript/control-plane";
 import { canRolePerform } from "@tenantscript/control-plane/rbac";
+import { ExecutionTable } from "./ExecutionTable.js";
 import { type AdminRoute, useHashRoute } from "./router.js";
+import { StatusPill } from "./StatusPill.js";
 
 const defaultClient = createUnavailableAdminApiClient();
 
@@ -1731,65 +1733,6 @@ function ExecutionsPanel({
   );
 }
 
-function ExecutionTable({
-  snapshot,
-  executions = snapshot?.executions ?? [],
-  onView
-}: {
-  snapshot?: DashboardSnapshot;
-  executions?: readonly ExecutionView[];
-  onView?: (id: string) => void;
-}) {
-  return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Execution ID</th>
-            <th>Hook</th>
-            <th>Plugin</th>
-            <th>Status</th>
-            <th>Duration</th>
-            <th>Capabilities</th>
-            {onView === undefined ? null : <th>Details</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {executions.map((execution) => (
-            <tr key={execution.id}>
-              <td>{execution.id}</td>
-              <td>{execution.hookName}</td>
-              <td>{execution.pluginId}</td>
-              <td>
-                <StatusPill status={execution.status} />
-              </td>
-              <td>{execution.durationMs}ms</td>
-              <td>
-                {execution.capabilityNames.length === 0
-                  ? "none"
-                  : execution.capabilityNames.join(", ")}
-              </td>
-              {onView === undefined ? null : (
-                <td>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => {
-                      onView(execution.id);
-                    }}
-                  >
-                    View {execution.id}
-                  </button>
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function ExecutionDetail({ detail }: { detail: ExecutionDetailView }) {
   return (
     <section className="execution-detail" aria-label={`Execution detail ${detail.id}`}>
@@ -1893,24 +1836,6 @@ function PanelHeader({ title, detail }: { title: string; detail: string }) {
       <span>{detail}</span>
     </div>
   );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const tone = useMemo(() => statusTone(status), [status]);
-  return <span className={`status-pill ${tone}`}>{status}</span>;
-}
-
-function statusTone(status: string): "ok" | "warning" | "critical" | "neutral" {
-  if (status === "success" || status === "enabled" || status === "approved") {
-    return "ok";
-  }
-  if (status === "pending") {
-    return "warning";
-  }
-  if (status === "error" || status === "timeout" || status === "egress_denied") {
-    return "critical";
-  }
-  return "neutral";
 }
 
 function adminMutationErrorMessage(cause: unknown, fallback: string): string {

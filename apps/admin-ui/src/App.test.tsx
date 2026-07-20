@@ -111,6 +111,62 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByRole("heading", { name: "Admin Console" })).toBeInTheDocument();
   });
 
+  it("keeps accumulated execution pages within a bounded DOM window", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const snapshot = await baseClient.getDashboard(session);
+    const execution = requireFirst(snapshot.executions);
+    const executions = Array.from({ length: 2_000 }, (_, index) => ({
+      ...execution,
+      id: `exec_window_${String(index).padStart(4, "0")}`
+    }));
+    const client: AdminApiClient = {
+      ...baseClient,
+      getDashboard: () => Promise.resolve({ ...snapshot, executions })
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Executions" }));
+    const firstExecutionCell = await screen.findByRole("cell", { name: "exec_window_0000" });
+
+    expect(screen.getByRole("region", { name: "Execution results" })).toHaveAttribute(
+      "tabindex",
+      "0"
+    );
+    expect(screen.getByRole("table")).toHaveAttribute("aria-rowcount", "2001");
+    expect(firstExecutionCell.closest("tr")).toHaveAttribute("aria-rowindex", "2");
+    expect(screen.getAllByRole("row").length).toBeLessThanOrEqual(32);
+    expect(screen.queryByRole("cell", { name: "exec_window_1999" })).not.toBeInTheDocument();
+  });
+
+  it("moves the bounded execution window with the scroll position", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const snapshot = await baseClient.getDashboard(session);
+    const execution = requireFirst(snapshot.executions);
+    const executions = Array.from({ length: 2_000 }, (_, index) => ({
+      ...execution,
+      id: `exec_scroll_${String(index).padStart(4, "0")}`
+    }));
+    const client: AdminApiClient = {
+      ...baseClient,
+      getDashboard: () => Promise.resolve({ ...snapshot, executions })
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(screen.getByRole("button", { name: "Executions" }));
+    await screen.findByRole("cell", { name: "exec_scroll_0000" });
+    fireEvent.scroll(screen.getByLabelText("Execution results"), {
+      target: { scrollTop: 2_000 * 52 }
+    });
+
+    const finalExecutionCell = await screen.findByRole("cell", { name: "exec_scroll_1999" });
+    expect(finalExecutionCell.closest("tr")).toHaveAttribute("aria-rowindex", "2001");
+    expect(screen.queryByRole("cell", { name: "exec_scroll_0000" })).not.toBeInTheDocument();
+  });
+
   it("does not expose app-wide schema blockers to tenant viewers", async () => {
     render(<App client={createDemoAdminApiClient()} />);
 

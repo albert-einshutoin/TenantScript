@@ -11,10 +11,10 @@ TenantScript Admin UIのproduction bundle転送量を、fork-safeなTier 1で継
 
 正本は[`apps/admin-ui/bundle-budget.json`](../../apps/admin-ui/bundle-budget.json)です。
 
-| Measurement        |                   Limit | 2026-07-20 baseline |
+| Measurement        |                   Limit | 2026-07-21 baseline |
 | ------------------ | ----------------------: | ------------------: |
-| Initial page       | 307,200 bytes (300 KiB) |        90,960 bytes |
-| All JavaScript/CSS | 460,800 bytes (450 KiB) |        90,690 bytes |
+| Initial page       | 307,200 bytes (300 KiB) |        91,317 bytes |
+| All JavaScript/CSS | 460,800 bytes (450 KiB) |        91,048 bytes |
 
 initial pageは`index.html`、Vite manifestのentry JavaScript、すべてのsynchronous imports、それらのCSSと直接参照assetを含みます。各HTTP assetを個別にgzipしたbyte数を合算します。
 

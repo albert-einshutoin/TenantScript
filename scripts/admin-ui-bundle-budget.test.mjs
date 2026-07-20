@@ -244,7 +244,8 @@ test("publishes the budget, update policy, and verification boundary", async () 
   for (const required of [
     "307,200 bytes",
     "460,800 bytes",
-    "90,960 bytes",
+    "91,317 bytes",
+    "91,048 bytes",
     "pnpm test:admin-ui-bundle-budget",
     "synchronous imports",
     "dynamic chunks",

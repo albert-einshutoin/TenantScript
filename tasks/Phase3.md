@@ -28,10 +28,10 @@
   - 内容: 320 / 768 / 1024 / 1440 のスクリーンショット比較(Playwright)。主要状態(空・ロード・エラー・大量データ)を含む
   - DoD: visual regression が CI 常設、ベースライン承認フロー確立
 
-- [ ] **P3-T04**(S)UI パフォーマンス
+- [x] **P3-T04**(S)UI パフォーマンス
   - 内容: 大量 executions(10万行想定)でのページング・仮想化。バンドルサイズ予算(app ページ < 300kb gz)を CI で監視
   - DoD: 予算超過で CI fail
-  - Progress: Issue #241でVite manifest由来の初期page 300 KiB gzip予算と全JS/CSS 450 KiB予算、chunk split回避、closed output検証をTier 1へ常設。browser runtime性能と10万行virtualizationの独立証跡は未完了
+  - Evidence: Issue #241でVite manifest由来の初期page 300 KiB gzip予算と全JS/CSS 450 KiB予算、chunk split回避、closed output検証をTier 1へ常設。Issue #243で10万件synthetic executionの固定高windowing、DOM 32行上限、初回描画1,000ms予算、末尾scrollと詳細操作をChromium/Tier 1へ常設
 
 ## チャンク B: secret broker 強化(T05–T07)
 
