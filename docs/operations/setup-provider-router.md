@@ -6,9 +6,9 @@ reconcile and cleanup.
 
 This is composition infrastructure, not a fallback implementation. An unregistered operation stops
 the setup run with `setup_provider_route_not_found`; it is never treated as applied. The D1 resource
-and migration operations now have accountless adapters, but the live migration runner, remaining
-Cloudflare resource adapters, live credential input, and clean-account Tier 2 evidence are still
-required before `ext setup` can claim a complete deployment.
+and migration operations now have accountless adapters and a production migration runner, but the
+remaining Cloudflare resource adapters, live credential input/composition, and clean-account Tier 2
+evidence are still required before `ext setup` can claim a complete deployment.
 
 ## Ownership contract
 

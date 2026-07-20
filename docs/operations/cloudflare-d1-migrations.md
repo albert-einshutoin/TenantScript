@@ -1,13 +1,12 @@
 # Cloudflare D1 migration setup adapter
 
-TenantScript's CLI includes an accountless adapter for
+TenantScript's CLI includes an accountless adapter and production runner for
 `apply:control-plane-migrations`. It verifies the repository's canonical SQL catalog, compares remote
-applied names as an exact prefix, applies only the missing suffix through an injected runner, and
+applied names as an exact prefix, applies only the missing suffix through pinned Wrangler, and
 re-reads history before reporting `applied`.
 
-This adapter does not execute SQL, spawn Wrangler, read credentials, or make a live Cloudflare call.
-It defines the safety contract that a future Wrangler process runner and CLI composition must obey.
-Do not treat its injected tests as clean-account Tier 2 evidence.
+The library does not prompt for credentials or compose a complete live `ext setup` command. Its
+accountless tests prove the read/process boundary, not clean-account Tier 2 behavior.
 
 ## Why Wrangler remains the mutation boundary
 
@@ -53,6 +52,33 @@ The adapter lists history again and does not replay names already present in the
 `D1MigrationRunnerError` values propagate unchanged; unknown runner exceptions become the
 non-reflective `cloudflare_d1_migration_runner_failed` adapter code.
 
+## Production runner boundary
+
+`createCloudflareWranglerD1MigrationRunner` binds one immutable D1 UUID, database name, Wrangler
+config path, API transport, and process executor. A fresh D1 database has no `d1_migrations` table,
+so history uses two constant queries rather than parsing human-facing Wrangler output:
+
+1. query `sqlite_schema` for the exact `d1_migrations` table name;
+2. only when present, query applied names ordered by Wrangler's migration ID.
+
+Both responses require one successful result, exact name rows, and a canonical prefix no longer than
+the pinned manifest. SQL never includes operator input. Unknown fields, gaps, duplicates, excessive
+rows, table drift, and provider exceptions become the stable non-reflective runner error.
+
+Before mutation the runner re-reads history and requires the caller's non-empty names to equal the
+canonical missing suffix. `createNodeWranglerD1MigrationProcess` then runs the repository-pinned
+Wrangler script with `process.execPath`, an argv array, `shell: false`, ignored stdio, `CI=true`, and
+metrics disabled. The only accepted command is equivalent to:
+
+```text
+wrangler d1 migrations apply <fixed-name> --remote --config <safe-relative-path> --install-skills=false
+```
+
+The repository root, config, and Wrangler script must resolve to regular non-symlink files inside
+the same canonical root. Parent-directory symlink escapes, arbitrary argv, local/preview targets,
+unsafe names, timeouts, signals, spawn failures, and non-zero exits fail closed. A mutation is never
+automatically retried; resume must re-read remote history.
+
 ## No automatic down migration
 
 Migration application has disposition `applied`, never `created`. `cleanupCreated` always rejects and
@@ -84,5 +110,5 @@ pnpm --filter @tenantscript/cli test:security
 pnpm verify
 ```
 
-Track the live Wrangler runner, remaining setup resources, CLI composition, and Tier 2 evidence in
+Track remaining setup resources, CLI credential/composition work, and Tier 2 evidence in
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34).

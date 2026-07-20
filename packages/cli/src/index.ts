@@ -104,6 +104,12 @@ export {
 } from "./cloudflare-d1-migration-setup-adapter.js";
 
 export {
+  createCloudflareWranglerD1MigrationRunner,
+  createNodeWranglerD1MigrationProcess,
+  type WranglerD1MigrationProcess
+} from "./cloudflare-wrangler-d1-migration-runner.js";
+
+export {
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   type ProductionWranglerInputV1
