@@ -26,6 +26,7 @@ const commandContracts = new Map([
     }
   ],
   ["doctor", { required: ["--report"], exits: [0, 1, 2] }],
+  ["setup", { required: ["--profile", "--runtime", "--dry-run"], exits: [0, 2] }],
   [
     "approvals",
     {
