@@ -177,6 +177,9 @@ function handlerTemplate(hookType: PluginScaffoldRequest["hookType"]): string {
 }
 
 function pluginTestTemplate(request: PluginScaffoldRequest): string {
+  // Accepted hook names contain only lowercase alphanumeric dot-separated segments, so this
+  // sentinel can never collide with the hook selected by an author or coding agent.
+  const undeclaredHookName = "tenantscript.scaffold-undeclared";
   return `import { describe, expect, it, vi } from "vitest";
 import { plugin } from "../src/index.js";
 
@@ -195,14 +198,14 @@ describe("${request.name}", () => {
 
   it("rejects hooks that are not declared in the manifest", async () => {
     const result = await plugin.dispatch({
-      hookName: "invoice.undeclared",
+      hookName: "${undeclaredHookName}",
       payload: { id: "evt_1" },
       context: { capability: vi.fn() }
     });
 
     expect(result).toEqual({
       ok: false,
-      error: { name: "UnknownHookError", hookName: "invoice.undeclared" }
+      error: { name: "UnknownHookError", hookName: "${undeclaredHookName}" }
     });
   });
 });

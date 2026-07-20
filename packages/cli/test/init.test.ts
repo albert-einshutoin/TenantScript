@@ -44,7 +44,7 @@ describe("ext init", () => {
       'hookName: "invoice.created"'
     );
     await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
-      'hookName: "invoice.undeclared"'
+      'hookName: "tenantscript.scaffold-undeclared"'
     );
     await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
       "expect(capability).not.toHaveBeenCalled()"
@@ -128,6 +128,30 @@ describe("ext init", () => {
     await expect(readFile(join(target, "src", "index.ts"), "utf8")).resolves.toContain(
       '"webhook.outbound": async (payload, _context) => payload'
     );
+  });
+
+  it("uses a negative-test hook that cannot collide with an accepted hook name", async () => {
+    const root = await createTempDir();
+    const target = join(root, "collision-safe-plugin");
+
+    await expect(
+      runExtCli(
+        [
+          "init",
+          "--name",
+          "collision-safe-plugin",
+          "--dir",
+          target,
+          "--hook",
+          "invoice.undeclared"
+        ],
+        rollbackOnlyClient,
+        captureIo([], [])
+      )
+    ).resolves.toBe(0);
+
+    const generatedTest = await readFile(join(target, "test", "plugin.test.ts"), "utf8");
+    expect(generatedTest).toContain('hookName: "tenantscript.scaffold-undeclared"');
   });
 
   it("supports policy hook scaffolds", async () => {
