@@ -1991,6 +1991,14 @@
               "kind": "type"
             },
             {
+              "name": "tenantScriptManifestJsonSchema",
+              "kind": "value"
+            },
+            {
+              "name": "TenantScriptManifestJsonSchema",
+              "kind": "type"
+            },
+            {
               "name": "validateConfig",
               "kind": "value"
             },
