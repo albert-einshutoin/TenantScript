@@ -27,6 +27,7 @@ These names are read by `packages/control-plane/src/worker-entry.ts`.
 | `TENANTSCRIPT_TELEMETRY_ENDPOINT`      | Unset                                 | Telemetry is enabled                                                   | No     | Credential-free public HTTPS receiver URL without query or fragment. The receiver endpoint is never returned by the Admin API.                                                       |
 | `TENANTSCRIPT_PRODUCT_VERSION`         | Unset                                 | Telemetry is enabled                                                   | No     | Semantic version included in the closed anonymous event schema.                                                                                                                      |
 | `TENANTSCRIPT_RUNTIME_PRIMITIVE`       | Unset                                 | Telemetry is enabled                                                   | No     | One of `cloudflare-workers`, `dynamic-workers`, or `workers-for-platforms`.                                                                                                          |
+| `USAGE_ANALYTICS`                      | Unset; D1 summaries remain available  | Analytics Engine usage events are enabled                              | No     | Analytics Engine dataset binding for the fixed, value-bounded usage schema. Dataset writes are best-effort and never become execution authority.                                     |
 
 Sharded deployments additionally use operator-defined app database bindings such as
 `APP_ACME_DB`. Every value referenced by `APP_DATABASE_ROUTES_JSON` must exist, and one binding
@@ -36,7 +37,8 @@ The generated production template installs a daily Cron Trigger for explicit exe
 opted-in telemetry shares that scheduled event while retaining independent failure visibility. The
 repository installs no telemetry collector. See [Execution retention](../operations/execution-retention.md),
 [Telemetry and privacy](../privacy/telemetry.md),
-[App database routing](../operations/app-database-routing.md), and
+[App database routing](../operations/app-database-routing.md),
+[Usage meter operations](../operations/usage-meter.md), and
 [Admin mutation rate limits](../operations/admin-mutation-rate-limits.md).
 
 ## Admin UI
