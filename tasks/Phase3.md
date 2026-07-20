@@ -85,9 +85,10 @@
   - DoD: API surface スナップショットテスト常設
   - Progress: Issue #223で公開package symbol/subpathとControl Plane REST route/method/isolationのsnapshot gateを実装。Issue #227で削除/kind/REST互換性破壊をmajor Changesetとmigration guideへ機械的に連携。manifest/response body schemaは未完了
 
-- [ ] **P3-T15**(M)upgrade guide + migration テスト
+- [x] **P3-T15**(M)upgrade guide + migration テスト
   - RED: 「前 minor → 最新」のアップグレードが、データ(D1/R2/DO)を保持したまま通る自動テスト
   - DoD: upgrade テストが CI 常設、ガイド公開
+  - Progress: Issue #231で、未公開minorを装わないimmutable `pre-v1-0010` baselineから現行へのworkerd upgrade journeyを常設。D1/R2/DO保持、suffix再適用、失敗migration rollback、現行schema利用とoperator guideをTier 1で検証
 
 - [ ] **P3-T16**(S)performance regression CI(**Tier 2**: 実 Cloudflare、nightly)
   - 内容: Phase 0 ベンチハーネスを CI 化し、p95 warm の劣化(>20%)で fail

@@ -27,7 +27,8 @@
 - 公開型、manifest schema、HTTP response、CLI exit codeを変える場合は、呼び出し側と公開docsの
   contract testも更新します。
 - D1、R2、Durable Objects、Worker bindingを変える場合は、plain Vitestだけで終えず、該当packageの
-  workerd-backed testを含むpackage `test` / `test:security`を実行します。
+  workerd-backed testを含むpackage `test` / `test:security`を実行します。migration追加時は
+  [Control Plane upgrade guide](../operations/control-plane-upgrades.md)の固定baseline journeyもgreenにします。
 - user journey、keyboard操作、表示する権限を変える場合はAdmin UIのPlaywright E2Eとsecurity testを
   両方実行します。
 - timeoutやretryを検証するために固定時間待機を追加しません。fake clock、明示的なpromise、保存済み
