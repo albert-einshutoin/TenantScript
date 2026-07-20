@@ -54,6 +54,11 @@ synthetic Playwright fixture that is excluded from the production entry. Run
 `pnpm test:admin-ui-performance` from the repository root before changing row layout, virtualization,
 or execution detail actions.
 
+The Audit log screen pages tenant-scoped events newest-first through signed cursors. Its API and UI
+accept only event metadata plus the public `enabled`, `priority`, `revision`, and `version` state;
+raw before/after JSON, configuration, grants, credentials, and customer payloads fail closed before
+they can enter the component tree.
+
 ## Control Plane connection
 
 公開設定のdefault、必須条件、secret境界を含む正本は
