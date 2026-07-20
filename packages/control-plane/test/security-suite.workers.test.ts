@@ -22,7 +22,7 @@ const testEnv = env as unknown as TestWorkersEnv;
 const manifest = {
   name: "large-invoice-notify",
   version: "1.0.0",
-  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
   capabilities: { "slack.send": { channel: "C123" } },
   configSchema: { properties: {}, required: [] },
   egress: { mode: "deny" },

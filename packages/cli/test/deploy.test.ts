@@ -268,7 +268,9 @@ async function createDeployFiles(): Promise<{ entry: string; manifest: string }>
     JSON.stringify({
       name: "large-invoice-notify",
       version: "1.0.0",
-      hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+      hooks: [
+        { name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }
+      ],
       capabilities: {},
       configSchema: { properties: {}, required: [] },
       egress: { mode: "deny" },

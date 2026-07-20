@@ -27,7 +27,9 @@ beforeEach(async () => {
     manifest: {
       name: "invoice-notify",
       version: "1.0.0",
-      hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+      hooks: [
+        { name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }
+      ],
       capabilities: { "slack.send": { channel: "$config.notifyChannel" } },
       configSchema: {
         properties: { notifyChannel: { type: "string" } },

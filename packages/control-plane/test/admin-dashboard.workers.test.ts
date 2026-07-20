@@ -455,7 +455,9 @@ function pluginVersion(id: string, pluginId: string, suffix: string): PluginVers
   const manifest = {
     name: `${pluginId}-${suffix}`,
     version: `1.0.${suffix === "a" ? "0" : "1"}`,
-    hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250 }],
+    hooks: [
+      { name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }
+    ],
     capabilities: {},
     configSchema: {
       properties: { hidden: { type: "string", default: "manifest-secret" } },

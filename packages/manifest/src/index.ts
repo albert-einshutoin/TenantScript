@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validRange } from "semver";
 
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
 const capabilityKeyPattern = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/;
@@ -9,6 +10,9 @@ const hookSchema = z
     name: z.string().min(1),
     type: z.enum(["event", "transform", "policy"]),
     timeoutMs: z.number().int().positive(),
+    schemaVersionRange: z.string().refine((range) => validRange(range) !== null, {
+      message: "schemaVersionRange must be a valid semver range"
+    }),
     priority: z.number().int().optional()
   })
   .strict();

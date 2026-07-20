@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { maxSatisfying, valid, validRange } from "semver";
 
 export const hookTypes = ["event", "transform", "policy"] as const;
 
@@ -52,6 +53,27 @@ export interface Installation {
   enabled: boolean;
   priority: number;
   hooks: readonly string[];
+}
+
+export interface SchemaCompatibleInstallation extends Installation {
+  hookSchemaRanges: Readonly<Record<string, string>>;
+}
+
+export interface VersionedHookSchema<TPayload> {
+  version: string;
+  payloadSchema: z.ZodType<unknown>;
+  project: (payload: TPayload) => unknown;
+}
+
+export interface RoutedHookPayload {
+  installationId: string;
+  pluginId: string;
+  schemaVersion: string;
+  payload: unknown;
+}
+
+export class HookSchemaCompatibilityError extends Error {
+  override readonly name = "HookSchemaCompatibilityError";
 }
 
 export interface ExecutionStep {
@@ -149,6 +171,90 @@ export function planExecution(params: {
     mode: "serial",
     steps: [...steps].sort((left, right) => left.priority - right.priority)
   };
+}
+
+export function routeHookPayloads<TPayload>(params: {
+  hookName: string;
+  payload: TPayload;
+  installations: readonly SchemaCompatibleInstallation[];
+  schemas: readonly VersionedHookSchema<TPayload>[];
+}): RoutedHookPayload[] {
+  const schemasByVersion = new Map<string, VersionedHookSchema<TPayload>>();
+  for (const schema of params.schemas) {
+    if (valid(schema.version) === null) {
+      throw new HookSchemaCompatibilityError(
+        `published ${params.hookName} schema version ${schema.version} is invalid`
+      );
+    }
+    if (schemasByVersion.has(schema.version)) {
+      throw new HookSchemaCompatibilityError(
+        `published ${params.hookName} schema version ${schema.version} is duplicated`
+      );
+    }
+    schemasByVersion.set(schema.version, schema);
+  }
+
+  const publishedVersions = [...schemasByVersion.keys()];
+  const payloadsByVersion = new Map<string, unknown>();
+  const projectPayload = (
+    schemaVersion: string,
+    schema: VersionedHookSchema<TPayload>
+  ): unknown => {
+    if (payloadsByVersion.has(schemaVersion)) {
+      return payloadsByVersion.get(schemaVersion);
+    }
+
+    let projectedPayload: unknown;
+    try {
+      projectedPayload = schema.project(params.payload);
+    } catch {
+      // Adapter errors can include customer payload values, so only a stable category
+      // crosses the host boundary while the selected version remains diagnosable.
+      throw new HookSchemaCompatibilityError(
+        `schema adapter failed for ${params.hookName}@${schemaVersion}`
+      );
+    }
+    const parsedPayload = schema.payloadSchema.safeParse(projectedPayload);
+    if (!parsedPayload.success) {
+      throw new HookSchemaCompatibilityError(
+        `schema adapter produced an invalid ${params.hookName}@${schemaVersion} payload`
+      );
+    }
+    // This cache lives only for one routing call, so repeated installations share work
+    // without ever retaining or reusing one tenant's payload in another execution.
+    payloadsByVersion.set(schemaVersion, parsedPayload.data);
+    return parsedPayload.data;
+  };
+
+  return params.installations
+    .filter((installation) => installation.enabled && installation.hooks.includes(params.hookName))
+    .map((installation) => {
+      const range = installation.hookSchemaRanges[params.hookName];
+      if (range === undefined || validRange(range) === null) {
+        throw new HookSchemaCompatibilityError(
+          `installation ${installation.id} has no valid ${params.hookName} schema range`
+        );
+      }
+      const schemaVersion = maxSatisfying(publishedVersions, range);
+      if (schemaVersion === null) {
+        throw new HookSchemaCompatibilityError(
+          `installation ${installation.id} has no compatible ${params.hookName} schema for range ${range}`
+        );
+      }
+      const schema = schemasByVersion.get(schemaVersion);
+      if (schema === undefined) {
+        throw new HookSchemaCompatibilityError(
+          `published ${params.hookName} schema ${schemaVersion} could not be resolved`
+        );
+      }
+
+      return {
+        installationId: installation.id,
+        pluginId: installation.pluginId,
+        schemaVersion,
+        payload: projectPayload(schemaVersion, schema)
+      };
+    });
 }
 
 export async function runTransformChain<TPayload>(
