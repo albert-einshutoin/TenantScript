@@ -195,7 +195,7 @@ select:focus-visible {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 12px;
   margin-bottom: 20px;
@@ -215,6 +215,27 @@ select:focus-visible {
 }
 
 .session-chip strong {
+  color: #0f766e;
+}
+
+.telemetry-chip {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d6deeb;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0 14px;
+  color: #475467;
+  font-size: 13px;
+}
+
+.telemetry-chip.disabled strong {
+  color: #667085;
+}
+
+.telemetry-chip.enabled strong {
   color: #0f766e;
 }
 

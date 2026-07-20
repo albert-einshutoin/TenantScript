@@ -36,6 +36,12 @@ The Overview screen shows app-wide hook schema migration usage to `owner`, `admi
 evidence only; the host publishing workflow must still use the removal gate documented in
 [`docs/operations/schema-migrations.md`](../../docs/operations/schema-migrations.md).
 
+The header shows whether anonymous aggregate telemetry is `On` or `Off`. The server response never
+includes the receiver endpoint. Telemetry is off by default and is configured only in the Control
+Plane Worker; see
+[`docs/privacy/telemetry.md`](../../docs/privacy/telemetry.md) for the exact event schema and privacy
+boundary.
+
 ## Control Plane connection
 
 Set the Pages build variable to the HTTPS Worker origin (loopback HTTP is accepted for local
@@ -56,6 +62,10 @@ Configure these Worker bindings:
 - `ADMIN_HOOK_SCHEMA_CATALOG_JSON`: JSON object mapping each hook name to every published stable
   schema version. Use the same catalog as host payload routing.
 - `DB`: D1 binding with every migration in `packages/control-plane/migrations/` applied in order.
+- `TENANTSCRIPT_TELEMETRY_ENABLED`: unset or `false` by default. Only exact `true` opts in.
+- `TENANTSCRIPT_TELEMETRY_ENDPOINT`, `TENANTSCRIPT_PRODUCT_VERSION`, and
+  `TENANTSCRIPT_RUNTIME_PRIMITIVE`: required only after telemetry opt-in. Configure a Cron Trigger
+  for the Worker's scheduled handler; no default collector or schedule is installed.
 
 `ADMIN_IDENTITIES_JSON` and `ADMIN_CURSOR_SECRET` are design-partner bootstrap secrets and must be
 stored as Worker secrets, never in Git or a public variable. Missing or malformed bindings fail
