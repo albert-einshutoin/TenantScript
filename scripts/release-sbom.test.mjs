@@ -100,7 +100,12 @@ test("generates byte-identical validated SBOMs from release tarballs", async () 
     await generateReleaseSbom(repositoryRoot, second);
     const [firstBytes, secondBytes] = await Promise.all([readFile(first), readFile(second)]);
     assert.deepEqual(firstBytes, secondBytes);
-    validateReleaseSbom(JSON.parse(firstBytes.toString("utf8")), validationContract());
+    const sbom = JSON.parse(firstBytes.toString("utf8"));
+    validateReleaseSbom(sbom, validationContract());
+    assert.equal(
+      sbom.metadata.tools.components.find(({ name }) => name === "npm")?.version,
+      "11.16.0"
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -151,9 +151,19 @@ export async function generateReleaseSbom(rootDirectory, outputFile) {
       HOME: consumerDirectory,
       USERPROFILE: consumerDirectory
     };
+    const npmCli = join(root, "node_modules", "npm", "bin", "npm-cli.js");
+    environment.npm_execpath = npmCli;
     await run(
-      "npm",
-      ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"],
+      process.execPath,
+      [
+        npmCli,
+        "install",
+        "--package-lock-only",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "--update-notifier=false"
+      ],
       consumerDirectory,
       environment,
       "Release SBOM dependency lock generation failed"
