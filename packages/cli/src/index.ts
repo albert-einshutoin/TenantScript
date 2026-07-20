@@ -10,6 +10,11 @@ import type {
   RollbackInstallationRequest,
   RollbackResult
 } from "@tenantscript/control-plane";
+import type {
+  AdminApprovalDecisionCommand,
+  AdminMutationClient,
+  AdminRollbackCommand
+} from "./admin-http-client.js";
 import { runRollbackDrill } from "./rollback-drill.js";
 import { evaluateDoctorReport, parseDoctorReport } from "./doctor.js";
 import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
@@ -18,6 +23,17 @@ import {
   renderProductionWranglerConfig,
   writeProductionWranglerConfig
 } from "./wrangler-template.js";
+
+export {
+  createHttpAdminMutationClient,
+  type AdminApprovalDecisionCommand,
+  type AdminApprovalDecisionResponse,
+  type AdminMutationClient,
+  type AdminRollbackCommand,
+  type AdminRollbackResponse
+} from "./admin-http-client.js";
+
+export { createBinaryAdminClient, type BinaryAdminClient } from "./binary-client.js";
 
 export {
   evaluateDoctorReport,
@@ -180,7 +196,10 @@ export interface FetchLike {
 
 export async function runExtCli(
   argv: readonly string[],
-  client: RollbackClient & Partial<ApprovalDecisionClient> & Partial<DeployClient>,
+  client: RollbackClient &
+    Partial<ApprovalDecisionClient> &
+    Partial<DeployClient> &
+    Partial<AdminMutationClient>,
   io: CliIo = consoleIo
 ): Promise<number> {
   const [command, ...args] = argv;
@@ -209,6 +228,9 @@ export async function runExtCli(
     return runRollbackDrill(args, io);
   }
   if (command === "approvals") {
+    if (client.decideAdminApproval !== undefined) {
+      return await runAdminApprovalDecision(args, client.decideAdminApproval, io);
+    }
     return await runApprovalDecision(args, client, io);
   }
   if (command === "doctor") {
@@ -220,6 +242,10 @@ export async function runExtCli(
   if (command !== "rollback") {
     io.stderr(`unknown command: ${command ?? ""}`);
     return 2;
+  }
+
+  if (client.rollbackAdminInstallation !== undefined) {
+    return await runAdminRollback(args, client.rollbackAdminInstallation, io);
   }
 
   const parsed = parseRollbackArgs(args);
@@ -243,6 +269,44 @@ export async function runExtCli(
     })
   );
   return 0;
+}
+
+async function runAdminRollback(
+  args: readonly string[],
+  rollback: AdminMutationClient["rollbackAdminInstallation"],
+  io: CliIo
+): Promise<number> {
+  const parsed = parseAdminRollbackArgs(args);
+  if (!parsed.ok) {
+    io.stderr(parsed.error);
+    return 2;
+  }
+  try {
+    io.stdout(JSON.stringify(await rollback(parsed.request)));
+    return 0;
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "rollback failed");
+    return 1;
+  }
+}
+
+async function runAdminApprovalDecision(
+  args: readonly string[],
+  decide: AdminMutationClient["decideAdminApproval"],
+  io: CliIo
+): Promise<number> {
+  const parsed = parseAdminApprovalDecisionArgs(args);
+  if (!parsed.ok) {
+    io.stderr(parsed.error);
+    return 2;
+  }
+  try {
+    io.stdout(JSON.stringify(await decide(parsed.request)));
+    return 0;
+  } catch (error) {
+    io.stderr(error instanceof Error ? error.message : "approval decision failed");
+    return 1;
+  }
 }
 
 async function runSetup(args: readonly string[], io: CliIo): Promise<number> {
@@ -368,6 +432,8 @@ function doctorDiagnostic(error: unknown): string {
     : "doctor report could not be read";
 }
 
+// Compatibility client for the pre-Admin API library contract. New integrations should use
+// createHttpAdminMutationClient, which authenticates against the shipped Admin Worker routes.
 export function createHttpRollbackClient(
   baseUrl: string,
   fetchImpl: FetchLike
@@ -384,9 +450,7 @@ export function createHttpRollbackClient(
         }
       );
       if (!response.ok) {
-        throw new Error(
-          `rollback request failed with HTTP ${String(response.status)}: ${await response.text()}`
-        );
+        throw new Error(`rollback request failed with HTTP ${String(response.status)}`);
       }
       return (await response.json()) as Awaited<ReturnType<RollbackClient["rollbackInstallation"]>>;
     },
@@ -397,9 +461,7 @@ export function createHttpRollbackClient(
         body: JSON.stringify(request)
       });
       if (!response.ok) {
-        throw new Error(
-          `approval decision request failed with HTTP ${String(response.status)}: ${await response.text()}`
-        );
+        throw new Error(`approval decision request failed with HTTP ${String(response.status)}`);
       }
       return (await response.json()) as Awaited<
         ReturnType<ApprovalDecisionClient["decideApproval"]>
@@ -1105,6 +1167,71 @@ function parseRollbackArgs(
       targetVersion: requiredFlags.value.to,
       auditId: requiredFlags.value.auditId,
       actor: requiredFlags.value.actor,
+      ...(flags.reason === undefined ? {} : { reason: flags.reason })
+    }
+  };
+}
+
+function parseAdminRollbackArgs(
+  args: readonly string[]
+): { ok: true; request: AdminRollbackCommand } | { ok: false; error: string } {
+  const flags = readFlags(args);
+  const allowed = [
+    "installation",
+    "target-version",
+    "expected-revision",
+    "idempotency-key"
+  ] as const;
+  const unsupported = Object.keys(flags).find(
+    (name) => !(allowed as readonly string[]).includes(name)
+  );
+  if (unsupported !== undefined) {
+    return { ok: false, error: `unsupported rollback option: --${unsupported}` };
+  }
+  for (const name of allowed) {
+    if (flags[name] === undefined) {
+      return { ok: false, error: `missing required rollback option: --${name}` };
+    }
+  }
+  const expectedRevision = Number(flags["expected-revision"]);
+  if (!/^\d+$/u.test(flags["expected-revision"] ?? "") || !Number.isSafeInteger(expectedRevision)) {
+    return { ok: false, error: "invalid rollback option: --expected-revision" };
+  }
+  if (!/^[A-Za-z0-9._~-]{16,128}$/u.test(flags["idempotency-key"] ?? "")) {
+    return { ok: false, error: "invalid rollback option: --idempotency-key" };
+  }
+  return {
+    ok: true,
+    request: {
+      installationId: flags.installation as string,
+      targetVersionId: flags["target-version"] as string,
+      expectedRevision,
+      idempotencyKey: flags["idempotency-key"] as string
+    }
+  };
+}
+
+function parseAdminApprovalDecisionArgs(
+  args: readonly string[]
+): { ok: true; request: AdminApprovalDecisionCommand } | { ok: false; error: string } {
+  const [action, ...flagArgs] = args;
+  const decision = action === "approve" ? "approved" : action === "reject" ? "rejected" : undefined;
+  if (decision === undefined) {
+    return { ok: false, error: `unknown approvals action: ${action ?? ""}` };
+  }
+  const flags = readFlags(flagArgs);
+  const unsupported = Object.keys(flags).find((name) => name !== "approval" && name !== "reason");
+  if (unsupported !== undefined) {
+    return { ok: false, error: `unsupported approvals option: --${unsupported}` };
+  }
+  if (flags.approval === undefined) {
+    return { ok: false, error: "missing required approvals option: --approval" };
+  }
+  return {
+    ok: true,
+    request: {
+      approvalId: flags.approval,
+      decision,
       ...(flags.reason === undefined ? {} : { reason: flags.reason })
     }
   };

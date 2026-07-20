@@ -226,7 +226,7 @@ describe("ext approvals", () => {
         ok: false,
         status: 409,
         json: () => Promise.resolve({}),
-        text: () => Promise.resolve("already decided")
+        text: () => Promise.resolve("already decided with fixture-secret")
       });
 
     await expect(
@@ -237,7 +237,7 @@ describe("ext approvals", () => {
         auditId: "audit_1",
         actor: "manager@example.com"
       })
-    ).rejects.toThrow("approval decision request failed with HTTP 409: already decided");
+    ).rejects.toThrow(/^approval decision request failed with HTTP 409$/u);
   });
 });
 
