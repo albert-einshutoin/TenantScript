@@ -253,6 +253,32 @@ describe("ext doctor", () => {
     expect(JSON.stringify(stderr)).not.toContain("secret-sentinel");
   });
 
+  it("rejects a V1 snapshot from an untyped live runtime", async () => {
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        [
+          "doctor",
+          "--cloudflare",
+          "--admin-cursor-secret-present",
+          "true",
+          "--database-id",
+          "123e4567-e89b-12d3-a456-426614174000",
+          "--config",
+          "wrangler.jsonc",
+          "--runtime",
+          "cloudflare-workers"
+        ],
+        rollbackOnlyClient,
+        captureIo([], stderr),
+        { collectCloudflareDoctor: () => Promise.resolve(healthyReport as never) }
+      )
+    ).resolves.toBe(2);
+
+    expect(stderr).toEqual(["cloudflare doctor collection failed"]);
+  });
+
   it.each([
     ["unconfigured", {}, "cloudflare doctor is not configured"],
     [

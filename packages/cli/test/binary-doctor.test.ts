@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   CONTROL_PLANE_MIGRATION_MANIFEST,
@@ -46,7 +49,7 @@ describe("binary Cloudflare doctor composition", () => {
     });
     expect(JSON.stringify(report)).not.toContain("secret-sentinel");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(readFile).toHaveBeenCalledWith("wrangler.jsonc", "utf8");
+    expect(readFile).toHaveBeenCalledWith("wrangler.jsonc");
     expect(fetchImpl.mock.calls.map(([input]) => input)).not.toEqual(
       expect.arrayContaining([expect.stringContaining("/settings")])
     );
@@ -89,6 +92,38 @@ describe("binary Cloudflare doctor composition", () => {
     expect(fetchImpl.mock.calls.map(([input]) => input)).not.toEqual(
       expect.arrayContaining([expect.stringContaining("/workers/")])
     );
+  });
+
+  it("rejects oversized and symlinked Wrangler configs before reading their contents", async () => {
+    const localDirectory = join(".tmp", `doctor-config-${crypto.randomUUID()}`);
+    const externalDirectory = await mkdtemp(join(tmpdir(), "tenantscript-doctor-config-"));
+    await mkdir(localDirectory, { recursive: true });
+    const oversizedPath = join(localDirectory, "oversized.jsonc");
+    const externalPath = join(externalDirectory, "external.jsonc");
+    const symlinkPath = join(localDirectory, "linked.jsonc");
+    await writeFile(oversizedPath, " ".repeat(65_537));
+    await writeFile(externalPath, validWranglerConfig());
+    await symlink(externalPath, symlinkPath);
+    const runtime = createBinaryDoctorRuntime(
+      { CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_API_TOKEN: apiToken },
+      (_input, init) => Promise.resolve(d1Response(init))
+    );
+
+    try {
+      for (const configPath of [oversizedPath, symlinkPath]) {
+        await expect(
+          runtime.collectCloudflareDoctor?.({
+            databaseId,
+            configPath,
+            runtime: "cloudflare-workers",
+            adminCursorSecretPresent: true
+          })
+        ).rejects.toMatchObject({ code: "cloudflare_doctor_collection_failed" });
+      }
+    } finally {
+      await rm(localDirectory, { recursive: true, force: true });
+      await rm(externalDirectory, { recursive: true, force: true });
+    }
   });
 });
 

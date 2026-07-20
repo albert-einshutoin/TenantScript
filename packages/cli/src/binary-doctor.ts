@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { lstat, open, realpath } from "node:fs/promises";
+import { resolve, sep } from "node:path";
 import { parse, type ParseError } from "jsonc-parser";
 import { createCloudflareApiTransport, type CloudflareFetch } from "./cloudflare-api-transport.js";
 import { createCloudflareDoctorCollector } from "./cloudflare-doctor-collector.js";
@@ -8,7 +9,7 @@ import type { CliRuntime } from "./cli-runtime.js";
 export function createBinaryDoctorRuntime(
   environment: Record<string, string | undefined>,
   fetchImpl: CloudflareFetch,
-  readConfig: (path: string, encoding: "utf8") => Promise<string> = readFile
+  readConfig: (path: string) => Promise<string> = readBoundedWranglerConfig
 ): CliRuntime {
   const accountId = environment.CLOUDFLARE_ACCOUNT_ID;
   const apiToken = environment.CLOUDFLARE_API_TOKEN;
@@ -22,7 +23,7 @@ export function createBinaryDoctorRuntime(
           databaseId,
           bindingPresence: {
             read: async (expectedDatabaseId) =>
-              parseWranglerBindingPresence(await readConfig(configPath, "utf8"), expectedDatabaseId)
+              parseWranglerBindingPresence(await readConfig(configPath), expectedDatabaseId)
           },
           migrationReader: createCloudflareD1MigrationReader({ transport, databaseId }),
           // Cloudflare secret response schemas may include secret text. The binary therefore
@@ -40,11 +41,40 @@ export function createBinaryDoctorRuntime(
   }
 }
 
+const MAX_WRANGLER_CONFIG_BYTES = 65_536;
+
+async function readBoundedWranglerConfig(configPath: string): Promise<string> {
+  const sourceStat = await lstat(configPath);
+  if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
+    throw new Error("invalid Wrangler config");
+  }
+  const repositoryRoot = await realpath(process.cwd());
+  const resolvedPath = await realpath(resolve(repositoryRoot, configPath));
+  if (!resolvedPath.startsWith(`${repositoryRoot}${sep}`)) {
+    throw new Error("invalid Wrangler config");
+  }
+  const handle = await open(resolvedPath, "r");
+  try {
+    const openedStat = await handle.stat();
+    if (!openedStat.isFile()) throw new Error("invalid Wrangler config");
+    // Read one byte beyond the public limit so oversized files are rejected without ever being
+    // fully materialized. This also keeps FIFOs and device files outside the read boundary.
+    const buffer = Buffer.alloc(MAX_WRANGLER_CONFIG_BYTES + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > MAX_WRANGLER_CONFIG_BYTES) throw new Error("invalid Wrangler config");
+    return buffer.subarray(0, bytesRead).toString("utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
 function parseWranglerBindingPresence(
   source: string,
   databaseId: string
 ): { DB: boolean; ADMIN_MUTATION_RATE_LIMITER_DO: boolean } {
-  if (Buffer.byteLength(source, "utf8") > 65_536) throw new Error("invalid Wrangler config");
+  if (Buffer.byteLength(source, "utf8") > MAX_WRANGLER_CONFIG_BYTES) {
+    throw new Error("invalid Wrangler config");
+  }
   const parseErrors: ParseError[] = [];
   const value: unknown = parse(source, parseErrors, {
     allowTrailingComma: true,

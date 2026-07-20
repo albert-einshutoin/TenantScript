@@ -16,7 +16,11 @@ import type {
   AdminRollbackCommand
 } from "./admin-http-client.js";
 import { runRollbackDrill } from "./rollback-drill.js";
-import { evaluateSupportedDoctorReport, parseSupportedDoctorReport } from "./doctor.js";
+import {
+  evaluateSupportedDoctorReport,
+  parseDoctorReportV2,
+  parseSupportedDoctorReport
+} from "./doctor.js";
 import type { CliRuntime } from "./cli-runtime.js";
 import { writePluginScaffold, type PluginScaffoldRequest } from "./plugin-scaffold.js";
 import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
@@ -479,7 +483,7 @@ async function runCloudflareDoctor(
     return 2;
   }
   try {
-    const report = parseSupportedDoctorReport(
+    const report = parseDoctorReportV2(
       await runtime.collectCloudflareDoctor({
         databaseId,
         configPath,
