@@ -315,6 +315,20 @@ export {
 } from "./schema-migrations.js";
 
 export {
+  createD1RunawayGuardStore,
+  enforceRunawayPolicyAfterExecution,
+  recoverRunawayInstallation,
+  type RunawayExecutionOutcome,
+  type RunawayGuardResult,
+  type RunawayGuardState,
+  type RunawayGuardStore,
+  type RunawayNotificationSink,
+  type RunawayPolicy,
+  type RunawayQuarantineNotification,
+  type RunawayQuarantineReason
+} from "./runaway-guard.js";
+
+export {
   createD1AdminInstallationCommandStore,
   createD1AdminInstallationDetailStore,
   type AdminInstallationCommandResult,
