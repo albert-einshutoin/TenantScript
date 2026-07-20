@@ -4,9 +4,34 @@ import {
   createEmailSendProvider,
   createHttpFetchProvider,
   createInvoiceReadProvider,
+  createInMemoryKvStateStorage,
+  createKvStateProvider,
   createMockSlackSendProvider
 } from "../src/index.js";
 import { runCapabilityContract } from "./contract-kit.js";
+
+runCapabilityContract({
+  capability: "kv.state",
+  grant: {
+    operations: ["get"],
+    keyPrefixes: ["settings:"]
+  },
+  allowedInput: { operation: "get", key: "settings:theme" },
+  deniedInput: { operation: "delete", key: "settings:theme" },
+  createProvider: () =>
+    createKvStateProvider({
+      scope: { tenantId: "tenant_contract", pluginName: "billing", version: "1.0.0" },
+      limits: {
+        maxKeyBytes: 128,
+        maxValueBytes: 1_024,
+        maxTotalBytes: 8_192,
+        maxEntries: 32
+      },
+      storage: createInMemoryKvStateStorage()
+    }),
+  expectedAllowedResult: { found: false },
+  expectedDeniedMessage: "kv.state operation delete is outside granted scope"
+});
 
 runCapabilityContract({
   capability: "http.fetch",
@@ -139,5 +164,6 @@ runCapabilityContract({
       }
     }),
   expectedAllowedResult: { id: "inv_1", amountCents: 1_000 },
-  expectedDeniedMessage: "invoice.read tenant tenant_other is outside tenant scope"
+  expectedDeniedMessage: "invoice.read tenant tenant_other is outside tenant scope",
+  expectedDeniedAuditReason: "provider_denied"
 });

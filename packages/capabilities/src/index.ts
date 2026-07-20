@@ -2,12 +2,14 @@ export interface CapabilityGrant {
   channel?: string | readonly string[];
   fields?: readonly string[];
   methods?: string | readonly string[];
+  operations?: string | readonly string[];
   origins?: string | readonly string[];
   recipientDomains?: string | readonly string[];
   requestHeaders?: string | readonly string[];
   roles?: string | readonly string[];
   resumeHooks?: string | readonly string[];
   templates?: string | readonly string[];
+  keyPrefixes?: string | readonly string[];
 }
 
 export type CapabilityGrants = Record<string, CapabilityGrant>;
@@ -178,6 +180,49 @@ export interface HttpFetchCredential {
 }
 
 export type WebFetchFunction = (input: string, init: RequestInit) => Promise<Response>;
+
+export type KvStateOperation = "get" | "put" | "delete";
+
+export interface KvStateScope {
+  tenantId: string;
+  pluginName: string;
+  version: string;
+}
+
+export interface KvStateLimits {
+  maxKeyBytes: number;
+  maxValueBytes: number;
+  maxTotalBytes: number;
+  maxEntries: number;
+}
+
+export type KvStateJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | KvStateJsonValue[]
+  | { [key: string]: KvStateJsonValue };
+
+export interface KvStateTransaction {
+  get: (key: string) => unknown;
+  put: (key: string, value: unknown) => Promise<void> | void;
+}
+
+export interface KvStateStorage extends KvStateTransaction {
+  transaction: <T>(callback: (transaction: KvStateTransaction) => Promise<T>) => Promise<T>;
+}
+
+interface KvStateEntry {
+  json: string;
+  sizeBytes: number;
+}
+
+interface KvStateFacetSnapshot {
+  revision: 1;
+  totalBytes: number;
+  entries: Map<string, KvStateEntry>;
+}
 
 export class CapabilityDeniedError extends Error {
   override readonly name = "CapabilityDeniedError";
@@ -408,6 +453,106 @@ export function createDurableObjectCapabilityCallJournal(
       await storage.put(journalKey(entry), entry);
       return entry;
     }
+  };
+}
+
+export function createInMemoryKvStateStorage(): KvStateStorage {
+  const values = new Map<string, unknown>();
+  let transactionTail: Promise<void> = Promise.resolve();
+  const transactionApi: KvStateTransaction = {
+    get: (key: string) => cloneKvStorageValue(values.get(key)),
+    put: (key: string, value: unknown) => {
+      values.set(key, cloneKvStorageValue(value));
+    }
+  };
+
+  return {
+    ...transactionApi,
+    transaction: <T>(callback: (transaction: KvStateTransaction) => Promise<T>) => {
+      // Serializing the in-memory adapter like a Durable Object transaction prevents
+      // concurrent tests and local runtimes from masking lost-update bugs.
+      const result = transactionTail.then(() => callback(transactionApi));
+      transactionTail = result.then(
+        () => undefined,
+        () => undefined
+      );
+      return result;
+    }
+  };
+}
+
+export function createKvStateProvider(params: {
+  scope: KvStateScope;
+  limits: KvStateLimits;
+  storage: KvStateStorage;
+}): CapabilityProvider {
+  validateKvStateScope(params.scope);
+  validateKvStateLimits(params.limits);
+  const storageKey = kvStateFacetStorageKey(params.scope);
+  const textEncoder = new TextEncoder();
+
+  return async (input) => {
+    const request = parseKvStateInput(input);
+    const keyBytes = textEncoder.encode(request.key).byteLength;
+    if (keyBytes > params.limits.maxKeyBytes) {
+      throw new CapabilityDeniedError(
+        `kv.state key exceeds ${String(params.limits.maxKeyBytes)} bytes`
+      );
+    }
+
+    if (request.operation === "get") {
+      const snapshot = readKvStateSnapshot(await params.storage.get(storageKey));
+      const entry = snapshot.entries.get(request.key);
+      return entry === undefined
+        ? { found: false }
+        : { found: true, value: JSON.parse(entry.json) as KvStateJsonValue };
+    }
+
+    if (request.operation === "put") {
+      const json = serializeKvStateValue(request.value);
+      const valueBytes = textEncoder.encode(json).byteLength;
+      if (valueBytes > params.limits.maxValueBytes) {
+        throw new CapabilityDeniedError(
+          `kv.state value exceeds ${String(params.limits.maxValueBytes)} bytes`
+        );
+      }
+
+      return params.storage.transaction(async (transaction) => {
+        const snapshot = readKvStateSnapshot(await transaction.get(storageKey));
+        const previous = snapshot.entries.get(request.key);
+        if (previous === undefined && snapshot.entries.size >= params.limits.maxEntries) {
+          throw new CapabilityDeniedError(
+            `kv.state facet exceeds ${String(params.limits.maxEntries)} entries`
+          );
+        }
+        const entryBytes = keyBytes + valueBytes;
+        const totalBytes = snapshot.totalBytes - (previous?.sizeBytes ?? 0) + entryBytes;
+        if (totalBytes > params.limits.maxTotalBytes) {
+          throw new CapabilityDeniedError(
+            `kv.state facet exceeds ${String(params.limits.maxTotalBytes)} bytes`
+          );
+        }
+
+        const entries = new Map(snapshot.entries);
+        entries.set(request.key, { json, sizeBytes: entryBytes });
+        await transaction.put(storageKey, { revision: 1, totalBytes, entries });
+        return { ok: true, totalBytes };
+      });
+    }
+
+    return params.storage.transaction(async (transaction) => {
+      const snapshot = readKvStateSnapshot(await transaction.get(storageKey));
+      const previous = snapshot.entries.get(request.key);
+      if (previous === undefined) {
+        return { deleted: false, totalBytes: snapshot.totalBytes };
+      }
+
+      const entries = new Map(snapshot.entries);
+      entries.delete(request.key);
+      const totalBytes = snapshot.totalBytes - previous.sizeBytes;
+      await transaction.put(storageKey, { revision: 1, totalBytes, entries });
+      return { deleted: true, totalBytes };
+    });
   };
 }
 
@@ -823,6 +968,20 @@ function assertScope(name: string, grant: CapabilityGrant, input: unknown): void
     }
   }
 
+  if (name === "kv.state") {
+    const request = parseKvStateInput(input);
+    const allowedOperations = normalizeKvStateGrantValues(grant.operations, "operation");
+    if (!allowedOperations.includes(request.operation)) {
+      throw new CapabilityDeniedError(
+        `kv.state operation ${request.operation} is outside granted scope`
+      );
+    }
+    const allowedKeyPrefixes = normalizeKvStateGrantValues(grant.keyPrefixes, "key prefix");
+    if (!allowedKeyPrefixes.some((prefix) => request.key.startsWith(prefix))) {
+      throw new CapabilityDeniedError(`kv.state key ${request.key} is outside granted scope`);
+    }
+  }
+
   if (name === "invoice.read") {
     parseInvoiceReadInput(input);
   }
@@ -951,6 +1110,40 @@ interface HttpFetchInput {
   method: string;
   headers: ReadonlyMap<string, string>;
   body?: string;
+}
+
+type KvStateInput =
+  | { operation: "get" | "delete"; key: string }
+  | { operation: "put"; key: string; value: KvStateJsonValue };
+
+function parseKvStateInput(input: unknown): KvStateInput {
+  if (!isRecord(input)) {
+    throw new CapabilityInputError("kv.state requires operation and key");
+  }
+  const supportedFields = new Set(["operation", "key", "value"]);
+  if (Object.keys(input).some((field) => !supportedFields.has(field))) {
+    throw new CapabilityInputError("kv.state contains unsupported input fields");
+  }
+  if (
+    (input.operation !== "get" && input.operation !== "put" && input.operation !== "delete") ||
+    typeof input.key !== "string" ||
+    input.key.length === 0 ||
+    hasControlCharacter(input.key)
+  ) {
+    throw new CapabilityInputError("kv.state requires a valid operation and key");
+  }
+
+  if (input.operation === "put") {
+    if (!Object.prototype.hasOwnProperty.call(input, "value")) {
+      throw new CapabilityInputError("kv.state put requires a value");
+    }
+    assertKvStateJsonValue(input.value);
+    return { operation: "put", key: input.key, value: input.value };
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "value")) {
+    throw new CapabilityInputError(`kv.state ${input.operation} must not include a value`);
+  }
+  return { operation: input.operation, key: input.key };
 }
 
 const pluginForbiddenHttpHeaders = new Set([
@@ -1368,6 +1561,136 @@ function renderEmailTemplate(request: EmailSendInput, template: EmailTemplate): 
   }
 
   return { to: request.to, subject, text: render(template.text) };
+}
+
+function normalizeKvStateGrantValues(
+  value: string | readonly string[] | undefined,
+  kind: "operation" | "key prefix"
+): string[] {
+  const values = value === undefined ? [] : [value].flat();
+  const invalid = values.some(
+    (entry) =>
+      typeof entry !== "string" ||
+      entry.length === 0 ||
+      hasControlCharacter(entry) ||
+      (kind === "operation" && entry !== "get" && entry !== "put" && entry !== "delete")
+  );
+  if (invalid) {
+    throw new CapabilityDeniedError(`kv.state has an invalid ${kind} grant`);
+  }
+  return [...new Set(values)];
+}
+
+function validateKvStateScope(scope: KvStateScope): void {
+  if (
+    [scope.tenantId, scope.pluginName, scope.version].some(
+      (value) => typeof value !== "string" || value.trim().length === 0
+    )
+  ) {
+    throw new Error("kv.state scope values must not be empty");
+  }
+}
+
+function validateKvStateLimits(limits: KvStateLimits): void {
+  if (
+    [limits.maxKeyBytes, limits.maxValueBytes, limits.maxTotalBytes, limits.maxEntries].some(
+      (value) => !Number.isSafeInteger(value) || value < 1
+    )
+  ) {
+    throw new Error("kv.state limits must be positive safe integers");
+  }
+}
+
+function kvStateFacetStorageKey(scope: KvStateScope): string {
+  return `kv.state:${JSON.stringify([scope.tenantId, scope.pluginName, scope.version])}`;
+}
+
+function readKvStateSnapshot(value: unknown): KvStateFacetSnapshot {
+  if (value === undefined) {
+    return { revision: 1, totalBytes: 0, entries: new Map() };
+  }
+  if (
+    !isRecord(value) ||
+    value.revision !== 1 ||
+    !Number.isSafeInteger(value.totalBytes) ||
+    (value.totalBytes as number) < 0 ||
+    !(value.entries instanceof Map)
+  ) {
+    throw new Error("kv.state facet snapshot is invalid");
+  }
+
+  let measuredBytes = 0;
+  for (const [key, entry] of value.entries.entries()) {
+    if (
+      typeof key !== "string" ||
+      !isRecord(entry) ||
+      typeof entry.json !== "string" ||
+      !Number.isSafeInteger(entry.sizeBytes) ||
+      (entry.sizeBytes as number) < 0
+    ) {
+      throw new Error("kv.state facet snapshot is invalid");
+    }
+    measuredBytes += entry.sizeBytes as number;
+  }
+  if (measuredBytes !== value.totalBytes) {
+    throw new Error("kv.state facet snapshot is invalid");
+  }
+  return value as unknown as KvStateFacetSnapshot;
+}
+
+function serializeKvStateValue(value: KvStateJsonValue): string {
+  return JSON.stringify(value);
+}
+
+function assertKvStateJsonValue(
+  value: unknown,
+  depth = 0,
+  ancestors = new WeakSet()
+): asserts value is KvStateJsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return;
+  }
+  if (typeof value === "number") {
+    if (Number.isFinite(value)) {
+      return;
+    }
+    throw new CapabilityInputError("kv.state value must contain finite numbers");
+  }
+  if (typeof value !== "object") {
+    throw new CapabilityInputError("kv.state value must be JSON-compatible");
+  }
+  if (depth >= 32 || ancestors.has(value)) {
+    throw new CapabilityInputError("kv.state value is too deeply nested or cyclic");
+  }
+
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+    throw new CapabilityInputError("kv.state value must contain only arrays and plain objects");
+  }
+  if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
+    throw new CapabilityInputError("kv.state value must not contain symbol keys");
+  }
+
+  ancestors.add(value);
+  const children: unknown[] = Array.isArray(value) ? value : Object.values(value);
+  for (const child of children) {
+    assertKvStateJsonValue(child, depth + 1, ancestors);
+  }
+  ancestors.delete(value);
+}
+
+function cloneKvStorageValue<T>(value: T): T {
+  return value === undefined ? value : structuredClone(value);
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint <= 31 || codePoint === 127) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
