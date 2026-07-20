@@ -25,6 +25,7 @@ const commandContracts = new Map([
       exits: [0, 2]
     }
   ],
+  ["doctor", { required: ["--report"], exits: [0, 1, 2] }],
   [
     "approvals",
     {
