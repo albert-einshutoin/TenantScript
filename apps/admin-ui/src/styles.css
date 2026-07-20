@@ -149,6 +149,7 @@ select:focus-visible {
 }
 
 .sidebar {
+  min-width: 0;
   border-right: 1px solid #d6deeb;
   background: #ffffff;
   padding: 20px;
@@ -270,6 +271,7 @@ select:focus-visible {
 
 .panel-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 

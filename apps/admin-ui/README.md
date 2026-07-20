@@ -73,6 +73,12 @@ Automated accessibility is enforced by the repository-verified
 dialogs, tables, or privileged journeys. The gate requires unfiltered axe zero and a keyboard-only
 install, rollback, and approval journey; it remains separate from manual screen-reader evidence.
 
+Responsive rendering is enforced by the repository-verified
+[`Admin UI visual regression gate`](../../docs/reference/admin-ui-visual-regression.md). Run
+`pnpm test:admin-ui-visual` from the repository root for layout or state changes. Linux baselines
+cover four viewports, every primary route, and empty, loading, error, large-data, and confirmation
+states; baseline approval remains separate from semantic accessibility and security evidence.
+
 The Audit log screen pages tenant-scoped events newest-first through signed cursors. Its API and UI
 accept only event metadata plus the public `enabled`, `priority`, `revision`, and `version` state;
 raw before/after JSON, configuration, grants, credentials, and customer payloads fail closed before
