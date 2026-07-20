@@ -1,5 +1,7 @@
 import type { SetupProviderAdapter } from "./setup-executor.js";
 
+const MAX_OPERATION_IDS = 64;
+
 export interface SetupProviderRoute {
   operationIds: readonly string[];
   adapter: SetupProviderAdapter;
@@ -22,6 +24,7 @@ export class SetupProviderRouterError extends Error {
 }
 
 export function createSetupProviderRouter(params: {
+  requiredOperationIds: readonly string[];
   routes: readonly SetupProviderRoute[];
 }): SetupProviderAdapter {
   const owners = validateAndIndexRoutes(params);
@@ -42,11 +45,21 @@ export function createSetupProviderRouter(params: {
 function validateAndIndexRoutes(params: unknown): ReadonlyMap<string, SetupProviderAdapter> {
   if (
     !isRecord(params) ||
-    !hasOnlyKeys(params, ["routes"]) ||
+    !hasOnlyKeys(params, ["requiredOperationIds", "routes"]) ||
+    !Array.isArray(params.requiredOperationIds) ||
+    params.requiredOperationIds.length === 0 ||
+    params.requiredOperationIds.length > MAX_OPERATION_IDS ||
     !Array.isArray(params.routes) ||
-    params.routes.length === 0
+    params.routes.length === 0 ||
+    params.routes.length > MAX_OPERATION_IDS
   ) {
     throw invalidConfiguration();
+  }
+
+  const required = new Set<string>();
+  for (const operationId of params.requiredOperationIds) {
+    if (!isOperationId(operationId) || required.has(operationId)) throw invalidConfiguration();
+    required.add(operationId);
   }
 
   const owners = new Map<string, SetupProviderAdapter>();
@@ -56,6 +69,7 @@ function validateAndIndexRoutes(params: unknown): ReadonlyMap<string, SetupProvi
       !hasOnlyKeys(route, ["operationIds", "adapter"]) ||
       !Array.isArray(route.operationIds) ||
       route.operationIds.length === 0 ||
+      route.operationIds.length > MAX_OPERATION_IDS ||
       !isAdapter(route.adapter)
     ) {
       throw invalidConfiguration();
@@ -66,6 +80,11 @@ function validateAndIndexRoutes(params: unknown): ReadonlyMap<string, SetupProvi
       }
       owners.set(operationId, route.adapter);
     }
+  }
+  // Live setup must prove complete ownership before its first provider call. Comparing sets keeps
+  // route declaration order irrelevant while rejecting both missing and accidentally widened IDs.
+  if (owners.size !== required.size || [...owners.keys()].some((id) => !required.has(id))) {
+    throw invalidConfiguration();
   }
   return owners;
 }

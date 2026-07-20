@@ -314,6 +314,7 @@ describe("Cloudflare D1 migration setup adapter", () => {
       runner: harness.runner
     });
     const router = createSetupProviderRouter({
+      requiredOperationIds: [migrationOperation.id],
       routes: [{ operationIds: [migrationOperation.id], adapter: migrationAdapter }]
     });
 

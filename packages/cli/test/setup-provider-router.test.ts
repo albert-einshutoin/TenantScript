@@ -26,6 +26,7 @@ describe("setup provider router", () => {
     const d1 = recordingAdapter("d1", calls);
     const r2 = recordingAdapter("r2", calls);
     const router = createSetupProviderRouter({
+      requiredOperationIds: [declareD1.id, createD1.id, createR2.id],
       routes: [
         { operationIds: [createR2.id], adapter: r2 },
         { operationIds: [createD1.id, declareD1.id], adapter: d1 }
@@ -46,6 +47,7 @@ describe("setup provider router", () => {
   it("routes cleanup by journal operation ownership instead of resource reference", async () => {
     const calls: string[] = [];
     const router = createSetupProviderRouter({
+      requiredOperationIds: [createR2.id, createD1.id],
       routes: [
         { operationIds: [createD1.id], adapter: recordingAdapter("d1", calls) },
         { operationIds: [createR2.id], adapter: recordingAdapter("r2", calls) }
@@ -65,6 +67,7 @@ describe("setup provider router", () => {
   it("fails closed for an unregistered operation without calling a delegate", async () => {
     const calls: string[] = [];
     const router = createSetupProviderRouter({
+      requiredOperationIds: [createD1.id],
       routes: [{ operationIds: [createD1.id], adapter: recordingAdapter("d1", calls) }]
     });
 
@@ -82,6 +85,7 @@ describe("setup provider router", () => {
 
     expect(() =>
       createSetupProviderRouter({
+        requiredOperationIds: [createD1.id],
         routes: [
           { operationIds: [createD1.id], adapter },
           { operationIds: [createD1.id], adapter }
@@ -92,17 +96,28 @@ describe("setup provider router", () => {
   });
 
   it.each([
-    { routes: [] },
-    { routes: [{ operationIds: [], adapter: recordingAdapter("empty", []) }] },
+    { requiredOperationIds: [createD1.id], routes: [] },
     {
+      requiredOperationIds: [createD1.id],
+      routes: [{ operationIds: [], adapter: recordingAdapter("empty", []) }]
+    },
+    {
+      requiredOperationIds: [createD1.id],
       routes: [{ operationIds: ["../unsafe"], adapter: recordingAdapter("unsafe", []) }]
     },
-    { routes: [{ operationIds: [createD1.id], adapter: {} }] },
+    { requiredOperationIds: [createD1.id], routes: [{ operationIds: [createD1.id], adapter: {} }] },
     {
+      requiredOperationIds: [createD1.id],
       routes: [
         { operationIds: [createD1.id], adapter: recordingAdapter("extra", []), fallback: true }
       ]
-    }
+    },
+    {
+      requiredOperationIds: [createD1.id],
+      routes: [{ operationIds: [createD1.id], adapter: recordingAdapter("widened", []) }],
+      secret: "secret-sentinel"
+    },
+    { routes: [{ operationIds: [createD1.id], adapter: recordingAdapter("missing", []) }] }
   ])("rejects invalid or widened configuration without reflection", (configuration) => {
     let thrown: unknown;
     try {
@@ -112,7 +127,68 @@ describe("setup provider router", () => {
     }
     expect(thrown).toBeInstanceOf(SetupProviderRouterError);
     expect(thrown).toMatchObject({ code: "setup_provider_invalid_configuration" });
-    expect(JSON.stringify(thrown)).not.toContain("unsafe");
+    expect(JSON.stringify(thrown)).not.toMatch(/unsafe|secret-sentinel/u);
+  });
+
+  it.each([
+    {
+      name: "missing route",
+      requiredOperationIds: [createD1.id, createR2.id],
+      routeOperationIds: [createD1.id]
+    },
+    {
+      name: "extra route",
+      requiredOperationIds: [createD1.id],
+      routeOperationIds: [createD1.id, createR2.id]
+    },
+    {
+      name: "duplicate required ID",
+      requiredOperationIds: [createD1.id, createD1.id],
+      routeOperationIds: [createD1.id]
+    },
+    { name: "empty required IDs", requiredOperationIds: [], routeOperationIds: [createD1.id] },
+    {
+      name: "unsafe required ID",
+      requiredOperationIds: ["../unsafe"],
+      routeOperationIds: [createD1.id]
+    },
+    {
+      name: "oversized required IDs",
+      requiredOperationIds: Array.from(
+        { length: 65 },
+        (_, index) => `create:item-${index.toString()}`
+      ),
+      routeOperationIds: [createD1.id]
+    }
+  ])("rejects $name before any delegate call", ({ requiredOperationIds, routeOperationIds }) => {
+    const calls: string[] = [];
+    expect(() =>
+      createSetupProviderRouter({
+        requiredOperationIds,
+        routes: [{ operationIds: routeOperationIds, adapter: recordingAdapter("delegate", calls) }]
+      })
+    ).toThrow(expect.objectContaining({ code: "setup_provider_invalid_configuration" }));
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects incomplete full production-plan coverage before any delegate call", () => {
+    const calls: string[] = [];
+    const requiredOperationIds = createProductionSetupPlan("cloudflare-workers").operations.map(
+      (candidate) => candidate.id
+    );
+
+    expect(() =>
+      createSetupProviderRouter({
+        requiredOperationIds,
+        routes: [
+          {
+            operationIds: [createD1.id, declareD1.id, createR2.id, createArchiveR2.id],
+            adapter: recordingAdapter("implemented-slice", calls)
+          }
+        ]
+      })
+    ).toThrow(expect.objectContaining({ code: "setup_provider_invalid_configuration" }));
+    expect(calls).toEqual([]);
   });
 
   it("preserves delegate typed errors without wrapping or reflecting them", async () => {
@@ -124,6 +200,7 @@ describe("setup provider router", () => {
       cleanupCreated: () => undefined
     };
     const router = createSetupProviderRouter({
+      requiredOperationIds: [createD1.id],
       routes: [{ operationIds: [createD1.id], adapter }]
     });
 
@@ -141,6 +218,7 @@ describe("setup provider router", () => {
       }
     };
     const router = createSetupProviderRouter({
+      requiredOperationIds: [createD1.id, declareD1.id],
       routes: [
         {
           operationIds: [createD1.id, declareD1.id],
@@ -189,6 +267,7 @@ describe("setup provider router", () => {
       }
     });
     const router = createSetupProviderRouter({
+      requiredOperationIds: [createD1.id, declareD1.id, createR2.id, createArchiveR2.id],
       routes: [
         {
           operationIds: [createD1.id, declareD1.id],
