@@ -853,6 +853,10 @@ describe("Admin UI auth foundation", () => {
       .fn<AdminApiClient["getDashboard"]>()
       .mockResolvedValueOnce(initial)
       .mockResolvedValueOnce(refreshed);
+    const getOperationalHealth = vi
+      .fn<AdminApiClient["getOperationalHealth"]>()
+      .mockResolvedValueOnce(initial.operationalHealth)
+      .mockResolvedValueOnce(refreshed.operationalHealth);
     const updateInstallationCommand = vi
       .fn<AdminApiClient["updateInstallationCommand"]>()
       .mockRejectedValueOnce(
@@ -864,7 +868,12 @@ describe("Admin UI auth foundation", () => {
         priority: 3,
         revision: 2
       });
-    const client: AdminApiClient = { ...baseClient, getDashboard, updateInstallationCommand };
+    const client: AdminApiClient = {
+      ...baseClient,
+      getDashboard,
+      getOperationalHealth,
+      updateInstallationCommand
+    };
     render(<App client={client} />);
 
     await login("manager-token");
@@ -881,7 +890,8 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByLabelText("Priority")).toHaveValue("3");
 
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
-    expect(screen.getByRole("region", { name: "Operational health" })).toHaveTextContent("8.82%");
+    expect(screen.getByRole("region", { name: "Operational health" })).toHaveTextContent("0.00%");
+    expect(getOperationalHealth).toHaveBeenCalledTimes(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Audit log" }));
     expect(screen.getByText("installation.command")).toBeInTheDocument();

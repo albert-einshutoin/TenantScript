@@ -179,10 +179,15 @@ function AdminShell({
   }, [client, session]);
 
   const refreshDashboard = useCallback(async () => {
-    const refreshed = await client.getDashboard(session);
-    // Additive endpoints stay independent from the legacy dashboard contract. A mutation refresh
-    // must not replace their more recent or independently paged state with empty placeholders.
-    setSnapshot((current) => preserveIndependentSlices(current, refreshed));
+    const [refreshed, operationalHealth] = await Promise.all([
+      client.getDashboard(session),
+      client.getOperationalHealth()
+    ]);
+    // Audit pagination is independent from mutation refreshes. Operational health, however, must
+    // move with usage so Overview never combines a current execution count with stale failures.
+    setSnapshot((current) =>
+      preserveAuditSlice(current, { ...refreshed, operationalHealth })
+    );
   }, [client, session]);
 
   const loadMore = useCallback(
@@ -1911,7 +1916,7 @@ function LoadMoreButton({
   );
 }
 
-function preserveIndependentSlices(
+function preserveAuditSlice(
   current: DashboardSnapshot | null,
   refreshed: DashboardSnapshot
 ): DashboardSnapshot {
@@ -1926,7 +1931,6 @@ function preserveIndependentSlices(
   return {
     ...refreshed,
     auditEvents: current.auditEvents,
-    operationalHealth: current.operationalHealth,
     cursors
   };
 }
