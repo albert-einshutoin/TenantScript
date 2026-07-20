@@ -21,6 +21,10 @@ test("wires the 100k execution browser budget into the Admin UI, root gate, and 
   assert.match(rootPackage.scripts.test, /pnpm test:admin-ui-performance/u);
 
   const tier1 = await readText(".github/workflows/tier1.yml");
+  assert.match(
+    tier1,
+    /run: pnpm --filter @tenantscript\/admin-ui exec playwright install --with-deps chromium/u
+  );
   assert.match(tier1, /run: pnpm test:admin-ui-performance/u);
 });
 
