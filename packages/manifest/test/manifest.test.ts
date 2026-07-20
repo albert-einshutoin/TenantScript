@@ -35,6 +35,92 @@ const validManifest = {
   limits: { cpuMs: 50, timeoutMs: 500 }
 } satisfies TenantScriptManifest;
 
+const sentinelSecret = "ts_sentinel_secret_must_not_leak";
+
+interface ManifestBoundaryCase {
+  name: string;
+  createInput: () => unknown;
+  expected: { path: string; message: string };
+}
+
+const manifestBoundaryCases: readonly ManifestBoundaryCase[] = [
+  {
+    name: "fractional hook timeout",
+    createInput: () =>
+      manifestWithSentinel({
+        hooks: [{ ...validManifest.hooks[0], timeoutMs: 1.5 }]
+      }),
+    expected: { path: "hooks.0.timeoutMs", message: "Expected integer, received float" }
+  },
+  {
+    name: "fractional hook priority",
+    createInput: () =>
+      manifestWithSentinel({
+        hooks: [{ ...validManifest.hooks[0], priority: 1.5 }]
+      }),
+    expected: { path: "hooks.0.priority", message: "Expected integer, received float" }
+  },
+  {
+    name: "empty egress allowlist",
+    createInput: () => manifestWithSentinel({ egress: { mode: "allowlist", hosts: [] } }),
+    expected: { path: "egress.hosts", message: "Array must contain at least 1 element(s)" }
+  },
+  {
+    name: "empty egress allowlist host",
+    createInput: () => manifestWithSentinel({ egress: { mode: "allowlist", hosts: [""] } }),
+    expected: { path: "egress.hosts.0", message: "String must contain at least 1 character(s)" }
+  },
+  {
+    name: "zero execution timeout",
+    createInput: () => manifestWithSentinel({ limits: { cpuMs: 50, timeoutMs: 0 } }),
+    expected: { path: "limits.timeoutMs", message: "Number must be greater than 0" }
+  },
+  {
+    name: "empty required config key",
+    createInput: () =>
+      manifestWithSentinel({
+        configSchema: { ...validManifest.configSchema, required: [""] }
+      }),
+    expected: {
+      path: "configSchema.required.0",
+      message: "String must contain at least 1 character(s)"
+    }
+  },
+  {
+    name: "empty config property key",
+    createInput: () =>
+      manifestWithSentinel({
+        configSchema: { properties: { "": { type: "string" } }, required: [] }
+      }),
+    expected: {
+      path: "configSchema.properties.",
+      message: "String must contain at least 1 character(s)"
+    }
+  },
+  {
+    name: "unknown hook field",
+    createInput: () =>
+      manifestWithSentinel({
+        hooks: [{ ...validManifest.hooks[0], sentinelField: sentinelSecret }]
+      }),
+    expected: {
+      path: "hooks.0",
+      message: "Unrecognized key(s) in object: 'sentinelField'"
+    }
+  },
+  {
+    name: "unknown limits field",
+    createInput: () =>
+      manifestWithSentinel({
+        limits: { ...validManifest.limits, sentinelField: sentinelSecret }
+      }),
+    expected: {
+      path: "limits",
+      message: "Unrecognized key(s) in object: 'sentinelField'"
+    }
+  }
+];
+
 describe("parseManifest", () => {
   it("accepts a valid manifest", () => {
     const result = parseManifest(validManifest);
@@ -101,6 +187,18 @@ describe("parseManifest", () => {
     }
   });
 
+  it.each(manifestBoundaryCases)(
+    "rejects $name with a stable redacted issue",
+    ({ createInput, expected }) => {
+      const result = parseManifest(createInput());
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("invalid manifest was accepted");
+      expect(result.errors).toEqual([expected]);
+      expect(JSON.stringify(result)).not.toContain(sentinelSecret);
+    }
+  );
+
   it("returns structured errors instead of throwing for arbitrary input", () => {
     fc.assert(
       fc.property(fc.anything(), (input) => {
@@ -113,6 +211,20 @@ describe("parseManifest", () => {
     );
   });
 });
+
+function manifestWithSentinel(override: Record<string, unknown>): unknown {
+  return {
+    ...validManifest,
+    capabilities: {
+      ...validManifest.capabilities,
+      "slack.send": {
+        ...validManifest.capabilities["slack.send"],
+        sentinelPayload: sentinelSecret
+      }
+    },
+    ...override
+  };
+}
 
 describe("validateConfig", () => {
   it("rejects missing required values", () => {
