@@ -52,6 +52,11 @@ perform resume-safe prefix verification, and expose a fail-closed Wrangler proce
 runner is not yet composed into a credential-bearing `ext setup` command, so operators must still
 run and verify the command above.
 
+The accountless [pinned Worker deploy process](wrangler-worker-deploy-process.md) fixes strict,
+non-autoconfiguring Wrangler arguments and closes process output. It is not yet composed with remote
+Worker ownership reconciliation, so it does not replace the reviewed operator command or authorize
+automatic cleanup.
+
 Do not treat `deploy --dry-run` as live resource, permission, migration, or request-path evidence.
 After deployment, collect a secret-free doctor report through a trusted adapter and evaluate it with
 `ext doctor --report`.

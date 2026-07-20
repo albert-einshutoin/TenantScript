@@ -19,6 +19,10 @@ repository root, and an existing output file. It never accepts or emits credenti
 `wrangler.example.jsonc` uses a
 synthetic D1 ID only for accountless Wrangler bundle validation; do not deploy it unchanged.
 
+The CLI also exposes a closed pinned-Wrangler deploy process, documented in the
+[Worker deploy process runbook](../../../docs/operations/wrangler-worker-deploy-process.md). It does
+not yet reconcile remote Worker ownership or replace the manual reviewed deployment flow.
+
 Only bindings consumed by `packages/control-plane/src/worker-entry.ts` are generated today:
 
 - `DB`
