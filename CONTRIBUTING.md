@@ -12,6 +12,7 @@ Before changing code, read:
 - [Security policy](SECURITY.md): private vulnerability reporting and sensitive-data rules.
 - [Code of Conduct](CODE_OF_CONDUCT.md): community behavior, confidential reporting, and enforcement.
 - [Good-first-issue pipeline](docs/community/good-first-issues.md): bounded newcomer tasks with explicit verification.
+- [Test-selection matrix](docs/contributing/test-selection.md): focused RED/GREEN commands, security/E2E additions, and the final repository gate by change area.
 - [AGENTS.md](AGENTS.md): concise repository workflow and safety guardrails for humans and coding agents.
 
 If these documents conflict, an accepted ADR governs the architecture, while the current issue or task defines the approved change scope. Ask in the issue before expanding that scope.
