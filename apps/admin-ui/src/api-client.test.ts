@@ -831,6 +831,77 @@ describe("Admin API environment selection", () => {
     );
   });
 
+  it("loads strict provider connection metadata without sending tenant scope fields", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            {
+              provider: "slack",
+              id: "connection_1",
+              workspaceId: "workspace_1",
+              workspaceName: "Operations",
+              botUserId: "bot_1",
+              connectedAt: "2026-07-21T00:00:00.000Z"
+            }
+          ]
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getProviderConnections()).resolves.toEqual([
+      {
+        provider: "slack",
+        id: "connection_1",
+        workspaceId: "workspace_1",
+        workspaceName: "Operations",
+        botUserId: "bot_1",
+        connectedAt: new Date("2026-07-21T00:00:00.000Z")
+      }
+    ]);
+    const [url] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/provider-connections");
+    expect(requestUrl(url)).not.toContain("tenantId");
+  });
+
+  it("rejects provider connections containing a secret reference", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            {
+              provider: "slack",
+              id: "connection_1",
+              workspaceId: "workspace_1",
+              connectedAt: "2026-07-21T00:00:00.000Z",
+              secretRef: { secretId: "secret-slack" }
+            }
+          ]
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getProviderConnections()).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
   it("maps every paginated dashboard section DTO", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

@@ -153,14 +153,16 @@ function AdminShell({
     void Promise.all([
       client.getDashboard(session),
       client.getAuditEvents(),
-      client.getOperationalHealth()
+      client.getOperationalHealth(),
+      client.getProviderConnections()
     ])
-      .then(([nextSnapshot, auditPage, operationalHealth]) => {
+      .then(([nextSnapshot, auditPage, operationalHealth, providerConnections]) => {
         if (active) {
           setSnapshot({
             ...nextSnapshot,
             auditEvents: auditPage.items,
             operationalHealth,
+            providerConnections,
             cursors: {
               ...nextSnapshot.cursors,
               ...(auditPage.nextCursor === undefined ? {} : { auditEvents: auditPage.nextCursor })
@@ -183,8 +185,9 @@ function AdminShell({
       client.getDashboard(session),
       client.getOperationalHealth()
     ]);
-    // Audit pagination is independent from mutation refreshes. Operational health, however, must
-    // move with usage so Overview never combines a current execution count with stale failures.
+    // Audit pagination and the read-only connection inventory are independent from mutation
+    // refreshes. Operational health, however, must move with usage so Overview never combines a
+    // current execution count with stale failures.
     setSnapshot((current) => preserveAuditSlice(current, { ...refreshed, operationalHealth }));
   }, [client, session]);
 
@@ -502,6 +505,7 @@ const routeItems: readonly { route: AdminRoute; label: string }[] = [
   { route: "versions", label: "Versions" },
   { route: "approvals", label: "Approval queue" },
   { route: "executions", label: "Executions" },
+  { route: "connections", label: "Connections" },
   { route: "audit", label: "Audit log" }
 ];
 
@@ -635,7 +639,45 @@ function RoutePanel({
           }}
         />
       );
+    case "connections":
+      return <ConnectionsPanel snapshot={snapshot} />;
   }
+}
+
+function ConnectionsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
+  return (
+    <section className="data-panel" aria-label="Provider connections">
+      <PanelHeader title="Provider connections" detail="Secret-safe metadata" />
+      {snapshot.providerConnections.length === 0 ? (
+        <p className="empty-state">No provider connections yet</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Workspace</th>
+                <th>Workspace ID</th>
+                <th>Bot user</th>
+                <th>Connected</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshot.providerConnections.map((connection) => (
+                <tr key={connection.id}>
+                  <td>{connection.provider}</td>
+                  <td>{connection.workspaceName ?? "Unnamed workspace"}</td>
+                  <td>{connection.workspaceId}</td>
+                  <td>{connection.botUserId ?? "Not reported"}</td>
+                  <td>{connection.connectedAt.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function AuditPanel({
@@ -1929,6 +1971,7 @@ function preserveAuditSlice(
   return {
     ...refreshed,
     auditEvents: current.auditEvents,
+    providerConnections: current.providerConnections,
     cursors
   };
 }

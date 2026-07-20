@@ -42,6 +42,13 @@ the authenticated request and reports an integer basis-point failure rate plus a
 egress-denial, and budget-exceeded counts. The UI never estimates budget utilization when a budget
 limit is not available in the dashboard read model.
 
+The Connections screen loads a read-only inventory from `GET /v1/admin/provider-connections`.
+Scope is derived from the authenticated session, and the closed response contains only provider,
+workspace, bot-user, connection ID, and connection time metadata. Secret values, tokens, and even
+secret-reference handles are excluded from the storage query and rejected by the UI parser. OAuth
+connect, rotation, and deletion workflows remain separate privileged operations tracked in Issue
+#31; this inventory must not be extended into a credential viewer.
+
 The header shows whether anonymous aggregate telemetry is `On` or `Off`. The server response never
 includes the receiver endpoint. Telemetry is off by default and is configured only in the Control
 Plane Worker; see

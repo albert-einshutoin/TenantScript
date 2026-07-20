@@ -37,6 +37,14 @@ test("manager can sign in and reach the approval queue", async ({ page }) => {
   await expect(operationalHealth).toContainText("Failure rate8.82%");
   await expect(operationalHealth).toContainText("Budget blocks1");
 
+  await page.getByRole("button", { name: "Connections" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Connections" })).toBeVisible();
+  const connections = page.getByLabel("Provider connections");
+  await expect(connections).toContainText("Acme Operations");
+  await expect(connections).toContainText("T123");
+  await expect(connections).toContainText("B123");
+  await expect(connections).not.toContainText("secretRef");
+
   await page.getByRole("button", { name: "Approval queue" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Approval queue" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve" })).toBeEnabled();
