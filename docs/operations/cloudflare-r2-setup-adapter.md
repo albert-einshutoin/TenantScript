@@ -55,8 +55,10 @@ otherwise. Optional values are closed to Cloudflare's documented values:
 
 A location hint is best effort and is not used as ownership evidence. A configured jurisdiction is
 sent only through the closed `cf-r2-jurisdiction` transport property and must match the provider
-response. Cloudflare documents jurisdiction as immutable after creation, so changing it requires an
-operator-owned migration, not setup reconciliation.
+response. When jurisdiction and storage class are omitted, an observed non-default value is still
+rejected rather than silently widening residency or cost policy. Cloudflare documents jurisdiction
+as immutable after creation, so changing it requires an operator-owned migration, not setup
+reconciliation.
 
 See Cloudflare's [Create bucket API](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/create/),
 [Delete bucket API](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/delete/),

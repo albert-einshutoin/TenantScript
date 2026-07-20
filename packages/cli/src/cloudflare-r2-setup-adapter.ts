@@ -326,18 +326,25 @@ function validateObservedBucket(
   configuration: CloudflareR2BucketConfiguration
 ): void {
   if (bucket.name !== expectedName) throw invalidResponse();
+  const expectedJurisdiction = configuration.jurisdiction ?? "default";
   if (
-    configuration.jurisdiction !== undefined &&
-    bucket.jurisdiction !== configuration.jurisdiction
+    (configuration.jurisdiction !== undefined && bucket.jurisdiction !== expectedJurisdiction) ||
+    (configuration.jurisdiction === undefined &&
+      bucket.jurisdiction !== undefined &&
+      bucket.jurisdiction !== expectedJurisdiction)
   ) {
     throw invalidResponse();
   }
-  if (
-    configuration.mode === "create" &&
-    configuration.storageClass !== undefined &&
-    bucket.storageClass !== configuration.storageClass
-  ) {
-    throw invalidResponse();
+  if (configuration.mode === "create") {
+    const expectedStorageClass = configuration.storageClass ?? "Standard";
+    if (
+      (configuration.storageClass !== undefined && bucket.storageClass !== expectedStorageClass) ||
+      (configuration.storageClass === undefined &&
+        bucket.storageClass !== undefined &&
+        bucket.storageClass !== expectedStorageClass)
+    ) {
+      throw invalidResponse();
+    }
   }
 }
 

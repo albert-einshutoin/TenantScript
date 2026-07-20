@@ -150,6 +150,24 @@ describe("Cloudflare R2 setup adapter", () => {
     });
   });
 
+  it.each([{ jurisdiction: "eu" }, { storage_class: "InfrequentAccess" }])(
+    "rejects provider drift away from an implicit default: %o",
+    async (providerFields) => {
+      const expectedName = derivedName("minimal-artifacts", artifacts);
+      const adapter = createCloudflareR2SetupAdapter({
+        transport: recordingTransport([], () => ({ name: expectedName, ...providerFields })),
+        buckets: {
+          artifacts: { mode: "create", baseName: "minimal-artifacts" },
+          executionArchive: { mode: "create", baseName: "minimal-archive" }
+        }
+      });
+
+      await expect(adapter.reconcile(reconcileRequest(artifacts))).rejects.toMatchObject({
+        code: "cloudflare_r2_invalid_response"
+      });
+    }
+  );
+
   it.each([
     ["wrong name", { name: "operator-secret", jurisdiction: "eu", storage_class: "Standard" }],
     [
