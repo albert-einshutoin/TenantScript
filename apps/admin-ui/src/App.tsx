@@ -150,11 +150,17 @@ function AdminShell({
 
   useEffect(() => {
     let active = true;
-    void client
-      .getDashboard(session)
-      .then((nextSnapshot) => {
+    void Promise.all([client.getDashboard(session), client.getAuditEvents()])
+      .then(([nextSnapshot, auditPage]) => {
         if (active) {
-          setSnapshot(nextSnapshot);
+          setSnapshot({
+            ...nextSnapshot,
+            auditEvents: auditPage.items,
+            cursors: {
+              ...nextSnapshot.cursors,
+              ...(auditPage.nextCursor === undefined ? {} : { auditEvents: auditPage.nextCursor })
+            }
+          });
         }
       })
       .catch(() => {
@@ -165,6 +171,13 @@ function AdminShell({
     return () => {
       active = false;
     };
+  }, [client, session]);
+
+  const refreshDashboard = useCallback(async () => {
+    const refreshed = await client.getDashboard(session);
+    // The additive audit endpoint is intentionally separate from the legacy dashboard contract.
+    // Preserve its independently paged slice when a mutation refreshes the remaining dashboard.
+    setSnapshot((current) => preserveAuditSlice(current, refreshed));
   }, [client, session]);
 
   const loadMore = useCallback(
@@ -252,14 +265,14 @@ function AdminShell({
         ) {
           // A conflict means every local installation revision may be stale. Refresh the complete
           // tenant snapshot before allowing another command so retries cannot loop on the old CAS.
-          setSnapshot(await client.getDashboard(session));
+          await refreshDashboard();
         }
         throw commandError;
       } finally {
         setCommandInFlight(false);
       }
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   const openInstallPreview = useCallback(
@@ -294,7 +307,7 @@ function AdminShell({
         const installed = await client.installPlugin(request);
         // Install results are not applied optimistically: refreshing also reconciles pagination,
         // server defaults, and any concurrent installation changes in the tenant.
-        setSnapshot(await client.getDashboard(session));
+        await refreshDashboard();
         setInstallPreview(null);
         return installed;
       } catch (cause) {
@@ -308,7 +321,7 @@ function AdminShell({
         setInstallInFlight(false);
       }
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   const requestInstallation = useCallback(
@@ -319,14 +332,11 @@ function AdminShell({
         const result = await client.requestInstallation(request);
         // Refresh only after the server returns the approval id. This keeps the queue and the
         // operator's success evidence correlated with the exact normalized grant proposal.
-        void client
-          .getDashboard(session)
-          .then(setSnapshot)
-          .catch(() => {
-            // The mutation has already succeeded. Preserve its approval id and report only the
-            // secondary refresh failure so a user does not submit a different request by mistake.
-            setError("Approval request created; dashboard refresh unavailable");
-          });
+        void refreshDashboard().catch(() => {
+          // The mutation has already succeeded. Preserve its approval id and report only the
+          // secondary refresh failure so a user does not submit a different request by mistake.
+          setError("Approval request created; dashboard refresh unavailable");
+        });
         return result;
       } catch (cause) {
         setInstallError(
@@ -339,7 +349,7 @@ function AdminShell({
         setInstallInFlight(false);
       }
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   const rollbackInstallation = useCallback(
@@ -349,7 +359,7 @@ function AdminShell({
         const result = await client.rollbackInstallation(request);
         // A fresh snapshot is the completion signal: it proves the current pin changed on the
         // server and avoids presenting a local optimistic version as an operational rollback.
-        setSnapshot(await client.getDashboard(session));
+        await refreshDashboard();
         return result;
       } catch (cause) {
         if (
@@ -357,14 +367,14 @@ function AdminShell({
           cause.status === 409 &&
           cause.code === "installation_revision_conflict"
         ) {
-          setSnapshot(await client.getDashboard(session));
+          await refreshDashboard();
         }
         throw cause;
       } finally {
         setRollbackInFlight(false);
       }
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   const decideApproval = useCallback(
@@ -373,12 +383,9 @@ function AdminShell({
       if (result.installation !== undefined) {
         // Grant approval creates the installation in the same server transaction. Reloading the
         // tenant snapshot makes that atomic completion visible instead of leaving a stale queue.
-        void client
-          .getDashboard(session)
-          .then(setSnapshot)
-          .catch(() => {
-            setError("Approval completed; dashboard refresh unavailable");
-          });
+        void refreshDashboard().catch(() => {
+          setError("Approval completed; dashboard refresh unavailable");
+        });
         return result;
       }
       // Apply the queue transition only after correlated audit evidence is returned.
@@ -394,7 +401,7 @@ function AdminShell({
       );
       return result;
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   return (
@@ -486,7 +493,8 @@ const routeItems: readonly { route: AdminRoute; label: string }[] = [
   { route: "installations", label: "Installations" },
   { route: "versions", label: "Versions" },
   { route: "approvals", label: "Approval queue" },
-  { route: "executions", label: "Executions" }
+  { route: "executions", label: "Executions" },
+  { route: "audit", label: "Audit log" }
 ];
 
 function RoutePanel({
@@ -609,7 +617,90 @@ function RoutePanel({
           onDetail={onExecutionDetail}
         />
       );
+    case "audit":
+      return (
+        <AuditPanel
+          snapshot={snapshot}
+          loading={loadingSection === "auditEvents"}
+          onLoadMore={() => {
+            onLoadMore("auditEvents");
+          }}
+        />
+      );
   }
+}
+
+function AuditPanel({
+  snapshot,
+  loading,
+  onLoadMore
+}: {
+  snapshot: DashboardSnapshot;
+  loading: boolean;
+  onLoadMore: () => void;
+}) {
+  return (
+    <section className="data-panel" aria-label="Tenant audit log">
+      <PanelHeader title="Audit events" detail="Newest first" />
+      {snapshot.auditEvents.length === 0 ? (
+        <p className="empty-state">No audit events yet</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Installation</th>
+                <th>Plugin</th>
+                <th>Revision</th>
+                <th>Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshot.auditEvents.map((event) => (
+                <tr key={event.id}>
+                  <td>{event.createdAt.toLocaleString()}</td>
+                  <td>{event.actor}</td>
+                  <td>{event.action}</td>
+                  <td>{event.installationId}</td>
+                  <td>{event.pluginId}</td>
+                  <td>{event.revision}</td>
+                  <td>{auditChangeSummary(event.before, event.after)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <LoadMoreButton
+        section="audit events"
+        cursor={snapshot.cursors.auditEvents}
+        loading={loading}
+        onClick={onLoadMore}
+      />
+    </section>
+  );
+}
+
+function auditChangeSummary(
+  before: DashboardSnapshot["auditEvents"][number]["before"],
+  after: DashboardSnapshot["auditEvents"][number]["after"]
+): string {
+  const changes: string[] = [];
+  for (const key of ["enabled", "priority", "revision", "version"] as const) {
+    if (before[key] !== after[key]) {
+      changes.push(`${key}: ${auditStateValue(before[key])} → ${auditStateValue(after[key])}`);
+    }
+  }
+  return changes.length === 0 ? "No public state change" : changes.join(", ");
+}
+
+function auditStateValue(value: boolean | number | string | undefined): string {
+  if (value === undefined) return "not set";
+  if (typeof value === "boolean") return value ? "on" : "off";
+  return String(value);
 }
 
 function OverviewPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
@@ -1798,6 +1889,21 @@ function LoadMoreButton({
   );
 }
 
+function preserveAuditSlice(
+  current: DashboardSnapshot | null,
+  refreshed: DashboardSnapshot
+): DashboardSnapshot {
+  if (current === null) return refreshed;
+  const cursors = { ...refreshed.cursors };
+  const auditCursor = current.cursors.auditEvents;
+  if (auditCursor === undefined) {
+    delete cursors.auditEvents;
+  } else {
+    cursors.auditEvents = auditCursor;
+  }
+  return { ...refreshed, auditEvents: current.auditEvents, cursors };
+}
+
 function appendPage(snapshot: DashboardSnapshot, page: DashboardSectionPage): DashboardSnapshot {
   const cursors: DashboardSnapshot["cursors"] =
     page.nextCursor === undefined
@@ -1815,6 +1921,8 @@ function appendPage(snapshot: DashboardSnapshot, page: DashboardSectionPage): Da
       return { ...snapshot, approvals: [...snapshot.approvals, ...page.items], cursors };
     case "executions":
       return { ...snapshot, executions: [...snapshot.executions, ...page.items], cursors };
+    case "auditEvents":
+      return { ...snapshot, auditEvents: [...snapshot.auditEvents, ...page.items], cursors };
   }
 }
 

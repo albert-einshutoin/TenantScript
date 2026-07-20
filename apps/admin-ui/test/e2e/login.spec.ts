@@ -134,6 +134,19 @@ test("manager searches tenant executions and opens safe capability evidence", as
   await expect(detail).toContainText("none");
 });
 
+test("manager reviews a redacted tenant audit trail", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Token").fill("manager-token");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByRole("button", { name: "Audit log" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Audit log" })).toBeVisible();
+  const auditLog = page.getByLabel("Tenant audit log");
+  await expect(auditLog).toContainText("installation.command");
+  await expect(auditLog).toContainText("enabled: on → off");
+  await expect(auditLog).not.toContainText("secret-config");
+});
+
 test("invalid token stays on the login screen", async ({ page }) => {
   await page.goto("/");
 

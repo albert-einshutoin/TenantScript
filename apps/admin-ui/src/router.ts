@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
-export const routes = ["overview", "installations", "versions", "approvals", "executions"] as const;
+export const routes = [
+  "overview",
+  "installations",
+  "versions",
+  "approvals",
+  "executions",
+  "audit"
+] as const;
 
 export type AdminRoute = (typeof routes)[number];
 

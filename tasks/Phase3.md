@@ -19,6 +19,7 @@
 - [ ] **P3-T01**(L→分割)全画面の完成
   - 内容: dashboard(usage / budget / 失敗率)、schema migration tracking、audit ビューア、secret 接続管理
   - DoD: 各画面に E2E + コンポーネントテスト
+  - Progress: Issue #245でtenant/app境界付きの監査read model、署名cursor、raw state非公開schema、Admin UIの監査table・空状態・ページング、component/E2E/security contractを実装
 
 - [ ] **P3-T02**(M)アクセシビリティ
   - RED: axe 自動チェック violation 0 / キーボードのみで全主要フロー(install → grant → rollback → approve)完走の E2E

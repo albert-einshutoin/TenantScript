@@ -194,6 +194,8 @@
             { "name": "AdminApprovalDecisionResult", "kind": "type" },
             { "name": "AdminApprovalDecisionStore", "kind": "type" },
             { "name": "AdminApprovalSummary", "kind": "type" },
+            { "name": "AdminAuditEventSummary", "kind": "type" },
+            { "name": "AdminAuditStateSummary", "kind": "type" },
             { "name": "AdminCapabilityMetadata", "kind": "type" },
             { "name": "AdminConfigFieldMetadata", "kind": "type" },
             { "name": "AdminCursorCodec", "kind": "type" },
@@ -621,6 +623,15 @@
       "isolation": "tenant-collection",
       "success": [
         { "method": "GET", "status": 200, "body": "json", "schema": "dashboardApprovals" }
+      ]
+    },
+    {
+      "id": "dashboardAuditEvents",
+      "path": "/v1/admin/dashboard/auditEvents",
+      "methods": ["GET"],
+      "isolation": "tenant-collection",
+      "success": [
+        { "method": "GET", "status": 200, "body": "json", "schema": "dashboardAuditEvents" }
       ]
     },
     {
@@ -1064,6 +1075,64 @@
               "status",
               "durationMs",
               "capabilityNames",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "nextCursor": { "type": "string" }
+      },
+      "required": ["section", "items"],
+      "additionalProperties": false
+    },
+    "dashboardAuditEvents": {
+      "type": "object",
+      "properties": {
+        "section": { "const": "auditEvents" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "installationId": { "type": "string" },
+              "pluginId": { "type": "string" },
+              "revision": { "type": "integer", "minimum": 0 },
+              "actor": { "type": "string" },
+              "action": { "type": "string" },
+              "before": {
+                "type": "object",
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "priority": { "type": "integer" },
+                  "revision": { "type": "integer", "minimum": 0 },
+                  "version": { "type": "string" }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "after": {
+                "type": "object",
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "priority": { "type": "integer" },
+                  "revision": { "type": "integer", "minimum": 0 },
+                  "version": { "type": "string" }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "createdAt": { "type": "string" }
+            },
+            "required": [
+              "id",
+              "installationId",
+              "pluginId",
+              "revision",
+              "actor",
+              "action",
+              "before",
+              "after",
               "createdAt"
             ],
             "additionalProperties": false

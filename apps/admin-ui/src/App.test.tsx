@@ -111,6 +111,54 @@ describe("Admin UI auth foundation", () => {
     expect(screen.getByRole("heading", { name: "Admin Console" })).toBeInTheDocument();
   });
 
+  it("shows a tenant audit log without rendering raw state", async () => {
+    render(<App client={createDemoAdminApiClient()} />);
+
+    await login("manager-token");
+    fireEvent.click(await screen.findByRole("button", { name: "Audit log" }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "Audit log" })).toBeInTheDocument();
+    expect(screen.getByText("installation.command")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "ops-manager" })).toBeInTheDocument();
+    expect(screen.getByText(/enabled: on → off/u)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("secret-config");
+  });
+
+  it("shows the empty audit state and appends a signed-cursor page", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const nextAudit = {
+      id: "audit_next",
+      installationId: "inst_next",
+      pluginId: "plugin_next",
+      revision: 2,
+      actor: "security-reviewer",
+      action: "installation.rollback",
+      before: { version: "2.0.0" },
+      after: { version: "1.9.0" },
+      createdAt: new Date("2026-07-20T00:00:00.000Z")
+    };
+    const getDashboardSection = vi.fn().mockResolvedValue({
+      section: "auditEvents",
+      items: [nextAudit]
+    });
+    const client: AdminApiClient = {
+      ...baseClient,
+      getAuditEvents: () =>
+        Promise.resolve({ section: "auditEvents", items: [], nextCursor: "signed.audit.cursor" }),
+      getDashboardSection
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    fireEvent.click(await screen.findByRole("button", { name: "Audit log" }));
+    expect(screen.getByText("No audit events yet")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more audit events" }));
+
+    expect(await screen.findByRole("cell", { name: "security-reviewer" })).toBeInTheDocument();
+    expect(screen.getByText("version: 2.0.0 → 1.9.0")).toBeInTheDocument();
+    expect(getDashboardSection).toHaveBeenCalledWith("auditEvents", "signed.audit.cursor");
+  });
+
   it("keeps accumulated execution pages within a bounded DOM window", async () => {
     const baseClient = createDemoAdminApiClient();
     const session = await baseClient.resolveSession({ token: "manager-token" });
@@ -758,6 +806,8 @@ describe("Admin UI auth foundation", () => {
     });
     const refreshed: DashboardSnapshot = {
       ...initial,
+      auditEvents: [],
+      cursors: {},
       installations: initial.installations.map((installation, index) =>
         index === 0 ? { ...installation, priority: 3, revision: 1 } : installation
       )
@@ -792,6 +842,11 @@ describe("Admin UI auth foundation", () => {
     });
     expect(screen.getByRole("cell", { name: "3" })).toBeInTheDocument();
     expect(screen.getByLabelText("Priority")).toHaveValue("3");
+
+    fireEvent.click(screen.getByRole("button", { name: "Audit log" }));
+    expect(screen.getByText("installation.command")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(screen.getByRole("button", { name: "Manage large-invoice-notify" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
     fireEvent.click(screen.getByRole("button", { name: "Review change" }));
