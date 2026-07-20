@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   createUnavailableAdminApiClient,
   AdminApiError,
@@ -29,10 +29,16 @@ const defaultClient = createUnavailableAdminApiClient();
 
 export function App({ client = defaultClient }: { client?: AdminApiClient }) {
   const [session, setSession] = useState<AdminSession | null>(null);
+  const skipToMainContent = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    // Admin routes also use the URL fragment. Preventing native hash replacement preserves the
+    // current workspace while retaining link semantics for keyboard and assistive-technology users.
+    event.preventDefault();
+    document.getElementById("main-content")?.focus();
+  }, []);
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main-content">
+      <a className="skip-link" href="#main-content" onClick={skipToMainContent}>
         Skip to main content
       </a>
       {session === null ? (

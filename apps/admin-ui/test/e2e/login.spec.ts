@@ -9,7 +9,18 @@ test("keyboard users can skip directly to the main content", async ({ page }) =>
   await expect(skipLink).toBeVisible();
 
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/#main-content$/u);
+  await expect(page).not.toHaveURL(/#main-content$/u);
+  await expect(page.getByRole("main")).toBeFocused();
+
+  await page.getByLabel("Token").fill("manager-token");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Installations" }).click();
+  await expect(page).toHaveURL(/#installations$/u);
+
+  await skipLink.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#installations$/u);
+  await expect(page.getByRole("heading", { level: 1, name: "Installations" })).toBeVisible();
   await expect(page.getByRole("main")).toBeFocused();
 });
 
