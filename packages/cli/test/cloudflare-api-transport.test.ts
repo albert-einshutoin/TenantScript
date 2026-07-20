@@ -9,6 +9,38 @@ const accountId = "0123456789abcdef0123456789abcdef";
 const apiToken = "cf-token-secret-sentinel";
 
 describe("Cloudflare API transport", () => {
+  it("projects only a closed R2 jurisdiction value into the provider header", async () => {
+    const requests: RequestInit[] = [];
+    const transport = createTransport((_input, init) => {
+      requests.push(init);
+      return Promise.resolve(jsonResponse({ success: true, result: { name: "tenant-bucket" } }));
+    });
+
+    await transport.request({
+      method: "GET",
+      pathSegments: ["r2", "buckets", "tenant-bucket"],
+      r2Jurisdiction: "eu"
+    });
+
+    expect(requests[0]?.headers).toMatchObject({ "cf-r2-jurisdiction": "eu" });
+  });
+
+  it.each([
+    { pathSegments: ["d1", "database"], r2Jurisdiction: "eu" },
+    { pathSegments: ["r2", "buckets"], r2Jurisdiction: "operator-secret" }
+  ])("rejects invalid R2 jurisdiction routing before fetch", async (request) => {
+    let called = false;
+    const transport = createTransport(() => {
+      called = true;
+      return Promise.resolve(jsonResponse({ success: true, result: null }));
+    });
+
+    await expect(transport.request({ method: "GET", ...request } as never)).rejects.toMatchObject({
+      code: "cloudflare_api_invalid_request"
+    });
+    expect(called).toBe(false);
+  });
+
   it("sends credentials only in Authorization and projects a successful result", async () => {
     const requests: Array<{ url: string; init: RequestInit }> = [];
     const transport = createCloudflareApiTransport({

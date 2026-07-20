@@ -79,14 +79,8 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
     operation("declare:app-database-boundary", "d1", "declare", "APP_<APP_ID>_DB", "implemented", [
       "create:control-plane-d1"
     ]),
-    operation("create:artifact-r2", "r2", "create", "ARTIFACTS", "integration-required"),
-    operation(
-      "create:execution-archive-r2",
-      "r2",
-      "create",
-      "EXECUTION_ARCHIVE",
-      "integration-required"
-    ),
+    operation("create:artifact-r2", "r2", "create", "ARTIFACTS", "implemented"),
+    operation("create:execution-archive-r2", "r2", "create", "EXECUTION_ARCHIVE", "implemented"),
     operation(
       "create:admin-rate-limiter-do",
       "durable-object",

@@ -31,6 +31,13 @@ describe("ext setup production dry-run", () => {
       "bind:control-plane-worker"
     ]);
     expect(plan.operations.at(-2)?.dependsOn).toEqual(["create:control-plane-d1"]);
+    expect(
+      plan.operations
+        .filter((operation) =>
+          ["create:artifact-r2", "create:execution-archive-r2"].includes(operation.id)
+        )
+        .map((operation) => operation.implementationStatus)
+    ).toEqual(["implemented", "implemented"]);
     expect(plan.operations.at(-1)?.dependsOn).toEqual([
       "create:control-plane-d1",
       "create:artifact-r2",

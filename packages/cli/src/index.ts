@@ -76,6 +76,14 @@ export {
 } from "./cloudflare-d1-setup-adapter.js";
 
 export {
+  CloudflareR2SetupAdapterError,
+  createCloudflareR2SetupAdapter,
+  type CloudflareR2BucketConfiguration,
+  type CloudflareR2SetupAdapterErrorCode,
+  type CloudflareR2SetupBucketsConfiguration
+} from "./cloudflare-r2-setup-adapter.js";
+
+export {
   createSetupProviderRouter,
   SetupProviderRouterError,
   type SetupProviderRoute,

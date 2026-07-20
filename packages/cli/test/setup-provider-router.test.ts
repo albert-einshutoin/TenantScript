@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  CloudflareApiError,
   CloudflareD1SetupAdapterError,
   SetupProviderRouterError,
   createCloudflareD1SetupAdapter,
+  createCloudflareR2SetupAdapter,
   createProductionSetupPlan,
   createSetupProviderRouter,
   deriveSetupOperationIdempotencyKey,
@@ -16,6 +18,7 @@ const databaseId = "123e4567-e89b-12d3-a456-426614174000";
 const createD1 = operation("create:control-plane-d1");
 const declareD1 = operation("declare:app-database-boundary");
 const createR2 = operation("create:artifact-r2");
+const createArchiveR2 = operation("create:execution-archive-r2");
 
 describe("setup provider router", () => {
   it("routes exact operation IDs to their owner independent of route order", async () => {
@@ -160,6 +163,61 @@ describe("setup provider router", () => {
       code: "setup_provider_route_not_found"
     });
     expect(providerRequests).toEqual(["GET:d1/database", "POST:d1/database"]);
+  });
+
+  it("composes exact D1 and R2 routes without widening either adapter", async () => {
+    const providerRequests: string[] = [];
+    const transport: CloudflareApiTransport = {
+      request: (request) => {
+        providerRequests.push(`${request.method}:${request.pathSegments.join("/")}`);
+        if (request.pathSegments[0] === "d1") {
+          if (request.method === "GET") return Promise.resolve([]);
+          const body = requireRecord(request.body);
+          return Promise.resolve({ uuid: databaseId, name: body.name });
+        }
+        if (request.method === "GET") {
+          return Promise.reject(new CloudflareApiError("cloudflare_api_request_failed", 404));
+        }
+        return Promise.resolve({ name: requireRecord(request.body).name });
+      }
+    };
+    const r2 = createCloudflareR2SetupAdapter({
+      transport,
+      buckets: {
+        artifacts: { mode: "create", baseName: "tenantscript-artifacts" },
+        executionArchive: { mode: "create", baseName: "tenantscript-archive" }
+      }
+    });
+    const router = createSetupProviderRouter({
+      routes: [
+        {
+          operationIds: [createD1.id, declareD1.id],
+          adapter: createCloudflareD1SetupAdapter({
+            transport,
+            database: { mode: "create", baseName: "tenantscript-control-plane" }
+          })
+        },
+        { operationIds: [createR2.id, createArchiveR2.id], adapter: r2 }
+      ]
+    });
+
+    await expect(router.reconcile(reconcileRequest(createR2))).resolves.toMatchObject({
+      disposition: "created"
+    });
+    await expect(router.reconcile(reconcileRequest(createArchiveR2))).resolves.toMatchObject({
+      disposition: "created"
+    });
+    await expect(router.reconcile(reconcileRequest(createD1))).resolves.toMatchObject({
+      disposition: "created"
+    });
+    expect(providerRequests.map((request) => request.split(":", 1)[0])).toEqual([
+      "GET",
+      "POST",
+      "GET",
+      "POST",
+      "GET",
+      "POST"
+    ]);
   });
 });
 
