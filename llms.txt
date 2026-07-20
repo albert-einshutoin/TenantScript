@@ -43,6 +43,7 @@ Use these sources for the current boundary:
 - [Hook schema migration operations](docs/operations/schema-migrations.md)
 - [App database routing and endpoint isolation](docs/operations/app-database-routing.md)
 - [Public configuration reference](docs/reference/configuration.md)
+- [Control Plane HTTP error catalog](docs/reference/control-plane-errors.md)
 - [Runaway installation quarantine](docs/operations/runaway-quarantine.md)
 - [Incident response and synthetic drills](docs/operations/incident-response.md)
 - [Opt-in telemetry and privacy](docs/privacy/telemetry.md)
