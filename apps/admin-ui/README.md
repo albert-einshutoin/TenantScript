@@ -42,6 +42,11 @@ Plane Worker; see
 [`docs/privacy/telemetry.md`](../../docs/privacy/telemetry.md) for the exact event schema and privacy
 boundary.
 
+Production bundle size is enforced by the repository-verified
+[`Admin UI performance budget`](../../docs/reference/admin-ui-performance-budget.md). Run
+`pnpm test:admin-ui-bundle-budget` from the repository root before changing frontend dependencies or
+chunk boundaries. This transfer-size gate is separate from live browser performance evidence.
+
 ## Control Plane connection
 
 公開設定のdefault、必須条件、secret境界を含む正本は
