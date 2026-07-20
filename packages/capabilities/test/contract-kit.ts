@@ -19,6 +19,7 @@ export interface CapabilityContractFixture {
   createProvider: () => CapabilityProvider;
   expectedAllowedResult: unknown;
   expectedDeniedMessage: string;
+  expectedDeniedAuditReason?: "input_invalid" | "provider_denied" | "scope_denied";
   sensitiveValue?: string;
 }
 
@@ -104,7 +105,7 @@ export function runCapabilityContract(fixture: CapabilityContractFixture): void 
         {
           capability: fixture.capability,
           status: "denied",
-          reason: fixture.capability === "invoice.read" ? "provider_denied" : "scope_denied",
+          reason: fixture.expectedDeniedAuditReason ?? "scope_denied",
           at: fixedNow()
         }
       ]);

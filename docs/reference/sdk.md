@@ -60,6 +60,7 @@ Phase 2 built-ins:
 
 - `email.send`: 完全一致のASCII recipient domainとtemplate scopeを強制。pluginは自由なsubject/bodyを渡せず、broker側templateのnamed string変数だけを単一passで展開する。provider credentialはtrusted adapter内で注入し、plugin context、result、error、auditへ含めない。
 - `http.fetch`: public HTTP(S) origin、標準method（GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS）、request header scopeを強制。redirectはtransportの自動追跡を無効化し、各hopのoriginと派生methodを再検証する。credentialはoriginごとのtrusted設定から注入し、別originへ持ち越さない。`createWebFetchHttpTransport`はWorkers標準`fetch`を`redirect: manual`、`credentials: omit`でadapter化する。
+- `kv.state`: `get`、`put`、`delete`とkey prefixをgrantで制限し、JSON-compatible valueだけを保存する。`createKvStateProvider`へ渡すtrusted scope (`tenantId`、`pluginName`、`version`) はplugin inputから指定・上書きできない。各scopeを独立したDurable Object facetとして保存し、key/value/facet全体のUTF-8 byte数とentry数をtransaction内で検証する。`KvStateStorage`はDurable Object互換の`get`、`put`、`transaction`契約で、`createInMemoryKvStateStorage`はlocal/test用に同じ原子性を直列化して再現する。
 
 同じexecution/call indexのretryはjournal resultを再利用する。capabilityまたはinputが変わったjournal entryは`CapabilityJournalConflictError`で拒否する。
 

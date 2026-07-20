@@ -9,6 +9,8 @@ import {
   createHttpFetchProvider,
   createInMemoryCapabilityCallJournal,
   createInvoiceReadProvider,
+  createInMemoryKvStateStorage,
+  createKvStateProvider,
   createMockSlackSendProvider,
   createPluginCapabilityContext,
   type ApprovalRecord
@@ -370,5 +372,46 @@ describe("capabilities security suite", () => {
     await expect(broker.call("invoice.read", { invoiceId: "inv_2" })).rejects.toThrow(
       "invoice.read invoice inv_2 is outside tenant scope"
     );
+  });
+
+  it("rejects kv.state scope spoofing and keeps tenant facets isolated", async () => {
+    const storage = createInMemoryKvStateStorage();
+    const limits = {
+      maxKeyBytes: 128,
+      maxValueBytes: 1_024,
+      maxTotalBytes: 8_192,
+      maxEntries: 32
+    };
+    const createBroker = (tenantId: string) =>
+      createCapabilityBroker({
+        grants: {
+          "kv.state": { operations: ["get", "put"], keyPrefixes: ["settings:"] }
+        },
+        providers: {
+          "kv.state": createKvStateProvider({
+            scope: { tenantId, pluginName: "billing", version: "1.0.0" },
+            limits,
+            storage
+          })
+        }
+      });
+    const tenantA = createBroker("tenant_a");
+    const tenantB = createBroker("tenant_b");
+
+    await tenantA.call("kv.state", {
+      operation: "put",
+      key: "settings:theme",
+      value: "tenant-a-only"
+    });
+    await expect(
+      tenantA.call("kv.state", {
+        operation: "get",
+        key: "settings:theme",
+        tenantId: "tenant_b"
+      })
+    ).rejects.toThrow("kv.state contains unsupported input fields");
+    await expect(
+      tenantB.call("kv.state", { operation: "get", key: "settings:theme" })
+    ).resolves.toEqual({ found: false });
   });
 });
