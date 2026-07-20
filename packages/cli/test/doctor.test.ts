@@ -4,9 +4,13 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   evaluateDoctorReport,
+  evaluateDoctorReportV2,
+  parseDoctorReport,
+  parseDoctorReportV2,
   runExtCli,
   type CliIo,
   type DoctorReportV1,
+  type DoctorReportV2,
   type RollbackClient
 } from "../src/index.js";
 
@@ -35,13 +39,80 @@ const healthyReport: DoctorReportV1 = {
   }
 };
 
+const healthyReportV2: DoctorReportV2 = {
+  ...healthyReport,
+  version: 2,
+  permissions: {
+    D1_READ: "granted",
+    D1_WRITE: "granted",
+    WORKERS_SCRIPTS_WRITE: "granted"
+  }
+};
+
 describe("ext doctor", () => {
   it("returns a healthy deterministic report", () => {
+    const parsed: DoctorReportV1 = parseDoctorReport(healthyReport);
+    expect(parsed).toEqual(healthyReport);
     expect(evaluateDoctorReport(healthyReport)).toEqual({
       version: 1,
       healthy: true,
       findings: []
     });
+  });
+
+  it("accepts a version 2 report only when every permission is verified as granted", () => {
+    expect(() => parseDoctorReport(healthyReportV2)).toThrow("doctor report is invalid");
+    expect(parseDoctorReportV2(healthyReportV2)).toEqual(healthyReportV2);
+    expect(evaluateDoctorReportV2(healthyReportV2)).toEqual({
+      version: 1,
+      healthy: true,
+      findings: []
+    });
+  });
+
+  it("keeps denied and unverified permission evidence distinct in stable order", () => {
+    const result = evaluateDoctorReportV2({
+      ...healthyReportV2,
+      permissions: {
+        D1_READ: "denied",
+        D1_WRITE: "unverified",
+        WORKERS_SCRIPTS_WRITE: "unverified"
+      }
+    });
+
+    expect(result.findings.map((finding) => finding.code)).toEqual([
+      "doctor_permission_d1_read_missing",
+      "doctor_permission_d1_write_unverified",
+      "doctor_permission_workers_scripts_write_unverified"
+    ]);
+    expect(result.healthy).toBe(false);
+  });
+
+  it.each([
+    ["version 2 boolean", { ...healthyReportV2, permissions: healthyReport.permissions }],
+    [
+      "version 2 unknown evidence",
+      {
+        ...healthyReportV2,
+        permissions: { ...healthyReportV2.permissions, D1_WRITE: "assumed" }
+      }
+    ],
+    [
+      "version 2 extra permission field",
+      {
+        ...healthyReportV2,
+        permissions: { ...healthyReportV2.permissions, token: "secret-sentinel" }
+      }
+    ]
+  ])("rejects malformed permission evidence without reflection: %s", async (_name, report) => {
+    const reportPath = await writeReport(report);
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(["doctor", "--report", reportPath], rollbackOnlyClient, captureIo([], stderr))
+    ).resolves.toBe(2);
+    expect(stderr).toEqual(["doctor report is invalid"]);
+    expect(JSON.stringify(stderr)).not.toContain("secret-sentinel");
   });
 
   it("reports every supported failure in a stable order without secret values", () => {
@@ -93,6 +164,25 @@ describe("ext doctor", () => {
     });
   });
 
+  it("returns exit 1 when version 2 permission evidence is unverified", async () => {
+    const reportPath = await writeReport({
+      ...healthyReportV2,
+      permissions: { ...healthyReportV2.permissions, D1_WRITE: "unverified" }
+    });
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(["doctor", "--report", reportPath], rollbackOnlyClient, captureIo(stdout, stderr))
+    ).resolves.toBe(1);
+
+    expect(stderr).toEqual([]);
+    expect(JSON.parse(stdout[0] ?? "null")).toMatchObject({
+      healthy: false,
+      findings: [{ code: "doctor_permission_d1_write_unverified" }]
+    });
+  });
+
   it("returns exit 2 with a stable diagnostic for unknown fields and does not reflect input", async () => {
     const reportPath = await writeReport({ ...healthyReport, token: "secret-sentinel" });
     const stdout: string[] = [];
@@ -108,7 +198,7 @@ describe("ext doctor", () => {
   });
 
   it.each([
-    ["unknown version", { ...healthyReport, version: 2 }],
+    ["unknown version", { ...healthyReport, version: 3 }],
     ["unknown profile", { ...healthyReport, profile: "development" }],
     [
       "duplicate migration",
