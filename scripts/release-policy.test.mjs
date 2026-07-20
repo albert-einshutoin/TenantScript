@@ -85,6 +85,39 @@ test("does not require a changeset for additive public API changes", () => {
   );
 });
 
+test("rejects a changed REST success status or body schema without a major changeset", () => {
+  const success = [{ method: "GET", status: 200, body: "json", schema: "session" }];
+  const baseSurface = surface({
+    rest: [
+      { id: "session", path: "/v1/session", methods: ["GET"], isolation: "identity", success }
+    ],
+    successSchemas: { session: { type: "object", required: ["subject"] } }
+  });
+  const currentSurface = surface({
+    rest: [
+      {
+        id: "session",
+        path: "/v1/session",
+        methods: ["GET"],
+        isolation: "identity",
+        success: [{ ...success[0], status: 201 }]
+      }
+    ],
+    successSchemas: { session: { type: "object", required: [] } }
+  });
+
+  assert.throws(
+    () =>
+      validateBreakingReleasePolicy({
+        baseSurface,
+        currentSurface,
+        changesets: [],
+        repositoryFiles: new Set()
+      }),
+    /changed REST success response session GET.*changed REST success schema session.*major Changeset/su
+  );
+});
+
 test("rejects unknown packages in a breaking-change changeset", () => {
   assert.throws(
     () =>
@@ -111,7 +144,7 @@ function changeset(name, bump, body) {
   };
 }
 
-function surface({ exports = [], rest = [] }) {
+function surface({ exports = [], rest = [], successSchemas } = {}) {
   return {
     version: 1,
     packages: [
@@ -124,7 +157,8 @@ function surface({ exports = [], rest = [] }) {
         subpaths: [{ subpath: ".", exports: [] }]
       }
     ],
-    controlPlaneRest: rest
+    controlPlaneRest: rest,
+    ...(successSchemas === undefined ? {} : { controlPlaneSuccessResponses: successSchemas })
   };
 }
 
