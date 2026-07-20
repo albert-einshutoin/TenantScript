@@ -43,6 +43,22 @@ export {
 } from "./setup-plan.js";
 
 export {
+  createFileSetupRunJournalStore,
+  createInMemorySetupRunJournalStore,
+  createSetupRunJournal,
+  executeProductionSetup,
+  parseSetupRunJournal,
+  SetupRunExecutionError,
+  type SetupOperationDisposition,
+  type SetupOperationPhase,
+  type SetupProviderAdapter,
+  type SetupReconcileResult,
+  type SetupRunJournal,
+  type SetupRunJournalEntry,
+  type SetupRunJournalStore
+} from "./setup-executor.js";
+
+export {
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   type ProductionWranglerInputV1
