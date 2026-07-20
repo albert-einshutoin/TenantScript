@@ -9,9 +9,10 @@ The executor and file journal are accountless orchestration foundations. The har
 [D1 setup adapter](cloudflare-d1-setup-adapter.md), and exact-ID
 [provider routing](setup-provider-router.md) are available. The
 [D1 migration adapter](cloudflare-d1-migrations.md) verifies a pinned catalog and resumable history,
-but its live runner, credential flow, remaining resource adapters, CLI live composition, and
-clean-account Tier 2 evidence are not implemented yet. Do not represent an injected adapter run as a
-successful deployment.
+and the [R2 setup adapter](cloudflare-r2-setup-adapter.md) covers separate artifact and execution
+archive buckets. The live migration runner, credential flow, remaining resource adapters, CLI live
+composition, and clean-account Tier 2 evidence are not implemented yet. Do not represent an injected
+adapter run as a successful deployment.
 
 ## Ownership dispositions
 

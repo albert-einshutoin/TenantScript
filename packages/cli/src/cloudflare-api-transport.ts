@@ -17,6 +17,7 @@ export interface CloudflareApiTransport {
     pathSegments: readonly string[];
     query?: Readonly<Record<string, string>>;
     body?: unknown;
+    r2Jurisdiction?: "default" | "eu" | "fedramp";
   }) => Promise<unknown>;
 }
 
@@ -84,11 +85,15 @@ export function createCloudflareApiTransport(params: {
 
   return {
     request: async (request) => {
+      validateR2Jurisdiction(request.pathSegments, request.r2Jurisdiction);
       const url = buildAccountUrl(params.accountId, request.pathSegments, request.query);
       const body = serializeRequestBody(request.method, request.body, maxRequestBytes);
       const headers: Record<string, string> = {
         Accept: "application/json",
         Authorization: `Bearer ${params.apiToken}`,
+        ...(request.r2Jurisdiction === undefined
+          ? {}
+          : { "cf-r2-jurisdiction": request.r2Jurisdiction }),
         ...(body === undefined ? {} : { "Content-Type": "application/json" })
       };
       // Cloudflare's resource-create endpoints do not document an idempotency key. Retrying a
@@ -134,6 +139,17 @@ export function createCloudflareApiTransport(params: {
       throw new CloudflareApiError("cloudflare_api_unavailable");
     }
   };
+}
+
+function validateR2Jurisdiction(pathSegments: readonly string[], jurisdiction: unknown): void {
+  if (jurisdiction === undefined) return;
+  if (
+    (jurisdiction !== "default" && jurisdiction !== "eu" && jurisdiction !== "fedramp") ||
+    pathSegments[0] !== "r2" ||
+    pathSegments[1] !== "buckets"
+  ) {
+    throw invalidRequest();
+  }
 }
 
 type AttemptOutcome =
