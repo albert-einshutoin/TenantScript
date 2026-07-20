@@ -71,16 +71,19 @@
 - [ ] **P3-T12**(M)supply chain
   - 内容: 依存固定(lockfile 監査)、SBOM 生成、npm provenance 付き publish、Renovate/Dependabot 運用ルール
   - DoD: publish パイプラインで SBOM/provenance が自動生成
+  - Progress: Issue #225で公開8 packageのclosed tarball、public provenance metadata、credential-free clean install smokeを実装。SBOM生成、trusted publishing実行、registry provenance確認は未完了
 
 ## チャンク D: release engineering(T13–T16)
 
 - [ ] **P3-T13**(M)changesets + 自動 publish
   - RED: changeset なしの破壊的変更 PR が CI で fail する
   - DoD: タグ → npm publish → GitHub Release が自動化
+  - Progress: Issue #225でsource-only topological build、pack budget、全export/bin import smokeをTier 1へ常設。changesets、release PR、tag/publish workflowは未完了
 
 - [ ] **P3-T14**(M)API freeze + semver ポリシー
   - 内容: 公開 API(SDK / manifest / control-plane REST)の表面を明文化し、breaking change 検知を CI 化(`ext schema diff` の自プロダクト適用)
   - DoD: API surface スナップショットテスト常設
+  - Progress: Issue #223で公開package symbol/subpathとControl Plane REST route/method/isolationのsnapshot gateを実装。manifest/response body schemaとchangeset連携は未完了
 
 - [ ] **P3-T15**(M)upgrade guide + migration テスト
   - RED: 「前 minor → 最新」のアップグレードが、データ(D1/R2/DO)を保持したまま通る自動テスト
