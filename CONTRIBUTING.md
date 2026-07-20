@@ -114,6 +114,11 @@ pnpm verify
 git diff --check
 ```
 
+Release dependency changes must also preserve the [SBOM contract](docs/reference/release-sbom.md).
+Do not suppress a runtime vulnerability or remove it from the SBOM to make CI green. Update to a fixed
+version, or document reachability, mitigation, owner, expiry, and security-maintainer approval in a public
+issue. Move non-public exploit details and credentials to the private SECURITY.md process.
+
 Docs-only changes must at least run `pnpm docs:check`, formatting, the issue verification commands, and any command shown in the changed guide. Security-sensitive documentation should also run the security suite when it claims or changes a security contract.
 
 ## Pull request expectations

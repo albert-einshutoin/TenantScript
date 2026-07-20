@@ -71,7 +71,7 @@
 - [ ] **P3-T12**(M)supply chain
   - 内容: 依存固定(lockfile 監査)、SBOM 生成、npm provenance 付き publish、Renovate/Dependabot 運用ルール
   - DoD: publish パイプラインで SBOM/provenance が自動生成
-  - Progress: Issue #225で公開8 packageのclosed tarball、public provenance metadata、credential-free clean install smokeを実装。SBOM生成、trusted publishing実行、registry provenance確認は未完了
+  - Progress: Issue #225で公開8 packageのclosed tarball、public provenance metadata、credential-free clean install smokeを実装。Issue #229で実tarball由来のreproducible CycloneDX SBOMとTier 1 artifactを実装。trusted publishing実行、registry provenance確認は未完了
 
 ## チャンク D: release engineering(T13–T16)
 
