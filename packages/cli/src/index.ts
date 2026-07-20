@@ -12,6 +12,7 @@ import type {
 } from "@tenantscript/control-plane";
 import { runRollbackDrill } from "./rollback-drill.js";
 import { evaluateDoctorReport, parseDoctorReport } from "./doctor.js";
+import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
 
 export {
   evaluateDoctorReport,
@@ -22,6 +23,19 @@ export {
   type DoctorResult,
   type DoctorRuntimePrimitive
 } from "./doctor.js";
+
+export {
+  createProductionSetupPlan,
+  isSetupRuntimePrimitive,
+  type ProductionSetupPlanV1,
+  type SetupCleanupStep,
+  type SetupCostBoundary,
+  type SetupOperation,
+  type SetupPermission,
+  type SetupResourceKind,
+  type SetupRuntimePrimitive,
+  type SetupWarning
+} from "./setup-plan.js";
 
 export {
   measureRollbackDrill,
@@ -103,6 +117,9 @@ export async function runExtCli(
   if (command === "doctor") {
     return await runDoctor(args, io);
   }
+  if (command === "setup") {
+    return runSetup(args, io);
+  }
   if (command !== "rollback") {
     io.stderr(`unknown command: ${command ?? ""}`);
     return 2;
@@ -128,6 +145,40 @@ export async function runExtCli(
       auditId: result.audit.id
     })
   );
+  return 0;
+}
+
+function runSetup(args: readonly string[], io: CliIo): number {
+  if (args.length !== 6) {
+    io.stderr("invalid setup options");
+    return 2;
+  }
+  const options = new Map<string, string>();
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (
+      name === undefined ||
+      value === undefined ||
+      !["--profile", "--runtime", "--dry-run"].includes(name) ||
+      options.has(name)
+    ) {
+      io.stderr("invalid setup options");
+      return 2;
+    }
+    options.set(name, value);
+  }
+  const profile = options.get("--profile");
+  const runtime = options.get("--runtime");
+  if (
+    profile !== "production" ||
+    !isSetupRuntimePrimitive(runtime) ||
+    options.get("--dry-run") !== "true"
+  ) {
+    io.stderr("invalid setup options");
+    return 2;
+  }
+  io.stdout(JSON.stringify(createProductionSetupPlan(runtime)));
   return 0;
 }
 
