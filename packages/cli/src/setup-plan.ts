@@ -129,7 +129,7 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
       "worker",
       "create",
       "TENANTSCRIPT_CONTROL_PLANE",
-      "integration-required",
+      "implemented",
       [
         "create:control-plane-d1",
         "create:artifact-r2",

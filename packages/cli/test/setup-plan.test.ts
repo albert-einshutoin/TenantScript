@@ -54,7 +54,7 @@ describe("ext setup production dry-run", () => {
       kind: "worker",
       action: "create",
       logicalName: "TENANTSCRIPT_CONTROL_PLANE",
-      implementationStatus: "integration-required"
+      implementationStatus: "implemented"
     });
     expect(plan.operations.some((operation) => operation.id === "bind:control-plane-worker")).toBe(
       false
