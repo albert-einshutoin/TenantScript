@@ -841,17 +841,30 @@ describe("Admin UI auth foundation", () => {
 
   it("confirms a manager approval and shows correlated audit evidence", async () => {
     const baseClient = createDemoAdminApiClient();
+    const session = await baseClient.resolveSession({ token: "manager-token" });
+    const dashboardSnapshot = await baseClient.getDashboard(session);
+    const initialDashboard = deferred<DashboardSnapshot>();
     const decideApproval = vi.fn().mockResolvedValue({
       approvalId: "approval_1",
       state: "approved",
       auditId: "approval_audit_1",
       decidedAt: new Date("2026-07-20T00:00:00.000Z")
     });
-    render(<App client={{ ...baseClient, decideApproval }} />);
+    render(
+      <App
+        client={{
+          ...baseClient,
+          getDashboard: () => initialDashboard.promise,
+          decideApproval
+        }}
+      />
+    );
 
     await login("manager-token");
     fireEvent.click(screen.getByRole("button", { name: "Approval queue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(screen.getByText("Loading")).toBeInTheDocument();
+    initialDashboard.resolve(dashboardSnapshot);
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Confirm approval decision" });
     expect(dialog).toHaveTextContent("tenant_acme");
@@ -880,7 +893,7 @@ describe("Admin UI auth foundation", () => {
 
     await login("manager-token");
     fireEvent.click(screen.getByRole("button", { name: "Approval queue" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm approval" }));
 
     await expect(screen.findByText("Approval decision unavailable")).resolves.toBeInTheDocument();
