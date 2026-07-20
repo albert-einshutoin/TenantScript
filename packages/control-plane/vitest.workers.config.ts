@@ -34,6 +34,11 @@ export default defineConfig({
             '{"worker-manager-token":{"subject":"worker-manager","role":"manager","appId":"app_worker","tenantId":"tenant_worker"},"worker-operator-token":{"subject":"worker-operator","role":"operator","appId":"app_worker","tenantId":"tenant_worker"}}',
           ADMIN_MUTATION_RATE_LIMIT: "2",
           ADMIN_MUTATION_RATE_WINDOW_SECONDS: "60",
+          // This independent snapshot prevents edits to old canonical migrations from silently
+          // redefining the data shape that the upgrade compatibility test starts from.
+          BASELINE_MIGRATIONS: await readD1Migrations(
+            path.join(dirname, "test/fixtures/upgrades/pre-v1-0010")
+          ),
           TEST_MIGRATIONS: await readD1Migrations(path.join(dirname, "migrations"))
         }
       }
