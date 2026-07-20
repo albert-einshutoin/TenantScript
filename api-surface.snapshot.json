@@ -235,6 +235,7 @@
             { "name": "AdminMutationRateLimitRequest", "kind": "type" },
             { "name": "AdminMutationRateLimitResult", "kind": "type" },
             { "name": "AdminMutationRateLimitStore", "kind": "type" },
+            { "name": "AdminOperationalHealthSummary", "kind": "type" },
             { "name": "AdminPluginVersionSummary", "kind": "type" },
             { "name": "AdminRole", "kind": "type" },
             { "name": "AdminRollbackError", "kind": "type+value" },
@@ -653,6 +654,15 @@
       ]
     },
     {
+      "id": "dashboardOperations",
+      "path": "/v1/admin/dashboard/operations",
+      "methods": ["GET"],
+      "isolation": "tenant-collection",
+      "success": [
+        { "method": "GET", "status": 200, "body": "json", "schema": "dashboardOperations" }
+      ]
+    },
+    {
       "id": "dashboardPluginVersions",
       "path": "/v1/admin/dashboard/pluginVersions",
       "methods": ["GET"],
@@ -967,6 +977,28 @@
         "usage",
         "schemaMigrations",
         "telemetry"
+      ],
+      "additionalProperties": false
+    },
+    "dashboardOperations": {
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "totalExecutions": { "type": "integer", "minimum": 0 },
+        "failedExecutions": { "type": "integer", "minimum": 0 },
+        "failureRateBps": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "timeoutExecutions": { "type": "integer", "minimum": 0 },
+        "egressDeniedExecutions": { "type": "integer", "minimum": 0 },
+        "budgetExceededExecutions": { "type": "integer", "minimum": 0 }
+      },
+      "required": [
+        "date",
+        "totalExecutions",
+        "failedExecutions",
+        "failureRateBps",
+        "timeoutExecutions",
+        "egressDeniedExecutions",
+        "budgetExceededExecutions"
       ],
       "additionalProperties": false
     },

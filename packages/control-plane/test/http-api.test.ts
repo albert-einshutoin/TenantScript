@@ -144,6 +144,64 @@ describe("Control Plane HTTP session contract", () => {
 });
 
 describe("Control Plane Admin dashboard contract", () => {
+  it("returns server-day operational health for the authenticated tenant", async () => {
+    const store = dashboardStore();
+    const handler = createDashboardHandler(store);
+    const response = await handler(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: `${dashboardUrl()}/operations?appId=app_other&tenantId=tenant_other`
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(store.readOperationalHealth).toHaveBeenCalledWith({
+      appId: "app_acme",
+      tenantId: "tenant_acme",
+      date: "2026-07-19"
+    });
+    await expect(response.json()).resolves.toEqual({
+      date: "2026-07-19",
+      totalExecutions: 34,
+      failedExecutions: 3,
+      failureRateBps: 882,
+      timeoutExecutions: 1,
+      egressDeniedExecutions: 1,
+      budgetExceededExecutions: 1
+    });
+  });
+
+  it("fails closed when operational health is unavailable and redacts store failures", async () => {
+    const store = dashboardStore();
+    const legacyStore: AdminDashboardStore = {
+      readSection: store.readSection,
+      readUsageSummary: store.readUsageSummary
+    };
+    const unavailable = await createDashboardHandler(legacyStore)(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: `${dashboardUrl()}/operations`
+      })
+    );
+    expect(unavailable.status).toBe(503);
+    await expect(unavailable.json()).resolves.toMatchObject({
+      error: { code: "dashboard_store_unavailable" }
+    });
+
+    store.readOperationalHealth.mockRejectedValue(new Error("SQL secret customer payload"));
+    const failed = await createDashboardHandler(store)(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: `${dashboardUrl()}/operations`
+      })
+    );
+    expect(failed.status).toBe(500);
+    const body = await failed.text();
+    expect(body).toContain("internal_error");
+    expect(body).not.toContain("SQL secret");
+    expect(body).not.toContain("customer payload");
+  });
+
   it("derives scope only from identity and returns redacted bounded summaries", async () => {
     const store = dashboardStore();
     const handler = createDashboardHandler(store);
@@ -773,7 +831,18 @@ function dashboardStore() {
       date: "2026-07-19",
       executions: 1,
       runtimeMs: 12
-    })
+    }),
+    readOperationalHealth: vi
+      .fn<NonNullable<AdminDashboardStore["readOperationalHealth"]>>()
+      .mockResolvedValue({
+        date: "2026-07-19",
+        totalExecutions: 34,
+        failedExecutions: 3,
+        failureRateBps: 882,
+        timeoutExecutions: 1,
+        egressDeniedExecutions: 1,
+        budgetExceededExecutions: 1
+      })
   } satisfies AdminDashboardStore;
 }
 

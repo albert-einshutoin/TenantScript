@@ -229,6 +229,28 @@
       ],
       "additionalProperties": false
     },
+    "dashboardOperations": {
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "totalExecutions": { "type": "integer", "minimum": 0 },
+        "failedExecutions": { "type": "integer", "minimum": 0 },
+        "failureRateBps": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "timeoutExecutions": { "type": "integer", "minimum": 0 },
+        "egressDeniedExecutions": { "type": "integer", "minimum": 0 },
+        "budgetExceededExecutions": { "type": "integer", "minimum": 0 }
+      },
+      "required": [
+        "date",
+        "totalExecutions",
+        "failedExecutions",
+        "failureRateBps",
+        "timeoutExecutions",
+        "egressDeniedExecutions",
+        "budgetExceededExecutions"
+      ],
+      "additionalProperties": false
+    },
     "dashboardInstallations": {
       "type": "object",
       "properties": {
