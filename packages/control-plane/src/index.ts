@@ -153,6 +153,7 @@ export {
   createInMemoryDailyUsageSummaryStore,
   createInMemoryUsageMeter,
   createAnalyticsEngineUsageSink,
+  createD1DailyUsageSummaryStore,
   createUsageMeter,
   type AnalyticsEngineDataPoint,
   type AnalyticsEngineDatasetLike,

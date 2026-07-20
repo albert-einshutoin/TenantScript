@@ -84,6 +84,11 @@ const manifestEntries = [
     "0013_runaway_quarantine.sql",
     1504,
     "feeb87b6280a15780b487beb7812253c32484f2e1d1e20773aac827b346c6a9f"
+  ],
+  [
+    "0014_usage_daily_summaries.sql",
+    550,
+    "3230140f26219d3f6638369ec4594b8f965b1d9ecc684905dc25c634562036c9"
   ]
 ] as const;
 
