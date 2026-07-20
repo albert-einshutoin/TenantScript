@@ -246,6 +246,11 @@ export {
 } from "./secret-store.js";
 
 export {
+  createDurableObjectNamespaceSecretStore,
+  ProviderSecretStoreDurableObject
+} from "./provider-secret-store-do.js";
+
+export {
   createProviderTokenRotationManager,
   ProviderTokenRotationStateError,
   type ProviderTokenResolutionSnapshot,

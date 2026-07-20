@@ -9,6 +9,7 @@ declare namespace Cloudflare {
     ARTIFACTS: R2Bucket;
     PROBE_DO: DurableObjectNamespace;
     ADMIN_MUTATION_RATE_LIMITER_DO: DurableObjectNamespace;
+    PROVIDER_SECRET_STORE_DO: DurableObjectNamespace;
     TEST_MIGRATIONS: D1Migration[];
   }
 }
@@ -19,6 +20,7 @@ declare module "cloudflare:workers" {
     ARTIFACTS: R2Bucket;
     PROBE_DO: DurableObjectNamespace;
     ADMIN_MUTATION_RATE_LIMITER_DO: DurableObjectNamespace;
+    PROVIDER_SECRET_STORE_DO: DurableObjectNamespace;
     TEST_MIGRATIONS: D1Migration[];
   }
 

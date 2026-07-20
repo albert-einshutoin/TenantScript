@@ -82,11 +82,11 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
     operation("create:artifact-r2", "r2", "create", "ARTIFACTS", "implemented"),
     operation("create:execution-archive-r2", "r2", "create", "EXECUTION_ARCHIVE", "implemented"),
     operation(
-      "create:secret-store-do",
+      "declare:provider-secret-store-do-binding",
       "durable-object",
-      "create",
+      "declare",
       "PROVIDER_SECRET_STORE_DO",
-      "integration-required"
+      "implemented"
     ),
     operation(
       "create:approval-workflow",
@@ -127,7 +127,7 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
         "create:control-plane-d1",
         "create:artifact-r2",
         "create:execution-archive-r2",
-        "create:secret-store-do",
+        "declare:provider-secret-store-do-binding",
         "create:approval-workflow",
         "declare:usage-analytics-engine-binding",
         "create:runtime-worker",

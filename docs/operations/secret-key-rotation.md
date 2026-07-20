@@ -78,5 +78,11 @@ pnpm --filter @tenantscript/control-plane exec vitest run test/secret-store.test
 pnpm test:security
 ```
 
+Production Wrangler input V4 declares `PROVIDER_SECRET_STORE_DO` as a SQLite-backed class owned by
+the Control Plane Worker. Its namespace client hashes the tenant ID before selecting an object and
+uses one storage transaction for ciphertext compare-and-swap. Provision the exact keyring JSON only
+through `PROVIDER_SECRET_KEYRING_JSON`; Worker deletion and setup rollback are not evidence that the
+secret namespace or its encrypted records were deleted.
+
 暗号境界の設計は[ADR-005](../adr/005-secret-envelope-encryption.md)、漏えい・record移動・鍵運用の
 脅威と検証証跡は[Threat model](../security/threat-model.md)を参照してください。

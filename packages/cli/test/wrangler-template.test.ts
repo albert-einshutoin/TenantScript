@@ -9,6 +9,7 @@ import {
   renderProductionWranglerConfig,
   runExtCli,
   type CliIo,
+  type ProductionWranglerInputV4,
   type ProductionWranglerInputV3,
   type RollbackClient
 } from "../src/index.js";
@@ -29,6 +30,11 @@ const validInput: ProductionWranglerInputV3 = {
   usageAnalytics: {
     dataset: "tenantscript_usage"
   }
+};
+
+const validV4Input: ProductionWranglerInputV4 = {
+  ...validInput,
+  version: 4
 };
 
 const temporaryDirectories: string[] = [];
@@ -69,6 +75,43 @@ describe("production Wrangler template", () => {
     });
 
     expect(JSON.parse(legacy)).not.toHaveProperty("analytics_engine_datasets");
+  });
+
+  it("keeps version 3 inputs compatible without enabling provider secret storage implicitly", () => {
+    const legacy = renderProductionWranglerConfig(validInput);
+
+    expect(legacy).not.toContain("PROVIDER_SECRET_STORE_DO");
+    expect(legacy).not.toContain("ProviderSecretStoreDurableObject");
+  });
+
+  it("declares the encrypted provider secret store as a Worker-owned SQLite Durable Object in version 4", () => {
+    const config = JSON.parse(renderProductionWranglerConfig(validV4Input)) as unknown;
+
+    expect(config).toMatchObject({
+      durable_objects: {
+        bindings: [
+          {
+            name: "ADMIN_MUTATION_RATE_LIMITER_DO",
+            class_name: "AdminMutationRateLimitDurableObject"
+          },
+          {
+            name: "PROVIDER_SECRET_STORE_DO",
+            class_name: "ProviderSecretStoreDurableObject"
+          }
+        ]
+      },
+      exports: {
+        AdminMutationRateLimitDurableObject: {
+          type: "durable-object",
+          storage: "sqlite"
+        },
+        ProviderSecretStoreDurableObject: {
+          type: "durable-object",
+          storage: "sqlite"
+        }
+      }
+    });
+    expect(JSON.stringify(config)).not.toContain("PROVIDER_SECRET_KEYRING_JSON");
   });
 
   it("derives one stable non-reflective Worker target from the reconcile key", () => {
