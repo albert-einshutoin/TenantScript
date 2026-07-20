@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "tenantscript-control-plane",
+  "main": "../../../packages/control-plane/src/worker-entry.ts",
+  "compatibility_date": "2026-07-20",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tenantscript-control-plane",
+      "database_id": "0123456789abcdef0123456789abcdef",
+      "migrations_dir": "../../../packages/control-plane/migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ADMIN_MUTATION_RATE_LIMITER_DO",
+        "class_name": "AdminMutationRateLimitDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AdminMutationRateLimitDurableObject"]
+    }
+  ]
+}

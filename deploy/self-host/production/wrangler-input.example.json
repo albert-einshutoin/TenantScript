@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "workerName": "tenantscript-control-plane",
+  "compatibilityDate": "2026-07-20",
+  "database": {
+    "name": "tenantscript-control-plane",
+    "id": "0123456789abcdef0123456789abcdef"
+  }
+}

@@ -1,5 +1,5 @@
 import { mkdir, open, readFile, readdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { bundlePlugin, runScopedHandler } from "@tenantscript/loader";
 import { parseManifest } from "@tenantscript/manifest";
 import type {
@@ -13,6 +13,11 @@ import type {
 import { runRollbackDrill } from "./rollback-drill.js";
 import { evaluateDoctorReport, parseDoctorReport } from "./doctor.js";
 import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
+import {
+  parseProductionWranglerInput,
+  renderProductionWranglerConfig,
+  writeProductionWranglerConfig
+} from "./wrangler-template.js";
 
 export {
   evaluateDoctorReport,
@@ -36,6 +41,12 @@ export {
   type SetupRuntimePrimitive,
   type SetupWarning
 } from "./setup-plan.js";
+
+export {
+  parseProductionWranglerInput,
+  renderProductionWranglerConfig,
+  type ProductionWranglerInputV1
+} from "./wrangler-template.js";
 
 export {
   measureRollbackDrill,
@@ -118,7 +129,7 @@ export async function runExtCli(
     return await runDoctor(args, io);
   }
   if (command === "setup") {
-    return runSetup(args, io);
+    return await runSetup(args, io);
   }
   if (command !== "rollback") {
     io.stderr(`unknown command: ${command ?? ""}`);
@@ -148,8 +159,8 @@ export async function runExtCli(
   return 0;
 }
 
-function runSetup(args: readonly string[], io: CliIo): number {
-  if (args.length !== 6) {
+async function runSetup(args: readonly string[], io: CliIo): Promise<number> {
+  if (args.length !== 6 && args.length !== 8 && args.length !== 10) {
     io.stderr("invalid setup options");
     return 2;
   }
@@ -160,7 +171,7 @@ function runSetup(args: readonly string[], io: CliIo): number {
     if (
       name === undefined ||
       value === undefined ||
-      !["--profile", "--runtime", "--dry-run"].includes(name) ||
+      !["--profile", "--runtime", "--dry-run", "--wrangler-input", "--output"].includes(name) ||
       options.has(name)
     ) {
       io.stderr("invalid setup options");
@@ -178,7 +189,50 @@ function runSetup(args: readonly string[], io: CliIo): number {
     io.stderr("invalid setup options");
     return 2;
   }
-  io.stdout(JSON.stringify(createProductionSetupPlan(runtime)));
+  const inputPath = options.get("--wrangler-input");
+  const outputPath = options.get("--output");
+  if (
+    outputPath !== undefined &&
+    (inputPath === undefined ||
+      dirname(resolve(outputPath)) !== process.cwd() ||
+      !basename(outputPath).endsWith(".jsonc"))
+  ) {
+    io.stderr("invalid setup options");
+    return 2;
+  }
+  if (inputPath === undefined) {
+    io.stdout(JSON.stringify(createProductionSetupPlan(runtime)));
+    return 0;
+  }
+  if (runtime !== "cloudflare-workers") {
+    io.stderr("invalid setup options");
+    return 2;
+  }
+  let content: string;
+  try {
+    const value: unknown = JSON.parse(
+      await readBoundedFile(inputPath, "wrangler input is invalid")
+    );
+    content = renderProductionWranglerConfig(parseProductionWranglerInput(value));
+  } catch (error) {
+    io.stderr(
+      error instanceof SyntaxError ||
+        (error instanceof Error && error.message === "wrangler input is invalid")
+        ? "wrangler input is invalid"
+        : "wrangler input could not be read"
+    );
+    return 2;
+  }
+  if (outputPath === undefined) {
+    io.stdout(content.trimEnd());
+    return 0;
+  }
+  try {
+    await writeProductionWranglerConfig(outputPath, content);
+  } catch {
+    io.stderr("wrangler config could not be written");
+    return 2;
+  }
   return 0;
 }
 
@@ -205,13 +259,17 @@ async function runDoctor(args: readonly string[], io: CliIo): Promise<number> {
 const MAX_DOCTOR_REPORT_BYTES = 65_536;
 
 async function readDoctorReport(path: string): Promise<string> {
+  return readBoundedFile(path, "doctor report is invalid");
+}
+
+async function readBoundedFile(path: string, tooLargeMessage: string): Promise<string> {
   const handle = await open(path, "r");
   try {
     // The closed report is tiny. Reading only one byte beyond the limit prevents a local path from
     // turning an offline diagnostic into an unbounded memory read while still detecting truncation.
     const buffer = Buffer.alloc(MAX_DOCTOR_REPORT_BYTES + 1);
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    if (bytesRead > MAX_DOCTOR_REPORT_BYTES) throw new Error("doctor report is invalid");
+    if (bytesRead > MAX_DOCTOR_REPORT_BYTES) throw new Error(tooLargeMessage);
     return buffer.subarray(0, bytesRead).toString("utf8");
   } finally {
     await handle.close();

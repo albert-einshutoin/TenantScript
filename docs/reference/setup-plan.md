@@ -61,6 +61,8 @@ live adapterはrun journalで「今回新規作成した」ことを証明でき
 削除してはいけません。dry-runはcleanupを実行しません。
 
 version 1にはlive create/update/delete、existing resource adoption、migration apply、rollback journal、
-IaC/wrangler生成、clean-account E2Eは含まれません。JSONの`liveValidationRequired: true`とwarningは、このplanを
+clean-account E2Eは含まれません。`cloudflare-workers`向けの最小Wrangler生成は
+[production self-host baseline](../operations/self-host-production.md)で提供しますが、現在Workerが利用するD1と
+Admin rate-limit Durable Objectだけを含みます。JSONの`liveValidationRequired: true`とwarningは、このplanを
 Tier 2または本番成功証跡として扱えないことを明示します。残作業は
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34)で追跡します。
