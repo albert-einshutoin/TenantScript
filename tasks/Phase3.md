@@ -16,10 +16,10 @@
 
 ## チャンク A: Admin UI 完成(T01–T04)
 
-- [ ] **P3-T01**(L→分割)全画面の完成
+- [x] **P3-T01**(L→分割)全画面の完成
   - 内容: dashboard(usage / budget / 失敗率)、schema migration tracking、audit ビューア、secret 接続管理
   - DoD: 各画面に E2E + コンポーネントテスト
-  - Progress: Issue #245でtenant/app境界付きの監査read model、署名cursor、raw state非公開schema、Admin UIの監査table・空状態・ページング、component/E2E/security contractを実装。Issue #247でtenant/app境界付きの日次失敗率、budget超過、timeout、egress拒否の運用health endpointとOverview指標を実装。Issue #249でsecret値とsecret参照をSELECT・公開schema・UI parserから除外したprovider接続inventoryとConnections画面を実装
+  - Evidence: Issue #245でtenant/app境界付きの監査read model、署名cursor、raw state非公開schema、Admin UIの監査table・空状態・ページング、component/E2E/security contractを実装。Issue #247でtenant/app境界付きの日次失敗率、budget超過、timeout、egress拒否の運用health endpointとOverview指標を実装。Issue #249でsecret値とsecret参照をSELECT・公開schema・UI parserから除外したprovider接続inventoryとConnections画面を実装。Issue #251 / #253でloginと全主要routeのaxe・keyboard・visual E2EをTier 1へ常設
 
 - [x] **P3-T02**(M)アクセシビリティ
   - RED: axe 自動チェック violation 0 / キーボードのみで全主要フロー(install → grant → rollback → approve)完走の E2E
