@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -8,6 +8,7 @@ import { test } from "node:test";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 test("ext init output builds and tests against packed public packages", async () => {
+  await mkdir(join(repoRoot, ".tmp"), { recursive: true });
   const tempRoot = await mkdtemp(join(repoRoot, ".tmp", "agent-plugin-scaffold-"));
   const pluginDirectory = join(tempRoot, "large-invoice-notify");
 
