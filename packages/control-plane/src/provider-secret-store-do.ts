@@ -115,8 +115,9 @@ export function createDurableObjectNamespaceSecretStore<TId>(
         headers: { "Content-Type": "application/json" },
         body
       });
-      if (!response.ok) throw unavailable();
-      if (response.status === 204) return undefined;
+      const expectedStatus = operation === "put" ? 204 : 200;
+      if (response.status !== expectedStatus) throw unavailable();
+      if (expectedStatus === 204) return undefined;
       return await readBoundedJson(response, PROVIDER_SECRET_RESPONSE_BYTES);
     } catch {
       throw unavailable();
