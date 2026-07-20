@@ -21,7 +21,11 @@ export class WranglerWorkerDeployProcessError extends Error {
 }
 
 export interface WranglerWorkerDeployProcess {
-  deploy: (request: { configPath: string }) => Promise<void> | void;
+  deploy: (request: {
+    configPath: string;
+    workerName: string;
+    ownershipTag: string;
+  }) => Promise<void> | void;
 }
 
 export function createNodeWranglerWorkerDeployProcess(params: {
@@ -37,8 +41,10 @@ export function createNodeWranglerWorkerDeployProcess(params: {
     deploy: async (request): Promise<void> => {
       if (
         !isRecord(request) ||
-        !hasExactKeys(request, ["configPath"]) ||
-        !isRootWranglerConfigPath(request.configPath)
+        !hasExactKeys(request, ["configPath", "workerName", "ownershipTag"]) ||
+        !isRootWranglerConfigPath(request.configPath) ||
+        !isWorkerName(request.workerName) ||
+        !isOwnershipTag(request.ownershipTag)
       ) {
         throw deployFailure();
       }
@@ -55,6 +61,8 @@ export function createNodeWranglerWorkerDeployProcess(params: {
           repositoryRoot: params.repositoryRoot,
           executablePath,
           configPath: request.configPath,
+          workerName: request.workerName,
+          ownershipTag: request.ownershipTag,
           timeoutMs
         });
       } catch (error) {
@@ -105,6 +113,8 @@ function runWranglerDeploy(params: {
   repositoryRoot: string;
   executablePath: string;
   configPath: string;
+  workerName: string;
+  ownershipTag: string;
   timeoutMs: number;
 }): Promise<void> {
   return new Promise((resolvePromise, rejectPromise) => {
@@ -116,6 +126,10 @@ function runWranglerDeploy(params: {
         "deploy",
         "--config",
         params.configPath,
+        "--name",
+        params.workerName,
+        "--tag",
+        params.ownershipTag,
         "--strict",
         "--experimental-autoconfig=false",
         "--install-skills=false"
@@ -169,6 +183,18 @@ function isRootWranglerConfigPath(value: unknown): value is string {
     typeof value === "string" &&
     value.length <= 255 &&
     /^[A-Za-z0-9][A-Za-z0-9._-]*\.jsonc?$/u.test(value)
+  );
+}
+
+function isWorkerName(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(value);
+}
+
+function isOwnershipTag(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 100 &&
+    /^tenantscript-setup-[0-9a-f]{32}$/u.test(value)
   );
 }
 

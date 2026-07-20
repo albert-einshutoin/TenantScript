@@ -7,6 +7,8 @@ import {
 } from "../src/index.js";
 
 const configPath = "wrangler.jsonc";
+const workerName = "tenantscript-control-plane-0123456789abcdef01234567";
+const ownershipTag = "tenantscript-setup-0123456789abcdef0123456789abcdef";
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -34,13 +36,17 @@ describe("Node Wrangler Worker deploy process", () => {
     await replaceFixtureMarker(fixture.scriptPath, receiptPath);
     const deployProcess = createProcess(fixture.directory);
 
-    await deployProcess.deploy({ configPath });
+    await deployProcess.deploy({ configPath, workerName, ownershipTag });
 
     await expect(readJson(receiptPath)).resolves.toEqual({
       argv: [
         "deploy",
         "--config",
         configPath,
+        "--name",
+        workerName,
+        "--tag",
+        ownershipTag,
         "--strict",
         "--experimental-autoconfig=false",
         "--install-skills=false"
@@ -51,12 +57,15 @@ describe("Node Wrangler Worker deploy process", () => {
   });
 
   it.each([
-    { configPath: "../outside.jsonc" },
-    { configPath: "/tmp/outside.jsonc" },
-    { configPath: "nested/wrangler.jsonc" },
-    { configPath: "wrangler.toml" },
-    { configPath: "wrangler;touch-pwned.jsonc" },
-    { configPath, env: "production-secret-sentinel" }
+    { configPath: "../outside.jsonc", workerName, ownershipTag },
+    { configPath: "/tmp/outside.jsonc", workerName, ownershipTag },
+    { configPath: "nested/wrangler.jsonc", workerName, ownershipTag },
+    { configPath: "wrangler.toml", workerName, ownershipTag },
+    { configPath: "wrangler;touch-pwned.jsonc", workerName, ownershipTag },
+    { configPath, workerName: "Tenant Script", ownershipTag },
+    { configPath, workerName, ownershipTag: "secret-sentinel" },
+    { configPath, workerName, ownershipTag, env: "production-secret-sentinel" },
+    { configPath }
   ])("rejects unsafe or widened deploy request before execution", async (request) => {
     const fixture = await processFixture(
       `await import("node:fs/promises").then(({ writeFile }) => writeFile(${JSON.stringify(
@@ -67,7 +76,7 @@ describe("Node Wrangler Worker deploy process", () => {
     await replaceFixtureMarker(fixture.scriptPath, unexpectedPath);
     const deployProcess = createProcess(fixture.directory);
 
-    const error = await captureDeployError(deployProcess.deploy(request));
+    const error = await captureDeployError(deployProcess.deploy(request as never));
 
     expect(error.toJSON()).toEqual({ code: "wrangler_worker_deploy_failed" });
     expect(JSON.stringify(error)).not.toContain("secret-sentinel");
@@ -103,9 +112,9 @@ describe("Node Wrangler Worker deploy process", () => {
     }
     const deployProcess = createProcess(fixture.directory);
 
-    await expect(deployProcess.deploy({ configPath })).rejects.toBeInstanceOf(
-      WranglerWorkerDeployProcessError
-    );
+    await expect(
+      deployProcess.deploy({ configPath, workerName, ownershipTag })
+    ).rejects.toBeInstanceOf(WranglerWorkerDeployProcessError);
   });
 
   it("rejects a binary that escapes through a symlinked parent directory", async () => {
@@ -120,9 +129,9 @@ describe("Node Wrangler Worker deploy process", () => {
       timeoutMs: 2_000
     });
 
-    await expect(deployProcess.deploy({ configPath })).rejects.toBeInstanceOf(
-      WranglerWorkerDeployProcessError
-    );
+    await expect(
+      deployProcess.deploy({ configPath, workerName, ownershipTag })
+    ).rejects.toBeInstanceOf(WranglerWorkerDeployProcessError);
   });
 
   it("does not reflect stdout or stderr when Wrangler exits non-zero", async () => {
@@ -133,7 +142,9 @@ describe("Node Wrangler Worker deploy process", () => {
     `);
     const deployProcess = createProcess(fixture.directory);
 
-    const error = await captureDeployError(deployProcess.deploy({ configPath }));
+    const error = await captureDeployError(
+      deployProcess.deploy({ configPath, workerName, ownershipTag })
+    );
 
     expect(JSON.stringify(error)).not.toContain("secret-sentinel");
   });
@@ -153,9 +164,9 @@ describe("Node Wrangler Worker deploy process", () => {
     });
 
     const startedAt = Date.now();
-    await expect(deployProcess.deploy({ configPath })).rejects.toBeInstanceOf(
-      WranglerWorkerDeployProcessError
-    );
+    await expect(
+      deployProcess.deploy({ configPath, workerName, ownershipTag })
+    ).rejects.toBeInstanceOf(WranglerWorkerDeployProcessError);
     expect(Date.now() - startedAt).toBeLessThan(2_000);
     await expect(readFile(receiptPath, "utf8")).resolves.toBe("attempt\n");
   });

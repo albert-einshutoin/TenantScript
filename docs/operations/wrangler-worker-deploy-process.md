@@ -1,20 +1,23 @@
 # Pinned Wrangler Worker deploy process
 
 TenantScript's CLI exposes `createNodeWranglerWorkerDeployProcess` as the closed process boundary for
-a future ownership-aware Control Plane Worker adapter. It executes the repository-pinned Wrangler
+the ownership-aware Control Plane Worker adapter. It executes the repository-pinned Wrangler
 against one reviewed root-level `.json` or `.jsonc` configuration. It does not acquire credentials,
 decide whether a remote Worker is created or adopted, write a setup journal, or prove live Tier 2
 deployment.
 
 ## Exact command profile
 
-The process accepts only `{ configPath }`; callers cannot provide a Worker name, environment,
-variable, secret file, compatibility override, route, or arbitrary argument. It invokes
+The process accepts only `{ configPath, workerName, ownershipTag }`. The adapter derives the Worker
+name and non-secret ownership tag; callers cannot provide an environment, variable, secret file,
+compatibility override, route, or arbitrary argument. It invokes
 `process.execPath` with the pinned Wrangler script and this fixed argument profile:
 
 ```text
 wrangler deploy \
   --config <reviewed-root-config> \
+  --name <derived-worker-name> \
+  --tag <derived-ownership-marker> \
   --strict \
   --experimental-autoconfig=false \
   --install-skills=false
@@ -44,13 +47,14 @@ paths never enter that error.
 ## No mutation retry or ownership claim
 
 A timeout or lost response can happen after Cloudflare accepted a deployment. The process therefore
-starts Wrangler once and never retries. A later ownership adapter must read remote script/deployment
-state, distinguish create from explicit adoption, and persist a verified resource reference before
-cleanup can be enabled. `--strict` reduces setting-overwrite risk; it does not prove ownership.
+starts Wrangler once and never retries. The Worker adapter reads remote immutable ID and Version tag
+state, distinguishes create from explicit adoption, and persists a verified resource reference
+before cleanup. `--strict` reduces setting-overwrite risk; it does not prove ownership by itself.
 
-Until that adapter and complete provider-route coverage exist, operators must continue to review and
-run the manual deployment steps in the [production self-host guide](self-host-production.md). Do not
-represent this accountless process test as a successful Cloudflare deployment.
+Until complete provider-route coverage and credential-bearing CLI composition exist, operators must
+continue to review and run the manual deployment steps in the
+[production self-host guide](self-host-production.md). Do not represent this accountless process test
+as a successful Cloudflare deployment.
 
 ## Accountless verification
 

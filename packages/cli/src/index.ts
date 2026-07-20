@@ -117,6 +117,13 @@ export {
 } from "./wrangler-worker-deploy-process.js";
 
 export {
+  CloudflareWorkerSetupAdapterError,
+  createCloudflareWorkerSetupAdapter,
+  type CloudflareWorkerConfiguration,
+  type CloudflareWorkerSetupAdapterErrorCode
+} from "./cloudflare-worker-setup-adapter.js";
+
+export {
   deriveControlPlaneWorkerName,
   parseProductionWranglerInput,
   renderProductionWranglerConfig,

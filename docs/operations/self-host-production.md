@@ -62,8 +62,10 @@ Worker ownership reconciliation, so it does not replace the reviewed operator co
 automatic cleanup.
 
 The setup plan models the Control Plane Worker as a create/adopt ownership resource distinct from
-the selected tenant runtime Worker. This makes its future journal entry and reverse cleanup order
-explicit, but no accountless Worker ownership adapter or remote delete path exists yet.
+the selected tenant runtime Worker. The accountless
+[Worker setup adapter](cloudflare-worker-setup-adapter.md) now provides deterministic create/resume
+and ownership-verified cleanup. It is not yet composed into a credential-bearing `ext setup`
+command, and it is not live Cloudflare evidence.
 
 Do not treat `deploy --dry-run` as live resource, permission, migration, or request-path evidence.
 After deployment, collect a secret-free doctor report through a trusted adapter and evaluate it with
