@@ -1,11 +1,58 @@
 import fc from "fast-check";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { zodToJsonSchema } from "zod-to-json-schema";
+import * as manifestApi from "../src/index.js";
+import { manifestSchema } from "../src/schema.js";
 import {
   parseManifest,
   resolveGrants,
   validateConfig,
   type TenantScriptManifest
 } from "../src/index.js";
+
+describe("public manifest JSON Schema", () => {
+  it("publishes a stable closed draft-07 schema from the package root", () => {
+    const schema = (manifestApi as Record<string, unknown>)["tenantScriptManifestJsonSchema"];
+
+    expect(schema).toMatchObject({
+      $schema: "http://json-schema.org/draft-07/schema#",
+      $id: "https://raw.githubusercontent.com/albert-einshutoin/TenantScript/main/docs/reference/tenantscript-manifest.schema.json",
+      title: "TenantScript plugin manifest",
+      type: "object",
+      additionalProperties: false,
+      required: ["name", "version", "hooks", "capabilities", "configSchema", "egress", "limits"]
+    });
+    expect(Object.isFrozen(schema)).toBe(true);
+  });
+
+  it("matches the reviewed structural compatibility snapshot", () => {
+    const expected = JSON.parse(
+      readFileSync(
+        new URL("../../../docs/reference/tenantscript-manifest.schema.json", import.meta.url),
+        "utf8"
+      )
+    ) as unknown;
+
+    const generated = {
+      ...zodToJsonSchema(manifestSchema, { target: "jsonSchema7", $refStrategy: "none" }),
+      $schema: "http://json-schema.org/draft-07/schema#",
+      $id: "https://raw.githubusercontent.com/albert-einshutoin/TenantScript/main/docs/reference/tenantscript-manifest.schema.json",
+      title: "TenantScript plugin manifest",
+      description:
+        "Canonical structural schema. Use parseManifest for complete semantic validation, including npm-compatible semver ranges."
+    };
+
+    expect(manifestApi.tenantScriptManifestJsonSchema).toEqual(generated);
+    expect(manifestApi.tenantScriptManifestJsonSchema).toEqual(expected);
+    expect(isDeeplyFrozen(manifestApi.tenantScriptManifestJsonSchema)).toBe(true);
+  });
+});
+
+function isDeeplyFrozen(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return true;
+  return Object.isFrozen(value) && Object.values(value).every(isDeeplyFrozen);
+}
 
 const validManifest = {
   name: "large-invoice-notify",
