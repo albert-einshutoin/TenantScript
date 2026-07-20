@@ -51,9 +51,10 @@ contain bearer tokens, account identifiers, customer data, or other credentials.
 
 ## CLI
 
-| Name                             | Default | Required when                                                             | Secret | Purpose                                                                                 |
-| -------------------------------- | ------- | ------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------- |
-| `TENANTSCRIPT_CONTROL_PLANE_URL` | Unset   | Running an `ext` command that calls the Control Plane, currently rollback | No     | HTTPS Control Plane base URL. Authentication material must never be placed in this URL. |
+| Name                               | Default | Required when                                      | Secret | Purpose                                                                                                                                        |
+| ---------------------------------- | ------- | -------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TENANTSCRIPT_CONTROL_PLANE_URL`   | Unset   | Running `ext rollback` or `ext approvals` live     | No     | Exact HTTPS Control Plane origin without path, query, fragment, or userinfo. Loopback HTTP is accepted only for local development.             |
+| `TENANTSCRIPT_CONTROL_PLANE_TOKEN` | Unset   | Running an authenticated Admin mutation from `ext` | Yes    | Bearer service token supplied only through the request header. Never place it in the URL, arguments, committed configuration, logs, or issues. |
 
 ## Runtime benchmark
 

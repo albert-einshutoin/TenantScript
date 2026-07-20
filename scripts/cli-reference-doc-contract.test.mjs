@@ -30,14 +30,14 @@ const commandContracts = new Map([
   [
     "approvals",
     {
-      required: ["approve", "reject", "--approval", "--tenant", "--audit-id", "--actor"],
+      required: ["approve", "reject", "--approval"],
       exits: [0, 1, 2]
     }
   ],
   [
     "rollback",
     {
-      required: ["--app", "--plugin", "--installation", "--to", "--audit-id", "--actor"],
+      required: ["--installation", "--target-version", "--expected-revision", "--idempotency-key"],
       exits: [0, 1, 2]
     }
   ]
