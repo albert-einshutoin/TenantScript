@@ -1,8 +1,32 @@
 {
   "name": "@tenantscript/proxy",
   "version": "0.0.0",
+  "description": "Zero-integration TenantScript webhook proxy with tenant isolation and SSRF-safe forwarding.",
+  "keywords": [
+    "tenantscript",
+    "proxy",
+    "saas",
+    "plugins",
+    "webhooks"
+  ],
+  "homepage": "https://github.com/albert-einshutoin/TenantScript#readme",
+  "bugs": {
+    "url": "https://github.com/albert-einshutoin/TenantScript/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/albert-einshutoin/TenantScript.git",
+    "directory": "packages/proxy"
+  },
   "type": "module",
   "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -10,6 +34,7 @@
     }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

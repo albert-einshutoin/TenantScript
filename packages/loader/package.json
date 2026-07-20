@@ -1,8 +1,32 @@
 {
   "name": "@tenantscript/loader",
   "version": "0.0.0",
+  "description": "Isolated TenantScript plugin execution with scoped context, timeouts, and capability budgets.",
+  "keywords": [
+    "tenantscript",
+    "sandbox",
+    "saas",
+    "plugins",
+    "security"
+  ],
+  "homepage": "https://github.com/albert-einshutoin/TenantScript#readme",
+  "bugs": {
+    "url": "https://github.com/albert-einshutoin/TenantScript/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/albert-einshutoin/TenantScript.git",
+    "directory": "packages/loader"
+  },
   "type": "module",
   "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -10,6 +34,7 @@
     }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

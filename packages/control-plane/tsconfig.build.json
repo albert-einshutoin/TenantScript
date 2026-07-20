@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "noEmit": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "paths": {},
+    "types": ["node", "@cloudflare/workers-types"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["test/**", "vitest.config.ts", "vitest.workers.config.ts"]
+}

@@ -1,8 +1,32 @@
 {
   "name": "@tenantscript/cli",
   "version": "0.0.0",
+  "description": "Command-line tooling for building, validating, operating, and self-hosting TenantScript plugins.",
+  "keywords": [
+    "tenantscript",
+    "cli",
+    "saas",
+    "plugins",
+    "cloudflare"
+  ],
+  "homepage": "https://github.com/albert-einshutoin/TenantScript#readme",
+  "bugs": {
+    "url": "https://github.com/albert-einshutoin/TenantScript/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/albert-einshutoin/TenantScript.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "bin": {
     "ext": "./dist/bin.js"
   },
@@ -13,6 +37,7 @@
     }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
