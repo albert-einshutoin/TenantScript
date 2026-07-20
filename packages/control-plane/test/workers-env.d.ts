@@ -10,6 +10,7 @@ declare namespace Cloudflare {
     PROBE_DO: DurableObjectNamespace;
     ADMIN_MUTATION_RATE_LIMITER_DO: DurableObjectNamespace;
     PROVIDER_SECRET_STORE_DO: DurableObjectNamespace;
+    OAUTH_STATE_STORE_DO: DurableObjectNamespace;
     TEST_MIGRATIONS: D1Migration[];
   }
 }
@@ -21,6 +22,7 @@ declare module "cloudflare:workers" {
     PROBE_DO: DurableObjectNamespace;
     ADMIN_MUTATION_RATE_LIMITER_DO: DurableObjectNamespace;
     PROVIDER_SECRET_STORE_DO: DurableObjectNamespace;
+    OAUTH_STATE_STORE_DO: DurableObjectNamespace;
     TEST_MIGRATIONS: D1Migration[];
   }
 

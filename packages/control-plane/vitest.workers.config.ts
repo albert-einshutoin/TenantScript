@@ -26,7 +26,8 @@ export default defineConfig({
         durableObjects: {
           PROBE_DO: "ProbeDurableObject",
           ADMIN_MUTATION_RATE_LIMITER_DO: "AdminMutationRateLimitDurableObject",
-          PROVIDER_SECRET_STORE_DO: "ProviderSecretStoreDurableObject"
+          PROVIDER_SECRET_STORE_DO: "ProviderSecretStoreDurableObject",
+          OAUTH_STATE_STORE_DO: "OAuthStateStoreDurableObject"
         },
         bindings: {
           ADMIN_ALLOWED_ORIGINS: '["https://admin.example.com"]',
