@@ -302,6 +302,8 @@ export {
 export {
   createD1AdminDashboardStore,
   createAdminCursorCodec,
+  type AdminAuditEventSummary,
+  type AdminAuditStateSummary,
   type AdminApprovalSummary,
   type AdminCursorCodec,
   type AdminCursorPayload,

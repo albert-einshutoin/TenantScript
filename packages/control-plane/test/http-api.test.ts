@@ -272,6 +272,31 @@ describe("Control Plane Admin dashboard contract", () => {
     await expect(crossTenant.json()).resolves.toMatchObject({ error: { code: "invalid_cursor" } });
   });
 
+  it("pages audit events only through their signed tenant cursor", async () => {
+    const store = dashboardStore();
+    const handler = createDashboardHandler(store);
+    const initial = await handler(
+      sessionRequest({ token: "manager-secret-token", url: `${dashboardUrl()}/auditEvents` })
+    );
+    const body: { nextCursor: string } = await initial.json();
+
+    const response = await handler(
+      sessionRequest({
+        token: "manager-secret-token",
+        url: `${dashboardUrl()}/auditEvents?cursor=${encodeURIComponent(body.nextCursor)}`
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(store.readSection).toHaveBeenLastCalledWith({
+      appId: "app_acme",
+      tenantId: "tenant_acme",
+      section: "auditEvents",
+      limit: 20,
+      position: "2026-07-19T12:00:00.000Z\taudit_1"
+    });
+  });
+
   it("redacts downstream store failures", async () => {
     const store = dashboardStore();
     store.readSection.mockRejectedValue(new Error("SQL stack trace secret-config"));
@@ -706,6 +731,24 @@ function dashboardStore() {
         return Promise.resolve({ section: "approvals", items: [] });
       case "executions":
         return Promise.resolve({ section: "executions", items: [] });
+      case "auditEvents":
+        return Promise.resolve({
+          section: "auditEvents",
+          items: [
+            {
+              id: "audit_1",
+              installationId: "inst_1",
+              pluginId: "plugin_1",
+              revision: 1,
+              actor: "ops-manager",
+              action: "installation.command",
+              before: { enabled: true, priority: 10, revision: 0 },
+              after: { enabled: false, priority: 10, revision: 1 },
+              createdAt: "2026-07-19T12:00:00.000Z"
+            }
+          ],
+          nextPosition: "2026-07-19T12:00:00.000Z\taudit_1"
+        });
     }
   });
   return {
@@ -765,6 +808,10 @@ function installationStore() {
 
 interface TestDashboardBody {
   installations: {
+    items: unknown[];
+    nextCursor: string;
+  };
+  auditEvents: {
     items: unknown[];
     nextCursor: string;
   };

@@ -86,6 +86,113 @@ describe("D1 Admin dashboard read model", () => {
     expect(second.nextPosition).toBeUndefined();
   });
 
+  it("pages tenant audit summaries newest-first without exposing raw state", async () => {
+    await seedDashboard();
+    await seedAuditEvent({
+      id: "audit_tenant_1_a",
+      installationId: "tenant_1_installation_a",
+      tenantId: "tenant_1",
+      appId: "app_1",
+      pluginId: "tenant_1_plugin",
+      actor: "owner-a",
+      before: { enabled: true, priority: 10, revision: 0, secret: "customer-secret-a" },
+      after: { enabled: false, priority: 10, revision: 1, config: "private-config-a" }
+    });
+    await seedAuditEvent({
+      id: "audit_tenant_1_b",
+      installationId: "tenant_1_installation_b",
+      tenantId: "tenant_1",
+      appId: "app_1",
+      pluginId: "tenant_1_plugin",
+      actor: "owner-b",
+      before: { enabled: true, priority: 20, revision: 0, secret: "customer-secret-b" },
+      after: { enabled: true, priority: 5, revision: 1, config: "private-config-b" }
+    });
+    await seedAuditEvent({
+      id: "audit_tenant_2",
+      installationId: "tenant_2_installation_a",
+      tenantId: "tenant_2",
+      appId: "app_1",
+      pluginId: "tenant_2_plugin",
+      actor: "other-tenant-actor",
+      before: {},
+      after: {}
+    });
+    await seedAuditEvent({
+      id: "audit_other_app",
+      installationId: "tenant_other_app_installation_a",
+      tenantId: "tenant_other_app",
+      appId: "app_other",
+      pluginId: "tenant_other_app_plugin",
+      actor: "other-app-actor",
+      before: {},
+      after: {}
+    });
+    const dashboard = createD1AdminDashboardStore(testEnv.DB);
+
+    const first = await dashboard.readSection({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      section: "auditEvents",
+      limit: 1
+    });
+
+    expect(first).toEqual({
+      section: "auditEvents",
+      items: [
+        {
+          id: "audit_tenant_1_b",
+          installationId: "tenant_1_installation_b",
+          pluginId: "tenant_1_plugin",
+          revision: 0,
+          actor: "owner-b",
+          action: "installation.seed",
+          before: { enabled: true, priority: 20, revision: 0 },
+          after: { enabled: true, priority: 5, revision: 1 },
+          createdAt: "2026-07-21T00:00:00.000Z"
+        }
+      ],
+      nextPosition: "2026-07-21T00:00:00.000Z\taudit_tenant_1_b"
+    });
+    const second = await dashboard.readSection({
+      appId: "app_1",
+      tenantId: "tenant_1",
+      section: "auditEvents",
+      limit: 1,
+      ...(first.nextPosition === undefined ? {} : { position: first.nextPosition })
+    });
+    expect(second.items.map((item) => item.id)).toEqual(["audit_tenant_1_a"]);
+    const serialized = JSON.stringify([first, second]);
+    expect(serialized).not.toContain("customer-secret");
+    expect(serialized).not.toContain("private-config");
+    expect(serialized).not.toContain("other-tenant-actor");
+    expect(serialized).not.toContain("other-app-actor");
+  });
+
+  it("fails closed when a known audit state field has an unsafe type", async () => {
+    await seedDashboard();
+    await seedAuditEvent({
+      id: "audit_invalid_state",
+      installationId: "tenant_1_installation_a",
+      tenantId: "tenant_1",
+      appId: "app_1",
+      pluginId: "tenant_1_plugin",
+      actor: "owner-a",
+      before: { enabled: true, priority: 10, revision: 0 },
+      after: { enabled: false, priority: "secret-instead-of-number", revision: 1 }
+    });
+    const dashboard = createD1AdminDashboardStore(testEnv.DB);
+
+    await expect(
+      dashboard.readSection({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        section: "auditEvents",
+        limit: 10
+      })
+    ).rejects.toThrow("invalid audit priority state");
+  });
+
   it("returns an honest daily execution/runtime summary and rejects app mismatch", async () => {
     await seedDashboard();
     const dashboard = createD1AdminDashboardStore(testEnv.DB);
@@ -403,6 +510,35 @@ async function seedDashboard(): Promise<void> {
     config: { value: "cross-app-secret" },
     grants: { permission: "cross-app-grant" }
   });
+}
+
+async function seedAuditEvent(request: {
+  id: string;
+  installationId: string;
+  tenantId: string;
+  appId: string;
+  pluginId: string;
+  actor: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}): Promise<void> {
+  await testEnv.DB.prepare(
+    "INSERT INTO admin_audit_events (id, installation_id, tenant_id, app_id, plugin_id, revision, actor, action, before_json, after_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  )
+    .bind(
+      request.id,
+      request.installationId,
+      request.tenantId,
+      request.appId,
+      request.pluginId,
+      0,
+      request.actor,
+      "installation.seed",
+      JSON.stringify(request.before),
+      JSON.stringify(request.after),
+      "2026-07-21T00:00:00.000Z"
+    )
+    .run();
 }
 
 async function seedTenant(

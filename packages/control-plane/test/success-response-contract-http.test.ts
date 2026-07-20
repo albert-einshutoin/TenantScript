@@ -75,6 +75,7 @@ function successRequests(): Request[] {
     get("/v1/admin/dashboard/pluginVersions"),
     get("/v1/admin/dashboard/approvals"),
     get("/v1/admin/dashboard/executions"),
+    get("/v1/admin/dashboard/auditEvents"),
     get("/v1/admin/installation-review?id=inst_1"),
     command("/v1/admin/installation-command", "PATCH", {
       id: "inst_1",
@@ -185,6 +186,23 @@ function successOptions(): ControlPlaneHttpHandlerOptions {
                 status: "success",
                 durationMs: 12,
                 capabilityNames: ["storage.read"],
+                createdAt: "2026-07-20T00:00:00.000Z"
+              }
+            ]
+          };
+        case "auditEvents":
+          return {
+            section,
+            items: [
+              {
+                id: "audit_1",
+                installationId: "inst_1",
+                pluginId: "plugin_1",
+                revision: 1,
+                actor: "operator_1",
+                action: "installation.command",
+                before: { enabled: true, revision: 0 },
+                after: { enabled: false, revision: 1 },
                 createdAt: "2026-07-20T00:00:00.000Z"
               }
             ]

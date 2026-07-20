@@ -208,6 +208,7 @@ export type AdminHttpEndpointId =
   | "dashboardPluginVersions"
   | "dashboardApprovals"
   | "dashboardExecutions"
+  | "dashboardAuditEvents"
   | "installationReview"
   | "installationCommand"
   | "installPreview"
@@ -292,6 +293,14 @@ export const ADMIN_HTTP_ENDPOINT_CONTRACTS = [
     isolation: "tenant-collection",
     route: "executions",
     success: { GET: { status: 200, body: "json", schema: "dashboardExecutions" } }
+  },
+  {
+    id: "dashboardAuditEvents",
+    path: "/v1/admin/dashboard/auditEvents",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "auditEvents",
+    success: { GET: { status: 200, body: "json", schema: "dashboardAuditEvents" } }
   },
   {
     id: "installationReview",

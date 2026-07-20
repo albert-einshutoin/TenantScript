@@ -150,11 +150,17 @@ function AdminShell({
 
   useEffect(() => {
     let active = true;
-    void client
-      .getDashboard(session)
-      .then((nextSnapshot) => {
+    void Promise.all([client.getDashboard(session), client.getAuditEvents()])
+      .then(([nextSnapshot, auditPage]) => {
         if (active) {
-          setSnapshot(nextSnapshot);
+          setSnapshot({
+            ...nextSnapshot,
+            auditEvents: auditPage.items,
+            cursors: {
+              ...nextSnapshot.cursors,
+              ...(auditPage.nextCursor === undefined ? {} : { auditEvents: auditPage.nextCursor })
+            }
+          });
         }
       })
       .catch(() => {
@@ -486,7 +492,8 @@ const routeItems: readonly { route: AdminRoute; label: string }[] = [
   { route: "installations", label: "Installations" },
   { route: "versions", label: "Versions" },
   { route: "approvals", label: "Approval queue" },
-  { route: "executions", label: "Executions" }
+  { route: "executions", label: "Executions" },
+  { route: "audit", label: "Audit log" }
 ];
 
 function RoutePanel({
@@ -609,7 +616,90 @@ function RoutePanel({
           onDetail={onExecutionDetail}
         />
       );
+    case "audit":
+      return (
+        <AuditPanel
+          snapshot={snapshot}
+          loading={loadingSection === "auditEvents"}
+          onLoadMore={() => {
+            onLoadMore("auditEvents");
+          }}
+        />
+      );
   }
+}
+
+function AuditPanel({
+  snapshot,
+  loading,
+  onLoadMore
+}: {
+  snapshot: DashboardSnapshot;
+  loading: boolean;
+  onLoadMore: () => void;
+}) {
+  return (
+    <section className="data-panel" aria-label="Tenant audit log">
+      <PanelHeader title="Audit events" detail="Newest first" />
+      {snapshot.auditEvents.length === 0 ? (
+        <p className="empty-state">No audit events yet</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Installation</th>
+                <th>Plugin</th>
+                <th>Revision</th>
+                <th>Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshot.auditEvents.map((event) => (
+                <tr key={event.id}>
+                  <td>{event.createdAt.toLocaleString()}</td>
+                  <td>{event.actor}</td>
+                  <td>{event.action}</td>
+                  <td>{event.installationId}</td>
+                  <td>{event.pluginId}</td>
+                  <td>{event.revision}</td>
+                  <td>{auditChangeSummary(event.before, event.after)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <LoadMoreButton
+        section="audit events"
+        cursor={snapshot.cursors.auditEvents}
+        loading={loading}
+        onClick={onLoadMore}
+      />
+    </section>
+  );
+}
+
+function auditChangeSummary(
+  before: DashboardSnapshot["auditEvents"][number]["before"],
+  after: DashboardSnapshot["auditEvents"][number]["after"]
+): string {
+  const changes: string[] = [];
+  for (const key of ["enabled", "priority", "revision", "version"] as const) {
+    if (before[key] !== after[key]) {
+      changes.push(`${key}: ${auditStateValue(before[key])} → ${auditStateValue(after[key])}`);
+    }
+  }
+  return changes.length === 0 ? "No public state change" : changes.join(", ");
+}
+
+function auditStateValue(value: boolean | number | string | undefined): string {
+  if (value === undefined) return "not set";
+  if (typeof value === "boolean") return value ? "on" : "off";
+  return String(value);
 }
 
 function OverviewPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
@@ -1815,6 +1905,8 @@ function appendPage(snapshot: DashboardSnapshot, page: DashboardSectionPage): Da
       return { ...snapshot, approvals: [...snapshot.approvals, ...page.items], cursors };
     case "executions":
       return { ...snapshot, executions: [...snapshot.executions, ...page.items], cursors };
+    case "auditEvents":
+      return { ...snapshot, auditEvents: [...snapshot.auditEvents, ...page.items], cursors };
   }
 }
 

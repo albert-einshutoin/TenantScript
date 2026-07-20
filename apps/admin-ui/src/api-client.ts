@@ -169,11 +169,31 @@ export interface ExecutionDetailView {
   createdAt: Date;
 }
 
+export interface AuditStateView {
+  enabled?: boolean;
+  priority?: number;
+  revision?: number;
+  version?: string;
+}
+
+export interface AuditEventView {
+  id: string;
+  installationId: string;
+  pluginId: string;
+  revision: number;
+  actor: string;
+  action: string;
+  before: AuditStateView;
+  after: AuditStateView;
+  createdAt: Date;
+}
+
 export interface DashboardSnapshot {
   installations: readonly InstallationView[];
   pluginVersions: readonly PluginVersionView[];
   approvals: readonly ApprovalView[];
   executions: readonly ExecutionView[];
+  auditEvents: readonly AuditEventView[];
   usage: DailyUsageSummaryView;
   schemaMigrations: readonly SchemaMigrationStatus[];
   telemetry: TelemetryStatus;
@@ -182,6 +202,7 @@ export interface DashboardSnapshot {
 
 export interface AdminApiClient extends AdminSessionClient {
   getDashboard: (session: AdminSession) => Promise<DashboardSnapshot>;
+  getAuditEvents: () => Promise<Extract<DashboardSectionPage, { section: "auditEvents" }>>;
   getDashboardSection: (
     section: AdminDashboardSection,
     cursor: string
@@ -246,7 +267,8 @@ export type DashboardSectionPage =
   | { section: "installations"; items: readonly InstallationView[]; nextCursor?: string }
   | { section: "pluginVersions"; items: readonly PluginVersionView[]; nextCursor?: string }
   | { section: "approvals"; items: readonly ApprovalView[]; nextCursor?: string }
-  | { section: "executions"; items: readonly ExecutionView[]; nextCursor?: string };
+  | { section: "executions"; items: readonly ExecutionView[]; nextCursor?: string }
+  | { section: "auditEvents"; items: readonly AuditEventView[]; nextCursor?: string };
 
 export class AdminApiError extends Error {
   override readonly name = "AdminApiError";
@@ -363,6 +385,29 @@ const executionDetailSchema = z
   })
   .strict();
 
+const auditStateSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    priority: z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).optional(),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+    version: z.string().min(1).optional()
+  })
+  .strict();
+
+const auditEventSchema = z
+  .object({
+    id: z.string().min(1),
+    installationId: z.string().min(1),
+    pluginId: z.string().min(1),
+    revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    actor: z.string().min(1),
+    action: z.string().min(1),
+    before: auditStateSchema,
+    after: auditStateSchema,
+    createdAt: z.coerce.date()
+  })
+  .strict();
+
 const usageSummarySchema = z
   .object({
     date: z.string(),
@@ -431,6 +476,9 @@ const dashboardSectionSchema = z.discriminatedUnion("section", [
   z.object({ section: z.literal("approvals"), ...collectionSchema(approvalSchema).shape }).strict(),
   z
     .object({ section: z.literal("executions"), ...collectionSchema(executionSchema).shape })
+    .strict(),
+  z
+    .object({ section: z.literal("auditEvents"), ...collectionSchema(auditEventSchema).shape })
     .strict()
 ]);
 
@@ -646,6 +694,19 @@ const dashboardFixture: DashboardSnapshot = {
       createdAt: new Date("2026-06-16T00:06:00.000Z")
     }
   ],
+  auditEvents: [
+    {
+      id: "audit_1",
+      installationId: "inst_large_invoice",
+      pluginId: "plugin_large_invoice",
+      revision: 1,
+      actor: "ops-manager",
+      action: "installation.command",
+      before: { enabled: true, priority: 10, revision: 0 },
+      after: { enabled: false, priority: 10, revision: 1 },
+      createdAt: new Date("2026-06-16T00:07:00.000Z")
+    }
+  ],
   usage: { date: "2026-06-16", executions: 34, runtimeMs: 742 },
   telemetry: { enabled: false, mode: "disabled", schemaVersion: 1 },
   schemaMigrations: [
@@ -721,6 +782,7 @@ export function createDemoAdminApiClient(): AdminApiClient {
             ? snapshot.schemaMigrations
             : []
       }),
+    getAuditEvents: () => Promise.resolve({ section: "auditEvents", items: snapshot.auditEvents }),
     getDashboardSection: () =>
       Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
     searchExecutions: (request) => {
@@ -959,6 +1021,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
   return {
     resolveSession: unavailable,
     getDashboard: unavailable,
+    getAuditEvents: unavailable,
     getDashboardSection: unavailable,
     searchExecutions: unavailable,
     getExecutionDetail: unavailable,
@@ -1049,6 +1112,17 @@ export function createAdminApiClient(params: {
         throw invalidResponse();
       }
       return dashboardSnapshot(dashboard.data);
+    },
+    getAuditEvents: async () => {
+      const url = new URL(`${dashboardUrl}/auditEvents`);
+      const payload = await fetchAdminJson(url.toString(), requireCredential(credential), fetcher);
+      const page = dashboardSectionSchema.safeParse(payload);
+      if (!page.success || page.data.section !== "auditEvents") throw invalidResponse();
+      return {
+        section: "auditEvents",
+        items: page.data.items.map(auditEventView),
+        ...(page.data.nextCursor === undefined ? {} : { nextCursor: page.data.nextCursor })
+      };
     },
     getDashboardSection: async (section, cursor) => {
       const url = new URL(`${dashboardUrl}/${section}`);
@@ -1335,6 +1409,7 @@ function dashboardSnapshot(data: z.infer<typeof dashboardSchema>): DashboardSnap
     pluginVersions: data.pluginVersions.items,
     approvals: data.approvals.items,
     executions: data.executions.items,
+    auditEvents: [],
     usage: data.usage,
     schemaMigrations: data.schemaMigrations,
     telemetry: data.telemetry,
@@ -1369,7 +1444,30 @@ function dashboardSectionPage(data: z.infer<typeof dashboardSectionSchema>): Das
         items: data.items,
         ...(data.nextCursor === undefined ? {} : { nextCursor: data.nextCursor })
       } as DashboardSectionPage;
+    case "auditEvents":
+      return {
+        section: data.section,
+        items: data.items.map(auditEventView),
+        ...(data.nextCursor === undefined ? {} : { nextCursor: data.nextCursor })
+      };
   }
+}
+
+function auditEventView(event: z.infer<typeof auditEventSchema>): AuditEventView {
+  return {
+    ...event,
+    before: definedAuditState(event.before),
+    after: definedAuditState(event.after)
+  };
+}
+
+function definedAuditState(state: z.infer<typeof auditStateSchema>): AuditStateView {
+  return {
+    ...(state.enabled === undefined ? {} : { enabled: state.enabled }),
+    ...(state.priority === undefined ? {} : { priority: state.priority }),
+    ...(state.revision === undefined ? {} : { revision: state.revision }),
+    ...(state.version === undefined ? {} : { version: state.version })
+  };
 }
 
 function installationView(installation: z.infer<typeof installationSchema>): InstallationView {

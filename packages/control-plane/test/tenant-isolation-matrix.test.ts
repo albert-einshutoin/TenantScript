@@ -17,6 +17,7 @@ const expectedEndpointIds = [
   "dashboardPluginVersions",
   "dashboardApprovals",
   "dashboardExecutions",
+  "dashboardAuditEvents",
   "installationReview",
   "installationCommand",
   "installPreview",
@@ -167,6 +168,7 @@ function scopeProbeOptions(
     case "dashboardPluginVersions":
     case "dashboardApprovals":
     case "dashboardExecutions":
+    case "dashboardAuditEvents":
       return {
         dashboardStore: {
           readSection: (request) => fail(request),

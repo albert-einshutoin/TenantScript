@@ -710,6 +710,7 @@ describe("Admin API environment selection", () => {
                 version: "1.0.0",
                 enabled: true,
                 priority: 10,
+                revision: 0,
                 config: { secret: "must-not-cross-wire" }
               }
             ]
@@ -725,6 +726,41 @@ describe("Admin API environment selection", () => {
     const session = await client.resolveSession({ token: "secret-token" });
 
     await expect(client.getDashboard(session)).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
+  it("rejects audit summaries that include raw before or after state", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "auditEvents",
+          items: [
+            {
+              id: "audit_1",
+              installationId: "inst_1",
+              pluginId: "plugin_1",
+              revision: 1,
+              actor: "ops-manager",
+              action: "installation.command",
+              before: { enabled: true, config: "secret-config" },
+              after: { enabled: false },
+              createdAt: "2026-07-19T00:00:00.000Z"
+            }
+          ]
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getAuditEvents()).rejects.toEqual(
       new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
     );
   });
@@ -781,6 +817,24 @@ describe("Admin API environment selection", () => {
             }
           ]
         })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          section: "auditEvents",
+          items: [
+            {
+              id: "audit_1",
+              installationId: "inst_1",
+              pluginId: "p1",
+              revision: 1,
+              actor: "ops-manager",
+              action: "installation.command",
+              before: { enabled: true, revision: 0 },
+              after: { enabled: false, revision: 1 },
+              createdAt: "2026-07-19T00:00:00.000Z"
+            }
+          ]
+        })
       );
     const client = createAdminApiClient({
       isDevelopment: false,
@@ -802,6 +856,13 @@ describe("Admin API environment selection", () => {
       section: "executions",
       items: [{ capabilityNames: [] }]
     });
+    await expect(client.getDashboardSection("auditEvents", "cursor")).resolves.toMatchObject({
+      section: "auditEvents",
+      items: [{ before: { enabled: true }, createdAt: new Date("2026-07-19T00:00:00.000Z") }]
+    });
+    expect(requestUrl(fetcher.mock.calls[4]?.[0])).toBe(
+      "https://api.example.com/v1/admin/dashboard/auditEvents?cursor=cursor"
+    );
   });
 
   it("preserves typed dashboard errors and redacts network failures", async () => {

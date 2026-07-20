@@ -2,6 +2,7 @@ export type ControlPlaneJsonSchema = Readonly<Record<string, unknown>>;
 
 const text = { type: "string" } as const;
 const nonNegativeInteger = { type: "integer", minimum: 0 } as const;
+const integer = { type: "integer" } as const;
 const boolean = { type: "boolean" } as const;
 
 function enumString(values: readonly string[]): ControlPlaneJsonSchema {
@@ -86,10 +87,33 @@ const executionSummary = object({
   createdAt: text
 });
 
+const auditStateSummary = object(
+  {
+    enabled: boolean,
+    priority: integer,
+    revision: nonNegativeInteger,
+    version: text
+  },
+  ["enabled", "priority", "revision", "version"]
+);
+
+const auditEventSummary = object({
+  id: text,
+  installationId: text,
+  pluginId: text,
+  revision: nonNegativeInteger,
+  actor: text,
+  action: text,
+  before: auditStateSummary,
+  after: auditStateSummary,
+  createdAt: text
+});
+
 const installationPage = page("installations", installationSummary);
 const pluginVersionPage = page("pluginVersions", pluginVersionSummary);
 const approvalPage = page("approvals", approvalSummary);
 const executionPage = page("executions", executionSummary);
+const auditEventPage = page("auditEvents", auditEventSummary);
 
 const schemaMigrationBlocker = object({
   installationId: text,
@@ -241,6 +265,7 @@ export const CONTROL_PLANE_SUCCESS_RESPONSE_SCHEMAS = deepFreeze({
   dashboardPluginVersions: pluginVersionPage,
   dashboardApprovals: approvalPage,
   dashboardExecutions: executionPage,
+  dashboardAuditEvents: auditEventPage,
   installationReview: installationDetail,
   installationCommand: object({
     id: text,

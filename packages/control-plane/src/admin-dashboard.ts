@@ -5,7 +5,12 @@ import {
   type SchemaMigrationStatus
 } from "./schema-migrations.js";
 
-export type AdminDashboardSection = "installations" | "pluginVersions" | "approvals" | "executions";
+export type AdminDashboardSection =
+  | "installations"
+  | "pluginVersions"
+  | "approvals"
+  | "executions"
+  | "auditEvents";
 
 export interface AdminDashboardScope {
   appId: string;
@@ -63,11 +68,31 @@ export interface AdminUsageSummary {
   runtimeMs: number;
 }
 
+export interface AdminAuditStateSummary {
+  enabled?: boolean;
+  priority?: number;
+  revision?: number;
+  version?: string;
+}
+
+export interface AdminAuditEventSummary {
+  id: string;
+  installationId: string;
+  pluginId: string;
+  revision: number;
+  actor: string;
+  action: string;
+  before: AdminAuditStateSummary;
+  after: AdminAuditStateSummary;
+  createdAt: string;
+}
+
 export type AdminDashboardSectionPage =
   | AdminSectionPage<"installations", AdminInstallationSummary>
   | AdminSectionPage<"pluginVersions", AdminPluginVersionSummary>
   | AdminSectionPage<"approvals", AdminApprovalSummary>
-  | AdminSectionPage<"executions", AdminExecutionSummary>;
+  | AdminSectionPage<"executions", AdminExecutionSummary>
+  | AdminSectionPage<"auditEvents", AdminAuditEventSummary>;
 
 interface AdminSectionPage<TSection extends AdminDashboardSection, TItem> {
   section: TSection;
@@ -119,6 +144,8 @@ export function createD1AdminDashboardStore(
           return readApprovals(db, request);
         case "executions":
           return readExecutions(db, request);
+        case "auditEvents":
+          return readAuditEvents(db, request);
       }
     },
     readUsageSummary: (request) => readUsageSummary(db, request),
@@ -278,6 +305,55 @@ async function readExecutions(
   };
 }
 
+async function readAuditEvents(
+  db: D1DatabaseLike,
+  request: SectionReadRequest
+): Promise<AdminDashboardSectionPage> {
+  const cursor = auditCursor(request.position);
+  // Audit IDs are not time ordered. Pairing created_at with id keeps pagination stable when several
+  // mutations share a timestamp, while every ownership relation is checked inside the SQL boundary.
+  const rows = await db
+    .prepare(
+      [
+        "SELECT a.id, a.installation_id, a.plugin_id, a.revision, a.actor, a.action,",
+        "a.before_json, a.after_json, a.created_at",
+        "FROM admin_audit_events a",
+        "JOIN tenants t ON t.id = a.tenant_id AND t.app_id = a.app_id",
+        "JOIN installations i ON i.id = a.installation_id AND i.tenant_id = a.tenant_id",
+        "JOIN plugins p ON p.id = a.plugin_id AND p.app_id = a.app_id",
+        "WHERE a.tenant_id = ?1 AND a.app_id = ?2",
+        "AND (?3 IS NULL OR a.created_at < ?3 OR (a.created_at = ?3 AND a.id < ?4))",
+        "ORDER BY a.created_at DESC, a.id DESC LIMIT ?5"
+      ].join(" ")
+    )
+    .bind(
+      request.tenantId,
+      request.appId,
+      cursor?.createdAt ?? null,
+      cursor?.id ?? null,
+      request.limit + 1
+    )
+    .all();
+  const page = keysetPage(rows.results as AuditEventSummaryRow[], request.limit, (row) =>
+    auditPosition(row.created_at, row.id)
+  );
+  return {
+    section: "auditEvents",
+    items: page.rows.map((row) => ({
+      id: row.id,
+      installationId: row.installation_id,
+      pluginId: row.plugin_id,
+      revision: safeInteger(row.revision, "invalid audit revision"),
+      actor: row.actor,
+      action: row.action,
+      before: auditState(row.before_json),
+      after: auditState(row.after_json),
+      createdAt: row.created_at
+    })),
+    ...(page.nextPosition === undefined ? {} : { nextPosition: page.nextPosition })
+  };
+}
+
 async function readUsageSummary(
   db: D1DatabaseLike,
   request: { appId: string; tenantId: string; date: string }
@@ -338,6 +414,53 @@ function executionCursor(position: string | undefined): { createdAt: string; id:
     throw new Error("invalid execution cursor position");
   }
   return { createdAt: position.slice(0, separator), id: position.slice(separator + 1) };
+}
+
+function auditPosition(createdAt: string, id: string): string {
+  return `${createdAt}\t${id}`;
+}
+
+function auditCursor(position: string | undefined): { createdAt: string; id: string } | null {
+  if (position === undefined) return null;
+  const separator = position.indexOf("\t");
+  if (separator <= 0 || separator === position.length - 1) {
+    throw new Error("invalid audit cursor position");
+  }
+  return { createdAt: position.slice(0, separator), id: position.slice(separator + 1) };
+}
+
+function auditState(serialized: string): AdminAuditStateSummary {
+  const parsed: unknown = JSON.parse(serialized);
+  if (!isRecord(parsed)) throw new Error("invalid audit state summary");
+  return {
+    ...(parsed.enabled === undefined
+      ? {}
+      : { enabled: requiredBoolean(parsed.enabled, "invalid audit enabled state") }),
+    ...(parsed.priority === undefined
+      ? {}
+      : { priority: requiredSafeInteger(parsed.priority, "invalid audit priority state") }),
+    ...(parsed.revision === undefined
+      ? {}
+      : { revision: requiredSafeInteger(parsed.revision, "invalid audit revision state") }),
+    ...(parsed.version === undefined
+      ? {}
+      : { version: requiredNonEmptyString(parsed.version, "invalid audit version state") })
+  };
+}
+
+function requiredBoolean(value: unknown, error: string): boolean {
+  if (typeof value !== "boolean") throw new Error(error);
+  return value;
+}
+
+function requiredSafeInteger(value: unknown, error: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new Error(error);
+  return value;
+}
+
+function requiredNonEmptyString(value: unknown, error: string): string {
+  if (typeof value !== "string" || value.length === 0) throw new Error(error);
+  return value;
 }
 
 function capabilityNames(serialized: string): readonly string[] {
@@ -429,6 +552,18 @@ interface ExecutionSummaryRow {
   created_at: string;
 }
 
+interface AuditEventSummaryRow {
+  id: string;
+  installation_id: string;
+  plugin_id: string;
+  revision: number;
+  actor: string;
+  action: string;
+  before_json: string;
+  after_json: string;
+  created_at: string;
+}
+
 interface UsageSummaryRow {
   executions: number;
   runtime_ms: number;
@@ -506,7 +641,8 @@ function isDashboardSection(value: unknown): value is AdminDashboardSection {
     value === "installations" ||
     value === "pluginVersions" ||
     value === "approvals" ||
-    value === "executions"
+    value === "executions" ||
+    value === "auditEvents"
   );
 }
 
