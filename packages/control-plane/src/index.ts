@@ -228,9 +228,13 @@ export {
 export {
   createDurableObjectSecretStore,
   createInMemorySecretStore,
+  SecretStoreError,
   type PutSecretRequest,
+  type SecretEncryptionKey,
+  type SecretEncryptionKeyring,
   type SecretRef,
   type SecretStore,
+  type SecretStoreErrorCode,
   type SecretStoreStorage
 } from "./secret-store.js";
 

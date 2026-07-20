@@ -13,6 +13,7 @@ D-### in the product document, check this index before adding or changing relate
 | [ADR-002](002-oss-license-and-publication.md) | OSS License and Publication Policy         | 2026-06-12 | Accepted    | Publish the repository as public OSS under Apache-2.0 with consistent license metadata across workspace packages.                                             |
 | [ADR-003](003-approval-continuation-model.md) | Approval Continuation Model                | 2026-07-05 | Accepted    | Handlers exit after `approvals.request()`; Workflows manage approval lifecycle and start `resumeHook` as a new execution on decision.                         |
 | [ADR-004](004-app-database-sharding.md)       | App-level D1 Sharding                      | 2026-07-20 | Accepted    | Provision one D1 database per host app, route only by authenticated app ID, and scale beyond binding limits with deployment-level partitioning.               |
+| [ADR-005](005-secret-envelope-encryption.md)  | Secret Envelope Encryption                 | 2026-07-20 | Accepted    | Persist provider secrets only as ref-bound AES-256-GCM envelopes and resolve current or retained keys through a deployment-owned keyring.                     |
 
 ## Adding a new ADR
 
