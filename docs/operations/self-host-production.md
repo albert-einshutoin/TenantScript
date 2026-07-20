@@ -70,7 +70,9 @@ rotation runbook. The template does not guess or generate secrets.
 - **Telemetry:** TenantScript telemetry remains opt-in and off by default. Review the privacy contract
   before enabling it.
 - **Recovery:** retain the setup plan and operator-owned resource journal. Never delete an adopted
-  resource merely because it appears in a cleanup example.
+  resource merely because it appears in a cleanup example. Follow the
+  [setup run journal recovery contract](setup-run-journal.md); live Cloudflare apply remains
+  unimplemented.
 - **Verification:** run accountless `pnpm verify`, Wrangler dry-run, migration inspection, the
   secret-free doctor flow, and a live tenant-isolation smoke test in the operator account.
 
