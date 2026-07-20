@@ -48,7 +48,8 @@
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*",
-    "@types/semver": "7.7.1"
+    "@types/semver": "7.7.1",
+    "ajv": "8.20.0"
   },
   "dependencies": {
     "@tenantscript/host-sdk": "workspace:*",

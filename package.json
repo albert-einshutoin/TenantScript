@@ -43,6 +43,7 @@
     "test:wrangler-template": "WRANGLER_SEND_METRICS=false wrangler deploy --dry-run --config deploy/self-host/production/wrangler.example.jsonc --outdir .tmp/wrangler-template",
     "api-surface:check": "node scripts/public-api-surface.mjs",
     "api-surface:write": "node scripts/public-api-surface.mjs --write",
+    "control-plane-schema:write": "node scripts/write-control-plane-success-schemas.mjs",
     "test:coverage": "pnpm -r test:coverage",
     "test:security": "pnpm --filter @tenantscript/loader test:security && pnpm --filter @tenantscript/capabilities test:security && pnpm --filter @tenantscript/control-plane test:security && pnpm --filter @tenantscript/proxy test:security && pnpm --filter @tenantscript/admin-ui test:security && pnpm --filter @tenantscript/cli test:security",
     "docs:check": "pnpm lint:adr && pnpm lint:docs",

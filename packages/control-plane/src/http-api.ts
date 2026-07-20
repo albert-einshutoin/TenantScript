@@ -27,6 +27,13 @@ import {
 import { ServiceTokenError, type ServiceTokenManager } from "./service-tokens.js";
 import { UsageMeterQueryError, type UsageMeter } from "./usage-meter.js";
 import type { TelemetryStatus } from "./telemetry.js";
+import type { ControlPlaneSuccessResponseSchemaId } from "./success-response-schemas.js";
+
+export { CONTROL_PLANE_SUCCESS_RESPONSE_SCHEMAS } from "./success-response-schemas.js";
+export type {
+  ControlPlaneJsonSchema,
+  ControlPlaneSuccessResponseSchemaId
+} from "./success-response-schemas.js";
 
 export type AdminRole = SupportedRbacRole;
 
@@ -218,120 +225,156 @@ export type AdminHttpIsolation =
   | "tenant-resource"
   | "tenant-mutation";
 
+export type AdminHttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+
+export type AdminHttpSuccessResponseContract =
+  | {
+      status: 200 | 201;
+      body: "json";
+      schema: ControlPlaneSuccessResponseSchemaId;
+    }
+  | { status: 204; body: "none" };
+
 export interface AdminHttpEndpointContract {
   id: AdminHttpEndpointId;
   path: string;
-  methods: readonly ("GET" | "POST" | "PATCH" | "DELETE")[];
+  methods: readonly AdminHttpMethod[];
   isolation: AdminHttpIsolation;
   route: Exclude<AdminRoute, { id: string }> | "installationReview";
+  success: Readonly<Partial<Record<AdminHttpMethod, AdminHttpSuccessResponseContract>>>;
 }
 
 export const ADMIN_HTTP_ENDPOINT_CONTRACTS = [
-  { id: "session", path: "/v1/session", methods: ["GET"], isolation: "identity", route: "session" },
+  {
+    id: "session",
+    path: "/v1/session",
+    methods: ["GET"],
+    isolation: "identity",
+    route: "session",
+    success: { GET: { status: 200, body: "json", schema: "session" } }
+  },
   {
     id: "dashboard",
     path: "/v1/admin/dashboard",
     methods: ["GET"],
     isolation: "tenant-collection",
-    route: "dashboard"
+    route: "dashboard",
+    success: { GET: { status: 200, body: "json", schema: "dashboard" } }
   },
   {
     id: "dashboardInstallations",
     path: "/v1/admin/dashboard/installations",
     methods: ["GET"],
     isolation: "tenant-collection",
-    route: "installations"
+    route: "installations",
+    success: { GET: { status: 200, body: "json", schema: "dashboardInstallations" } }
   },
   {
     id: "dashboardPluginVersions",
     path: "/v1/admin/dashboard/pluginVersions",
     methods: ["GET"],
     isolation: "tenant-collection",
-    route: "pluginVersions"
+    route: "pluginVersions",
+    success: { GET: { status: 200, body: "json", schema: "dashboardPluginVersions" } }
   },
   {
     id: "dashboardApprovals",
     path: "/v1/admin/dashboard/approvals",
     methods: ["GET"],
     isolation: "tenant-collection",
-    route: "approvals"
+    route: "approvals",
+    success: { GET: { status: 200, body: "json", schema: "dashboardApprovals" } }
   },
   {
     id: "dashboardExecutions",
     path: "/v1/admin/dashboard/executions",
     methods: ["GET"],
     isolation: "tenant-collection",
-    route: "executions"
+    route: "executions",
+    success: { GET: { status: 200, body: "json", schema: "dashboardExecutions" } }
   },
   {
     id: "installationReview",
     path: "/v1/admin/installation-review",
     methods: ["GET"],
     isolation: "tenant-resource",
-    route: "installationReview"
+    route: "installationReview",
+    success: { GET: { status: 200, body: "json", schema: "installationReview" } }
   },
   {
     id: "installationCommand",
     path: "/v1/admin/installation-command",
     methods: ["PATCH"],
     isolation: "tenant-mutation",
-    route: "installationCommand"
+    route: "installationCommand",
+    success: { PATCH: { status: 200, body: "json", schema: "installationCommand" } }
   },
   {
     id: "installPreview",
     path: "/v1/admin/install-preview",
     methods: ["GET"],
     isolation: "tenant-resource",
-    route: "installPreview"
+    route: "installPreview",
+    success: { GET: { status: 200, body: "json", schema: "installPreview" } }
   },
   {
     id: "installCreate",
     path: "/v1/admin/installations",
     methods: ["POST"],
     isolation: "tenant-mutation",
-    route: "installCreate"
+    route: "installCreate",
+    success: { POST: { status: 201, body: "json", schema: "installCreate" } }
   },
   {
     id: "installRequestCreate",
     path: "/v1/admin/installation-requests",
     methods: ["POST"],
     isolation: "tenant-mutation",
-    route: "installRequestCreate"
+    route: "installRequestCreate",
+    success: { POST: { status: 201, body: "json", schema: "installRequestCreate" } }
   },
   {
     id: "rollbackCreate",
     path: "/v1/admin/rollbacks",
     methods: ["POST"],
     isolation: "tenant-mutation",
-    route: "rollbackCreate"
+    route: "rollbackCreate",
+    success: { POST: { status: 200, body: "json", schema: "rollbackCreate" } }
   },
   {
     id: "executionDetail",
     path: "/v1/admin/execution-detail",
     methods: ["GET"],
     isolation: "tenant-resource",
-    route: "executionDetail"
+    route: "executionDetail",
+    success: { GET: { status: 200, body: "json", schema: "executionDetail" } }
   },
   {
     id: "usage",
     path: "/v1/admin/usage",
     methods: ["GET"],
     isolation: "tenant-collection",
-    route: "usage"
+    route: "usage",
+    success: { GET: { status: 200, body: "json", schema: "usage" } }
   },
   {
     id: "approvalDecisionCreate",
     path: "/v1/admin/approval-decisions",
     methods: ["POST"],
     isolation: "tenant-mutation",
-    route: "approvalDecisionCreate"
+    route: "approvalDecisionCreate",
+    success: { POST: { status: 200, body: "json", schema: "approvalDecisionCreate" } }
   },
   {
     id: "serviceTokenCollection",
     path: "/v1/admin/service-tokens",
     methods: ["POST", "DELETE"],
     isolation: "tenant-mutation",
-    route: "serviceTokenCollection"
+    route: "serviceTokenCollection",
+    success: {
+      POST: { status: 201, body: "json", schema: "serviceTokenIssue" },
+      DELETE: { status: 204, body: "none" }
+    }
   }
 ] as const satisfies readonly AdminHttpEndpointContract[];
 

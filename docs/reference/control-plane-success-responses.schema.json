@@ -1,0 +1,1260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "session": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "owner",
+            "admin",
+            "operator",
+            "viewer",
+            "tenant-admin",
+            "manager"
+          ]
+        },
+        "appId": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "role",
+        "appId",
+        "tenantId"
+      ],
+      "additionalProperties": false
+    },
+    "dashboard": {
+      "type": "object",
+      "properties": {
+        "installations": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "pluginKey": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id",
+                  "pluginKey",
+                  "version",
+                  "enabled",
+                  "priority",
+                  "revision"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "nextCursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "additionalProperties": false
+        },
+        "pluginVersions": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "pluginId": {
+                    "type": "string"
+                  },
+                  "pluginKey": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "artifactHash": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "pluginId",
+                  "pluginKey",
+                  "version",
+                  "artifactHash",
+                  "createdAt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "nextCursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "additionalProperties": false
+        },
+        "approvals": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "pluginId": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "resumeHook": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "approved",
+                      "rejected",
+                      "expired"
+                    ]
+                  },
+                  "expiresAt": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "pluginId",
+                  "role",
+                  "resumeHook",
+                  "state",
+                  "expiresAt",
+                  "createdAt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "nextCursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "additionalProperties": false
+        },
+        "executions": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "pluginId": {
+                    "type": "string"
+                  },
+                  "hookName": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "success",
+                      "error",
+                      "timeout",
+                      "egress_denied",
+                      "budget_exceeded"
+                    ]
+                  },
+                  "durationMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "capabilityNames": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "createdAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "pluginId",
+                  "hookName",
+                  "version",
+                  "status",
+                  "durationMs",
+                  "capabilityNames",
+                  "createdAt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "nextCursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "additionalProperties": false
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string"
+            },
+            "executions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "runtimeMs": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "date",
+            "executions",
+            "runtimeMs"
+          ],
+          "additionalProperties": false
+        },
+        "schemaMigrations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hookName": {
+                "type": "string"
+              },
+              "versions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "installationCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "removable": {
+                      "type": "boolean"
+                    },
+                    "blockingInstallations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "installationId": {
+                            "type": "string"
+                          },
+                          "pluginKey": {
+                            "type": "string"
+                          },
+                          "pluginVersion": {
+                            "type": "string"
+                          },
+                          "schemaRange": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "installationId",
+                          "pluginKey",
+                          "pluginVersion",
+                          "schemaRange"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "installationCount",
+                    "removable",
+                    "blockingInstallations"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "incompatibleInstallations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "installationId": {
+                      "type": "string"
+                    },
+                    "pluginKey": {
+                      "type": "string"
+                    },
+                    "pluginVersion": {
+                      "type": "string"
+                    },
+                    "schemaRange": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "installationId",
+                    "pluginKey",
+                    "pluginVersion",
+                    "schemaRange"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "hookName",
+              "versions",
+              "incompatibleInstallations"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "telemetry": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "disabled",
+                "anonymous-aggregate"
+              ]
+            },
+            "schemaVersion": {
+              "const": 1
+            }
+          },
+          "required": [
+            "enabled",
+            "mode",
+            "schemaVersion"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "installations",
+        "pluginVersions",
+        "approvals",
+        "executions",
+        "usage",
+        "schemaMigrations",
+        "telemetry"
+      ],
+      "additionalProperties": false
+    },
+    "dashboardInstallations": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "const": "installations"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "pluginKey": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "priority": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "pluginKey",
+              "version",
+              "enabled",
+              "priority",
+              "revision"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "nextCursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "section",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "dashboardPluginVersions": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "const": "pluginVersions"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "pluginId": {
+                "type": "string"
+              },
+              "pluginKey": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "artifactHash": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "pluginId",
+              "pluginKey",
+              "version",
+              "artifactHash",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "nextCursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "section",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "dashboardApprovals": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "const": "approvals"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "pluginId": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "resumeHook": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected",
+                  "expired"
+                ]
+              },
+              "expiresAt": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "pluginId",
+              "role",
+              "resumeHook",
+              "state",
+              "expiresAt",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "nextCursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "section",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "dashboardExecutions": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "const": "executions"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "pluginId": {
+                "type": "string"
+              },
+              "hookName": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "error",
+                  "timeout",
+                  "egress_denied",
+                  "budget_exceeded"
+                ]
+              },
+              "durationMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "capabilityNames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "pluginId",
+              "hookName",
+              "version",
+              "status",
+              "durationMs",
+              "capabilityNames",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "nextCursor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "section",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "installationReview": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "pluginKey": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "configFields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "configured": {
+                "type": "boolean"
+              },
+              "hasDefault": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required",
+              "configured",
+              "hasDefault"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "granted",
+                  "missing"
+                ]
+              },
+              "scopeKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "configReferences": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "status",
+              "scopeKeys",
+              "configReferences"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "egress": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "deny",
+                "allowlist"
+              ]
+            },
+            "allowlistedHostCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "mode",
+            "allowlistedHostCount"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "pluginKey",
+        "version",
+        "enabled",
+        "priority",
+        "revision",
+        "configFields",
+        "capabilities",
+        "egress"
+      ],
+      "additionalProperties": false
+    },
+    "installationCommand": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "enabled",
+        "priority",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "installPreview": {
+      "type": "object",
+      "properties": {
+        "versionId": {
+          "type": "string"
+        },
+        "pluginKey": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "configFields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "hasDefault": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "required",
+              "hasDefault"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "scopeKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "configReferences": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "scopeKeys",
+              "configReferences"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "egress": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "deny",
+                "allowlist"
+              ]
+            },
+            "allowlistedHostCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "mode",
+            "allowlistedHostCount"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "versionId",
+        "pluginKey",
+        "version",
+        "configFields",
+        "capabilities",
+        "egress"
+      ],
+      "additionalProperties": false
+    },
+    "installCreate": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        },
+        "pluginKey": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revision": {
+          "const": 0
+        }
+      },
+      "required": [
+        "id",
+        "versionId",
+        "pluginKey",
+        "version",
+        "enabled",
+        "priority",
+        "revision"
+      ],
+      "additionalProperties": false
+    },
+    "installRequestCreate": {
+      "type": "object",
+      "properties": {
+        "approvalId": {
+          "type": "string"
+        },
+        "state": {
+          "const": "pending"
+        },
+        "pluginKey": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expiresAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "approvalId",
+        "state",
+        "pluginKey",
+        "version",
+        "capabilities",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "rollbackCreate": {
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "type": "string"
+        },
+        "pluginKey": {
+          "type": "string"
+        },
+        "fromVersion": {
+          "type": "string"
+        },
+        "toVersion": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "auditId": {
+          "type": "string"
+        },
+        "completedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "installationId",
+        "pluginKey",
+        "fromVersion",
+        "toVersion",
+        "revision",
+        "auditId",
+        "completedAt"
+      ],
+      "additionalProperties": false
+    },
+    "executionDetail": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "pluginId": {
+          "type": "string"
+        },
+        "hookName": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "success",
+            "error",
+            "timeout",
+            "egress_denied",
+            "budget_exceeded"
+          ]
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errorCode": {
+          "type": "string",
+          "enum": [
+            "execution_failed",
+            "execution_timeout",
+            "egress_denied",
+            "budget_exceeded"
+          ]
+        },
+        "capabilityCalls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "success",
+                  "denied",
+                  "error"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "pluginId",
+        "hookName",
+        "version",
+        "status",
+        "durationMs",
+        "capabilityCalls",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "usage": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tenantId": {
+                "type": "string"
+              },
+              "pluginId": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string"
+              },
+              "executions": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "cpuMs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "subrequests": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "workflowRuns": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "tenantId",
+              "pluginId",
+              "date",
+              "executions",
+              "cpuMs",
+              "subrequests",
+              "workflowRuns"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "approvalDecisionCreate": {
+      "type": "object",
+      "properties": {
+        "approvalId": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "auditId": {
+          "type": "string"
+        },
+        "decidedAt": {
+          "type": "string"
+        },
+        "installation": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "versionId": {
+              "type": "string"
+            },
+            "pluginKey": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "priority": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "revision": {
+              "const": 0
+            }
+          },
+          "required": [
+            "id",
+            "versionId",
+            "pluginKey",
+            "version",
+            "enabled",
+            "priority",
+            "revision"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "approvalId",
+        "state",
+        "auditId",
+        "decidedAt"
+      ],
+      "additionalProperties": false
+    },
+    "serviceTokenIssue": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "owner",
+            "admin",
+            "operator",
+            "viewer",
+            "tenant-admin"
+          ]
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "token",
+        "label",
+        "role",
+        "scopes",
+        "createdAt",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
