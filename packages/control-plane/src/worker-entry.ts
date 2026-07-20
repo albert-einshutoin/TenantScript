@@ -76,15 +76,21 @@ export class AdminMutationRateLimitDurableObject {
     try {
       const input: unknown = await request.json();
       if (!isRateLimitReservationInput(input)) return new Response(null, { status: 400 });
-      const result = await this.state.storage.transaction(async (transaction) => {
-        const current = await transaction.get<{ windowStartedAt: number; count: number }>("window");
-        const evaluated = evaluateFixedWindowReservation({ current, ...input });
-        await transaction.put("window", evaluated.record);
-        return {
-          count: evaluated.count,
-          windowStartedAt: evaluated.record.windowStartedAt
-        };
-      });
+      // Storage transactions protect the persisted record, while blockConcurrencyWhile also keeps
+      // separate fetch events from interleaving their reservation critical sections in one DO.
+      const result = await this.state.blockConcurrencyWhile(() =>
+        this.state.storage.transaction(async (transaction) => {
+          const current = await transaction.get<{ windowStartedAt: number; count: number }>(
+            "window"
+          );
+          const evaluated = evaluateFixedWindowReservation({ current, ...input });
+          await transaction.put("window", evaluated.record);
+          return {
+            count: evaluated.count,
+            windowStartedAt: evaluated.record.windowStartedAt
+          };
+        })
+      );
       return Response.json(result, { headers: { "Cache-Control": "no-store" } });
     } catch {
       return new Response(null, { status: 500 });
