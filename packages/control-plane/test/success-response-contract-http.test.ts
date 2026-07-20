@@ -77,6 +77,7 @@ function successRequests(): Request[] {
     get("/v1/admin/dashboard/approvals"),
     get("/v1/admin/dashboard/executions"),
     get("/v1/admin/dashboard/auditEvents"),
+    get("/v1/admin/provider-connections"),
     get("/v1/admin/installation-review?id=inst_1"),
     command("/v1/admin/installation-command", "PATCH", {
       id: "inst_1",
@@ -246,6 +247,18 @@ function successOptions(): ControlPlaneHttpHandlerOptions {
       }
     }),
     dashboardStore,
+    providerConnectionStore: {
+      readConnections: async () => [
+        {
+          provider: "slack",
+          id: "connection_1",
+          workspaceId: "workspace_1",
+          workspaceName: "Operations",
+          botUserId: "bot_1",
+          connectedAt: "2026-07-20T00:00:00.000Z"
+        }
+      ]
+    },
     cursorCodec: {
       encode: async () => "cursor_1",
       decode: async () => ({

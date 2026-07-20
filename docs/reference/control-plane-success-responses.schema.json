@@ -424,6 +424,29 @@
       "required": ["section", "items"],
       "additionalProperties": false
     },
+    "providerConnections": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "provider": { "type": "string", "enum": ["slack"] },
+              "id": { "type": "string" },
+              "workspaceId": { "type": "string" },
+              "workspaceName": { "type": "string" },
+              "botUserId": { "type": "string" },
+              "connectedAt": { "type": "string" }
+            },
+            "required": ["provider", "id", "workspaceId", "connectedAt"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["items"],
+      "additionalProperties": false
+    },
     "installationReview": {
       "type": "object",
       "properties": {

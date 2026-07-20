@@ -3,6 +3,7 @@ import { createAdminCursorCodec, type AdminDashboardStore } from "../src/admin-d
 import type { AdminInstallationDetailStore } from "../src/admin-installations.js";
 import { createControlPlaneHttpHandler } from "../src/http-api.js";
 import { createStaticTokenIdentityResolver } from "../src/index.js";
+import type { AdminProviderConnectionStore } from "../src/admin-provider-connections.js";
 
 const allowedOrigin = "https://admin.example.com";
 
@@ -367,6 +368,90 @@ describe("Control Plane Admin dashboard contract", () => {
     expect(body).toContain("internal_error");
     expect(body).not.toContain("SQL stack");
     expect(body).not.toContain("secret-config");
+  });
+});
+
+describe("Control Plane provider connection inventory contract", () => {
+  it("derives scope from identity and returns only public connection metadata", async () => {
+    const readConnections = vi
+      .fn<AdminProviderConnectionStore["readConnections"]>()
+      .mockResolvedValue([
+        {
+          provider: "slack",
+          id: "connection_1",
+          workspaceId: "workspace_1",
+          workspaceName: "Operations",
+          botUserId: "bot_1",
+          connectedAt: "2026-07-21T00:00:00.000Z"
+        }
+      ]);
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createStaticTokenIdentityResolver({
+        "viewer-secret-token": {
+          subject: "support-viewer",
+          role: "viewer",
+          appId: "app_acme",
+          tenantId: "tenant_acme"
+        }
+      }),
+      providerConnectionStore: { readConnections },
+      allowedOrigins: [allowedOrigin]
+    });
+    const response = await handler(
+      sessionRequest({
+        token: "viewer-secret-token",
+        url: "https://api.example.com/v1/admin/provider-connections?appId=other&tenantId=other"
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(readConnections).toHaveBeenCalledWith({
+      appId: "app_acme",
+      tenantId: "tenant_acme"
+    });
+    await expect(response.json()).resolves.toEqual({
+      items: [
+        {
+          provider: "slack",
+          id: "connection_1",
+          workspaceId: "workspace_1",
+          workspaceName: "Operations",
+          botUserId: "bot_1",
+          connectedAt: "2026-07-21T00:00:00.000Z"
+        }
+      ]
+    });
+  });
+
+  it("fails closed when the connection store is unavailable and redacts store failures", async () => {
+    const request = sessionRequest({
+      token: "manager-secret-token",
+      url: "https://api.example.com/v1/admin/provider-connections"
+    });
+    const unavailable = await createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      allowedOrigins: [allowedOrigin]
+    })(request);
+
+    expect(unavailable.status).toBe(503);
+    await expect(unavailable.json()).resolves.toMatchObject({
+      error: { code: "provider_connection_store_unavailable" }
+    });
+
+    const failed = await createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      providerConnectionStore: {
+        readConnections: () =>
+          Promise.reject(new Error("SQL secret_ref_json customer-workspace-token"))
+      },
+      allowedOrigins: [allowedOrigin]
+    })(request);
+    const body = await failed.text();
+
+    expect(failed.status).toBe(500);
+    expect(body).toContain("internal_error");
+    expect(body).not.toContain("secret_ref_json");
+    expect(body).not.toContain("customer-workspace-token");
   });
 });
 

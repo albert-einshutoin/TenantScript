@@ -19,6 +19,7 @@ const expectedEndpointIds = [
   "dashboardApprovals",
   "dashboardExecutions",
   "dashboardAuditEvents",
+  "providerConnections",
   "installationReview",
   "installationCommand",
   "installPreview",
@@ -182,6 +183,8 @@ function scopeProbeOptions(
           decode: () => Promise.reject(new Error("unexpected cursor decode"))
         }
       };
+    case "providerConnections":
+      return { providerConnectionStore: { readConnections: (request) => fail(request) } };
     case "installationReview":
       return { installationDetailStore: { readInstallation: (request) => fail(request) } };
     case "installationCommand":
