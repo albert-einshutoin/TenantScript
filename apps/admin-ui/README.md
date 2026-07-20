@@ -44,6 +44,10 @@ boundary.
 
 ## Control Plane connection
 
+公開設定のdefault、必須条件、secret境界を含む正本は
+[`docs/reference/configuration.md`](../../docs/reference/configuration.md) です。このREADMEではAdmin
+UI接続に必要な最小手順だけを示します。
+
 Set the Pages build variable to the HTTPS Worker origin (loopback HTTP is accepted for local
 development only):
 
@@ -51,26 +55,12 @@ development only):
 VITE_CONTROL_PLANE_URL=https://control-plane.example.com pnpm --filter @tenantscript/admin-ui build
 ```
 
-Configure these Worker bindings:
-
-- `ADMIN_ALLOWED_ORIGINS`: JSON array of exact HTTPS Admin UI origins, for example
-  `["https://admin.example.com"]`.
-- `ADMIN_IDENTITIES_JSON`: secret JSON object keyed by bearer token. Each value must contain
-  `subject`, `role` (`manager` or `viewer`), `appId`, and `tenantId`.
-- `ADMIN_CURSOR_SECRET`: secret with at least 32 bytes used to authenticate tenant- and
-  section-scoped pagination cursors.
-- `ADMIN_HOOK_SCHEMA_CATALOG_JSON`: JSON object mapping each hook name to every published stable
-  schema version. Use the same catalog as host payload routing.
-- `DB`: D1 binding with every migration in `packages/control-plane/migrations/` applied in order.
-- `TENANTSCRIPT_TELEMETRY_ENABLED`: unset or `false` by default. Only exact `true` opts in.
-- `TENANTSCRIPT_TELEMETRY_ENDPOINT`, `TENANTSCRIPT_PRODUCT_VERSION`, and
-  `TENANTSCRIPT_RUNTIME_PRIMITIVE`: required only after telemetry opt-in. Configure a Cron Trigger
-  for the Worker's scheduled handler; no default collector or schedule is installed.
-
-`ADMIN_IDENTITIES_JSON` and `ADMIN_CURSOR_SECRET` are design-partner bootstrap secrets and must be
-stored as Worker secrets, never in Git or a public variable. Missing or malformed bindings fail
-closed. A production build ignores `VITE_ADMIN_DEMO_MODE`; fixture credentials are enabled only by
-the Vite development server.
+Configure the Control Plane Worker using the canonical reference rather than copying a partial
+binding list into a deployment guide. In particular, `ADMIN_IDENTITIES_JSON` and
+`ADMIN_CURSOR_SECRET` are design-partner bootstrap secrets and must be stored as Worker secrets,
+never in Git or a public variable. Missing or malformed required bindings fail closed. A production
+build ignores `VITE_ADMIN_DEMO_MODE`; fixture credentials are enabled only by the Vite development
+server.
 
 ## Design Partner Manual Deploy
 
