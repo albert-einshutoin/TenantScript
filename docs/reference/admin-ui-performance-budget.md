@@ -13,8 +13,8 @@ TenantScript Admin UIのproduction bundle転送量を、fork-safeなTier 1で継
 
 | Measurement        |                   Limit | 2026-07-21 baseline |
 | ------------------ | ----------------------: | ------------------: |
-| Initial page       | 307,200 bytes (300 KiB) |        91,317 bytes |
-| All JavaScript/CSS | 460,800 bytes (450 KiB) |        91,048 bytes |
+| Initial page       | 307,200 bytes (300 KiB) |        91,377 bytes |
+| All JavaScript/CSS | 460,800 bytes (450 KiB) |        91,110 bytes |
 
 initial pageは`index.html`、Vite manifestのentry JavaScript、すべてのsynchronous imports、それらのCSSと直接参照assetを含みます。各HTTP assetを個別にgzipしたbyte数を合算します。
 

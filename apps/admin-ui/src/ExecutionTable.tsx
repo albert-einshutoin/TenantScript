@@ -1,4 +1,4 @@
-import { useState, type UIEvent } from "react";
+import { useEffect, useRef, useState, type UIEvent } from "react";
 import type { DashboardSnapshot, ExecutionView } from "./api-client.js";
 import { StatusPill } from "./StatusPill.js";
 
@@ -9,13 +9,23 @@ const OVERSCAN_ROWS = 5;
 export function ExecutionTable({
   snapshot,
   executions = snapshot?.executions ?? [],
+  resetKey,
   onView
 }: {
   snapshot?: DashboardSnapshot;
   executions?: readonly ExecutionView[];
+  resetKey?: number;
   onView?: (id: string) => void;
 }) {
   const [requestedFirstVisibleIndex, setRequestedFirstVisibleIndex] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  // A server-side search replaces the logical result set and must begin at row one. Cursor paging,
+  // however, appends to the same set and should preserve the operator's position, so callers advance
+  // this key only for replacements instead of resetting for every executions-array identity change.
+  useEffect(() => {
+    setRequestedFirstVisibleIndex(0);
+    if (viewportRef.current !== null) viewportRef.current.scrollTop = 0;
+  }, [resetKey]);
   // Loaded cursor pages can grow without bound during an operator session. Deriving a small
   // viewport window keeps DOM and reconciliation cost bounded while retaining every row in memory
   // for filtering, paging, and stable detail lookup. Storing the row index instead of raw pixels
@@ -36,6 +46,7 @@ export function ExecutionTable({
 
   return (
     <div
+      ref={viewportRef}
       className="table-wrap execution-table-viewport"
       role="region"
       aria-label="Execution results"

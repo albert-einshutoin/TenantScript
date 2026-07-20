@@ -149,9 +149,14 @@ describe("Admin UI auth foundation", () => {
       ...execution,
       id: `exec_scroll_${String(index).padStart(4, "0")}`
     }));
+    const replacementExecutions = Array.from({ length: 20 }, (_, index) => ({
+      ...execution,
+      id: `exec_replacement_${String(index).padStart(2, "0")}`
+    }));
     const client: AdminApiClient = {
       ...baseClient,
-      getDashboard: () => Promise.resolve({ ...snapshot, executions })
+      getDashboard: () => Promise.resolve({ ...snapshot, executions }),
+      searchExecutions: () => Promise.resolve({ items: replacementExecutions })
     };
     render(<App client={client} />);
 
@@ -165,6 +170,11 @@ describe("Admin UI auth foundation", () => {
     const finalExecutionCell = await screen.findByRole("cell", { name: "exec_scroll_1999" });
     expect(finalExecutionCell.closest("tr")).toHaveAttribute("aria-rowindex", "2001");
     expect(screen.queryByRole("cell", { name: "exec_scroll_0000" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Search executions" }));
+
+    await screen.findByRole("cell", { name: "exec_replacement_00" });
+    expect(screen.getByLabelText("Execution results")).toHaveProperty("scrollTop", 0);
   });
 
   it("does not expose app-wide schema blockers to tenant viewers", async () => {

@@ -1591,6 +1591,7 @@ function ExecutionsPanel({
   const [hookName, setHookName] = useState("");
   const [status, setStatus] = useState<"" | ExecutionView["status"]>("");
   const [results, setResults] = useState<readonly ExecutionView[] | null>(null);
+  const [resultSetVersion, setResultSetVersion] = useState(0);
   const [filters, setFilters] = useState<ExecutionSearchRequest>({});
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [searchLoading, setSearchLoading] = useState(false);
@@ -1610,6 +1611,7 @@ function ExecutionsPanel({
       void onSearch(request)
         .then((page) => {
           if (searchRequest.current !== requestId) return;
+          if (!append) setResultSetVersion((current) => current + 1);
           setResults((current) =>
             append && current !== null
               ? [
@@ -1716,7 +1718,11 @@ function ExecutionsPanel({
         </button>
       </form>
       {searchError === null ? null : <p className="form-error">{searchError}</p>}
-      <ExecutionTable executions={visibleExecutions} onView={openDetail} />
+      <ExecutionTable
+        executions={visibleExecutions}
+        resetKey={resultSetVersion}
+        onView={openDetail}
+      />
       <LoadMoreButton
         section="executions"
         cursor={visibleCursor}
