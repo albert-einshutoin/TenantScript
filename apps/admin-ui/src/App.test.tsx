@@ -806,6 +806,8 @@ describe("Admin UI auth foundation", () => {
     });
     const refreshed: DashboardSnapshot = {
       ...initial,
+      auditEvents: [],
+      cursors: {},
       installations: initial.installations.map((installation, index) =>
         index === 0 ? { ...installation, priority: 3, revision: 1 } : installation
       )
@@ -840,6 +842,11 @@ describe("Admin UI auth foundation", () => {
     });
     expect(screen.getByRole("cell", { name: "3" })).toBeInTheDocument();
     expect(screen.getByLabelText("Priority")).toHaveValue("3");
+
+    fireEvent.click(screen.getByRole("button", { name: "Audit log" }));
+    expect(screen.getByText("installation.command")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+    fireEvent.click(screen.getByRole("button", { name: "Manage large-invoice-notify" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Disable installation" }));
     fireEvent.click(screen.getByRole("button", { name: "Review change" }));

@@ -173,6 +173,13 @@ function AdminShell({
     };
   }, [client, session]);
 
+  const refreshDashboard = useCallback(async () => {
+    const refreshed = await client.getDashboard(session);
+    // The additive audit endpoint is intentionally separate from the legacy dashboard contract.
+    // Preserve its independently paged slice when a mutation refreshes the remaining dashboard.
+    setSnapshot((current) => preserveAuditSlice(current, refreshed));
+  }, [client, session]);
+
   const loadMore = useCallback(
     (section: AdminDashboardSection) => {
       const cursor = snapshot?.cursors[section];
@@ -258,14 +265,14 @@ function AdminShell({
         ) {
           // A conflict means every local installation revision may be stale. Refresh the complete
           // tenant snapshot before allowing another command so retries cannot loop on the old CAS.
-          setSnapshot(await client.getDashboard(session));
+          await refreshDashboard();
         }
         throw commandError;
       } finally {
         setCommandInFlight(false);
       }
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   const openInstallPreview = useCallback(
@@ -300,7 +307,7 @@ function AdminShell({
         const installed = await client.installPlugin(request);
         // Install results are not applied optimistically: refreshing also reconciles pagination,
         // server defaults, and any concurrent installation changes in the tenant.
-        setSnapshot(await client.getDashboard(session));
+        await refreshDashboard();
         setInstallPreview(null);
         return installed;
       } catch (cause) {
@@ -314,7 +321,7 @@ function AdminShell({
         setInstallInFlight(false);
       }
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   const requestInstallation = useCallback(
@@ -325,14 +332,11 @@ function AdminShell({
         const result = await client.requestInstallation(request);
         // Refresh only after the server returns the approval id. This keeps the queue and the
         // operator's success evidence correlated with the exact normalized grant proposal.
-        void client
-          .getDashboard(session)
-          .then(setSnapshot)
-          .catch(() => {
-            // The mutation has already succeeded. Preserve its approval id and report only the
-            // secondary refresh failure so a user does not submit a different request by mistake.
-            setError("Approval request created; dashboard refresh unavailable");
-          });
+        void refreshDashboard().catch(() => {
+          // The mutation has already succeeded. Preserve its approval id and report only the
+          // secondary refresh failure so a user does not submit a different request by mistake.
+          setError("Approval request created; dashboard refresh unavailable");
+        });
         return result;
       } catch (cause) {
         setInstallError(
@@ -345,7 +349,7 @@ function AdminShell({
         setInstallInFlight(false);
       }
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   const rollbackInstallation = useCallback(
@@ -355,7 +359,7 @@ function AdminShell({
         const result = await client.rollbackInstallation(request);
         // A fresh snapshot is the completion signal: it proves the current pin changed on the
         // server and avoids presenting a local optimistic version as an operational rollback.
-        setSnapshot(await client.getDashboard(session));
+        await refreshDashboard();
         return result;
       } catch (cause) {
         if (
@@ -363,14 +367,14 @@ function AdminShell({
           cause.status === 409 &&
           cause.code === "installation_revision_conflict"
         ) {
-          setSnapshot(await client.getDashboard(session));
+          await refreshDashboard();
         }
         throw cause;
       } finally {
         setRollbackInFlight(false);
       }
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   const decideApproval = useCallback(
@@ -379,12 +383,9 @@ function AdminShell({
       if (result.installation !== undefined) {
         // Grant approval creates the installation in the same server transaction. Reloading the
         // tenant snapshot makes that atomic completion visible instead of leaving a stale queue.
-        void client
-          .getDashboard(session)
-          .then(setSnapshot)
-          .catch(() => {
-            setError("Approval completed; dashboard refresh unavailable");
-          });
+        void refreshDashboard().catch(() => {
+          setError("Approval completed; dashboard refresh unavailable");
+        });
         return result;
       }
       // Apply the queue transition only after correlated audit evidence is returned.
@@ -400,7 +401,7 @@ function AdminShell({
       );
       return result;
     },
-    [client, session]
+    [client, refreshDashboard]
   );
 
   return (
@@ -1886,6 +1887,21 @@ function LoadMoreButton({
       {loading ? `Loading more ${section}` : `Load more ${section}`}
     </button>
   );
+}
+
+function preserveAuditSlice(
+  current: DashboardSnapshot | null,
+  refreshed: DashboardSnapshot
+): DashboardSnapshot {
+  if (current === null) return refreshed;
+  const cursors = { ...refreshed.cursors };
+  const auditCursor = current.cursors.auditEvents;
+  if (auditCursor === undefined) {
+    delete cursors.auditEvents;
+  } else {
+    cursors.auditEvents = auditCursor;
+  }
+  return { ...refreshed, auditEvents: current.auditEvents, cursors };
 }
 
 function appendPage(snapshot: DashboardSnapshot, page: DashboardSectionPage): DashboardSnapshot {
