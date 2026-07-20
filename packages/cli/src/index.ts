@@ -110,6 +110,13 @@ export {
 } from "./cloudflare-wrangler-d1-migration-runner.js";
 
 export {
+  createNodeWranglerWorkerDeployProcess,
+  WranglerWorkerDeployProcessError,
+  type WranglerWorkerDeployProcess,
+  type WranglerWorkerDeployProcessErrorCode
+} from "./wrangler-worker-deploy-process.js";
+
+export {
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   type ProductionWranglerInputV1

@@ -54,6 +54,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Cloudflare D1 setup adapter](docs/operations/cloudflare-d1-setup-adapter.md) — deterministic create、explicit adoption、ownership-verified cleanup
 - [Cloudflare R2 setup adapter](docs/operations/cloudflare-r2-setup-adapter.md) — 2 bucketの安定create/resume、explicit adoption、ownership-safe cleanup
 - [Cloudflare D1 migrations](docs/operations/cloudflare-d1-migrations.md) — pinned SQL catalog、closed history query、fail-closed Wrangler apply、response-loss resume
+- [Pinned Wrangler Worker deploy](docs/operations/wrangler-worker-deploy-process.md) — strict exact argv、autoconfig無効化、path/secret/process fail-closed境界
 - [Setup provider router](docs/operations/setup-provider-router.md) — exact operation ownership、mutation前の全route coverage検証、shared cleanup routing
 
 ## ローカル検証とCI
