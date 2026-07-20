@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "baseWorkerName": "tenantscript-control-plane",
   "setupRunId": "replace-with-the-persisted-setup-run-id",
   "compatibilityDate": "2026-07-20",
@@ -10,5 +10,8 @@
   "executionArchive": {
     "baseBucketName": "tenantscript-execution-archive",
     "hotRetentionDays": 30
+  },
+  "usageAnalytics": {
+    "dataset": "tenantscript_usage"
   }
 }

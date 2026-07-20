@@ -96,11 +96,11 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
       "integration-required"
     ),
     operation(
-      "create:usage-analytics-engine",
+      "declare:usage-analytics-engine-binding",
       "analytics-engine",
-      "create",
+      "declare",
       "USAGE_ANALYTICS",
-      "integration-required"
+      "implemented"
     ),
     operation(
       "create:runtime-worker",
@@ -129,7 +129,7 @@ export function createProductionSetupPlan(runtime: SetupRuntimePrimitive): Produ
         "create:execution-archive-r2",
         "create:secret-store-do",
         "create:approval-workflow",
-        "create:usage-analytics-engine",
+        "declare:usage-analytics-engine-binding",
         "create:runtime-worker",
         "apply:control-plane-migrations"
       ]

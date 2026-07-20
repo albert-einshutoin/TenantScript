@@ -9,12 +9,12 @@ import {
   renderProductionWranglerConfig,
   runExtCli,
   type CliIo,
-  type ProductionWranglerInputV2,
+  type ProductionWranglerInputV3,
   type RollbackClient
 } from "../src/index.js";
 
-const validInput: ProductionWranglerInputV2 = {
-  version: 2,
+const validInput: ProductionWranglerInputV3 = {
+  version: 3,
   baseWorkerName: "tenantscript-control-plane",
   setupRunId: "run-owned-worker",
   compatibilityDate: "2026-07-20",
@@ -25,6 +25,9 @@ const validInput: ProductionWranglerInputV2 = {
   executionArchive: {
     baseBucketName: "tenantscript-execution-archive",
     hotRetentionDays: 30
+  },
+  usageAnalytics: {
+    dataset: "tenantscript_usage"
   }
 };
 
@@ -53,6 +56,19 @@ describe("production Wrangler template", () => {
     expect(JSON.parse(legacy)).not.toHaveProperty("r2_buckets");
     expect(JSON.parse(legacy)).not.toHaveProperty("triggers");
     expect(legacy).not.toContain("EXECUTION_ARCHIVE_HOT_RETENTION_DAYS");
+  });
+
+  it("keeps version 2 inputs compatible without enabling usage analytics implicitly", () => {
+    const legacy = renderProductionWranglerConfig({
+      version: 2,
+      baseWorkerName: validInput.baseWorkerName,
+      setupRunId: validInput.setupRunId,
+      compatibilityDate: validInput.compatibilityDate,
+      database: validInput.database,
+      executionArchive: validInput.executionArchive
+    });
+
+    expect(JSON.parse(legacy)).not.toHaveProperty("analytics_engine_datasets");
   });
 
   it("derives one stable non-reflective Worker target from the reconcile key", () => {
@@ -114,6 +130,12 @@ describe("production Wrangler template", () => {
         EXECUTION_ARCHIVE_HOT_RETENTION_DAYS: "30"
       },
       triggers: { crons: ["0 2 * * *"] },
+      analytics_engine_datasets: [
+        {
+          binding: "USAGE_ANALYTICS",
+          dataset: "tenantscript_usage"
+        }
+      ],
       durable_objects: {
         bindings: [
           {
@@ -130,9 +152,7 @@ describe("production Wrangler template", () => {
       }
     });
     expect(JSON.parse(first)).not.toHaveProperty("migrations");
-    expect(first).not.toMatch(
-      /ARTIFACTS|PROVIDER_SECRET_STORE_DO|APPROVAL_WORKFLOW|USAGE_ANALYTICS/u
-    );
+    expect(first).not.toMatch(/ARTIFACTS|PROVIDER_SECRET_STORE_DO|APPROVAL_WORKFLOW/u);
     expect(first).not.toMatch(/token|secret|account_id/iu);
   });
 
@@ -177,6 +197,13 @@ describe("production Wrangler template", () => {
           ...validInput.executionArchive,
           hotRetentionDays: 0
         }
+      }
+    ],
+    [
+      "unsafe analytics dataset",
+      {
+        ...validInput,
+        usageAnalytics: { dataset: "secret-sentinel" }
       }
     ]
   ])("rejects %s without reflecting input", (_name, input) => {

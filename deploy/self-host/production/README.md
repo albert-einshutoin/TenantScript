@@ -19,8 +19,9 @@ The renderer rejects unknown fields, unresolved placeholders, invalid names/IDs,
 repository root, and an existing output file. It never accepts or emits credentials. The committed
 `wrangler.example.jsonc` uses a
 synthetic D1 ID only for accountless Wrangler bundle validation; do not deploy it unchanged.
-Input schema version 2 adds explicit scheduled execution retention. Version 1 remains accepted and
-renders the previous D1/Worker-only configuration without enabling R2 or a Cron Trigger.
+Input schema version 3 adds the explicit Analytics Engine dataset binding used by production usage
+metering. Version 2 remains accepted without enabling Analytics Engine; version 1 also renders the
+previous D1/Worker-only configuration without enabling R2 or a Cron Trigger.
 
 The CLI also exposes a closed pinned-Wrangler deploy process, documented in the
 [Worker deploy process runbook](../../../docs/operations/wrangler-worker-deploy-process.md). It does
@@ -32,6 +33,7 @@ Only bindings consumed by `packages/control-plane/src/worker-entry.ts` are gener
 - `DB`
 - `EXECUTION_ARCHIVE`
 - `ADMIN_MUTATION_RATE_LIMITER_DO`
+- `USAGE_ANALYTICS`
 
 The execution archive name is derived from the same setup run and operation key used by the
 ownership-aware R2 adapter. The daily scheduled trigger archives at most one batch for each of 50
@@ -44,7 +46,8 @@ The Durable Object binding and SQLite `exports` declaration are deployed as part
 Plane Worker. They are not a separate setup resource, and automatic rollback does not emit a
 destructive class tombstone.
 
-Artifact R2, provider secret store, approval Workflow, Analytics Engine usage, and tenant
-runtime bindings remain `integration-required`. They are deliberately absent until their production
-composition exists. See [the self-host production guide](../../../docs/operations/self-host-production.md)
-for migration, secret, RBAC, retention, budget, and verification boundaries.
+Artifact R2, provider secret store, approval Workflow, and tenant runtime bindings remain
+`integration-required`. The Analytics Engine dataset is binding-owned and appears after its first
+data point write; it is not a separately created or automatically deleted setup resource. See
+[the self-host production guide](../../../docs/operations/self-host-production.md) for migration,
+secret, RBAC, retention, budget, and verification boundaries.
