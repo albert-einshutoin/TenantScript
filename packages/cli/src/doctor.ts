@@ -51,18 +51,29 @@ export type DoctorFindingCode =
   | "doctor_binding_rate_limiter_missing"
   | "doctor_migrations_pending"
   | "doctor_permission_d1_read_missing"
-  | "doctor_permission_d1_read_unverified"
   | "doctor_permission_d1_write_missing"
-  | "doctor_permission_d1_write_unverified"
   | "doctor_permission_workers_scripts_write_missing"
-  | "doctor_permission_workers_scripts_write_unverified"
   | "doctor_runtime_primitive_unsupported"
   | "doctor_secret_admin_cursor_missing";
+
+export type DoctorFindingCodeV2 =
+  | DoctorFindingCode
+  | "doctor_permission_d1_read_unverified"
+  | "doctor_permission_d1_write_unverified"
+  | "doctor_permission_workers_scripts_write_unverified";
 
 export interface DoctorFinding {
   code: DoctorFindingCode;
   severity: "error";
   component: "binding" | "migration" | "permission" | "runtime" | "secret";
+  summary: string;
+  repair: string;
+}
+
+export interface DoctorFindingV2 {
+  code: DoctorFindingCodeV2;
+  severity: "error";
+  component: DoctorFinding["component"];
   summary: string;
   repair: string;
 }
@@ -73,13 +84,31 @@ export interface DoctorResult {
   findings: DoctorFinding[];
 }
 
+export interface DoctorResultV2 {
+  version: 1;
+  healthy: boolean;
+  findings: DoctorFindingV2[];
+}
+
 const runtimePrimitives: readonly DoctorRuntimePrimitive[] = [
   "cloudflare-workers",
   "dynamic-workers",
   "workers-for-platforms"
 ];
 
-export function parseDoctorReport(value: unknown): DoctorReport {
+export function parseDoctorReport(value: unknown): DoctorReportV1 {
+  const report = parseSupportedDoctorReport(value);
+  if (report.version !== 1) throw invalidReport();
+  return report;
+}
+
+export function parseDoctorReportV2(value: unknown): DoctorReportV2 {
+  const report = parseSupportedDoctorReport(value);
+  if (report.version !== 2) throw invalidReport();
+  return report;
+}
+
+export function parseSupportedDoctorReport(value: unknown): DoctorReport {
   if (
     !isClosedRecord(value, [
       "version",
@@ -132,8 +161,23 @@ export function parseDoctorReport(value: unknown): DoctorReport {
   };
 }
 
-export function evaluateDoctorReport(report: DoctorReport): DoctorResult {
-  const findings: DoctorFinding[] = [];
+export function evaluateDoctorReport(report: DoctorReportV1): DoctorResult {
+  const result = evaluateSupportedDoctorReport(report);
+  const findings = result.findings;
+  if (!findings.every(isDoctorFindingV1)) {
+    // V1 normalizes booleans to granted/denied, so an unverified finding would indicate an
+    // implementation invariant violation rather than caller-controlled report data.
+    throw new Error("doctor V1 evaluation invariant failed");
+  }
+  return { ...result, findings };
+}
+
+export function evaluateDoctorReportV2(report: DoctorReportV2): DoctorResultV2 {
+  return evaluateSupportedDoctorReport(report);
+}
+
+export function evaluateSupportedDoctorReport(report: DoctorReport): DoctorResultV2 {
+  const findings: DoctorFindingV2[] = [];
   const permissions = normalizePermissionEvidence(report);
   if (!report.bindings.DB) {
     findings.push(
@@ -227,7 +271,7 @@ function normalizePermissionEvidence(report: DoctorReport): DoctorReportV2["perm
 }
 
 function pushPermissionFinding(
-  findings: DoctorFinding[],
+  findings: DoctorFindingV2[],
   permission: keyof DoctorReportV2["permissions"],
   evidence: DoctorPermissionEvidence
 ): void {
@@ -262,6 +306,10 @@ function pushPermissionFinding(
       "docs/reference/configuration.md#control-plane-worker"
     )
   );
+}
+
+function isDoctorFindingV1(findingValue: DoctorFindingV2): findingValue is DoctorFinding {
+  return !findingValue.code.endsWith("_unverified");
 }
 
 function parseMigrations(value: unknown): DoctorReportV1["migrations"] {
@@ -333,12 +381,12 @@ function isClosedRecord(
   );
 }
 
-function finding(
-  code: DoctorFindingCode,
+function finding<Code extends DoctorFindingCodeV2>(
+  code: Code,
   component: DoctorFinding["component"],
   summary: string,
   repair: string
-): DoctorFinding {
+): DoctorFindingV2 & { code: Code } {
   return { code, severity: "error", component, summary, repair };
 }
 

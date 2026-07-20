@@ -86,6 +86,8 @@ version 2はversion 1と同じclosed fieldsを持ち、`permissions`だけを三
 
 `unverified`は`granted`へ昇格せず、修復・追加確認が必要な独立findingとしてfail closedで扱います。
 boolean、未知の文字列、追加fieldはversion 2ではschema errorです。
+programmatic consumerはV1互換の`parseDoctorReport` / `evaluateDoctorReport`ではなく、追加APIの
+`parseDoctorReportV2` / `evaluateDoctorReportV2`を使用します。
 
 ## Result and exit codes
 

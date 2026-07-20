@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   evaluateDoctorReport,
+  evaluateDoctorReportV2,
   parseDoctorReport,
+  parseDoctorReportV2,
   runExtCli,
   type CliIo,
   type DoctorReportV1,
@@ -49,6 +51,8 @@ const healthyReportV2: DoctorReportV2 = {
 
 describe("ext doctor", () => {
   it("returns a healthy deterministic report", () => {
+    const parsed: DoctorReportV1 = parseDoctorReport(healthyReport);
+    expect(parsed).toEqual(healthyReport);
     expect(evaluateDoctorReport(healthyReport)).toEqual({
       version: 1,
       healthy: true,
@@ -57,8 +61,9 @@ describe("ext doctor", () => {
   });
 
   it("accepts a version 2 report only when every permission is verified as granted", () => {
-    expect(parseDoctorReport(healthyReportV2)).toEqual(healthyReportV2);
-    expect(evaluateDoctorReport(healthyReportV2)).toEqual({
+    expect(() => parseDoctorReport(healthyReportV2)).toThrow("doctor report is invalid");
+    expect(parseDoctorReportV2(healthyReportV2)).toEqual(healthyReportV2);
+    expect(evaluateDoctorReportV2(healthyReportV2)).toEqual({
       version: 1,
       healthy: true,
       findings: []
@@ -66,7 +71,7 @@ describe("ext doctor", () => {
   });
 
   it("keeps denied and unverified permission evidence distinct in stable order", () => {
-    const result = evaluateDoctorReport({
+    const result = evaluateDoctorReportV2({
       ...healthyReportV2,
       permissions: {
         D1_READ: "denied",

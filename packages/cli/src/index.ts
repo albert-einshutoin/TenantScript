@@ -16,7 +16,7 @@ import type {
   AdminRollbackCommand
 } from "./admin-http-client.js";
 import { runRollbackDrill } from "./rollback-drill.js";
-import { evaluateDoctorReport, parseDoctorReport } from "./doctor.js";
+import { evaluateSupportedDoctorReport, parseSupportedDoctorReport } from "./doctor.js";
 import { writePluginScaffold, type PluginScaffoldRequest } from "./plugin-scaffold.js";
 import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
 import {
@@ -38,14 +38,19 @@ export { createBinaryAdminClient, type BinaryAdminClient } from "./binary-client
 
 export {
   evaluateDoctorReport,
+  evaluateDoctorReportV2,
   parseDoctorReport,
+  parseDoctorReportV2,
   type DoctorFinding,
   type DoctorFindingCode,
+  type DoctorFindingCodeV2,
+  type DoctorFindingV2,
   type DoctorPermissionEvidence,
   type DoctorReport,
   type DoctorReportV1,
   type DoctorReportV2,
   type DoctorResult,
+  type DoctorResultV2,
   type DoctorRuntimePrimitive
 } from "./doctor.js";
 
@@ -401,7 +406,7 @@ async function runDoctor(args: readonly string[], io: CliIo): Promise<number> {
   }
   try {
     const value: unknown = JSON.parse(await readDoctorReport(args[1]));
-    const result = evaluateDoctorReport(parseDoctorReport(value));
+    const result = evaluateSupportedDoctorReport(parseSupportedDoctorReport(value));
     io.stdout(JSON.stringify(result));
     return result.healthy ? 0 : 1;
   } catch (error) {
