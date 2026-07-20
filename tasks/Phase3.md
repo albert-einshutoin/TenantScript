@@ -78,7 +78,7 @@
 - [ ] **P3-T13**(M)changesets + 自動 publish
   - RED: changeset なしの破壊的変更 PR が CI で fail する
   - DoD: タグ → npm publish → GitHub Release が自動化
-  - Progress: Issue #225でsource-only topological build、pack budget、全export/bin import smokeをTier 1へ常設。Issue #227でfixed-version Changesetsとbreaking API release policyをTier 1へ常設。release PR、tag/publish workflowは未完了
+  - Progress: Issue #225でsource-only topological build、pack budget、全export/bin import smokeをTier 1へ常設。Issue #227でfixed-version Changesetsとbreaking API release policyをTier 1へ常設。Issue #237でChangesets release PRとmain-ancestry/stable-tag preflight、OIDC限定npm publish、SBOM付きGitHub Release workflowを実装。npm scope/初回bootstrap/trusted publisher/provenance live確認は外部blocker
 
 - [ ] **P3-T14**(M)API freeze + semver ポリシー
   - 内容: 公開 API(SDK / manifest / control-plane REST)の表面を明文化し、breaking change 検知を CI 化(`ext schema diff` の自プロダクト適用)

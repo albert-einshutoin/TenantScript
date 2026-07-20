@@ -45,4 +45,5 @@ private reportingへ切り替えます。
 
 このartifactはdependency inventoryであり、署名、build provenance、npm publish完了の証明ではありません。
 npm scope、2FA、trusted publishing、GitHub environment approval、registry provenance確認はIssue #3/#33の
-external release laneです。tag/release workflowは独自SBOMを作らず、このaccountless入口を再利用します。
+external release laneです。[Tag release workflow](release-automation.md)は独自SBOMを作らず、この
+accountless入口を再利用します。
