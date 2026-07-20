@@ -498,4 +498,3 @@ BEGIN
 
   SELECT CASE WHEN changes() != 1 THEN RAISE(ABORT, 'approval decision conflict') END;
 END;
-
