@@ -345,11 +345,11 @@ function isNotFound(error: unknown): boolean {
 }
 
 function isBaseName(value: unknown): value is string {
-  return typeof value === "string" && /^[a-z][a-z0-9-]{0,37}[a-z0-9]$/u.test(value);
+  return typeof value === "string" && /^[a-z][a-z0-9-]{0,36}[a-z0-9]$/u.test(value);
 }
 
 function isBucketName(value: unknown): value is string {
-  return typeof value === "string" && /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/u.test(value);
+  return typeof value === "string" && /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/u.test(value);
 }
 
 function isLocationHint(value: unknown): value is R2LocationHint {

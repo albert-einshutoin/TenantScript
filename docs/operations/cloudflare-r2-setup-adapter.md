@@ -14,7 +14,8 @@ Cloudflare account can complete setup.
 
 Create mode requires a separate base name for each authority boundary. The adapter hashes the
 persisted operation reconcile key and appends a 24-hex-character (96-bit) suffix. The full setup key
-is never exposed in the globally visible bucket name.
+is never exposed in the account-level bucket name. Derived and adopted names enforce R2's
+3–63-character, lowercase alphanumeric-and-hyphen naming contract before provider access.
 
 For every reconcile, the adapter first performs an exact-name `GET`:
 
@@ -25,8 +26,11 @@ For every reconcile, the adapter first performs an exact-name `GET`:
    remains a stable failure. The adapter never chooses a fallback name.
 
 This ordering makes a lost create response resumable while preserving the transport rule that
-mutations are never retried automatically. It is not a proof that an external actor cannot reserve
-the same global name; a provider conflict remains an operator-visible failure.
+mutations are never retried automatically. An exact matching name is interpreted as response-loss
+recovery; the 96-bit suffix makes accidental collision negligible, but it is not ownership proof
+against another principal with R2 write access in the same account. Restrict that permission to the
+trusted setup operator and never pre-create a derived setup name. A provider conflict is surfaced;
+the adapter does not choose a fallback name.
 
 ## Explicit adoption
 

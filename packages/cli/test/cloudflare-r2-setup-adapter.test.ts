@@ -182,6 +182,14 @@ describe("Cloudflare R2 setup adapter", () => {
     {
       artifacts: { mode: "create", baseName: "valid-artifacts", extra: true },
       executionArchive: { mode: "create", baseName: "valid-archive" }
+    },
+    {
+      artifacts: { mode: "create", baseName: `a${"b".repeat(38)}` },
+      executionArchive: { mode: "create", baseName: "valid-archive" }
+    },
+    {
+      artifacts: { mode: "adopt", bucketName: `a${"b".repeat(62)}c` },
+      executionArchive: { mode: "create", baseName: "valid-archive" }
     }
   ])("rejects invalid configuration before provider access", (buckets) => {
     const requests: RecordedRequest[] = [];
