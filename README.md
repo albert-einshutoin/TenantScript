@@ -6,6 +6,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 
 ## ドキュメント
 
+- [Audience別ドキュメント入口](docs/README.md) — adopter、plugin/host作者、operator、security reviewer、contributorの最短導線
 - [Proxy mode quickstart](docs/quickstarts/zero-integration-proxy-mode.md) — host改修なしでwebhook変換を15分で再現
 - [SDK integration quickstart](docs/quickstarts/sdk-integration.md) — typed hook、plugin、capability、dry-run deployをTDDで接続
 - [SDK reference](docs/reference/sdk.md) — Phase 1 public TypeScript surfaceと安全境界
