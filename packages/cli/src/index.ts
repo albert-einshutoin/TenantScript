@@ -161,6 +161,7 @@ export {
   createCloudflareDoctorCollector,
   type CloudflareDoctorCollector,
   type CloudflareDoctorCollectorErrorCode,
+  type CloudflareDoctorBindingPresence,
   type CloudflareDoctorMigrationReader,
   type CloudflareDoctorSecretPresence
 } from "./cloudflare-doctor-collector.js";
@@ -439,7 +440,7 @@ async function runCloudflareDoctor(
   io: CliIo,
   runtime: CliRuntime
 ): Promise<number> {
-  if (args.length !== 7) {
+  if (args.length !== 9) {
     io.stderr("invalid doctor options");
     return 2;
   }
@@ -450,7 +451,7 @@ async function runCloudflareDoctor(
     if (
       name === undefined ||
       value === undefined ||
-      !["--worker", "--database-id", "--runtime"].includes(name) ||
+      !["--worker", "--database-id", "--config", "--runtime"].includes(name) ||
       options.has(name)
     ) {
       io.stderr("invalid doctor options");
@@ -460,12 +461,15 @@ async function runCloudflareDoctor(
   }
   const workerName = options.get("--worker");
   const databaseId = options.get("--database-id");
+  const configPath = options.get("--config");
   const primitive = options.get("--runtime");
   if (
     workerName === undefined ||
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(workerName) ||
     databaseId === undefined ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(databaseId) ||
+    configPath === undefined ||
+    !isSafeDoctorConfigPath(configPath) ||
     !isSetupRuntimePrimitive(primitive)
   ) {
     io.stderr("invalid doctor options");
@@ -477,7 +481,12 @@ async function runCloudflareDoctor(
   }
   try {
     const report = parseSupportedDoctorReport(
-      await runtime.collectCloudflareDoctor({ workerName, databaseId, runtime: primitive })
+      await runtime.collectCloudflareDoctor({
+        workerName,
+        databaseId,
+        configPath,
+        runtime: primitive
+      })
     );
     const result = evaluateSupportedDoctorReport(report);
     io.stdout(JSON.stringify(result));
@@ -488,6 +497,14 @@ async function runCloudflareDoctor(
     io.stderr("cloudflare doctor collection failed");
     return 2;
   }
+}
+
+function isSafeDoctorConfigPath(value: string): boolean {
+  return (
+    value.length <= 256 &&
+    /^(?!\/)[A-Za-z0-9][A-Za-z0-9._/-]*\.jsonc?$/u.test(value) &&
+    !value.split("/").includes("..")
+  );
 }
 
 const MAX_DOCTOR_REPORT_BYTES = 65_536;

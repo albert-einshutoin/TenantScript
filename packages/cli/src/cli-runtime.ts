@@ -4,6 +4,7 @@ export interface CliRuntime {
   collectCloudflareDoctor?: (request: {
     workerName: string;
     databaseId: string;
+    configPath: string;
     runtime: DoctorRuntimePrimitive;
   }) => Promise<DoctorReportV2>;
 }

@@ -1,27 +1,12 @@
-import type { CloudflareApiTransport } from "./cloudflare-api-transport.js";
 import { CONTROL_PLANE_MIGRATION_MANIFEST } from "./cloudflare-d1-migration-setup-adapter.js";
 import { parseDoctorReportV2, type DoctorReportV2, type DoctorRuntimePrimitive } from "./doctor.js";
 
-const MAX_BINDINGS = 256;
-const SETTINGS_KEYS = [
-  "annotations",
-  "bindings",
-  "cache_options",
-  "compatibility_date",
-  "compatibility_flags",
-  "exports",
-  "limits",
-  "logpush",
-  "migrations",
-  "observability",
-  "placement",
-  "tail_consumers",
-  "tags",
-  "usage_model"
-] as const;
-
 export interface CloudflareDoctorMigrationReader {
   listApplied: (databaseId: string) => Promise<readonly string[]> | readonly string[];
+}
+
+export interface CloudflareDoctorBindingPresence {
+  read: (databaseId: string) => Promise<DoctorReportV2["bindings"]> | DoctorReportV2["bindings"];
 }
 
 export interface CloudflareDoctorSecretPresence {
@@ -50,11 +35,10 @@ export class CloudflareDoctorCollectorError extends Error {
 }
 
 export function createCloudflareDoctorCollector(params: {
-  transport: CloudflareApiTransport;
-  workerName: string;
   databaseId: string;
+  bindingPresence: CloudflareDoctorBindingPresence;
   migrationReader: CloudflareDoctorMigrationReader;
-  secretPresence?: CloudflareDoctorSecretPresence;
+  secretPresence: CloudflareDoctorSecretPresence;
   runtime: {
     configured: DoctorRuntimePrimitive;
     supported: readonly DoctorRuntimePrimitive[];
@@ -63,32 +47,25 @@ export function createCloudflareDoctorCollector(params: {
   validateConfiguration(params);
   const expectedNames = CONTROL_PLANE_MIGRATION_MANIFEST.map(({ name }) => name);
   const expected = expectedNames.map((_, index) => index + 1);
-  const hasSecretOverride = params.secretPresence !== undefined;
 
   return {
     collect: async (): Promise<DoctorReportV2> => {
       try {
         // These independent reads are joined before parsing so the report is emitted atomically:
         // callers never receive a partially collected snapshot after one trusted source fails.
-        const [settings, appliedNames, secretOverride] = await Promise.all([
-          params.transport.request({
-            method: "GET",
-            pathSegments: ["workers", "scripts", params.workerName, "settings"]
-          }),
+        const [bindingPresence, appliedNames, adminCursorSecret] = await Promise.all([
+          params.bindingPresence.read(params.databaseId),
           params.migrationReader.listApplied(params.databaseId),
-          params.secretPresence?.has("ADMIN_CURSOR_SECRET")
+          params.secretPresence.has("ADMIN_CURSOR_SECRET")
         ]);
-        const workerSnapshot = parseBindings(settings, params.databaseId);
+        const bindings = parseBindingPresence(bindingPresence);
         const applied = parseAppliedMigrations(appliedNames, expectedNames);
-        if (hasSecretOverride && typeof secretOverride !== "boolean") throw invalidResponse();
-        const adminCursorSecret = hasSecretOverride
-          ? (secretOverride as boolean)
-          : workerSnapshot.adminCursorSecret;
+        if (typeof adminCursorSecret !== "boolean") throw invalidResponse();
 
         return parseDoctorReportV2({
           version: 2,
           profile: "production",
-          bindings: workerSnapshot.bindings,
+          bindings,
           migrations: { expected, applied },
           // Cloudflare's read endpoints accept overlapping read/write permission sets. A successful
           // request therefore proves resource visibility, not the exact deployment authority.
@@ -111,72 +88,16 @@ export function createCloudflareDoctorCollector(params: {
   };
 }
 
-function parseBindings(
-  value: unknown,
-  databaseId: string
-): { bindings: DoctorReportV2["bindings"]; adminCursorSecret: boolean } {
-  if (!isRecord(value) || !hasOnlyKeys(value, SETTINGS_KEYS)) {
+function parseBindingPresence(value: unknown): DoctorReportV2["bindings"] {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["DB", "ADMIN_MUTATION_RATE_LIMITER_DO"]) ||
+    typeof value.DB !== "boolean" ||
+    typeof value.ADMIN_MUTATION_RATE_LIMITER_DO !== "boolean"
+  ) {
     throw invalidResponse();
   }
-  const bindingValues = value.bindings ?? [];
-  if (!Array.isArray(bindingValues) || bindingValues.length > MAX_BINDINGS) {
-    throw invalidResponse();
-  }
-
-  let database = false;
-  let rateLimiter = false;
-  let adminCursorSecret = false;
-  for (const binding of bindingValues as unknown[]) {
-    if (!isRecord(binding) || !isBindingName(binding.name) || !isBindingType(binding.type)) {
-      throw invalidResponse();
-    }
-    if (binding.name === "DB") {
-      if (
-        database ||
-        binding.type !== "d1" ||
-        !hasOnlyKeys(binding, ["name", "type", "database_id", "id"]) ||
-        binding.database_id !== databaseId
-      ) {
-        throw invalidResponse();
-      }
-      database = true;
-    }
-    if (binding.name === "ADMIN_MUTATION_RATE_LIMITER_DO") {
-      if (
-        rateLimiter ||
-        binding.type !== "durable_object_namespace" ||
-        !hasOnlyKeys(binding, [
-          "name",
-          "type",
-          "class_name",
-          "dispatch_namespace",
-          "environment",
-          "namespace_id",
-          "script_name"
-        ]) ||
-        binding.class_name !== "AdminMutationRateLimitDurableObject"
-      ) {
-        throw invalidResponse();
-      }
-      rateLimiter = true;
-    }
-    if (binding.name === "ADMIN_CURSOR_SECRET") {
-      if (
-        adminCursorSecret ||
-        binding.type !== "secret_text" ||
-        !hasOnlyKeys(binding, ["name", "type", "text"])
-      ) {
-        throw invalidResponse();
-      }
-      // The settings response may contain provider-managed secret metadata. Presence is the only
-      // diagnostic fact retained; the value is never read, copied, serialized, or logged.
-      adminCursorSecret = true;
-    }
-  }
-  return {
-    bindings: { DB: database, ADMIN_MUTATION_RATE_LIMITER_DO: rateLimiter },
-    adminCursorSecret
-  };
+  return { DB: value.DB, ADMIN_MUTATION_RATE_LIMITER_DO: value.ADMIN_MUTATION_RATE_LIMITER_DO };
 }
 
 function parseAppliedMigrations(value: unknown, expectedNames: readonly string[]): number[] {
@@ -193,24 +114,22 @@ function validateConfiguration(value: unknown): void {
   if (
     !isRecord(value) ||
     !hasOnlyKeys(value, [
-      "transport",
-      "workerName",
       "databaseId",
+      "bindingPresence",
       "migrationReader",
       "secretPresence",
       "runtime"
     ]) ||
-    !["transport", "workerName", "databaseId", "migrationReader", "runtime"].every(
+    !["databaseId", "bindingPresence", "migrationReader", "secretPresence", "runtime"].every(
       (key) => key in value
     ) ||
-    !isRecord(value.transport) ||
-    typeof value.transport.request !== "function" ||
-    !isWorkerName(value.workerName) ||
     !isDatabaseId(value.databaseId) ||
+    !isRecord(value.bindingPresence) ||
+    typeof value.bindingPresence.read !== "function" ||
     !isRecord(value.migrationReader) ||
     typeof value.migrationReader.listApplied !== "function" ||
-    (value.secretPresence !== undefined &&
-      (!isRecord(value.secretPresence) || typeof value.secretPresence.has !== "function")) ||
+    !isRecord(value.secretPresence) ||
+    typeof value.secretPresence.has !== "function" ||
     !isRecord(value.runtime) ||
     !hasExactKeys(value.runtime, ["configured", "supported"]) ||
     !isRuntimePrimitive(value.runtime.configured) ||
@@ -235,23 +154,11 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
   return Object.keys(value).length === keys.length && hasOnlyKeys(value, keys);
 }
 
-function isWorkerName(value: unknown): value is string {
-  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(value);
-}
-
 function isDatabaseId(value: unknown): value is string {
   return (
     typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(value)
   );
-}
-
-function isBindingName(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Za-z_][A-Za-z0-9_]{0,127}$/u.test(value);
-}
-
-function isBindingType(value: unknown): value is string {
-  return typeof value === "string" && /^[a-z][a-z0-9_]{0,63}$/u.test(value);
 }
 
 function isRuntimePrimitive(value: unknown): value is DoctorRuntimePrimitive {

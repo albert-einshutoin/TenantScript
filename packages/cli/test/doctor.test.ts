@@ -206,6 +206,8 @@ describe("ext doctor", () => {
           "tenantscript-control-plane",
           "--database-id",
           "123e4567-e89b-12d3-a456-426614174000",
+          "--config",
+          "wrangler.jsonc",
           "--runtime",
           "cloudflare-workers"
         ],
@@ -219,6 +221,7 @@ describe("ext doctor", () => {
     expect(collectCloudflareDoctor).toHaveBeenCalledWith({
       workerName: "tenantscript-control-plane",
       databaseId: "123e4567-e89b-12d3-a456-426614174000",
+      configPath: "wrangler.jsonc",
       runtime: "cloudflare-workers"
     });
     expect(stderr).toEqual([]);
@@ -274,6 +277,8 @@ describe("ext doctor", () => {
             "tenantscript-control-plane",
             "--database-id",
             "123e4567-e89b-12d3-a456-426614174000",
+            "--config",
+            "wrangler.jsonc",
             "--runtime",
             "cloudflare-workers"
           ],

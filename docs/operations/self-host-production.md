@@ -82,8 +82,10 @@ Do not treat `deploy --dry-run` as live resource, permission, migration, or requ
 After deployment, collect a secret-free doctor report through a trusted adapter and evaluate it with
 `ext doctor --report`.
 
-The public `createCloudflareDoctorCollector` helper can compose Worker binding observations with a
-trusted migration-history reader and secret-presence probe. It intentionally reports Cloudflare
+The public `createCloudflareDoctorCollector` helper composes value-free binding and secret presence
+readers with a trusted migration-history reader. The binary reads DB/DO presence from the reviewed
+local Wrangler config and uses Cloudflare's value-omitting single-secret metadata endpoint; it never
+requests Worker settings or secret-list payloads. It intentionally reports Cloudflare
 permission evidence as `unverified`: a successful resource read does not prove the exact write
 authority required for deployment. See the canonical [doctor report contract](../reference/doctor-report.md#cloudflare-read-only-collector).
 

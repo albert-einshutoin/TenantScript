@@ -98,6 +98,7 @@
             { "name": "CloudflareD1MigrationSetupAdapterErrorCode", "kind": "type" },
             { "name": "CloudflareD1SetupAdapterError", "kind": "type+value" },
             { "name": "CloudflareD1SetupAdapterErrorCode", "kind": "type" },
+            { "name": "CloudflareDoctorBindingPresence", "kind": "type" },
             { "name": "CloudflareDoctorCollector", "kind": "type" },
             { "name": "CloudflareDoctorCollectorError", "kind": "type+value" },
             { "name": "CloudflareDoctorCollectorErrorCode", "kind": "type" },
