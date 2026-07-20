@@ -327,6 +327,53 @@ describe("Cloudflare API transport", () => {
     expect(JSON.stringify(error)).not.toContain(apiToken);
   });
 
+  it("keeps the timeout active until the response body has been consumed", async () => {
+    let timeoutCallback: (() => void) | undefined;
+    let timerActive = false;
+    let cleared = 0;
+    const transport = createCloudflareApiTransport({
+      accountId,
+      apiToken,
+      maxGetAttempts: 1,
+      timers: {
+        set: (callback) => {
+          timeoutCallback = callback;
+          timerActive = true;
+          return 13;
+        },
+        clear: (handle) => {
+          expect(handle).toBe(13);
+          timerActive = false;
+          cleared += 1;
+        }
+      },
+      fetch: (input, init) => {
+        expect(input).toContain(`/accounts/${accountId}/`);
+        return Promise.resolve(
+          new Response(
+            new ReadableStream({
+              pull: (controller) => {
+                if (timerActive) {
+                  timeoutCallback?.();
+                }
+                expect(init.signal?.aborted).toBe(true);
+                controller.error(new Error(`stalled body ${apiToken}`));
+              }
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+    });
+
+    const error = await captureApiError(
+      transport.request({ method: "GET", pathSegments: ["d1", "database"] })
+    );
+    expect(error.code).toBe("cloudflare_api_unavailable");
+    expect(cleared).toBe(1);
+    expect(JSON.stringify(error)).not.toContain(apiToken);
+  });
+
   it("clears the request timer after a successful response", async () => {
     let cleared = 0;
     const transport = createCloudflareApiTransport({

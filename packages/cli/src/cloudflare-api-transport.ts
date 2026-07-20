@@ -97,9 +97,8 @@ export function createCloudflareApiTransport(params: {
       const attempts = request.method === "GET" ? maxGetAttempts : 1;
 
       for (let attempt = 0; attempt < attempts; attempt += 1) {
-        let response: Response;
         try {
-          response = await fetchWithTimeout({
+          const outcome = await performAttempt({
             fetch: params.fetch,
             url,
             init: {
@@ -108,86 +107,103 @@ export function createCloudflareApiTransport(params: {
               ...(body === undefined ? {} : { body })
             },
             timeoutMs,
-            timers
-          });
-        } catch {
-          if (request.method === "GET" && attempt + 1 < attempts) {
-            await sleep(serverBackoffMs(attempt));
-            continue;
-          }
-          throw new CloudflareApiError("cloudflare_api_unavailable");
-        }
-
-        if (response.status === 429) {
-          const retryAfterMs = parseRetryAfter(
-            response.headers.get("Retry-After"),
+            timers,
+            maxResponseBytes,
             maxRetryAfterMs
-          );
-          await cancelBody(response);
-          if (request.method === "GET" && attempt + 1 < attempts && retryAfterMs !== null) {
-            await sleep(retryAfterMs);
-            continue;
+          });
+          if (outcome.kind === "rate_limited") {
+            if (attempt + 1 < attempts && outcome.retryAfterMs !== null) {
+              await sleep(outcome.retryAfterMs);
+              continue;
+            }
+            throw new CloudflareApiError("cloudflare_api_rate_limited", outcome.status);
           }
-          throw new CloudflareApiError("cloudflare_api_rate_limited", response.status);
-        }
-        if (response.status >= 500) {
-          await cancelBody(response);
-          if (request.method === "GET" && attempt + 1 < attempts) {
+          return outcome.result;
+        } catch (error) {
+          if (
+            error instanceof CloudflareApiError &&
+            error.code === "cloudflare_api_unavailable" &&
+            attempt + 1 < attempts
+          ) {
             await sleep(serverBackoffMs(attempt));
             continue;
           }
-          throw new CloudflareApiError("cloudflare_api_unavailable", response.status);
+          throw error;
         }
-        if (response.status === 401 || response.status === 403) {
-          await cancelBody(response);
-          throw new CloudflareApiError("cloudflare_api_unauthorized", response.status);
-        }
-        if (!response.ok) {
-          await cancelBody(response);
-          throw new CloudflareApiError("cloudflare_api_request_failed", response.status);
-        }
-        if (response.status === 204) {
-          await cancelBody(response);
-          return null;
-        }
-
-        const text = await readBoundedResponse(response, maxResponseBytes);
-        let envelope: unknown;
-        try {
-          envelope = JSON.parse(text);
-        } catch {
-          throw new CloudflareApiError("cloudflare_api_invalid_response", response.status);
-        }
-        if (!isRecord(envelope) || envelope.success !== true || !("result" in envelope)) {
-          throw new CloudflareApiError(
-            isRecord(envelope) && envelope.success === false
-              ? "cloudflare_api_request_failed"
-              : "cloudflare_api_invalid_response",
-            response.status
-          );
-        }
-        // Return only the documented result boundary. Provider errors/messages may contain account
-        // or credential context and must never cross into setup diagnostics or journals.
-        return envelope.result;
       }
       throw new CloudflareApiError("cloudflare_api_unavailable");
     }
   };
 }
 
-async function fetchWithTimeout(params: {
+type AttemptOutcome =
+  | { kind: "success"; result: unknown }
+  | { kind: "rate_limited"; retryAfterMs: number | null; status: number };
+
+async function performAttempt(params: {
   fetch: CloudflareFetch;
   url: string;
   init: RequestInit;
   timeoutMs: number;
   timers: CloudflareTimers;
-}): Promise<Response> {
+  maxResponseBytes: number;
+  maxRetryAfterMs: number;
+}): Promise<AttemptOutcome> {
   const controller = new AbortController();
   const handle = params.timers.set(() => {
     controller.abort();
   }, params.timeoutMs);
   try {
-    return await params.fetch(params.url, { ...params.init, signal: controller.signal });
+    let response: Response;
+    try {
+      response = await params.fetch(params.url, { ...params.init, signal: controller.signal });
+    } catch {
+      throw new CloudflareApiError("cloudflare_api_unavailable");
+    }
+
+    if (response.status === 429) {
+      const retryAfterMs = parseRetryAfter(
+        response.headers.get("Retry-After"),
+        params.maxRetryAfterMs
+      );
+      await cancelBody(response);
+      return { kind: "rate_limited", retryAfterMs, status: response.status };
+    }
+    if (response.status >= 500) {
+      await cancelBody(response);
+      throw new CloudflareApiError("cloudflare_api_unavailable", response.status);
+    }
+    if (response.status === 401 || response.status === 403) {
+      await cancelBody(response);
+      throw new CloudflareApiError("cloudflare_api_unauthorized", response.status);
+    }
+    if (!response.ok) {
+      await cancelBody(response);
+      throw new CloudflareApiError("cloudflare_api_request_failed", response.status);
+    }
+    if (response.status === 204) {
+      await cancelBody(response);
+      return { kind: "success", result: null };
+    }
+
+    const text = await readBoundedResponse(response, params.maxResponseBytes, controller.signal);
+    let envelope: unknown;
+    try {
+      envelope = JSON.parse(text);
+    } catch {
+      throw new CloudflareApiError("cloudflare_api_invalid_response", response.status);
+    }
+    if (!isRecord(envelope) || envelope.success !== true || !("result" in envelope)) {
+      throw new CloudflareApiError(
+        isRecord(envelope) && envelope.success === false
+          ? "cloudflare_api_request_failed"
+          : "cloudflare_api_invalid_response",
+        response.status
+      );
+    }
+    // Return only the documented result boundary. Provider errors/messages may contain account or
+    // credential context and must never cross into setup diagnostics or journals.
+    return { kind: "success", result: envelope.result };
   } finally {
     params.timers.clear(handle);
   }
@@ -239,7 +255,11 @@ function serializeRequestBody(
   }
 }
 
-async function readBoundedResponse(response: Response, maxBytes: number): Promise<string> {
+async function readBoundedResponse(
+  response: Response,
+  maxBytes: number,
+  signal: AbortSignal
+): Promise<string> {
   const declaredLength = response.headers.get("Content-Length");
   if (declaredLength !== null) {
     const length = Number(declaredLength);
@@ -272,6 +292,7 @@ async function readBoundedResponse(response: Response, maxBytes: number): Promis
     }
   } catch (error) {
     if (error instanceof CloudflareApiError) throw error;
+    if (signal.aborted) throw new CloudflareApiError("cloudflare_api_unavailable");
     throw new CloudflareApiError("cloudflare_api_invalid_response", response.status);
   } finally {
     reader.releaseLock();
