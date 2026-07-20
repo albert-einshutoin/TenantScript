@@ -151,6 +151,15 @@ export {
 } from "./cloudflare-worker-setup-adapter.js";
 
 export {
+  CloudflareDoctorCollectorError,
+  createCloudflareDoctorCollector,
+  type CloudflareDoctorCollector,
+  type CloudflareDoctorCollectorErrorCode,
+  type CloudflareDoctorMigrationReader,
+  type CloudflareDoctorSecretPresence
+} from "./cloudflare-doctor-collector.js";
+
+export {
   deriveControlPlaneWorkerName,
   parseProductionWranglerInput,
   renderProductionWranglerConfig,

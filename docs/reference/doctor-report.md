@@ -120,6 +120,20 @@ exit `2`のstderrは固定diagnosticだけを返し、入力pathやJSON内容を
 - findingの`repair` pathを正本として読み、provider error本文から生成したcommandを実行しません。
 - report生成時刻やlive source provenanceはversion 1/2 schemaに含まれないため、古いreportを現在の状態とみなしません。
 
+### Cloudflare read-only collector
+
+`createCloudflareDoctorCollector`は既存の`CloudflareApiTransport`でWorker settingsを読み、注入された
+migration history readerとsecret presence probeを合わせてclosed version 2 reportを生成します。
+provider responseからは対象bindingのpresenceだけを残し、database ID、Durable Object class、annotation、
+provider error本文をreportやpublic errorへ渡しません。migration historyはrepository manifestの厳密なprefixだけを
+受け付け、secret probeは`ADMIN_CURSOR_SECRET`のboolean presenceだけを返す必要があります。
+
+CloudflareのD1 read endpointは`D1 Read`または`D1 Write`、Workerのread endpointもread/writeを含む複数の
+permissionで成功できます。そのためread成功は個別permissionの証明ではありません。collectorは
+`D1_READ`、`D1_WRITE`、`WORKERS_SCRIPTS_WRITE`を`unverified`として出力し、token policyを確認する将来の
+authoritative collectorが追加されるまでhealthyへ昇格させません。これはcredentialed clean-account Tier 2の
+代替ではなく、安全なsecret-free snapshot収集境界です。
+
 実際のbinding要件は[configuration reference](configuration.md#control-plane-worker)、D1 routingは
 [app database routing](../operations/app-database-routing.md)、rate limiterは
 [admin mutation rate limits](../operations/admin-mutation-rate-limits.md)を参照してください。
