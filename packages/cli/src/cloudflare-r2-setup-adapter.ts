@@ -61,6 +61,11 @@ export function deriveCloudflareR2BucketName(
   baseName: string,
   setupRunId: string,
   operationId: CloudflareR2SetupOperationId
+): string;
+export function deriveCloudflareR2BucketName(
+  baseName: string,
+  setupRunId: string,
+  operationId: string
 ): string {
   if (
     !isBaseName(baseName) ||
