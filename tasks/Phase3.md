@@ -105,6 +105,7 @@
 - [ ] **P3-T19**(M)self-host ガイド + IaC テンプレ
   - 内容: wrangler 設定テンプレ、本番チェックリスト(budget / retention / RBAC 初期値)
   - DoD: 検証者2名がガイドのみで self-host 完走(Exit Gate 連動)
+  - Progress: Issue #185で`cloudflare-workers`向けのfail-closed最小Wrangler生成と本番チェックリストを実装。未結線resource、live apply、検証者2名の完走はIssue #34に残す
 
 - [ ] **P3-T20**(M)agent-friendly docs(D-016)
   - 内容: llms.txt、plugin scaffold テンプレ集、チュートリアルのコード断片を CI でテスト(docs が腐らない仕組み)
