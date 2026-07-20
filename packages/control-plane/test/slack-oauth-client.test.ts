@@ -93,6 +93,32 @@ describe("Slack OAuth v2 exchange client", () => {
     expect(JSON.stringify(error)).not.toContain("synthetic-refresh-token");
   });
 
+  it("rejects enterprise-wide installs until connection scope is modeled", async () => {
+    const client = oauthClient(() =>
+      Promise.resolve(
+        Response.json({
+          ok: true,
+          access_token: "xoxb-enterprise-secret-sentinel",
+          token_type: "bot",
+          scope: "chat:write,commands",
+          bot_user_id: "B12345678",
+          app_id: "A12345678",
+          team: { id: "T12345678", name: "Synthetic Workspace" },
+          enterprise: { id: "E12345678", name: "Synthetic Enterprise" },
+          authed_user: { id: "U12345678", scope: "" },
+          is_enterprise_install: true
+        })
+      )
+    );
+
+    const error = await captureExchangeError(
+      client.exchangeCode({ code: "synthetic-one-time-code", redirectUri })
+    );
+
+    expect(error.toJSON()).toEqual({ code: "slack_oauth_exchange_unavailable" });
+    expect(JSON.stringify(error)).not.toContain("secret-sentinel");
+  });
+
   it.each([
     ["unknown configuration field", { unexpected: "secret-sentinel" }],
     ["empty client ID", { clientId: "" }],
@@ -153,6 +179,22 @@ describe("Slack OAuth v2 exchange client", () => {
     expect(JSON.stringify(error)).not.toContain("synthetic-client-secret");
     expect(JSON.stringify(error)).not.toContain("synthetic-code");
   });
+
+  it.each(["service_unavailable", "internal_error", "request_timeout", "ratelimited"])(
+    "classifies transient provider error %s as unavailable without reflecting it",
+    async (providerError) => {
+      const client = oauthClient(() =>
+        Promise.resolve(Response.json({ ok: false, error: providerError }))
+      );
+
+      const error = await captureExchangeError(
+        client.exchangeCode({ code: "synthetic-code", redirectUri })
+      );
+
+      expect(error.toJSON()).toEqual({ code: "slack_oauth_exchange_unavailable" });
+      expect(JSON.stringify(error)).not.toContain(providerError);
+    }
+  );
 
   it.each([
     ["HTTP failure", () => new Response("upstream-secret-sentinel", { status: 503 })],

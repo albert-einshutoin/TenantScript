@@ -30,6 +30,10 @@ The response is read as a bounded stream with a 64 KiB ceiling. The timeout rema
 completion. A redirect, non-200 response, wrong content type, malformed or oversized JSON, unknown success
 field, non-bot token, or missing workspace fails closed.
 
+Enterprise Grid organization-wide installations (`is_enterprise_install: true`) also fail closed. The
+current connection record and secret reference are workspace-scoped; accepting an organization-wide token
+before enterprise scope is recorded and enforced would make that authority ambiguous.
+
 The returned projection contains only:
 
 - `accessToken`
@@ -42,7 +46,9 @@ state machine; accepting the expiring access token while discarding its refresh 
 delayed outage. Provider errors, client credentials, authorization codes, access tokens, refresh tokens,
 response bodies, and redirect URIs are never placed in the public error object. Stable codes distinguish
 invalid configuration, invalid requests, provider rejection, and unavailable or malformed provider
-responses.
+responses. Documented transient Slack method errors (`service_unavailable`, `internal_error`,
+`request_timeout`, and `ratelimited`) map to unavailable without exposing the raw provider error, so an
+operator can distinguish a retry-later condition from a denied or invalid installation.
 
 The client never retries. A timeout or connection loss after Slack accepted the code has an ambiguous
 outcome; replaying the one-time code would hide that state and cannot safely prove whether an installation
@@ -60,7 +66,8 @@ A production callback must additionally provide all of the following:
 6. encrypted refresh-token persistence and an expiry-aware refresh state machine before enabling Slack
    token rotation;
 7. authenticated, tenant-scoped connection metadata persistence;
-8. live Slack evidence in the credential-bearing Tier 2 lane.
+8. enterprise-scope connection modeling and enforcement before enabling organization-wide installs;
+9. live Slack evidence in the credential-bearing Tier 2 lane.
 
 Do not call `exchangeCode` directly from an unauthenticated callback, browser bundle, plugin, or capability
 input. Never pass its raw token result to logs, diagnostics, audit fields, issues, or pull requests.
@@ -77,4 +84,5 @@ pnpm test:security
 
 These commands verify fixed-origin request construction, exact redirect matching, complete documented
 success fixtures, fail-closed token-rotation responses, response bounds, timeout behavior, non-retry, and
-secret-free errors. They do not contact Slack or validate OAuth state and are not live provider evidence.
+secret-free errors. They also verify enterprise-wide install rejection and transient provider-error
+classification. They do not contact Slack or validate OAuth state and are not live provider evidence.

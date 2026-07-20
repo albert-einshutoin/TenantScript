@@ -3,6 +3,12 @@ import type { SlackOAuthClient, SlackOAuthTokenResponse } from "./api.js";
 const SLACK_OAUTH_ACCESS_URL = "https://slack.com/api/oauth.v2.access";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 65_536;
+const TRANSIENT_PROVIDER_ERRORS = new Set([
+  "service_unavailable",
+  "internal_error",
+  "request_timeout",
+  "ratelimited"
+]);
 
 export type SlackOAuthExchangeErrorCode =
   | "slack_oauth_invalid_configuration"
@@ -65,7 +71,13 @@ export function createSlackOAuthClient(
         });
         if (response.status !== 200 || response.redirected) throw unavailable();
         const value = await readBoundedJson(response);
-        if (isRecord(value) && value.ok === false) throw rejected();
+        if (isRecord(value) && value.ok === false) {
+          // Keep provider details private, but preserve whether an operator can retry the
+          // installation later instead of presenting a transient Slack outage as user rejection.
+          throw typeof value.error === "string" && TRANSIENT_PROVIDER_ERRORS.has(value.error)
+            ? unavailable()
+            : rejected();
+        }
         return parseSuccess(value);
       } catch (error) {
         if (error instanceof SlackOAuthExchangeError) throw error;
@@ -149,7 +161,11 @@ function parseSuccess(value: unknown): SlackOAuthTokenResponse {
     (value.enterprise !== undefined &&
       value.enterprise !== null &&
       !isEnterprise(value.enterprise)) ||
-    (value.is_enterprise_install !== undefined && typeof value.is_enterprise_install !== "boolean")
+    (value.is_enterprise_install !== undefined &&
+      typeof value.is_enterprise_install !== "boolean") ||
+    // The connection record is workspace-scoped today. Accepting an org-wide token without
+    // recording and enforcing that scope would silently weaken the tenant boundary.
+    value.is_enterprise_install === true
   ) {
     throw unavailable();
   }
