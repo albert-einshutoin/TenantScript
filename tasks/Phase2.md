@@ -116,10 +116,11 @@
 - [x] **P2-T22**(S)ADOPTERS.md + フィードバック導線
   - DoD: 採用報告の PR テンプレと issue テンプレが整備されている
 
-- [ ] **P2-T23**(M)GOVERNANCE.md / CONTRIBUTING.md
+- [x] **P2-T23**(M)GOVERNANCE.md / CONTRIBUTING.md
   - 内容: 意思決定プロセス、レビュー基準(TDD 必須を明記)、co-maintainer の役割定義
   - DoD: 公開済み。good-first-issue を10件以上ラベル付け
 
 - [ ] **P2-T24**(S)Phase 2 refactor + ゲートレビュー
   - 内容: 横断 refactor、カバレッジ確認、Exit Gate 消化、**Phase 3 タスクの再分割**
   - DoD: Exit Gate 全項目チェック、Phase3.md 最新化
+  - 2026-07-20 review: `docs/reviews/phase2-gate-evidence.md` で初回判定。repository-controlled security/coverage gateはgreenだが、adoption、live load/p95、incident window、co-maintainer conversationが未完了のためExit Gateはopen。
