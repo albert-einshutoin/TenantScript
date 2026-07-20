@@ -51,6 +51,22 @@ describe("ModalDialog keyboard focus boundary", () => {
     fireEvent.keyDown(dialog, { key: "Tab" });
     expect(dialog).toHaveFocus();
   });
+
+  it("moves focus back to an action when controls are re-enabled", async () => {
+    const { rerender } = render(<DialogHarness cancelDisabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Open confirmation" }));
+    await flushAnimationFrame();
+    const dialog = screen.getByRole("dialog", { name: "Confirmation" });
+    expect(dialog).toHaveFocus();
+
+    rerender(<DialogHarness />);
+    fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    dialog.focus();
+    fireEvent.keyDown(dialog, { key: "Tab" });
+    expect(screen.getByRole("button", { name: "Confirm" })).toHaveFocus();
+  });
 });
 
 function DialogHarness({ cancelDisabled = false }: { cancelDisabled?: boolean }) {
