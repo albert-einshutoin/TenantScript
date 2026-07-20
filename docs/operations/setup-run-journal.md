@@ -4,9 +4,10 @@ TenantScript's production setup executor records every planned operation before 
 reconciliation. The journal is the ownership boundary for future live Cloudflare setup: it prevents
 cleanup from deleting resources that existed before the current run.
 
-The executor and file journal are accountless orchestration foundations. A live Cloudflare adapter,
-credential flow, resource mutation, and clean-account Tier 2 evidence are not implemented yet. Do
-not represent a synthetic adapter run as a successful deployment.
+The executor and file journal are accountless orchestration foundations. The hardened
+[Cloudflare API transport](cloudflare-api-transport.md) is available, but resource-specific live
+adapters, credential flow, resource mutation, and clean-account Tier 2 evidence are not implemented
+yet. Do not represent a synthetic adapter run as a successful deployment.
 
 ## Ownership dispositions
 

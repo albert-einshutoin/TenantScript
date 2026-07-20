@@ -95,7 +95,7 @@
 - [ ] **P3-T17**(M)`ext setup`(セットアップウィザード)
   - RED: クリーンな Cloudflare アカウントに対し、D1/R2/DO/Workflows/AE の作成と初期 migration が一括で通る(dry-run は Tier 1、実アカウント E2E は **Tier 2**)
   - DoD: 新規アカウントでの setup E2E green(Tier 2)
-  - Progress: accountless production dry-run plannerをIssue #183、最小WranglerをIssue #185、resumable run journalとownership-safe cleanupをIssue #187で実装。live Cloudflare adapter、clean-account Tier 2はIssue #34に残す
+  - Progress: accountless production dry-run plannerをIssue #183、最小WranglerをIssue #185、resumable run journalとownership-safe cleanupをIssue #187、fixed-origin Cloudflare API transportをIssue #189で実装。resource-specific live adapter、clean-account Tier 2はIssue #34に残す
 
 - [ ] **P3-T18**(S)`ext doctor`(自己診断)
   - RED: binding 欠落・migration 未適用・権限不足を検知して人間が読める修復手順を出す

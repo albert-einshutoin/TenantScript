@@ -50,6 +50,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Security policy](SECURITY.md) — supported versions、非公開の脆弱性報告窓口、対応SLA
 - [Usage meter運用契約](docs/operations/usage-meter.md) — Analytics Engine固定schema、fail-open、UTC期間集計
 - [Agent onboarding](llms.txt) — 公開docs、package entrypoint、TDD、credential境界の短い索引
+- [Cloudflare API transport](docs/operations/cloudflare-api-transport.md) — fixed-origin、mutation非retry、response上限、credential非露出の境界
 
 ## ローカル検証とCI
 
