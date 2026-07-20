@@ -18,7 +18,7 @@
     "lint": "eslint .",
     "test": "vitest run && vitest run --config vitest.workers.config.ts",
     "test:chaos": "vitest run test/chaos-suite.test.ts",
-    "test:security": "vitest run test/security-suite.test.ts test/audit-export.test.ts test/runaway-guard.test.ts test/telemetry.test.ts && vitest run --config vitest.workers.config.ts test/security-suite.workers.test.ts test/audit-log.workers.test.ts test/execution-archive.workers.test.ts test/runaway-guard.workers.test.ts",
+    "test:security": "vitest run test/security-suite.test.ts test/audit-export.test.ts test/runaway-guard.test.ts test/telemetry.test.ts test/app-database-router.test.ts test/tenant-isolation-matrix.test.ts && vitest run --config vitest.workers.config.ts test/security-suite.workers.test.ts test/audit-log.workers.test.ts test/execution-archive.workers.test.ts test/runaway-guard.workers.test.ts",
     "test:coverage": "vitest run --coverage && vitest run --config vitest.workers.config.ts"
   },
   "devDependencies": {

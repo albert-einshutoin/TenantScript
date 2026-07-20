@@ -77,16 +77,24 @@ export function createControlPlaneHttpHandler(
 
     const corsHeaders = origin === null ? undefined : corsResponseHeaders(origin);
     const url = new URL(request.url);
-    const route = adminRoute(url);
-    if (route === null) {
+    const endpoint = matchAdminHttpEndpoint(url);
+    if (endpoint === null) {
       return errorResponse(404, "route_not_found", "route not found", corsHeaders);
     }
+    const route = endpoint.route;
 
     if (request.method === "OPTIONS") {
       if (origin === null) {
         return errorResponse(403, "origin_required", "request origin is required");
       }
-      return preflightResponse(corsHeaders, allowedMethods(route));
+      return preflightResponse(corsHeaders, allowedMethods(endpoint.contract));
+    }
+    if (!endpoint.contract.methods.some((method) => method === request.method)) {
+      const allow = allowedMethods(endpoint.contract);
+      return errorResponse(405, "method_not_allowed", "method not allowed", {
+        ...corsHeaders,
+        Allow: allow
+      });
     }
     if (route === "installationCommand") {
       if (request.method !== "PATCH") {
@@ -171,7 +179,7 @@ export function createControlPlaneHttpHandler(
   };
 }
 
-type AdminRoute =
+export type AdminRoute =
   | "session"
   | "dashboard"
   | "installationCommand"
@@ -186,50 +194,160 @@ type AdminRoute =
   | AdminDashboardSection
   | { id: string };
 
-function adminRoute(url: URL): AdminRoute | null {
-  const path = url.pathname;
-  if (path === "/v1/session") {
-    return "session";
+export type AdminHttpEndpointId =
+  | "session"
+  | "dashboard"
+  | "dashboardInstallations"
+  | "dashboardPluginVersions"
+  | "dashboardApprovals"
+  | "dashboardExecutions"
+  | "installationReview"
+  | "installationCommand"
+  | "installPreview"
+  | "installCreate"
+  | "installRequestCreate"
+  | "rollbackCreate"
+  | "executionDetail"
+  | "usage"
+  | "approvalDecisionCreate"
+  | "serviceTokenCollection";
+
+export type AdminHttpIsolation =
+  | "identity"
+  | "tenant-collection"
+  | "tenant-resource"
+  | "tenant-mutation";
+
+export interface AdminHttpEndpointContract {
+  id: AdminHttpEndpointId;
+  path: string;
+  methods: readonly ("GET" | "POST" | "PATCH" | "DELETE")[];
+  isolation: AdminHttpIsolation;
+  route: Exclude<AdminRoute, { id: string }> | "installationReview";
+}
+
+export const ADMIN_HTTP_ENDPOINT_CONTRACTS = [
+  { id: "session", path: "/v1/session", methods: ["GET"], isolation: "identity", route: "session" },
+  {
+    id: "dashboard",
+    path: "/v1/admin/dashboard",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "dashboard"
+  },
+  {
+    id: "dashboardInstallations",
+    path: "/v1/admin/dashboard/installations",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "installations"
+  },
+  {
+    id: "dashboardPluginVersions",
+    path: "/v1/admin/dashboard/pluginVersions",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "pluginVersions"
+  },
+  {
+    id: "dashboardApprovals",
+    path: "/v1/admin/dashboard/approvals",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "approvals"
+  },
+  {
+    id: "dashboardExecutions",
+    path: "/v1/admin/dashboard/executions",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "executions"
+  },
+  {
+    id: "installationReview",
+    path: "/v1/admin/installation-review",
+    methods: ["GET"],
+    isolation: "tenant-resource",
+    route: "installationReview"
+  },
+  {
+    id: "installationCommand",
+    path: "/v1/admin/installation-command",
+    methods: ["PATCH"],
+    isolation: "tenant-mutation",
+    route: "installationCommand"
+  },
+  {
+    id: "installPreview",
+    path: "/v1/admin/install-preview",
+    methods: ["GET"],
+    isolation: "tenant-resource",
+    route: "installPreview"
+  },
+  {
+    id: "installCreate",
+    path: "/v1/admin/installations",
+    methods: ["POST"],
+    isolation: "tenant-mutation",
+    route: "installCreate"
+  },
+  {
+    id: "installRequestCreate",
+    path: "/v1/admin/installation-requests",
+    methods: ["POST"],
+    isolation: "tenant-mutation",
+    route: "installRequestCreate"
+  },
+  {
+    id: "rollbackCreate",
+    path: "/v1/admin/rollbacks",
+    methods: ["POST"],
+    isolation: "tenant-mutation",
+    route: "rollbackCreate"
+  },
+  {
+    id: "executionDetail",
+    path: "/v1/admin/execution-detail",
+    methods: ["GET"],
+    isolation: "tenant-resource",
+    route: "executionDetail"
+  },
+  {
+    id: "usage",
+    path: "/v1/admin/usage",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "usage"
+  },
+  {
+    id: "approvalDecisionCreate",
+    path: "/v1/admin/approval-decisions",
+    methods: ["POST"],
+    isolation: "tenant-mutation",
+    route: "approvalDecisionCreate"
+  },
+  {
+    id: "serviceTokenCollection",
+    path: "/v1/admin/service-tokens",
+    methods: ["POST", "DELETE"],
+    isolation: "tenant-mutation",
+    route: "serviceTokenCollection"
   }
-  if (path === "/v1/admin/dashboard") {
-    return "dashboard";
-  }
-  if (path === "/v1/admin/installation-review") {
+] as const satisfies readonly AdminHttpEndpointContract[];
+
+export interface AdminHttpEndpointMatch {
+  contract: (typeof ADMIN_HTTP_ENDPOINT_CONTRACTS)[number];
+  route: AdminRoute;
+}
+
+export function matchAdminHttpEndpoint(url: URL): AdminHttpEndpointMatch | null {
+  const contract = ADMIN_HTTP_ENDPOINT_CONTRACTS.find(({ path }) => path === url.pathname);
+  if (contract === undefined) return null;
+  if (contract.route === "installationReview") {
     const id = url.searchParams.get("id");
-    return id === null || id.length === 0 ? null : { id };
+    return id === null || id.length === 0 ? null : { contract, route: { id } };
   }
-  if (path === "/v1/admin/installation-command") {
-    return "installationCommand";
-  }
-  if (path === "/v1/admin/install-preview") {
-    return "installPreview";
-  }
-  if (path === "/v1/admin/installations") {
-    return "installCreate";
-  }
-  if (path === "/v1/admin/installation-requests") {
-    return "installRequestCreate";
-  }
-  if (path === "/v1/admin/rollbacks") {
-    return "rollbackCreate";
-  }
-  if (path === "/v1/admin/execution-detail") {
-    return "executionDetail";
-  }
-  if (path === "/v1/admin/usage") {
-    return "usage";
-  }
-  if (path === "/v1/admin/approval-decisions") {
-    return "approvalDecisionCreate";
-  }
-  if (path === "/v1/admin/service-tokens") {
-    return "serviceTokenCollection";
-  }
-  const section = path.slice("/v1/admin/dashboard/".length);
-  if (path.startsWith("/v1/admin/dashboard/") && isDashboardSection(section)) {
-    return section;
-  }
-  return null;
+  return { contract, route: contract.route };
 }
 
 const maximumCommandBodyBytes = 16 * 1024;
@@ -1599,15 +1717,6 @@ function dashboardLimit(value: string | null): number | null {
   return parsed > 0 ? Math.min(parsed, 50) : null;
 }
 
-function isDashboardSection(value: string): value is AdminDashboardSection {
-  return (
-    value === "installations" ||
-    value === "pluginVersions" ||
-    value === "approvals" ||
-    value === "executions"
-  );
-}
-
 function canReadAppWideSchemaMigrations(identity: TenantScopedAdminIdentity): boolean {
   const role = normalizeRbacRole(identity.role);
   return role === "owner" || role === "admin";
@@ -1677,13 +1786,8 @@ function preflightResponse(
   });
 }
 
-function allowedMethods(route: AdminRoute): string {
-  if (route === "installationCommand") return "PATCH, OPTIONS";
-  if (route === "installCreate" || route === "rollbackCreate" || route === "approvalDecisionCreate")
-    return "POST, OPTIONS";
-  if (route === "installRequestCreate") return "POST, OPTIONS";
-  if (route === "serviceTokenCollection") return "POST, DELETE, OPTIONS";
-  return "GET, OPTIONS";
+function allowedMethods(contract: AdminHttpEndpointContract): string {
+  return [...contract.methods, "OPTIONS"].join(", ");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

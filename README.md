@@ -11,6 +11,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [SDK reference](docs/reference/sdk.md) — Phase 1 public TypeScript surfaceと安全境界
 - [Schema diff in CI](docs/reference/schema-diff-ci.md) — breaking判定、exit code、warning、CI統合
 - [Hook schema migration運用](docs/operations/schema-migrations.md) — app全体の利用追跡、廃止ゲート、Admin UI
+- [App database routing](docs/operations/app-database-routing.md) — app単位D1、fail-closed router、endpoint isolation matrix
 - [Runaway installation隔離](docs/operations/runaway-quarantine.md) — 連続失敗・timeout、自動disable、明示復旧
 - [Incident response runbook](docs/operations/incident-response.md) — plugin・capability・budget・D1/R2障害の封じ込め、復旧、公開drill契約
 - [Opt-in telemetry and privacy](docs/privacy/telemetry.md) — default-off、匿名集計schema、receiver制約、Admin UI表示
