@@ -99,6 +99,7 @@
 - [ ] **P3-T18**(S)`ext doctor`(自己診断)
   - RED: binding 欠落・migration 未適用・権限不足を検知して人間が読める修復手順を出す
   - DoD: 故障注入テスト green
+  - Progress: `ext doctor --report`のclosed offline evaluatorと故障注入testをIssue #181で実装。live Cloudflare collectorとclean-account検証はIssue #34に残す
 
 - [ ] **P3-T19**(M)self-host ガイド + IaC テンプレ
   - 内容: wrangler 設定テンプレ、本番チェックリスト(budget / retention / RBAC 初期値)
