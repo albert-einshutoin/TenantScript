@@ -52,6 +52,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Agent onboarding](llms.txt) — 公開docs、package entrypoint、TDD、credential境界の短い索引
 - [Cloudflare API transport](docs/operations/cloudflare-api-transport.md) — fixed-origin、mutation非retry、response上限、credential非露出の境界
 - [Cloudflare D1 setup adapter](docs/operations/cloudflare-d1-setup-adapter.md) — deterministic create、explicit adoption、ownership-verified cleanup
+- [Cloudflare D1 migrations](docs/operations/cloudflare-d1-migrations.md) — pinned SQL catalog、prefix verification、response-loss resume
 - [Setup provider router](docs/operations/setup-provider-router.md) — exact operation ownership、fail-closed composition、shared cleanup routing
 
 ## ローカル検証とCI

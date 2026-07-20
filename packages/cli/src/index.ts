@@ -83,6 +83,19 @@ export {
 } from "./setup-provider-router.js";
 
 export {
+  CloudflareD1MigrationSetupAdapterError,
+  CONTROL_PLANE_MIGRATION_MANIFEST,
+  createCloudflareD1MigrationSetupAdapter,
+  D1MigrationRunnerError,
+  loadControlPlaneMigrationCatalog,
+  type CloudflareD1MigrationSetupAdapterErrorCode,
+  type ControlPlaneMigration,
+  type ControlPlaneMigrationCatalog,
+  type D1MigrationRunner,
+  type D1MigrationRunnerErrorCode
+} from "./cloudflare-d1-migration-setup-adapter.js";
+
+export {
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   type ProductionWranglerInputV1
