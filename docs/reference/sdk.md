@@ -49,6 +49,20 @@ Return contract:
 - policyは`allow`、`deny`、またはpayload付き`modify`を返す。
 - undeclared/missing handlerとthrowはstructured errorになり、secretをmessageへ含めてはならない。
 
+## `@tenantscript/loader`
+
+`runScopedHandler`はlocal development/replay向けにbundleをterminable Worker内の`node:vm`で実行する。productionのuntrusted multi-tenant実行はCloudflare Dynamic Workers境界を使い、このlocal isolateをproduction保証として扱わない。
+
+`ScopedRuntimeLimits`の既定値と入力契約:
+
+| Field            | Default    | Contract                                                                                |
+| ---------------- | ---------- | --------------------------------------------------------------------------------------- |
+| `timeoutMs`      | `250`      | 1以上のsafe integer。bundle評価、handler、async完了をwall-clockで打ち切る               |
+| `maxSubrequests` | `Infinity` | 0以上のsafe integer、または内部既定値の`Infinity`。`0`はcapability callを許可しない     |
+| `memoryMb`       | `128`      | 8以上のsafe integer。WorkerのV8 old-generation heap上限としてallocation stormを隔離する |
+
+timeoutは`ScopedRuntimeTimeoutError`（`executionStatus: "timeout"`）、subrequestまたはheap上限超過は`ScopedRuntimeLimitError`（`executionStatus: "budget_exceeded"`）になる。`memoryMb`はV8 heap境界であり、OS、Cloudflare isolate、external/native allocationのproduction memory保証ではない。
+
 ## `@tenantscript/capabilities`
 
 `createCapabilityBroker`はgrant scope、provider、journal、rate limiter、audit sinkを結合する。pluginには`createPluginCapabilityContext`の結果だけを渡す。
