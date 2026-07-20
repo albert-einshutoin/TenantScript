@@ -1,8 +1,9 @@
 # Doctor report contract
 
 `ext doctor --report <path>`は、self-host環境から別のtrusted adapterが収集したsecret-free snapshotを
-決定的なfindingへ変換するoffline evaluatorです。Cloudflare API、D1、Durable Objects、secret storeへ接続せず、
-このcommand単体の成功はlive deploymentの健全性を証明しません。live collectorとclean-account検証は
+決定的なfindingへ変換するoffline evaluatorです。`ext doctor --cloudflare`はread-only Cloudflare APIから
+同じversion 2 snapshotを収集して評価します。どちらもmutationやsecret値の取得を行わず、credentialed
+clean-account Tier 2の完走やwrite authorityの証明は
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34)の未完了範囲です。
 
 ## Version 1 compatibility schema
@@ -114,7 +115,7 @@ exit `2`のstderrは固定diagnosticだけを返し、入力pathやJSON内容を
 
 ## Safe collection boundary
 
-- collectorはsecret managerへ値ではなくpresenceだけを問い合わせます。
+- Cloudflare collectorはbindingとsecretの値を受け取らず、検証済みpresence readerだけを合成します。
 - reportをissue、CI artifact、support ticketへ添付する前に、closed parserを通します。
 - account/resource IDやcredential付きURLが必要な調査は、公開reportとは別のprivate incident経路で扱います。
 - findingの`repair` pathを正本として読み、provider error本文から生成したcommandを実行しません。
@@ -122,19 +123,29 @@ exit `2`のstderrは固定diagnosticだけを返し、入力pathやJSON内容を
 
 ### Cloudflare read-only collector
 
-`createCloudflareDoctorCollector`は既存の`CloudflareApiTransport`でWorker settingsを読み、注入された
-migration history readerと合わせてclosed version 2 reportを生成します。`ADMIN_CURSOR_SECRET`は同じ
-settings snapshot内の`secret_text` binding名からpresenceだけを導出します。既存integration向けの
-`secretPresence` overrideも利用できますが、新規Cloudflare compositionでは省略して時点ずれを避けます。
-provider responseからは対象bindingのpresenceだけを残し、database ID、Durable Object class、annotation、
-secret value、provider error本文をreportやpublic errorへ渡しません。migration historyはrepository manifestの厳密なprefixだけを
-受け付け、secret probeは`ADMIN_CURSOR_SECRET`のboolean presenceだけを返す必要があります。
+`createCloudflareDoctorCollector`は注入されたbinding presence、migration history、secret presence readerを
+合わせてclosed version 2 reportを生成します。公開binaryはDB/DO bindingをoperatorが指定したローカル
+Wrangler JSON/JSONC設定から検証し、`ADMIN_CURSOR_SECRET`は値を含まない
+`--admin-cursor-secret-present true|false`のoperator attestationだけを受け取ります。CloudflareのWorker settings、
+secret list、secret get response schemaはいずれもsecret textを含み得るため呼びません。database ID、Durable Object
+class、secret value、provider error本文をreportやpublic errorへ渡しません。migration historyはrepository manifestの
+厳密なprefixだけを受け付けます。
 
 CloudflareのD1 read endpointは`D1 Read`または`D1 Write`、Workerのread endpointもread/writeを含む複数の
 permissionで成功できます。そのためread成功は個別permissionの証明ではありません。collectorは
 `D1_READ`、`D1_WRITE`、`WORKERS_SCRIPTS_WRITE`を`unverified`として出力し、token policyを確認する将来の
 authoritative collectorが追加されるまでhealthyへ昇格させません。これはcredentialed clean-account Tier 2の
 代替ではなく、安全なsecret-free snapshot収集境界です。
+
+公開binaryは`CLOUDFLARE_ACCOUNT_ID`と`CLOUDFLARE_API_TOKEN`を環境変数からだけ読みます。tokenを
+argument、report、stdout、stderrへ渡しません。次のcommandは通常、未検証permission findingsによりexit 1を
+返します。
+
+```sh
+# cwd: repository root
+# expected-exit: 1
+ext doctor --cloudflare --database-id 123e4567-e89b-12d3-a456-426614174000 --config wrangler.jsonc --admin-cursor-secret-present true --runtime cloudflare-workers
+```
 
 実際のbinding要件は[configuration reference](configuration.md#control-plane-worker)、D1 routingは
 [app database routing](../operations/app-database-routing.md)、rate limiterは

@@ -2,4 +2,4 @@
 "@tenantscript/cli": patch
 ---
 
-Derive doctor secret presence from the existing Worker settings snapshot while preserving the optional injected probe.
+Require value-free binding and secret presence readers so doctor collection never retrieves Worker secret values.

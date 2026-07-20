@@ -1,7 +1,7 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   evaluateDoctorReport,
   evaluateDoctorReportV2,
@@ -182,6 +182,142 @@ describe("ext doctor", () => {
       findings: [{ code: "doctor_permission_d1_write_unverified" }]
     });
   });
+
+  it("collects and evaluates a read-only Cloudflare snapshot from exact live options", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const collectCloudflareDoctor = vi.fn(() =>
+      Promise.resolve({
+        ...healthyReportV2,
+        permissions: {
+          D1_READ: "unverified" as const,
+          D1_WRITE: "unverified" as const,
+          WORKERS_SCRIPTS_WRITE: "unverified" as const
+        }
+      })
+    );
+
+    await expect(
+      runExtCli(
+        [
+          "doctor",
+          "--cloudflare",
+          "--admin-cursor-secret-present",
+          "true",
+          "--database-id",
+          "123e4567-e89b-12d3-a456-426614174000",
+          "--config",
+          "wrangler.jsonc",
+          "--runtime",
+          "cloudflare-workers"
+        ],
+        rollbackOnlyClient,
+        captureIo(stdout, stderr),
+        { collectCloudflareDoctor }
+      )
+    ).resolves.toBe(1);
+
+    expect(collectCloudflareDoctor).toHaveBeenCalledOnce();
+    expect(collectCloudflareDoctor).toHaveBeenCalledWith({
+      adminCursorSecretPresent: true,
+      databaseId: "123e4567-e89b-12d3-a456-426614174000",
+      configPath: "wrangler.jsonc",
+      runtime: "cloudflare-workers"
+    });
+    expect(stderr).toEqual([]);
+    expect(JSON.parse(stdout[0] ?? "null")).toMatchObject({
+      healthy: false,
+      findings: [
+        { code: "doctor_permission_d1_read_unverified" },
+        { code: "doctor_permission_d1_write_unverified" },
+        { code: "doctor_permission_workers_scripts_write_unverified" }
+      ]
+    });
+  });
+
+  it("rejects malformed live options before collector access", async () => {
+    const stderr: string[] = [];
+    const collectCloudflareDoctor = vi.fn();
+
+    await expect(
+      runExtCli(
+        ["doctor", "--cloudflare", "--admin-cursor-secret-present", "secret-sentinel"],
+        rollbackOnlyClient,
+        captureIo([], stderr),
+        { collectCloudflareDoctor }
+      )
+    ).resolves.toBe(2);
+
+    expect(collectCloudflareDoctor).not.toHaveBeenCalled();
+    expect(stderr).toEqual(["invalid doctor options"]);
+    expect(JSON.stringify(stderr)).not.toContain("secret-sentinel");
+  });
+
+  it("rejects a V1 snapshot from an untyped live runtime", async () => {
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        [
+          "doctor",
+          "--cloudflare",
+          "--admin-cursor-secret-present",
+          "true",
+          "--database-id",
+          "123e4567-e89b-12d3-a456-426614174000",
+          "--config",
+          "wrangler.jsonc",
+          "--runtime",
+          "cloudflare-workers"
+        ],
+        rollbackOnlyClient,
+        captureIo([], stderr),
+        { collectCloudflareDoctor: () => Promise.resolve(healthyReport as never) }
+      )
+    ).resolves.toBe(2);
+
+    expect(stderr).toEqual(["cloudflare doctor collection failed"]);
+  });
+
+  it.each([
+    ["unconfigured", {}, "cloudflare doctor is not configured"],
+    [
+      "provider failure",
+      {
+        collectCloudflareDoctor: () =>
+          Promise.reject(new Error("token-account-worker-database-secret-sentinel"))
+      },
+      "cloudflare doctor collection failed"
+    ]
+  ])(
+    "returns a stable non-reflecting diagnostic when live collection is %s",
+    async (_scenario, runtime, diagnostic) => {
+      const stderr: string[] = [];
+
+      await expect(
+        runExtCli(
+          [
+            "doctor",
+            "--cloudflare",
+            "--admin-cursor-secret-present",
+            "true",
+            "--database-id",
+            "123e4567-e89b-12d3-a456-426614174000",
+            "--config",
+            "wrangler.jsonc",
+            "--runtime",
+            "cloudflare-workers"
+          ],
+          rollbackOnlyClient,
+          captureIo([], stderr),
+          runtime
+        )
+      ).resolves.toBe(2);
+
+      expect(stderr).toEqual([diagnostic]);
+      expect(JSON.stringify(stderr)).not.toContain("secret-sentinel");
+    }
+  );
 
   it("returns exit 2 with a stable diagnostic for unknown fields and does not reflect input", async () => {
     const reportPath = await writeReport({ ...healthyReport, token: "secret-sentinel" });

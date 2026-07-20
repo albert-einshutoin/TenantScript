@@ -16,7 +16,12 @@ import type {
   AdminRollbackCommand
 } from "./admin-http-client.js";
 import { runRollbackDrill } from "./rollback-drill.js";
-import { evaluateSupportedDoctorReport, parseSupportedDoctorReport } from "./doctor.js";
+import {
+  evaluateSupportedDoctorReport,
+  parseDoctorReportV2,
+  parseSupportedDoctorReport
+} from "./doctor.js";
+import type { CliRuntime } from "./cli-runtime.js";
 import { writePluginScaffold, type PluginScaffoldRequest } from "./plugin-scaffold.js";
 import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
 import {
@@ -35,6 +40,10 @@ export {
 } from "./admin-http-client.js";
 
 export { createBinaryAdminClient, type BinaryAdminClient } from "./binary-client.js";
+
+export { createBinaryDoctorRuntime } from "./binary-doctor.js";
+
+export type { CliRuntime } from "./cli-runtime.js";
 
 export {
   evaluateDoctorReport,
@@ -131,6 +140,7 @@ export {
 } from "./cloudflare-d1-migration-setup-adapter.js";
 
 export {
+  createCloudflareD1MigrationReader,
   createCloudflareWranglerD1MigrationRunner,
   createNodeWranglerD1MigrationProcess,
   type WranglerD1MigrationProcess
@@ -155,6 +165,7 @@ export {
   createCloudflareDoctorCollector,
   type CloudflareDoctorCollector,
   type CloudflareDoctorCollectorErrorCode,
+  type CloudflareDoctorBindingPresence,
   type CloudflareDoctorMigrationReader,
   type CloudflareDoctorSecretPresence
 } from "./cloudflare-doctor-collector.js";
@@ -218,7 +229,8 @@ export async function runExtCli(
     Partial<ApprovalDecisionClient> &
     Partial<DeployClient> &
     Partial<AdminMutationClient>,
-  io: CliIo = consoleIo
+  io: CliIo = consoleIo,
+  runtime: CliRuntime = {}
 ): Promise<number> {
   const [command, ...args] = argv;
   if (command === "init") {
@@ -252,7 +264,7 @@ export async function runExtCli(
     return await runApprovalDecision(args, client, io);
   }
   if (command === "doctor") {
-    return await runDoctor(args, io);
+    return await runDoctor(args, io, runtime);
   }
   if (command === "setup") {
     return await runSetup(args, io);
@@ -404,7 +416,10 @@ async function runSetup(args: readonly string[], io: CliIo): Promise<number> {
   return 0;
 }
 
-async function runDoctor(args: readonly string[], io: CliIo): Promise<number> {
+async function runDoctor(args: readonly string[], io: CliIo, runtime: CliRuntime): Promise<number> {
+  if (args[0] === "--cloudflare") {
+    return runCloudflareDoctor(args, io, runtime);
+  }
   if (args.length === 0) {
     io.stderr("missing required doctor option: --report");
     return 2;
@@ -422,6 +437,77 @@ async function runDoctor(args: readonly string[], io: CliIo): Promise<number> {
     io.stderr(error instanceof SyntaxError ? "doctor report is invalid" : doctorDiagnostic(error));
     return 2;
   }
+}
+
+async function runCloudflareDoctor(
+  args: readonly string[],
+  io: CliIo,
+  runtime: CliRuntime
+): Promise<number> {
+  if (args.length !== 9) {
+    io.stderr("invalid doctor options");
+    return 2;
+  }
+  const options = new Map<string, string>();
+  for (let index = 1; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (
+      name === undefined ||
+      value === undefined ||
+      !["--database-id", "--config", "--admin-cursor-secret-present", "--runtime"].includes(name) ||
+      options.has(name)
+    ) {
+      io.stderr("invalid doctor options");
+      return 2;
+    }
+    options.set(name, value);
+  }
+  const databaseId = options.get("--database-id");
+  const configPath = options.get("--config");
+  const secretPresence = options.get("--admin-cursor-secret-present");
+  const primitive = options.get("--runtime");
+  if (
+    databaseId === undefined ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(databaseId) ||
+    configPath === undefined ||
+    !isSafeDoctorConfigPath(configPath) ||
+    (secretPresence !== "true" && secretPresence !== "false") ||
+    !isSetupRuntimePrimitive(primitive)
+  ) {
+    io.stderr("invalid doctor options");
+    return 2;
+  }
+  if (runtime.collectCloudflareDoctor === undefined) {
+    io.stderr("cloudflare doctor is not configured");
+    return 2;
+  }
+  try {
+    const report = parseDoctorReportV2(
+      await runtime.collectCloudflareDoctor({
+        databaseId,
+        configPath,
+        adminCursorSecretPresent: secretPresence === "true",
+        runtime: primitive
+      })
+    );
+    const result = evaluateSupportedDoctorReport(report);
+    io.stdout(JSON.stringify(result));
+    return result.healthy ? 0 : 1;
+  } catch {
+    // Provider errors can include account, resource, or credential context. The CLI exposes one
+    // stable diagnostic and relies on the closed Doctor result for all repair guidance.
+    io.stderr("cloudflare doctor collection failed");
+    return 2;
+  }
+}
+
+function isSafeDoctorConfigPath(value: string): boolean {
+  return (
+    value.length <= 256 &&
+    /^(?!\/)[A-Za-z0-9][A-Za-z0-9._/-]*\.jsonc?$/u.test(value) &&
+    !value.split("/").includes("..")
+  );
 }
 
 const MAX_DOCTOR_REPORT_BYTES = 65_536;

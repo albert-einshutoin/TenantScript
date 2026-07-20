@@ -42,13 +42,14 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:security": "vitest run test/admin-http-client.test.ts test/cloudflare-api-transport.test.ts test/cloudflare-d1-setup-adapter.test.ts test/cloudflare-d1-migration-setup-adapter.test.ts test/cloudflare-doctor-collector.test.ts test/cloudflare-wrangler-d1-migration-runner.test.ts test/cloudflare-r2-setup-adapter.test.ts test/cloudflare-worker-setup-adapter.test.ts test/doctor.test.ts test/setup-provider-router.test.ts test/setup-executor.test.ts test/wrangler-template.test.ts test/wrangler-worker-deploy-process.test.ts",
+    "test:security": "vitest run test/admin-http-client.test.ts test/binary-doctor.test.ts test/cloudflare-api-transport.test.ts test/cloudflare-d1-setup-adapter.test.ts test/cloudflare-d1-migration-setup-adapter.test.ts test/cloudflare-doctor-collector.test.ts test/cloudflare-wrangler-d1-migration-runner.test.ts test/cloudflare-r2-setup-adapter.test.ts test/cloudflare-worker-setup-adapter.test.ts test/doctor.test.ts test/setup-provider-router.test.ts test/setup-executor.test.ts test/wrangler-template.test.ts test/wrangler-worker-deploy-process.test.ts",
     "rollback:drill": "node scripts/rollback-drill.mjs"
   },
   "dependencies": {
     "@tenantscript/control-plane": "workspace:*",
     "@tenantscript/loader": "workspace:*",
-    "@tenantscript/manifest": "workspace:*"
+    "@tenantscript/manifest": "workspace:*",
+    "jsonc-parser": "3.3.1"
   },
   "devDependencies": {
     "@tenantscript/test-config": "workspace:*"

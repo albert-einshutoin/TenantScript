@@ -18,6 +18,48 @@ export interface WranglerD1MigrationProcess {
   applyRemote: (request: { databaseName: string; configPath: string }) => Promise<void> | void;
 }
 
+export function createCloudflareD1MigrationReader(params: {
+  transport: CloudflareApiTransport;
+  databaseId: string;
+}): Pick<D1MigrationRunner, "listApplied"> {
+  validateReaderConfiguration(params);
+  const expectedNames = CONTROL_PLANE_MIGRATION_MANIFEST.map((migration) => migration.name);
+
+  return {
+    listApplied: async (databaseId: string): Promise<readonly string[]> => {
+      if (databaseId !== params.databaseId) throw runnerFailure();
+
+      try {
+        const tableResult = parseQueryResult(
+          await params.transport.request({
+            method: "POST",
+            pathSegments: ["d1", "database", databaseId, "query"],
+            body: { sql: MIGRATION_TABLE_QUERY }
+          })
+        );
+        if (tableResult.length === 0) return [];
+        if (tableResult.length !== 1 || !isExactNameRow(tableResult[0], "d1_migrations")) {
+          throw runnerFailure();
+        }
+
+        const historyResult = parseQueryResult(
+          await params.transport.request({
+            method: "POST",
+            pathSegments: ["d1", "database", databaseId, "query"],
+            body: { sql: MIGRATION_HISTORY_QUERY }
+          })
+        );
+        const names = historyResult.map(readMigrationName);
+        validateHistory(names, expectedNames);
+        return names;
+      } catch (error) {
+        if (error instanceof D1MigrationRunnerError) throw error;
+        throw runnerFailure();
+      }
+    }
+  };
+}
+
 export function createCloudflareWranglerD1MigrationRunner(params: {
   transport: CloudflareApiTransport;
   databaseId: string;
@@ -27,38 +69,10 @@ export function createCloudflareWranglerD1MigrationRunner(params: {
 }): D1MigrationRunner {
   validateRunnerConfiguration(params);
   const expectedNames = CONTROL_PLANE_MIGRATION_MANIFEST.map((migration) => migration.name);
-
-  const listApplied = async (databaseId: string): Promise<readonly string[]> => {
-    if (databaseId !== params.databaseId) throw runnerFailure();
-
-    try {
-      const tableResult = parseQueryResult(
-        await params.transport.request({
-          method: "POST",
-          pathSegments: ["d1", "database", databaseId, "query"],
-          body: { sql: MIGRATION_TABLE_QUERY }
-        })
-      );
-      if (tableResult.length === 0) return [];
-      if (tableResult.length !== 1 || !isExactNameRow(tableResult[0], "d1_migrations")) {
-        throw runnerFailure();
-      }
-
-      const historyResult = parseQueryResult(
-        await params.transport.request({
-          method: "POST",
-          pathSegments: ["d1", "database", databaseId, "query"],
-          body: { sql: MIGRATION_HISTORY_QUERY }
-        })
-      );
-      const names = historyResult.map(readMigrationName);
-      validateHistory(names, expectedNames);
-      return names;
-    } catch (error) {
-      if (error instanceof D1MigrationRunnerError) throw error;
-      throw runnerFailure();
-    }
-  };
+  const { listApplied } = createCloudflareD1MigrationReader({
+    transport: params.transport,
+    databaseId: params.databaseId
+  });
 
   return {
     listApplied,
@@ -95,6 +109,21 @@ export function createCloudflareWranglerD1MigrationRunner(params: {
       }
     }
   };
+}
+
+function validateReaderConfiguration(value: unknown): asserts value is {
+  transport: CloudflareApiTransport;
+  databaseId: string;
+} {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["transport", "databaseId"]) ||
+    !isRecord(value.transport) ||
+    typeof value.transport.request !== "function" ||
+    !isDatabaseId(value.databaseId)
+  ) {
+    throw new TypeError("Cloudflare D1 migration reader configuration is invalid");
+  }
 }
 
 export function createNodeWranglerD1MigrationProcess(params: {
