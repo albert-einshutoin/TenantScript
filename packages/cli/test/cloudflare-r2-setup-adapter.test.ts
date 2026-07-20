@@ -84,6 +84,24 @@ describe("Cloudflare R2 setup adapter", () => {
     expect(requests[0]?.method).toBe("GET");
   });
 
+  it("reconciles an ambiguous POST failure with one exact read and never replays create", async () => {
+    const requests: RecordedRequest[] = [];
+    const expectedName = derivedName("tenantscript-artifacts", artifacts);
+    let call = 0;
+    const adapter = createAdapter(requests, () => {
+      call += 1;
+      if (call === 1) throw notFound();
+      if (call === 2) throw new CloudflareApiError("cloudflare_api_unavailable");
+      return { name: expectedName, jurisdiction: "eu", storage_class: "Standard" };
+    });
+
+    await expect(adapter.reconcile(reconcileRequest(artifacts))).resolves.toEqual({
+      disposition: "created",
+      resourceRef: `r2:${expectedName}`
+    });
+    expect(requests.map((request) => request.method)).toEqual(["GET", "POST", "GET"]);
+  });
+
   it("adopts only explicitly configured exact buckets without mutation", async () => {
     const requests: RecordedRequest[] = [];
     const adapter = createCloudflareR2SetupAdapter({
@@ -257,7 +275,7 @@ describe("Cloudflare R2 setup adapter", () => {
 
     const error = await captureApiError(adapter.reconcile(reconcileRequest(artifacts)));
     expect(error.code).toBe("cloudflare_api_unavailable");
-    expect(methods).toEqual(["GET", "POST"]);
+    expect(methods).toEqual(["GET", "POST", "GET"]);
     expect(JSON.stringify(error)).not.toContain("r2-adapter-secret-sentinel");
   });
 

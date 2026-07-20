@@ -83,26 +83,42 @@ export function createCloudflareR2SetupAdapter(params: {
         if (!isNotFound(error)) throw error;
       }
 
-      const created = parseR2Bucket(
-        await params.transport.request({
-          method: "POST",
-          pathSegments: ["r2", "buckets"],
-          ...(configuration.jurisdiction === undefined
-            ? {}
-            : { r2Jurisdiction: configuration.jurisdiction }),
-          body: {
-            name,
-            ...(configuration.locationHint === undefined
+      try {
+        const created = parseR2Bucket(
+          await params.transport.request({
+            method: "POST",
+            pathSegments: ["r2", "buckets"],
+            ...(configuration.jurisdiction === undefined
               ? {}
-              : { locationHint: configuration.locationHint }),
-            ...(configuration.storageClass === undefined
-              ? {}
-              : { storageClass: configuration.storageClass })
-          }
-        })
-      );
-      validateObservedBucket(created, name, configuration);
-      return { disposition: "created", resourceRef: resourceRef(created.name) };
+              : { r2Jurisdiction: configuration.jurisdiction }),
+            body: {
+              name,
+              ...(configuration.locationHint === undefined
+                ? {}
+                : { locationHint: configuration.locationHint }),
+              ...(configuration.storageClass === undefined
+                ? {}
+                : { storageClass: configuration.storageClass })
+            }
+          })
+        );
+        validateObservedBucket(created, name, configuration);
+        return { disposition: "created", resourceRef: resourceRef(created.name) };
+      } catch (mutationError) {
+        if (!isAmbiguousMutationFailure(mutationError)) throw mutationError;
+        try {
+          // A network/5xx or malformed success response can arrive after Cloudflare committed the
+          // create. Reconcile once by read; never replay the mutation or invent another name.
+          const observed = parseR2Bucket(
+            await getBucket(params.transport, name, configuration.jurisdiction)
+          );
+          validateObservedBucket(observed, name, configuration);
+          return { disposition: "created", resourceRef: resourceRef(observed.name) };
+        } catch (reconcileError) {
+          if (isNotFound(reconcileError)) throw mutationError;
+          throw reconcileError;
+        }
+      }
     },
 
     cleanupCreated: async (request): Promise<void> => {
@@ -280,7 +296,7 @@ function isArchiveOperation(operation: SetupOperation): boolean {
 
 function deriveBucketName(baseName: string, reconcileKey: string): string {
   // R2 create has no documented idempotency key. The persisted operation key provides a stable
-  // crash-resume target, while the 96-bit digest avoids exposing the full key in a global name.
+  // crash-resume target, while the 96-bit digest avoids exposing the full key in a provider name.
   const suffix = createHash("sha256").update(reconcileKey).digest("hex").slice(0, 24);
   return `${baseName}-${suffix}`;
 }
@@ -341,6 +357,16 @@ function isNotFound(error: unknown): boolean {
     error instanceof CloudflareApiError &&
     error.code === "cloudflare_api_request_failed" &&
     error.status === 404
+  );
+}
+
+function isAmbiguousMutationFailure(error: unknown): boolean {
+  return (
+    (error instanceof CloudflareApiError &&
+      (error.code === "cloudflare_api_unavailable" ||
+        error.code === "cloudflare_api_invalid_response")) ||
+    (error instanceof CloudflareR2SetupAdapterError &&
+      error.code === "cloudflare_r2_invalid_response")
   );
 }
 

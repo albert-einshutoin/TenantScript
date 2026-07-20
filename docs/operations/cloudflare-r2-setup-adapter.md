@@ -22,8 +22,11 @@ For every reconcile, the adapter first performs an exact-name `GET`:
 1. If the bucket exists and its configured jurisdiction and storage class match, it returns
    `created` without replaying `POST`.
 2. If Cloudflare returns exactly `404`, it attempts `POST /r2/buckets` once.
-3. Any collision, malformed response, property drift, authorization error, or availability error
-   remains a stable failure. The adapter never chooses a fallback name.
+3. If that mutation has an ambiguous network, `5xx`, or malformed-success outcome, it performs one
+   exact read. A matching bucket completes reconciliation; an absent bucket preserves the original
+   stable failure.
+4. Any collision, property drift, authorization error, or unresolved availability error remains a
+   stable failure. The adapter never chooses a fallback name.
 
 This ordering makes a lost create response resumable while preserving the transport rule that
 mutations are never retried automatically. An exact matching name is interpreted as response-loss
