@@ -228,6 +228,124 @@ describe("encrypted secret store", () => {
     await expect(inconsistentStore.rewrapSecret(ref)).rejects.toThrow("secret record is invalid");
   });
 
+  it("creates, replaces, and deletes a secret through encrypted compare-and-swap", async () => {
+    const records = new Map<string, string>();
+    const storage = mapStorage(records);
+    const store = createDurableObjectSecretStore(storage, await keyring("key-v1", 98));
+    const ref = secretRef("tenant_1", "workspace_1");
+
+    await expect(
+      store.compareAndSwapSecret({ ref, expectedValue: "missing-token", nextValue: "must-not-win" })
+    ).resolves.toEqual({ matched: false, changed: false });
+    await expect(
+      store.compareAndSwapSecret({ ref, expectedValue: null, nextValue: null })
+    ).resolves.toEqual({ matched: true, changed: false });
+    expect(records.size).toBe(0);
+
+    await expect(
+      store.compareAndSwapSecret({ ref, expectedValue: null, nextValue: "active-token" })
+    ).resolves.toEqual({ matched: true, changed: true });
+    expect(onlyRecord(records)).not.toContain("active-token");
+    await expect(store.getSecret(ref)).resolves.toBe("active-token");
+
+    await expect(
+      store.compareAndSwapSecret({
+        ref,
+        expectedValue: "wrong-token",
+        nextValue: "must-not-win"
+      })
+    ).resolves.toEqual({ matched: false, changed: false });
+    await expect(store.getSecret(ref)).resolves.toBe("active-token");
+
+    await expect(
+      store.compareAndSwapSecret({
+        ref,
+        expectedValue: "active-token",
+        nextValue: "candidate-token"
+      })
+    ).resolves.toEqual({ matched: true, changed: true });
+    await expect(store.getSecret(ref)).resolves.toBe("candidate-token");
+
+    await expect(
+      store.compareAndSwapSecret({
+        ref,
+        expectedValue: "candidate-token",
+        nextValue: null
+      })
+    ).resolves.toEqual({ matched: true, changed: true });
+    await expect(store.getSecret(ref)).resolves.toBeNull();
+  });
+
+  it("does not overwrite a concurrent secret change during compare-and-swap", async () => {
+    const key = await importSyntheticKey(99);
+    const keys = staticKeyring("key-v1", new Map([["key-v1", key]]));
+    const ref = secretRef("tenant_1", "workspace_1");
+    const records = new Map<string, string>();
+    const store = createDurableObjectSecretStore(mapStorage(records), keys);
+    await store.putSecret({ ref, value: "expected-token" });
+
+    const concurrentRecords = new Map<string, string>();
+    const concurrentStore = createDurableObjectSecretStore(mapStorage(concurrentRecords), keys);
+    await concurrentStore.putSecret({ ref, value: "concurrent-token" });
+    const concurrentRecord = onlyRecord(concurrentRecords);
+    const storage = mapStorage(records);
+    storage.replaceIfUnchanged = vi.fn((storageKey: string) => {
+      records.set(storageKey, concurrentRecord);
+      return false;
+    });
+    const conflictingStore = createDurableObjectSecretStore(storage, keys);
+
+    await expect(
+      conflictingStore.compareAndSwapSecret({
+        ref,
+        expectedValue: "expected-token",
+        nextValue: "must-not-win"
+      })
+    ).resolves.toEqual({ matched: false, changed: false });
+    await expect(store.getSecret(ref)).resolves.toBe("concurrent-token");
+    expect(storage.replaceIfUnchanged).toHaveBeenCalledOnce();
+  });
+
+  it("authenticates but does not rewrite an unchanged compare-and-swap value", async () => {
+    const records = new Map<string, string>();
+    const storage = mapStorage(records);
+    const store = createDurableObjectSecretStore(storage, await keyring("key-v1", 100));
+    const ref = secretRef("tenant_1", "workspace_1");
+    await store.putSecret({ ref, value: "unchanged-token" });
+    const replaceIfUnchanged = vi.spyOn(storage, "replaceIfUnchanged");
+
+    await expect(
+      store.compareAndSwapSecret({
+        ref,
+        expectedValue: "unchanged-token",
+        nextValue: "unchanged-token"
+      })
+    ).resolves.toEqual({ matched: true, changed: false });
+    expect(replaceIfUnchanged).not.toHaveBeenCalled();
+  });
+
+  it("rejects a tampered record before compare-and-swap can overwrite it", async () => {
+    const records = new Map<string, string>();
+    const storage = mapStorage(records);
+    const store = createDurableObjectSecretStore(storage, await keyring("key-v1", 101));
+    const ref = secretRef("tenant_1", "workspace_1");
+    await store.putSecret({ ref, value: "authenticated-token" });
+    const [recordKey, rawRecord] = onlyEntry(records);
+    const envelope = JSON.parse(rawRecord) as { ciphertext: string };
+    envelope.ciphertext = replaceFirstBase64UrlCharacter(envelope.ciphertext);
+    records.set(recordKey, JSON.stringify(envelope));
+    const replaceIfUnchanged = vi.spyOn(storage, "replaceIfUnchanged");
+
+    await expect(
+      store.compareAndSwapSecret({
+        ref,
+        expectedValue: "authenticated-token",
+        nextValue: "must-not-overwrite-corruption"
+      })
+    ).rejects.toThrow("secret record is invalid");
+    expect(replaceIfUnchanged).not.toHaveBeenCalled();
+  });
+
   it("rejects keys that are not non-extractable AES-256-GCM keys", async () => {
     const shortKey = await crypto.subtle.importKey(
       "raw",
@@ -331,7 +449,8 @@ function mapStorage(records: Map<string, string>): SecretStoreStorage {
     },
     replaceIfUnchanged: (key, expected, next) => {
       if (records.get(key) !== expected) return false;
-      records.set(key, next);
+      if (next === undefined) records.delete(key);
+      else records.set(key, next);
       return true;
     }
   };
