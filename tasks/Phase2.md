@@ -99,7 +99,7 @@
   - 内容: 暴走 plugin(CPU/メモリ/再帰 hook)、broker 停止、D1 障害、R2 不達の注入テスト。**fail closed / fail open が hook 型どおりに働くことを検証**
   - DoD: chaos シナリオが nightly CI に常設
 
-- [ ] **P2-T19**(M)runaway detection 改善
+- [x] **P2-T19**(M)runaway detection 改善
   - RED: 連続失敗・異常実行数の plugin が自動隔離(disable)され、管理者に通知される
   - DoD: 検知・隔離・復旧のテスト green
 
