@@ -170,6 +170,44 @@ test("rejects manifest records that alias the same emitted JavaScript", async ()
   );
 });
 
+test("accepts safe top-level CSS and static asset manifest records", async () => {
+  const fixture = await createFixture({
+    manifest: {
+      "index.html": {
+        file: "assets/index.js",
+        isEntry: true,
+        css: ["assets/index.css"],
+        assets: ["assets/inter.woff2"]
+      },
+      "src/styles.css": {
+        file: "assets/index.css",
+        src: "src/styles.css",
+        isEntry: true
+      },
+      "src/inter.woff2": {
+        file: "assets/inter.woff2",
+        src: "src/inter.woff2"
+      }
+    },
+    files: {
+      "index.html": "<main></main>",
+      "assets/index.js": "export default 1;",
+      "assets/index.css": "body{font-family:Inter}",
+      "assets/inter.woff2": "fixture-font"
+    },
+    budget: validBudget()
+  });
+
+  const report = await evaluateAdminUiBundleBudget(fixture.dist, fixture.budgetPath);
+
+  assert.deepEqual(report.initialAssets, [
+    "assets/index.css",
+    "assets/index.js",
+    "assets/inter.woff2",
+    "index.html"
+  ]);
+});
+
 test("wires the production budget into the Admin UI, root gate, and Tier 1", async () => {
   const budget = JSON.parse(
     await readFile(join(repositoryRoot, "apps/admin-ui/bundle-budget.json"), "utf8")

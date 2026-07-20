@@ -122,8 +122,15 @@ function parseManifest(contents) {
     if (!isManifestKey(key) || !isRecord(candidate) || !isSafeAssetPath(candidate.file)) {
       throw new Error("Admin UI bundle manifest is invalid: unsafe asset path");
     }
-    if (extname(candidate.file) !== ".js") {
-      throw new Error("Admin UI bundle manifest is invalid: entry files must be JavaScript");
+    const extension = extname(candidate.file);
+    if (!allowedOutputExtensions.has(extension)) {
+      throw new Error("Admin UI bundle manifest is invalid: unsupported asset type");
+    }
+    // Vite may expose CSS, fonts, and images as top-level manifest records. They are
+    // measured from the output tree or a chunk's asset lists, but only JS records form
+    // the synchronous import graph that determines the initial page.
+    if (extension !== ".js") {
+      continue;
     }
     if (emittedFiles.has(candidate.file)) {
       throw new Error("Admin UI bundle manifest is invalid: duplicate emitted file");
