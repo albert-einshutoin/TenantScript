@@ -11,6 +11,7 @@
     "test:security": "vitest run src/security-suite.test.tsx",
     "test:coverage": "vitest run --coverage",
     "test:bundle-budget": "node ../../scripts/admin-ui-bundle-budget.test.mjs && vite build && node ../../scripts/admin-ui-bundle-budget.mjs dist bundle-budget.json",
+    "test:accessibility": "playwright test test/e2e/accessibility.spec.ts",
     "test:performance": "playwright test test/e2e/execution-performance.spec.ts",
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
@@ -23,6 +24,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
     "@playwright/test": "^1.61.0",
     "@tenantscript/test-config": "workspace:*",
     "@testing-library/jest-dom": "^6.9.1",

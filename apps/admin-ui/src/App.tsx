@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   createUnavailableAdminApiClient,
   AdminApiError,
@@ -26,6 +26,7 @@ import { canRolePerform } from "@tenantscript/control-plane/rbac";
 import { ExecutionTable } from "./ExecutionTable.js";
 import { type AdminRoute, useHashRoute } from "./router.js";
 import { StatusPill } from "./StatusPill.js";
+import { ModalDialog } from "./ModalDialog.js";
 
 const defaultClient = createUnavailableAdminApiClient();
 
@@ -651,7 +652,7 @@ function ConnectionsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
       {snapshot.providerConnections.length === 0 ? (
         <p className="empty-state">No provider connections yet</p>
       ) : (
-        <div className="table-wrap">
+        <TableViewport label="Provider connection table">
           <table>
             <thead>
               <tr>
@@ -674,7 +675,7 @@ function ConnectionsPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableViewport>
       )}
     </section>
   );
@@ -695,7 +696,7 @@ function AuditPanel({
       {snapshot.auditEvents.length === 0 ? (
         <p className="empty-state">No audit events yet</p>
       ) : (
-        <div className="table-wrap">
+        <TableViewport label="Tenant audit event table">
           <table>
             <thead>
               <tr>
@@ -722,7 +723,7 @@ function AuditPanel({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableViewport>
       )}
       <LoadMoreButton
         section="audit events"
@@ -802,7 +803,7 @@ function SchemaMigrationsPanel({
       {migrations.length === 0 ? (
         <p>No schema migrations configured</p>
       ) : (
-        <div className="table-wrap">
+        <TableViewport label="Schema migration table">
           <table>
             <thead>
               <tr>
@@ -850,7 +851,7 @@ function SchemaMigrationsPanel({
               )}
             </tbody>
           </table>
-        </div>
+        </TableViewport>
       )}
       {migrations.some((migration) => migration.incompatibleInstallations.length > 0) ? (
         <div className="form-error">
@@ -901,7 +902,7 @@ function InstallationsPanel({
   return (
     <section className="data-panel">
       <PanelHeader title="Installations" detail="Tenant scoped plugins" />
-      <div className="table-wrap">
+      <TableViewport label="Installation table">
         <table>
           <thead>
             <tr>
@@ -953,7 +954,7 @@ function InstallationsPanel({
             ))}
           </tbody>
         </table>
-      </div>
+      </TableViewport>
       <LoadMoreButton
         section="installations"
         cursor={snapshot.cursors.installations}
@@ -1068,7 +1069,13 @@ function InstallationCommandPanel({
       </button>
       {error === null ? null : <p className="form-error">{error}</p>}
       {!confirming ? null : (
-        <div role="dialog" aria-modal="true" aria-label="Confirm installation change">
+        <ModalDialog
+          label="Confirm installation change"
+          cancelDisabled={commandInFlight}
+          onCancel={() => {
+            setConfirming(false);
+          }}
+        >
           <p>
             Change enabled to {String(enabled)} and priority to {String(parsedPriority)}?
           </p>
@@ -1084,7 +1091,7 @@ function InstallationCommandPanel({
           >
             Cancel
           </button>
-        </div>
+        </ModalDialog>
       )}
     </section>
   );
@@ -1209,7 +1216,7 @@ function VersionsPanel({
   return (
     <section className="data-panel">
       <PanelHeader title="Versions" detail="Pinned artifacts" />
-      <div className="table-wrap">
+      <TableViewport label="Plugin version table">
         <table>
           <thead>
             <tr>
@@ -1281,7 +1288,7 @@ function VersionsPanel({
             })}
           </tbody>
         </table>
-      </div>
+      </TableViewport>
       <LoadMoreButton
         section="versions"
         cursor={snapshot.cursors.pluginVersions}
@@ -1301,7 +1308,13 @@ function VersionsPanel({
       )}
       {rollbackError === null ? null : <p className="form-error">{rollbackError}</p>}
       {rollbackTarget === null ? null : (
-        <div role="dialog" aria-modal="true" aria-label="Confirm plugin rollback">
+        <ModalDialog
+          label="Confirm plugin rollback"
+          cancelDisabled={rollbackInFlight}
+          onCancel={() => {
+            setRollbackTarget(null);
+          }}
+        >
           <p>Tenant: {tenantId}</p>
           <p>Plugin: {rollbackTarget.version.pluginKey}</p>
           <p>From: {rollbackTarget.installation.version}</p>
@@ -1318,7 +1331,7 @@ function VersionsPanel({
           >
             Cancel
           </button>
-        </div>
+        </ModalDialog>
       )}
       {rollbackResult === null ? null : (
         <section aria-label="Rollback result">
@@ -1521,14 +1534,16 @@ function InstallFlowPanel({
         </section>
       )}
       {!confirming ? null : (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={
+        <ModalDialog
+          label={
             mode === "install"
               ? "Confirm plugin installation"
               : "Confirm installation approval request"
           }
+          cancelDisabled={installInFlight}
+          onCancel={() => {
+            setConfirming(false);
+          }}
         >
           <p>
             Install {preview.pluginKey} {preview.version} with {String(preview.capabilities.length)}{" "}
@@ -1552,7 +1567,7 @@ function InstallFlowPanel({
           >
             Cancel
           </button>
-        </div>
+        </ModalDialog>
       )}
     </section>
   );
@@ -1682,7 +1697,14 @@ function ApprovalsPanel({
       </div>
       {decisionError === null ? null : <p className="form-error">{decisionError}</p>}
       {confirmation === null ? null : (
-        <div role="dialog" aria-modal="true" aria-label="Confirm approval decision">
+        <ModalDialog
+          label="Confirm approval decision"
+          cancelDisabled={submitting}
+          onCancel={() => {
+            setConfirmation(null);
+            setReason("");
+          }}
+        >
           <p>Tenant: {tenantId}</p>
           <p>Approval: {confirmation.approval.id}</p>
           <p>Decision: {confirmation.decision}</p>
@@ -1709,7 +1731,7 @@ function ApprovalsPanel({
           >
             Cancel
           </button>
-        </div>
+        </ModalDialog>
       )}
       {result === null ? null : (
         <section aria-label="Approval decision result">
@@ -2020,6 +2042,14 @@ function PanelHeader({ title, detail }: { title: string; detail: string }) {
     <div className="panel-header">
       <h2>{title}</h2>
       <span>{detail}</span>
+    </div>
+  );
+}
+
+function TableViewport({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="table-wrap" role="region" aria-label={label} tabIndex={0}>
+      {children}
     </div>
   );
 }

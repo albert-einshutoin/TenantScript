@@ -67,6 +67,12 @@ synthetic Playwright fixture that is excluded from the production entry. Run
 `pnpm test:admin-ui-performance` from the repository root before changing row layout, virtualization,
 or execution detail actions.
 
+Automated accessibility is enforced by the repository-verified
+[`Admin UI accessibility gate`](../../docs/reference/admin-ui-accessibility.md). Run
+`pnpm test:admin-ui-accessibility` from the repository root when changing navigation, forms,
+dialogs, tables, or privileged journeys. The gate requires unfiltered axe zero and a keyboard-only
+install, rollback, and approval journey; it remains separate from manual screen-reader evidence.
+
 The Audit log screen pages tenant-scoped events newest-first through signed cursors. Its API and UI
 accept only event metadata plus the public `enabled`, `priority`, `revision`, and `version` state;
 raw before/after JSON, configuration, grants, credentials, and customer payloads fail closed before
