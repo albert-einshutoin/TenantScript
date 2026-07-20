@@ -9,10 +9,10 @@ in the production setup plan:
 The adapter uses the hardened [Cloudflare API transport](cloudflare-api-transport.md). It is a
 resource-specific building block composed through the fail-closed
 [setup provider router](setup-provider-router.md). The accountless
-[D1 migration adapter](cloudflare-d1-migrations.md) handles the next operation, but neither adapter
-is a complete `ext setup` command. Worker bindings, a live migration runner, credential input, the
-remaining Cloudflare resources, and clean-account Tier 2 evidence are still required before
-TenantScript can claim live self-host setup completion.
+[D1 migration adapter and runner](cloudflare-d1-migrations.md) handle the next operation, but these
+building blocks are not a complete `ext setup` command. Worker bindings, credential input/live
+composition, the remaining Cloudflare resources, and clean-account Tier 2 evidence are still
+required before TenantScript can claim live self-host setup completion.
 
 ## Permission and endpoints
 

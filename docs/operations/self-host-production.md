@@ -47,9 +47,10 @@ pnpm wrangler deploy --dry-run --config wrangler.jsonc
 pnpm wrangler deploy --config wrangler.jsonc
 ```
 
-The accountless [D1 migration adapter](cloudflare-d1-migrations.md) pins the repository catalog and
-defines resume-safe prefix verification for future setup composition. It does not currently invoke
-Wrangler or accept credentials, so operators must still run and verify the command above.
+The [D1 migration adapter and runner](cloudflare-d1-migrations.md) pin the repository catalog,
+perform resume-safe prefix verification, and expose a fail-closed Wrangler process boundary. The
+runner is not yet composed into a credential-bearing `ext setup` command, so operators must still
+run and verify the command above.
 
 Do not treat `deploy --dry-run` as live resource, permission, migration, or request-path evidence.
 After deployment, collect a secret-free doctor report through a trusted adapter and evaluate it with
@@ -79,7 +80,7 @@ rotation runbook. The template does not guess or generate secrets.
   [setup run journal recovery contract](setup-run-journal.md) and the
   [Cloudflare transport boundary](cloudflare-api-transport.md). The
   [D1 setup adapter](cloudflare-d1-setup-adapter.md) and
-  [migration adapter](cloudflare-d1-migrations.md), together with the
+  [migration adapter and runner](cloudflare-d1-migrations.md), together with the
   [R2 setup adapter](cloudflare-r2-setup-adapter.md), are accountless resource slices; full live
   Cloudflare apply remains unimplemented.
 - **Verification:** run accountless `pnpm verify`, Wrangler dry-run, migration inspection, the

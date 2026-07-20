@@ -53,7 +53,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Cloudflare API transport](docs/operations/cloudflare-api-transport.md) — fixed-origin、mutation非retry、response上限、credential非露出の境界
 - [Cloudflare D1 setup adapter](docs/operations/cloudflare-d1-setup-adapter.md) — deterministic create、explicit adoption、ownership-verified cleanup
 - [Cloudflare R2 setup adapter](docs/operations/cloudflare-r2-setup-adapter.md) — 2 bucketの安定create/resume、explicit adoption、ownership-safe cleanup
-- [Cloudflare D1 migrations](docs/operations/cloudflare-d1-migrations.md) — pinned SQL catalog、prefix verification、response-loss resume
+- [Cloudflare D1 migrations](docs/operations/cloudflare-d1-migrations.md) — pinned SQL catalog、closed history query、fail-closed Wrangler apply、response-loss resume
 - [Setup provider router](docs/operations/setup-provider-router.md) — exact operation ownership、fail-closed composition、shared cleanup routing
 
 ## ローカル検証とCI

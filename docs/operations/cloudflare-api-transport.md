@@ -24,6 +24,7 @@ Grant only permissions required by the selected adapter. Current Cloudflare refe
 | Adapter action               | Official endpoint reference                                                                                                             | Required permission shown by Cloudflare |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | Create D1 database           | [Create D1 database](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/create/)                          | `D1 Write`                              |
+| Read D1 migration history    | [Query D1 database](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/query/)                            | `D1 Read` or `D1 Write`                 |
 | Create R2 bucket             | [Create R2 bucket](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/create/)                             | `Workers R2 Storage Write`              |
 | Delete R2 bucket             | [Delete R2 bucket](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/delete/)                             | `Workers R2 Storage Write`              |
 | Upload Worker script content | [Put script content](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/content/methods/update/) | `Workers Scripts Write`                 |
