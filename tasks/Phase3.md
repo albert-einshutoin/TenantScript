@@ -42,9 +42,10 @@
   - RED: provider token の rotation 中も capability call が無停止で成功する(新旧鍵の並行受理)
   - DoD: rotation テスト green、手順がドキュメント化
 
-- [ ] **P3-T07**(S)provider 接続の汎用化
+- [x] **P3-T07**(S)provider 接続の汎用化
   - 内容: Slack 以外の OAuth provider を追加するための内部インターフェース安定化(contract test kit 適用)
   - DoD: 2つ目の provider(例: GitHub)が kit を通過
+  - Evidence: `createGitHubIssueCreateProvider`、`packages/capabilities/test/capability-contracts.test.ts`、`docs/reference/provider-adapters.md`
 
 ## チャンク C: security 仕上げ(T08–T12)
 

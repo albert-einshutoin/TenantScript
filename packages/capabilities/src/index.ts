@@ -6,6 +6,7 @@ export interface CapabilityGrant {
   origins?: string | readonly string[];
   recipientDomains?: string | readonly string[];
   requestHeaders?: string | readonly string[];
+  repositories?: string | readonly string[];
   roles?: string | readonly string[];
   resumeHooks?: string | readonly string[];
   templates?: string | readonly string[];
@@ -28,6 +29,22 @@ export interface ProviderTokenRotationSnapshot {
 export interface RotatingTokenCapabilityProviderOptions {
   resolveTokens: () => Promise<ProviderTokenRotationSnapshot> | ProviderTokenRotationSnapshot;
   invoke: (request: { token: string; input: unknown }) => unknown;
+}
+
+export interface GitHubIssueCreateRequest {
+  repository: string;
+  title: string;
+  body?: string;
+}
+
+export interface GitHubIssueCreateResult {
+  number: number;
+  url: string;
+}
+
+export interface GitHubIssueCreateProviderOptions {
+  resolveTokens: RotatingTokenCapabilityProviderOptions["resolveTokens"];
+  createIssue: (request: GitHubIssueCreateRequest & { token: string }) => unknown;
 }
 
 export type ProviderTokenRotationErrorCode =
@@ -906,6 +923,21 @@ export function createMockSlackSendProvider(params: {
   };
 }
 
+export function createGitHubIssueCreateProvider(
+  options: GitHubIssueCreateProviderOptions
+): CapabilityProvider {
+  const provider = createRotatingTokenCapabilityProvider({
+    resolveTokens: options.resolveTokens,
+    invoke: async ({ token, input }) => {
+      const request = input as GitHubIssueCreateRequest;
+      const result = await options.createIssue({ token, ...request });
+      return normalizeGitHubIssueCreateResult(result, request.repository);
+    }
+  });
+
+  return (input) => provider(parseGitHubIssueCreateInput(input));
+}
+
 export function createRotatingTokenCapabilityProvider(
   options: RotatingTokenCapabilityProviderOptions
 ): CapabilityProvider {
@@ -975,6 +1007,16 @@ function assertScope(name: string, grant: CapabilityGrant, input: unknown): void
     if (allowedChannels.length > 0 && !allowedChannels.includes(message.channel)) {
       throw new CapabilityDeniedError(
         `slack.send channel ${message.channel} is outside granted scope`
+      );
+    }
+  }
+
+  if (name === "github.issue.create") {
+    const request = parseGitHubIssueCreateInput(input);
+    const repositories = normalizeGitHubRepositoryGrant(grant.repositories);
+    if (!repositories.includes(request.repository)) {
+      throw new CapabilityDeniedError(
+        `github.issue.create repository ${request.repository} is outside granted scope`
       );
     }
   }
@@ -1124,6 +1166,75 @@ function parseSlackSendInput(input: unknown): { channel: string; text: string } 
     channel: input.channel,
     text: input.text
   };
+}
+
+function parseGitHubIssueCreateInput(input: unknown): GitHubIssueCreateRequest {
+  if (!isClosedRecord(input, ["repository", "title", "body"])) {
+    if (typeof input === "object" && input !== null && !Array.isArray(input)) {
+      throw new CapabilityInputError("github.issue.create contains unsupported input fields");
+    }
+    throw new CapabilityInputError("github.issue.create requires repository and title");
+  }
+  const repository = input.repository;
+  const title = input.title;
+  const body = input.body;
+  if (typeof repository !== "string" || typeof title !== "string" || title.length === 0) {
+    throw new CapabilityInputError("github.issue.create requires repository and title");
+  }
+  validateGitHubRepository(repository, "input");
+  if (
+    title.length > 256 ||
+    (body !== undefined && (typeof body !== "string" || body.length > 65_536))
+  ) {
+    throw new CapabilityInputError("github.issue.create input exceeds size limits");
+  }
+  return { repository, title, ...(body === undefined ? {} : { body }) };
+}
+
+function normalizeGitHubRepositoryGrant(
+  value: string | readonly string[] | undefined
+): readonly string[] {
+  const repositories = value === undefined ? [] : [value].flat();
+  if (repositories.length === 0 || new Set(repositories).size !== repositories.length) {
+    throw new CapabilityDeniedError("github.issue.create has an invalid repository grant");
+  }
+  for (const repository of repositories) validateGitHubRepository(repository, "grant");
+  return repositories;
+}
+
+function validateGitHubRepository(value: string, source: "grant" | "input"): void {
+  const [owner, repository, ...extra] = value.split("/");
+  const ownerValid =
+    owner !== undefined && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u.test(owner);
+  const repositoryValid =
+    repository !== undefined &&
+    repository !== "." &&
+    repository !== ".." &&
+    /^[A-Za-z0-9._-]{1,100}$/u.test(repository);
+  if (!ownerValid || !repositoryValid || extra.length > 0) {
+    const message = `github.issue.create repository is invalid`;
+    if (source === "grant") throw new CapabilityDeniedError(message);
+    throw new CapabilityInputError(message);
+  }
+}
+
+function normalizeGitHubIssueCreateResult(
+  value: unknown,
+  repository: string
+): GitHubIssueCreateResult {
+  if (!isClosedRecord(value, ["number", "url"])) throw new Error("invalid GitHub issue result");
+  const number = value.number;
+  const url = value.url;
+  if (
+    typeof number !== "number" ||
+    !Number.isSafeInteger(number) ||
+    number <= 0 ||
+    typeof url !== "string" ||
+    url !== `https://github.com/${repository}/issues/${String(number)}`
+  ) {
+    throw new Error("invalid GitHub issue result");
+  }
+  return { number, url };
 }
 
 function normalizeProviderTokenSnapshot(value: unknown): ProviderTokenRotationSnapshot {

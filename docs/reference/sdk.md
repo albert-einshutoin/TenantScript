@@ -79,11 +79,15 @@ Phase 2 built-ins:
 - `http.fetch`: public HTTP(S) origin、標準method（GET/HEAD/POST/PUT/PATCH/DELETE/OPTIONS）、request header scopeを強制。redirectはtransportの自動追跡を無効化し、各hopのoriginと派生methodを再検証する。credentialはoriginごとのtrusted設定から注入し、別originへ持ち越さない。`createWebFetchHttpTransport`はWorkers標準`fetch`を`redirect: manual`、`credentials: omit`でadapter化する。
 - `kv.state`: `get`、`put`、`delete`とkey prefixをgrantで制限し、JSON-compatible valueだけを保存する。`createKvStateProvider`へ渡すtrusted scope (`tenantId`、`pluginName`、`version`) はplugin inputから指定・上書きできない。各scopeを独立したDurable Object facetとして保存し、key/value/facet全体のUTF-8 byte数とentry数をtransaction内で検証する。`KvStateStorage`はDurable Object互換の`get`、`put`、`transaction`契約で、`createInMemoryKvStateStorage`はlocal/test用に同じ原子性を直列化して再現する。
 
+Phase 3 built-ins:
+
+- `github.issue.create`: `repositories`のexact allowlistとclosedな`repository`、`title`、`body` inputを強制する。`createGitHubIssueCreateProvider`はrotation-aware token sourceを再利用し、credentialをtransportだけへ注入する。resultは同じrepositoryの`number`とpublic issue `url`だけに限定する。adapter追加時の全契約は[Provider adapter contract](provider-adapters.md)を参照する。
+
 同じexecution/call indexのretryはjournal resultを再利用する。capabilityまたはinputが変わったjournal entryは`CapabilityJournalConflictError`で拒否する。
 
 providerを実行した呼び出しは`success`、grant/scope/rate limit等による拒否は`denied`、予期しないprovider障害は`error`として監査する。監査recordはcapability名、安定したreason、時刻だけを持ち、input、result、credential、provider error本文を保存しない。予期しないprovider障害は`CapabilityProviderError`へ正規化され、内部messageをpluginへ反射しない。journal replayは既存resultと監査を再利用するため、重複するprovider実行や監査recordを生成しない。
 
-capability追加時は`packages/capabilities/test/capability-contracts.test.ts`へfixtureを追加し、grant、scope、監査、rate limit、冪等性、secret非露出、安定したエラー形状を共通検証する。
+capability追加時は`packages/capabilities/test/capability-contracts.test.ts`へfixtureを追加し、grant、scope、監査、rate limit、冪等性、secret非露出、安定したエラー形状を共通検証する。外部SaaS adapterは[Provider adapter contract](provider-adapters.md)も満たす。
 
 ## `@tenantscript/proxy`
 
