@@ -51,6 +51,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Usage meter運用契約](docs/operations/usage-meter.md) — Analytics Engine固定schema、fail-open、UTC期間集計
 - [Agent onboarding](llms.txt) — 公開docs、package entrypoint、TDD、credential境界の短い索引
 - [Cloudflare API transport](docs/operations/cloudflare-api-transport.md) — fixed-origin、mutation非retry、response上限、credential非露出の境界
+- [Cloudflare D1 setup adapter](docs/operations/cloudflare-d1-setup-adapter.md) — deterministic create、explicit adoption、ownership-verified cleanup
 
 ## ローカル検証とCI
 

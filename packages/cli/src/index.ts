@@ -46,6 +46,7 @@ export {
   createFileSetupRunJournalStore,
   createInMemorySetupRunJournalStore,
   createSetupRunJournal,
+  deriveSetupOperationIdempotencyKey,
   executeProductionSetup,
   parseSetupRunJournal,
   SetupRunExecutionError,
@@ -66,6 +67,13 @@ export {
   type CloudflareFetch,
   type CloudflareHttpMethod
 } from "./cloudflare-api-transport.js";
+
+export {
+  CloudflareD1SetupAdapterError,
+  createCloudflareD1SetupAdapter,
+  type CloudflareD1DatabaseConfiguration,
+  type CloudflareD1SetupAdapterErrorCode
+} from "./cloudflare-d1-setup-adapter.js";
 
 export {
   parseProductionWranglerInput,
