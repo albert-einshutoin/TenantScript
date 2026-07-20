@@ -22,6 +22,7 @@ evidence.
 | stored grant proposal changes plugin/version after review    | composite D1 foreign keys reject the mutation                       | `packages/control-plane/test/security-suite.workers.test.ts` |
 | viewer/operator invokes privileged Admin UI actions          | controls stay absent and server authorization remains authoritative | `apps/admin-ui/src/App.test.tsx`                             |
 | brokered HTTP redirects or headers escape the egress grant   | revalidate every redirect; inject exact-origin credentials only     | `packages/capabilities/test/security-suite.test.ts`          |
+| plugin input forges a `kv.state` tenant, plugin, or version  | reject scope fields; bind storage facets from trusted host context  | `packages/capabilities/test/security-suite.test.ts`          |
 
 ## Review rule
 

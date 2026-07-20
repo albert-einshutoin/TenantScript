@@ -75,7 +75,7 @@
   - RED: allowlist 外 URL 拒否(リダイレクト追跡含む)/ credential injection(plugin に header を見せず broker が注入)/ audit 記録
   - DoD: D-005 の allowlist 実装として security suite 入り
 
-- [ ] **P2-T14**(M)kv.state(DO facets)
+- [x] **P2-T14**(M)kv.state(DO facets)
   - RED: plugin ごとの durable state が plugin/tenant 境界で分離される / サイズ上限
   - DoD: 分離・上限テスト green
 
