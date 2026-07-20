@@ -1,0 +1,54 @@
+name: Adoption and product feedback
+description: Share public or anonymous self-host feedback without customer data.
+title: "[Feedback] "
+labels: ["area:community"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        This issue is public. You may remain anonymous. Do not include organization/customer names,
+        deployment URLs, tenant data, credentials, account identifiers, or confidential metrics.
+  - type: dropdown
+    id: identity
+    attributes:
+      label: Publication preference
+      options:
+        - Anonymous feedback
+        - Public organization or project name is included with authorization
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow and outcome
+      description: Describe the use case and outcome using synthetic or broad information.
+    validations:
+      required: true
+  - type: textarea
+    id: friction
+    attributes:
+      label: Friction and failed paths
+      description: Explain what was difficult and the documentation or behavior you expected.
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime primitive
+      options:
+        - Accountless evaluation
+        - Cloudflare Workers
+        - Dynamic Workers
+        - Workers for Platforms
+        - Prefer not to say
+    validations:
+      required: true
+  - type: checkboxes
+    id: public_safety
+    attributes:
+      label: Public safety confirmation
+      options:
+        - label: I am authorized to publish every name included, or I selected anonymous feedback.
+          required: true
+        - label: I removed secrets, customer/tenant data, account identifiers, private URLs, and confidential metrics.
+          required: true

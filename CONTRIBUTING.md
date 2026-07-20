@@ -123,6 +123,22 @@ Use `Fixes #N` only when every acceptance criterion is satisfied. Green CI does 
 
 Contributions are accepted when they fit the documented scope, preserve security boundaries and package direction, include proportionate tests and documentation, and pass required checks. Maintainers may ask to split a pull request that is too broad to review safely.
 
+## Adoption reports and product feedback
+
+Adopter listing is voluntary and separate from telemetry. To add a public entry, update
+[`ADOPTERS.md`](ADOPTERS.md) using the
+[adopter report template](.github/PULL_REQUEST_TEMPLATE/adopter-report.md). The submitter must be
+authorized to publish every name and must remove customer/tenant data, account identifiers,
+credentials, private URLs, and confidential metrics. Maintainers verify public consent and safe
+content before merge.
+
+Adopters who cannot publish a name can use the
+[anonymous feedback form](https://github.com/albert-einshutoin/TenantScript/issues/new?template=feedback.yml).
+The issue is still public, so use broad synthetic context and omit organization, customer,
+deployment, and tenant details. Reproducible defects use the bug template. Public security
+hardening proposals use the security-adjacent template; suspected vulnerabilities always follow
+the private process in [`SECURITY.md`](SECURITY.md).
+
 ## Review and conduct
 
 Review the change, not the person. Explain security or architecture concerns with concrete evidence and offer a path forward. Harassment, disclosure of private information, and unsafe publication of vulnerabilities are not acceptable.

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/albert-einshutoin/TenantScript/blob/main/docs/reference/telemetry-event.schema.json",
+  "title": "TenantScript public telemetry event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatedAt", "productVersion", "runtimePrimitive", "counts"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "productVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "runtimePrimitive": {
+      "enum": ["cloudflare-workers", "dynamic-workers", "workers-for-platforms"]
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabledInstallations", "executions", "errors"],
+      "properties": {
+        "enabledInstallations": { "type": "integer", "minimum": 0 },
+        "executions": { "type": "integer", "minimum": 0 },
+        "errors": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runtime", "timeout", "egressDenied", "budgetExceeded"],
+          "properties": {
+            "runtime": { "type": "integer", "minimum": 0 },
+            "timeout": { "type": "integer", "minimum": 0 },
+            "egressDenied": { "type": "integer", "minimum": 0 },
+            "budgetExceeded": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

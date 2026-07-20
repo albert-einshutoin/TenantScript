@@ -40,6 +40,8 @@ Use these sources for the current boundary:
 - [Hook schema migration operations](docs/operations/schema-migrations.md)
 - [Runaway installation quarantine](docs/operations/runaway-quarantine.md)
 - [Incident response and synthetic drills](docs/operations/incident-response.md)
+- [Opt-in telemetry and privacy](docs/privacy/telemetry.md)
+- [Voluntary adopter reports](ADOPTERS.md)
 - [Rollback operations](docs/operations/rollback-troubleshooting.md)
 
 Quickstart snippets are executable contracts. Update their linked tests in the same change; do not
