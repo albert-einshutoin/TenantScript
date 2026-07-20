@@ -15,6 +15,44 @@ export interface CapabilityGrant {
 export type CapabilityGrants = Record<string, CapabilityGrant>;
 export type CapabilityProvider = (input: unknown) => unknown;
 
+export interface ProviderToken {
+  id: string;
+  value: string;
+}
+
+export interface ProviderTokenRotationSnapshot {
+  active: ProviderToken;
+  candidate?: ProviderToken;
+}
+
+export interface RotatingTokenCapabilityProviderOptions {
+  resolveTokens: () => Promise<ProviderTokenRotationSnapshot> | ProviderTokenRotationSnapshot;
+  invoke: (request: { token: string; input: unknown }) => unknown;
+}
+
+export type ProviderTokenRotationErrorCode =
+  | "provider_credentials_rejected"
+  | "provider_invocation_failed"
+  | "provider_token_snapshot_invalid"
+  | "provider_token_source_unavailable";
+
+export class ProviderCredentialRejectedError extends Error {
+  constructor() {
+    super("provider credential rejected");
+    this.name = "ProviderCredentialRejectedError";
+  }
+}
+
+export class ProviderTokenRotationError extends Error {
+  readonly code: ProviderTokenRotationErrorCode;
+
+  constructor(code: ProviderTokenRotationErrorCode, message: string) {
+    super(message);
+    this.name = "ProviderTokenRotationError";
+    this.code = code;
+  }
+}
+
 export interface CapabilityCallJournalEntry {
   executionId: string;
   callIndex: number;
@@ -868,6 +906,40 @@ export function createMockSlackSendProvider(params: {
   };
 }
 
+export function createRotatingTokenCapabilityProvider(
+  options: RotatingTokenCapabilityProviderOptions
+): CapabilityProvider {
+  return async (input) => {
+    let snapshot: ProviderTokenRotationSnapshot;
+    try {
+      snapshot = await options.resolveTokens();
+    } catch {
+      throw new ProviderTokenRotationError(
+        "provider_token_source_unavailable",
+        "provider token source is unavailable"
+      );
+    }
+    snapshot = normalizeProviderTokenSnapshot(snapshot);
+
+    const primary = snapshot.candidate ?? snapshot.active;
+    try {
+      return await options.invoke({ token: primary.value, input });
+    } catch (error) {
+      if (snapshot.candidate === undefined || !(error instanceof ProviderCredentialRejectedError)) {
+        throw sanitizeProviderInvocationError(error);
+      }
+    }
+
+    // Only an explicit credential rejection is safe to replay. Network, timeout, rate-limit,
+    // and permission failures may have produced a side effect, so they never reach this fallback.
+    try {
+      return await options.invoke({ token: snapshot.active.value, input });
+    } catch (error) {
+      throw sanitizeProviderInvocationError(error);
+    }
+  };
+}
+
 async function readJournaledCapabilityCall(params: {
   journal: CapabilityCallJournal | undefined;
   executionId: string | undefined;
@@ -1052,6 +1124,61 @@ function parseSlackSendInput(input: unknown): { channel: string; text: string } 
     channel: input.channel,
     text: input.text
   };
+}
+
+function normalizeProviderTokenSnapshot(value: unknown): ProviderTokenRotationSnapshot {
+  try {
+    if (!isClosedRecord(value, ["active", "candidate"])) throw new Error("invalid snapshot");
+    const active = normalizeProviderToken(value.active);
+    const candidateValue = value.candidate;
+    const candidate =
+      candidateValue === undefined ? undefined : normalizeProviderToken(candidateValue);
+    if (candidate?.id === active.id) throw new Error("duplicate token id");
+    // Copy primitive values once so getters cannot change the token between validation and invoke.
+    return { active, ...(candidate === undefined ? {} : { candidate }) };
+  } catch {
+    throw new ProviderTokenRotationError(
+      "provider_token_snapshot_invalid",
+      "provider token snapshot is invalid"
+    );
+  }
+}
+
+function normalizeProviderToken(value: unknown): ProviderToken {
+  if (!isClosedRecord(value, ["id", "value"])) throw new Error("invalid token");
+  const id = value.id;
+  const token = value.value;
+  if (
+    typeof id !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(id) ||
+    typeof token !== "string" ||
+    token.length === 0
+  ) {
+    throw new Error("invalid token");
+  }
+  return { id, value: token };
+}
+
+function isClosedRecord(
+  value: unknown,
+  allowedKeys: readonly string[]
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).every((key) => allowedKeys.includes(key))
+  );
+}
+
+function sanitizeProviderInvocationError(error: unknown): ProviderTokenRotationError {
+  if (error instanceof ProviderCredentialRejectedError) {
+    return new ProviderTokenRotationError(
+      "provider_credentials_rejected",
+      "provider credentials were rejected"
+    );
+  }
+  return new ProviderTokenRotationError("provider_invocation_failed", "provider invocation failed");
 }
 
 function parseApprovalRequestInput(input: unknown): {
