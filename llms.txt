@@ -9,6 +9,7 @@ sources instead of inferring architecture or live deployment details.
 
 ## Start here
 
+- [Documentation by audience and verification status](docs/README.md)
 - [Project status and documentation map](README.md)
 - [Contribution workflow and quality gates](CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
