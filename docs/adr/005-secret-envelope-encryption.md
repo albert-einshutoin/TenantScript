@@ -67,6 +67,13 @@ associated envelope is rewrapped and read-verified makes those records unrecover
 operator sequence and rollback boundary are documented in
 [Secret KEK rotation](../operations/secret-key-rotation.md).
 
+Trusted internal state machines can use `compareAndSwapSecret` to create, replace, or delete an
+encrypted value only when its expected plaintext corresponds to the authenticated ciphertext revision.
+The storage adapter compares that exact ciphertext and applies the new ciphertext (or deletion) in one
+transaction. Provider-token rotation uses this primitive to keep active, candidate, and retiring tokens
+inside one envelope while promotion and rollback remain atomic. Callers must never expose the expected
+or next plaintext through an API, log, audit record, or conflict error.
+
 ## Consequences
 
 - Storage no longer contains plaintext provider tokens or plaintext DEKs, and authenticated
@@ -79,5 +86,9 @@ operator sequence and rollback boundary are documented in
   Production adapters still need a transactional compare-and-swap implementation, and production
   inventory/orchestration, rotation drills, vendor KMS integration, and legacy-data migration remain
   operational work under Issue #31.
-- Provider-token rotation, where old and new SaaS credentials overlap without interrupting capability
-  calls, is separate from encryption-key rotation and is not implemented by this decision.
+- Provider-token sets have an encrypted CAS state machine for staging, promotion, rollback, abort, and
+  finalization. Production OAuth/admin endpoints and live Durable Object transaction evidence remain
+  deployment work rather than guarantees of this ADR.
+- Provider-token rotation remains separate from encryption-key rotation. The accountless encrypted
+  state machine and capability fallback are implemented, while production OAuth/admin orchestration,
+  live provider validation, and provider-side revocation remain deployment responsibilities.

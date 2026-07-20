@@ -231,6 +231,8 @@ export {
   createInMemorySecretStore,
   SecretStoreError,
   type AesGcmSecretEncryptionKeyringConfig,
+  type CompareAndSwapSecretRequest,
+  type CompareAndSwapSecretResult,
   type EncodedSecretEncryptionKey,
   type PutSecretRequest,
   type RewrapSecretResult,
@@ -241,6 +243,16 @@ export {
   type SecretStoreErrorCode,
   type SecretStoreStorage
 } from "./secret-store.js";
+
+export {
+  createProviderTokenRotationManager,
+  ProviderTokenRotationStateError,
+  type ProviderTokenResolutionSnapshot,
+  type ProviderTokenRotationManager,
+  type ProviderTokenRotationMetadata,
+  type ProviderTokenRotationStateErrorCode,
+  type ProviderTokenValue
+} from "./provider-token-rotation-store.js";
 
 export {
   createInMemorySlackConnectionStore,

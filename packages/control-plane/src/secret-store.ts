@@ -9,9 +9,23 @@ export interface PutSecretRequest {
   value: string;
 }
 
+export interface CompareAndSwapSecretRequest {
+  ref: SecretRef;
+  expectedValue: string | null;
+  nextValue: string | null;
+}
+
+export interface CompareAndSwapSecretResult {
+  matched: boolean;
+  changed: boolean;
+}
+
 export interface SecretStore {
   putSecret: (request: PutSecretRequest) => Promise<SecretRef> | SecretRef;
   getSecret: (ref: SecretRef) => Promise<string | null> | string | null;
+  compareAndSwapSecret: (
+    request: CompareAndSwapSecretRequest
+  ) => Promise<CompareAndSwapSecretResult>;
   rewrapSecret: (ref: SecretRef) => Promise<RewrapSecretResult | null>;
 }
 
@@ -27,7 +41,11 @@ export interface SecretStoreStorage {
   put: (key: string, value: string) => Promise<void> | void;
   // A rewrap must not overwrite an OAuth reconnect or token refresh that wins the race.
   // Production adapters therefore need one transactional compare-and-swap operation.
-  replaceIfUnchanged: (key: string, expected: string, next: string) => Promise<boolean> | boolean;
+  replaceIfUnchanged: (
+    key: string,
+    expected: string | undefined,
+    next: string | undefined
+  ) => Promise<boolean> | boolean;
 }
 
 export interface SecretEncryptionKey {
@@ -98,7 +116,8 @@ export function createInMemorySecretStore(): SecretStore {
       },
       replaceIfUnchanged: (storageKey, expected, next) => {
         if (secrets.get(storageKey) !== expected) return false;
-        secrets.set(storageKey, next);
+        if (next === undefined) secrets.delete(storageKey);
+        else secrets.set(storageKey, next);
         return true;
       }
     },
@@ -119,56 +138,8 @@ export function createDurableObjectSecretStore(
       if (request.value.length === 0) {
         throw new Error("secret value must not be empty");
       }
-      const currentKey = await resolveCurrentKey(keyring);
-      const dataKey = await generateAesGcmKey(true);
-      const keyIv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTES));
-      const dataIv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTES));
-      let wrappedKey: ArrayBuffer;
-      let ciphertext: ArrayBuffer;
-      let rawDataKey: ArrayBuffer | null = null;
-      try {
-        const exportedDataKey = await crypto.subtle.exportKey("raw", dataKey);
-        if (!(exportedDataKey instanceof ArrayBuffer)) {
-          throw new Error("unexpected data key format");
-        }
-        rawDataKey = exportedDataKey;
-        wrappedKey = await crypto.subtle.encrypt(
-          {
-            name: "AES-GCM",
-            iv: keyIv,
-            additionalData: secretAdditionalData("key", request.ref, currentKey.id),
-            tagLength: AES_GCM_TAG_BYTES * 8
-          },
-          currentKey.key,
-          exportedDataKey
-        );
-        ciphertext = await crypto.subtle.encrypt(
-          {
-            name: "AES-GCM",
-            iv: dataIv,
-            additionalData: secretAdditionalData("data", request.ref),
-            tagLength: AES_GCM_TAG_BYTES * 8
-          },
-          dataKey,
-          textEncoder.encode(request.value)
-        );
-      } catch {
-        throw new SecretStoreError("secret_encryption_failed", "secret encryption failed");
-      } finally {
-        // Web Crypto needs an exportable per-record key for wrapping. Erasing our temporary raw
-        // copy minimizes its lifetime; the deployment key itself remains non-extractable.
-        if (rawDataKey !== null) new Uint8Array(rawDataKey).fill(0);
-      }
-      const envelope: SecretEnvelopeV1 = {
-        version: SECRET_ENVELOPE_VERSION,
-        algorithm: SECRET_ENVELOPE_ALGORITHM,
-        keyId: currentKey.id,
-        keyIv: encodeBase64Url(keyIv),
-        wrappedKey: encodeBase64Url(new Uint8Array(wrappedKey)),
-        iv: encodeBase64Url(dataIv),
-        ciphertext: encodeBase64Url(new Uint8Array(ciphertext))
-      };
-      await storage.put(secretKey(request.ref), JSON.stringify(envelope));
+      const record = await encryptSecretValue(request.ref, request.value, keyring);
+      await storage.put(secretKey(request.ref), record);
       return request.ref;
     },
     getSecret: async (ref) => {
@@ -176,46 +147,32 @@ export function createDurableObjectSecretStore(
       const record = await storage.get(secretKey(ref));
       if (record === undefined) return null;
 
-      const envelope = parseSecretEnvelope(record);
-      const key = await resolveDecryptionKey(keyring, envelope.keyId);
-      let rawDataKey: ArrayBuffer | null = null;
-      try {
-        rawDataKey = await crypto.subtle.decrypt(
-          {
-            name: "AES-GCM",
-            iv: decodeBase64Url(envelope.keyIv),
-            additionalData: secretAdditionalData("key", ref, envelope.keyId),
-            tagLength: AES_GCM_TAG_BYTES * 8
-          },
-          key,
-          decodeBase64Url(envelope.wrappedKey)
-        );
-        if (rawDataKey.byteLength !== AES_256_KEY_BYTES) throw invalidSecretRecord();
-        const dataKey = await crypto.subtle.importKey(
-          "raw",
-          rawDataKey,
-          { name: "AES-GCM" },
-          false,
-          ["decrypt"]
-        );
-        const plaintext = await crypto.subtle.decrypt(
-          {
-            name: "AES-GCM",
-            iv: decodeBase64Url(envelope.iv),
-            additionalData: secretAdditionalData("data", ref),
-            tagLength: AES_GCM_TAG_BYTES * 8
-          },
-          dataKey,
-          decodeBase64Url(envelope.ciphertext)
-        );
-        return textDecoder.decode(plaintext);
-      } catch {
-        // Authentication, malformed ciphertext, and decoding errors share one public error so
-        // storage corruption cannot become an oracle for key or plaintext information.
-        throw invalidSecretRecord();
-      } finally {
-        if (rawDataKey !== null) new Uint8Array(rawDataKey).fill(0);
+      return decryptSecretRecord(ref, record, keyring);
+    },
+    compareAndSwapSecret: async (request) => {
+      validateSecretRef(request.ref);
+      validateOptionalSecretValue(request.expectedValue);
+      validateOptionalSecretValue(request.nextValue);
+      const storageKey = secretKey(request.ref);
+      const record = await storage.get(storageKey);
+      if (record === undefined) {
+        if (request.expectedValue !== null) return { matched: false, changed: false };
+        if (request.nextValue === null) return { matched: true, changed: false };
+      } else {
+        if (request.expectedValue === null) return { matched: false, changed: false };
+        const currentValue = await decryptSecretRecord(request.ref, record, keyring);
+        if (currentValue !== request.expectedValue) return { matched: false, changed: false };
+        if (request.nextValue === currentValue) return { matched: true, changed: false };
       }
+
+      const nextRecord =
+        request.nextValue === null
+          ? undefined
+          : await encryptSecretValue(request.ref, request.nextValue, keyring);
+      // The ciphertext observed above is the revision token. One storage transaction must compare
+      // and replace it so an OAuth reconnect cannot be lost between decrypt and write.
+      const replaced = await storage.replaceIfUnchanged(storageKey, record, nextRecord);
+      return replaced ? { matched: true, changed: true } : { matched: false, changed: false };
     },
     rewrapSecret: async (ref) => {
       validateSecretRef(ref);
@@ -265,6 +222,103 @@ export function createDurableObjectSecretStore(
       }
     }
   };
+}
+
+async function encryptSecretValue(
+  ref: SecretRef,
+  value: string,
+  keyring: SecretEncryptionKeyring
+): Promise<string> {
+  const currentKey = await resolveCurrentKey(keyring);
+  const dataKey = await generateAesGcmKey(true);
+  const keyIv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTES));
+  const dataIv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTES));
+  let wrappedKey: ArrayBuffer;
+  let ciphertext: ArrayBuffer;
+  let rawDataKey: ArrayBuffer | null = null;
+  try {
+    const exportedDataKey = await crypto.subtle.exportKey("raw", dataKey);
+    if (!(exportedDataKey instanceof ArrayBuffer)) throw new Error("unexpected data key format");
+    rawDataKey = exportedDataKey;
+    wrappedKey = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv: keyIv,
+        additionalData: secretAdditionalData("key", ref, currentKey.id),
+        tagLength: AES_GCM_TAG_BYTES * 8
+      },
+      currentKey.key,
+      exportedDataKey
+    );
+    ciphertext = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv: dataIv,
+        additionalData: secretAdditionalData("data", ref),
+        tagLength: AES_GCM_TAG_BYTES * 8
+      },
+      dataKey,
+      textEncoder.encode(value)
+    );
+  } catch {
+    throw new SecretStoreError("secret_encryption_failed", "secret encryption failed");
+  } finally {
+    // Web Crypto needs an exportable per-record key for wrapping. Erasing our temporary raw
+    // copy minimizes its lifetime; the deployment key itself remains non-extractable.
+    if (rawDataKey !== null) new Uint8Array(rawDataKey).fill(0);
+  }
+  return JSON.stringify({
+    version: SECRET_ENVELOPE_VERSION,
+    algorithm: SECRET_ENVELOPE_ALGORITHM,
+    keyId: currentKey.id,
+    keyIv: encodeBase64Url(keyIv),
+    wrappedKey: encodeBase64Url(new Uint8Array(wrappedKey)),
+    iv: encodeBase64Url(dataIv),
+    ciphertext: encodeBase64Url(new Uint8Array(ciphertext))
+  } satisfies SecretEnvelopeV1);
+}
+
+async function decryptSecretRecord(
+  ref: SecretRef,
+  record: string,
+  keyring: SecretEncryptionKeyring
+): Promise<string> {
+  const envelope = parseSecretEnvelope(record);
+  const key = await resolveDecryptionKey(keyring, envelope.keyId);
+  let rawDataKey: ArrayBuffer | null = null;
+  try {
+    rawDataKey = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: decodeBase64Url(envelope.keyIv),
+        additionalData: secretAdditionalData("key", ref, envelope.keyId),
+        tagLength: AES_GCM_TAG_BYTES * 8
+      },
+      key,
+      decodeBase64Url(envelope.wrappedKey)
+    );
+    if (rawDataKey.byteLength !== AES_256_KEY_BYTES) throw invalidSecretRecord();
+    const dataKey = await crypto.subtle.importKey("raw", rawDataKey, { name: "AES-GCM" }, false, [
+      "decrypt"
+    ]);
+    const plaintext = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: decodeBase64Url(envelope.iv),
+        additionalData: secretAdditionalData("data", ref),
+        tagLength: AES_GCM_TAG_BYTES * 8
+      },
+      dataKey,
+      decodeBase64Url(envelope.ciphertext)
+    );
+    return textDecoder.decode(plaintext);
+  } catch {
+    // Authentication, malformed ciphertext, and decoding errors share one public error so
+    // storage corruption cannot become an oracle for key or plaintext information.
+    throw invalidSecretRecord();
+  } finally {
+    if (rawDataKey !== null) new Uint8Array(rawDataKey).fill(0);
+  }
 }
 
 export async function createAesGcmSecretEncryptionKeyring(
@@ -537,6 +591,10 @@ function invalidKeyConfiguration(): SecretStoreError {
     "secret_encryption_key_configuration_invalid",
     "secret encryption key configuration is invalid"
   );
+}
+
+function validateOptionalSecretValue(value: string | null): void {
+  if (value !== null && value.length === 0) throw new Error("secret value must not be empty");
 }
 
 function validateSecretRef(ref: SecretRef): void {
