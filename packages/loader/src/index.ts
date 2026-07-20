@@ -24,6 +24,7 @@ export interface ScopedRuntimeContext {
 export interface ScopedRuntimeLimits {
   timeoutMs?: number;
   maxSubrequests?: number;
+  memoryMb?: number;
 }
 
 export interface ScopedRuntimeResult {
@@ -60,6 +61,7 @@ export class ScopedRuntimeLimitError extends Error {
 interface RuntimeLimitState {
   timeoutMs: number;
   maxSubrequests: number;
+  memoryMb: number;
 }
 
 interface SerializedRuntimeError {
@@ -149,10 +151,24 @@ export function createApprovalContinuationRunner(
 }
 
 function normalizeLimits(limits: ScopedRuntimeLimits | undefined): RuntimeLimitState {
-  return {
+  const normalized = {
     timeoutMs: limits?.timeoutMs ?? 250,
-    maxSubrequests: limits?.maxSubrequests ?? Number.POSITIVE_INFINITY
+    maxSubrequests: limits?.maxSubrequests ?? Number.POSITIVE_INFINITY,
+    memoryMb: limits?.memoryMb ?? 128
   };
+  if (!Number.isSafeInteger(normalized.timeoutMs) || normalized.timeoutMs < 1) {
+    throw new TypeError("runtime timeoutMs must be a positive safe integer");
+  }
+  if (
+    normalized.maxSubrequests !== Number.POSITIVE_INFINITY &&
+    (!Number.isSafeInteger(normalized.maxSubrequests) || normalized.maxSubrequests < 0)
+  ) {
+    throw new TypeError("runtime maxSubrequests must be a non-negative safe integer");
+  }
+  if (!Number.isSafeInteger(normalized.memoryMb) || normalized.memoryMb < 8) {
+    throw new TypeError("runtime memoryMb must be a safe integer of at least 8");
+  }
+  return normalized;
 }
 
 function runHandlerInWorker(params: {
@@ -164,6 +180,9 @@ function runHandlerInWorker(params: {
 }): Promise<ScopedRuntimeResult> {
   const worker = new Worker(RUNTIME_WORKER_SOURCE, {
     eval: true,
+    // A worker-level V8 heap cap contains allocation storms independently from the wall-clock
+    // timeout, protecting local tooling from a plugin that exhausts memory before it yields.
+    resourceLimits: { maxOldGenerationSizeMb: params.limits.memoryMb },
     workerData: {
       bundleCode: params.bundleCode,
       handlerName: params.handlerName,
@@ -254,7 +273,13 @@ function runHandlerInWorker(params: {
     });
 
     worker.on("error", (error) => {
-      finishReject(error as Error);
+      finishReject(
+        isWorkerOutOfMemoryError(error)
+          ? new ScopedRuntimeLimitError(
+              `handler ${params.handlerName} exceeded ${String(params.limits.memoryMb)}MB memory limit`
+            )
+          : (error as Error)
+      );
     });
 
     worker.on("exit", (code) => {
@@ -263,6 +288,14 @@ function runHandlerInWorker(params: {
       }
     });
   });
+}
+
+function isWorkerOutOfMemoryError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error as Error & { code?: unknown }).code === "ERR_WORKER_OUT_OF_MEMORY"
+  );
 }
 
 function serializeUnknownError(error: unknown): SerializedRuntimeError {
@@ -533,7 +566,16 @@ function serializeError(error) {
   if (error instanceof Error) {
     return { name: error.name, message: error.message };
   }
-  return { name: "Error", message: String(error) };
+  // Errors created inside node:vm are from another realm, so instanceof Error is false. Preserve
+  // only their stable name/message fields instead of reflecting stack or plugin-owned metadata.
+  if (isRecord(error) && typeof error.name === "string" && typeof error.message === "string") {
+    return { name: error.name, message: error.message };
+  }
+  const rendered = String(error);
+  const match = rendered.match(/^([A-Za-z]+Error):\s([\s\S]*)$/);
+  return match === null
+    ? { name: "Error", message: rendered }
+    : { name: match[1], message: match[2] };
 }
 
 function deserializeError(error) {

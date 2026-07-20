@@ -54,5 +54,6 @@ re-triggering quarantine.
 - D1 quarantine/recovery triggers and concurrent transition behavior:
   `packages/control-plane/test/runaway-guard.workers.test.ts`
 
-These accountless tests run in Tier 1. Live provider incidents, Cloudflare load thresholds, and the
-broader chaos drill remain separate work in Issue #23.
+These accountless tests run in Tier 1. The broader accountless chaos matrix and synthetic drill are
+documented in [Incident response](incident-response.md). Live provider incidents and Cloudflare
+load thresholds remain separate evidence work in Issue #23.

@@ -95,7 +95,7 @@
 
 ## チャンク F: 信頼性(T18–T20)
 
-- [ ] **P2-T18**(M)chaos テスト
+- [x] **P2-T18**(M)chaos テスト
   - 内容: 暴走 plugin(CPU/メモリ/再帰 hook)、broker 停止、D1 障害、R2 不達の注入テスト。**fail closed / fail open が hook 型どおりに働くことを検証**
   - DoD: chaos シナリオが nightly CI に常設
 
@@ -103,7 +103,7 @@
   - RED: 連続失敗・異常実行数の plugin が自動隔離(disable)され、管理者に通知される
   - DoD: 検知・隔離・復旧のテスト green
 
-- [ ] **P2-T20**(S)障害 runbook
+- [x] **P2-T20**(S)障害 runbook
   - 内容: 主要障害(plugin 事故、capability 障害、budget 事故)の対応手順書
   - DoD: runbook どおりに drill を1回実施
 

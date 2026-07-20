@@ -39,6 +39,7 @@ Use these sources for the current boundary:
 - [Schema compatibility in CI](docs/reference/schema-diff-ci.md)
 - [Hook schema migration operations](docs/operations/schema-migrations.md)
 - [Runaway installation quarantine](docs/operations/runaway-quarantine.md)
+- [Incident response and synthetic drills](docs/operations/incident-response.md)
 - [Rollback operations](docs/operations/rollback-troubleshooting.md)
 
 Quickstart snippets are executable contracts. Update their linked tests in the same change; do not
