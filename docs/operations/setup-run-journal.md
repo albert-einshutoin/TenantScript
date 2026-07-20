@@ -39,6 +39,11 @@ The executor derives a fixed-length SHA-256 idempotency key from run ID, operati
 The same key is reused when a process resumes an `in-progress` reconcile or `cleaning` cleanup.
 Adapters must make both calls idempotent before they are used against a live account.
 
+Before creating a journal or making the first provider call, production composition must construct
+the [setup provider router](setup-provider-router.md) with every operation ID from the selected plan.
+Missing or extra ownership fails preflight. Do not start a partial plan and rely on cleanup: applied
+migrations and adopted resources intentionally have no automatic destructive rollback.
+
 Resume with the same plan, runtime, run ID, journal, and adapter configuration. The executor rejects
 plan fingerprint, operation order, runtime, or run ID drift. Completed operations are skipped. A
 failed run resumes cleanup; it does not silently restart resource creation.
