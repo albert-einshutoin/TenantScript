@@ -114,6 +114,7 @@
 - [ ] **P3-T20**(M)agent-friendly docs(D-016)
   - 内容: llms.txt、plugin scaffold テンプレ集、チュートリアルのコード断片を CI でテスト(docs が腐らない仕組み)
   - DoD: coding agent(Claude Code 等)に「pluginを書いて」と指示して、docs だけで manifest 込みの動く plugin が生成されることを実地検証
+  - Progress: Issue #239でCLI versionと一致するexact SDK dependencies、最小権限test、実tarballに対するfresh scaffold build/test、agent authoring guideとdocs contractを実装。外部coding agent製品による独立evalは未完了
 
 ## チャンク F: v1.0 リリース(T21–T22)
 

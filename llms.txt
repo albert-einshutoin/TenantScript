@@ -40,6 +40,7 @@ Use these sources for the current boundary:
 - [Operator troubleshooting index](docs/operations/README.md)
 - [Zero-integration proxy quickstart](docs/quickstarts/zero-integration-proxy-mode.md)
 - [Typed SDK integration quickstart](docs/quickstarts/sdk-integration.md)
+- [Agent-friendly plugin authoring](docs/quickstarts/agent-plugin-authoring.md)
 - [Public SDK reference](docs/reference/sdk.md)
 - [Canonical TenantScript glossary](docs/reference/glossary.md)
 - [CLI command and exit-code reference](docs/reference/cli.md)

@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { bundlePlugin, runScopedHandler } from "@tenantscript/loader";
 import { parseManifest } from "@tenantscript/manifest";
@@ -17,6 +17,7 @@ import type {
 } from "./admin-http-client.js";
 import { runRollbackDrill } from "./rollback-drill.js";
 import { evaluateDoctorReport, parseDoctorReport } from "./doctor.js";
+import { writePluginScaffold, type PluginScaffoldRequest } from "./plugin-scaffold.js";
 import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
 import {
   parseProductionWranglerInput,
@@ -772,18 +773,7 @@ async function runApprovalDecision(
   return 0;
 }
 
-interface InitRequest {
-  name: string;
-  directory: string;
-  hookName: string;
-  hookType: "event" | "transform" | "policy";
-}
-
-interface InitResult {
-  name: string;
-  directory: string;
-  files: readonly string[];
-}
+type InitRequest = PluginScaffoldRequest;
 
 interface BuildRequest {
   entry: string;
@@ -1343,165 +1333,6 @@ function readFlags(args: readonly string[]): Record<string, string> {
     flags[name.slice(2)] = value;
   }
   return flags;
-}
-
-async function writePluginScaffold(request: InitRequest): Promise<InitResult> {
-  await assertTargetDirectoryIsEmpty(request.directory);
-
-  const files = [
-    "package.json",
-    "tsconfig.json",
-    "src/manifest.ts",
-    "src/index.ts",
-    "test/plugin.test.ts"
-  ] as const;
-  await mkdir(resolve(request.directory, "src"), { recursive: true });
-  await mkdir(resolve(request.directory, "test"), { recursive: true });
-  await Promise.all([
-    writeScaffoldFile(request.directory, "package.json", packageJsonTemplate(request)),
-    writeScaffoldFile(request.directory, "tsconfig.json", tsconfigTemplate()),
-    writeScaffoldFile(request.directory, "src/manifest.ts", manifestTemplate(request)),
-    writeScaffoldFile(request.directory, "src/index.ts", pluginTemplate(request)),
-    writeScaffoldFile(request.directory, "test/plugin.test.ts", pluginTestTemplate(request))
-  ]);
-
-  return {
-    name: request.name,
-    directory: request.directory,
-    files
-  };
-}
-
-async function assertTargetDirectoryIsEmpty(directory: string): Promise<void> {
-  try {
-    const entries = await readdir(directory);
-    if (entries.length > 0) {
-      throw new Error(`target directory is not empty: ${directory}`);
-    }
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      return;
-    }
-    throw error;
-  }
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
-async function writeScaffoldFile(directory: string, path: string, content: string): Promise<void> {
-  await writeFile(resolve(directory, path), content, { flag: "wx" });
-}
-
-function packageJsonTemplate(request: InitRequest): string {
-  return `${JSON.stringify(
-    {
-      name: `@tenantscript-plugin/${request.name}`,
-      version: "0.1.0",
-      type: "module",
-      private: true,
-      scripts: {
-        build: "tsc --noEmit",
-        test: "vitest run"
-      },
-      dependencies: {
-        "@tenantscript/manifest": "0.0.0",
-        "@tenantscript/plugin-sdk": "0.0.0"
-      },
-      devDependencies: {
-        typescript: "^5.8.3",
-        vitest: "^4.1.8"
-      }
-    },
-    null,
-    2
-  )}\n`;
-}
-
-function tsconfigTemplate(): string {
-  return `${JSON.stringify(
-    {
-      compilerOptions: {
-        target: "ES2022",
-        lib: ["ES2022"],
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        strict: true,
-        noUncheckedIndexedAccess: true,
-        exactOptionalPropertyTypes: true,
-        verbatimModuleSyntax: true,
-        isolatedModules: true,
-        skipLibCheck: true
-      },
-      include: ["src/**/*.ts", "test/**/*.ts"]
-    },
-    null,
-    2
-  )}\n`;
-}
-
-function manifestTemplate(request: InitRequest): string {
-  return `import type { TenantScriptManifest } from "@tenantscript/manifest";
-
-export const manifest = {
-  name: "${request.name}",
-  version: "0.1.0",
-  hooks: [{ name: "${request.hookName}", type: "${request.hookType}", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
-  capabilities: {},
-  configSchema: {
-    properties: {},
-    required: []
-  },
-  egress: { mode: "deny" },
-  limits: { cpuMs: 50, timeoutMs: 500 }
-} satisfies TenantScriptManifest;
-`;
-}
-
-function pluginTemplate(request: InitRequest): string {
-  return `import { definePlugin } from "@tenantscript/plugin-sdk";
-import { manifest } from "./manifest.js";
-
-export const plugin = definePlugin({
-  manifest,
-  handlers: {
-    "${request.hookName}": ${handlerTemplate(request.hookType)}
-  }
-});
-
-export default plugin;
-`;
-}
-
-function handlerTemplate(hookType: InitRequest["hookType"]): string {
-  if (hookType === "transform") {
-    return "async (payload, _context) => payload";
-  }
-  if (hookType === "policy") {
-    return 'async (_payload, _context) => ({ decision: "allow" })';
-  }
-  return "async (_payload, _context) => undefined";
-}
-
-function pluginTestTemplate(request: InitRequest): string {
-  return `import { describe, expect, it, vi } from "vitest";
-import { plugin } from "../src/index.js";
-
-describe("${request.name}", () => {
-  it("dispatches ${request.hookName}", async () => {
-    const result = await plugin.dispatch({
-      hookName: "${request.hookName}",
-      payload: { id: "evt_1" },
-      context: {
-        capability: vi.fn()
-      }
-    });
-
-    expect(result.ok).toBe(true);
-  });
-});
-`;
 }
 
 const consoleIo: CliIo = {
