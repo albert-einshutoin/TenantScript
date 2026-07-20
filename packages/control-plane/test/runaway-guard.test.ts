@@ -105,6 +105,29 @@ describe("runaway guard", () => {
     expect(notifications.publish).not.toHaveBeenCalled();
   });
 
+  it("keeps the installation quarantined when notification delivery fails", async () => {
+    const store = createStore();
+    const providerFailure = new Error("synthetic queue unavailable");
+
+    await expect(
+      enforceRunawayPolicyAfterExecution({
+        store,
+        notifications: { publish: () => Promise.reject(providerFailure) },
+        installationId: "installation_1",
+        tenantId: "tenant_1",
+        pluginId: "plugin_1",
+        outcome: "error",
+        policy: { consecutiveFailures: 1, consecutiveTimeouts: 2 },
+        at: new Date("2026-07-20T00:00:04.000Z")
+      })
+    ).rejects.toBe(providerFailure);
+
+    expect(store.enabled).toBe(false);
+    expect(store.state).toEqual(
+      expect.objectContaining({ quarantined: true, reason: "consecutive_failures" })
+    );
+  });
+
   it("requires an explicit recovery that clears state before re-enabling", async () => {
     const store = createStore();
     store.state = {
