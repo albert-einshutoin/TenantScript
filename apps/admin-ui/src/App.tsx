@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   createUnavailableAdminApiClient,
   AdminApiError,
@@ -29,11 +29,22 @@ const defaultClient = createUnavailableAdminApiClient();
 
 export function App({ client = defaultClient }: { client?: AdminApiClient }) {
   const [session, setSession] = useState<AdminSession | null>(null);
+  const skipToMainContent = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    // Admin routes also use the URL fragment. Preventing native hash replacement preserves the
+    // current workspace while retaining link semantics for keyboard and assistive-technology users.
+    event.preventDefault();
+    document.getElementById("main-content")?.focus();
+  }, []);
 
   return (
-    <main className="app-shell">
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content" onClick={skipToMainContent}>
+        Skip to main content
+      </a>
       {session === null ? (
-        <LoginPanel client={client} onLogin={setSession} />
+        <main id="main-content" tabIndex={-1}>
+          <LoginPanel client={client} onLogin={setSession} />
+        </main>
       ) : (
         <AdminShell
           client={client}
@@ -44,7 +55,7 @@ export function App({ client = defaultClient }: { client?: AdminApiClient }) {
           }}
         />
       )}
-    </main>
+    </div>
   );
 }
 
@@ -409,7 +420,7 @@ function AdminShell({
           ))}
         </nav>
       </aside>
-      <div className="workspace">
+      <main id="main-content" className="workspace" tabIndex={-1}>
         <header className="topbar">
           <div>
             <p className="eyebrow">Acme Production</p>
@@ -463,7 +474,7 @@ function AdminShell({
             onApprovalDecision={decideApproval}
           />
         )}
-      </div>
+      </main>
     </section>
   );
 }
