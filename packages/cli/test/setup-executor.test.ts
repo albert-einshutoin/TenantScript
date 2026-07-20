@@ -29,6 +29,40 @@ afterEach(async () => {
 });
 
 describe("production setup executor", () => {
+  it("checkpoints created Control Plane Worker ownership for cleanup", async () => {
+    const adapter = adapterFrom({
+      reconcile: (operation) => {
+        if (operation.id === "create:control-plane-worker") {
+          return { disposition: "created", resourceRef: "worker:tenantscript-control-plane:etag" };
+        }
+        return operation.action === "create"
+          ? { disposition: "adopted", resourceRef: `adopted:${operation.id}` }
+          : { disposition: "applied" };
+      }
+    });
+
+    const result = await executeProductionSetup({
+      plan,
+      runId: "run-control-plane-worker",
+      adapter,
+      journalStore: createInMemorySetupRunJournalStore(),
+      approvedAdoptionOperationIds: plan.operations
+        .filter(
+          (operation) =>
+            operation.action === "create" && operation.id !== "create:control-plane-worker"
+        )
+        .map((operation) => operation.id)
+    });
+
+    expect(
+      result.entries.find((entry) => entry.operationId === "create:control-plane-worker")
+    ).toMatchObject({
+      phase: "completed",
+      disposition: "created",
+      resourceRef: "worker:tenantscript-control-plane:etag"
+    });
+  });
+
   it("checkpoints created, adopted, and applied operations in plan order", async () => {
     const calls: string[] = [];
     const adapter = adapterFrom({

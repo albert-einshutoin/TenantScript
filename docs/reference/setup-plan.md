@@ -27,7 +27,7 @@ operationは次の固定順序です。`implementationStatus: implemented`はacc
 8. usage meterのWorkers Analytics Engine datasetを作成する。
 9. 明示選択したtenant runtime Worker/dispatch boundaryを作成する。
 10. Control Plane D1 migrationを適用する。
-11. resourceをControl Plane Workerへbindする。
+11. resourceをbindするControl Plane Workerを、selected runtime Workerとは別のownership resourceとして作成または明示adoptする。
 
 各operationはstable ID、resource kind、action、logical name、implementation status、dependency IDだけを持ちます。
 Cloudflare resource IDや実account由来の名前を含みません。同じruntime入力はbyte-identicalなJSONを返します。
@@ -56,14 +56,16 @@ permission response本文をplanへ出してはいけません。
 ## Cleanup and failure boundary
 
 cleanup planは`action: create`のresourceだけを作成順の逆順で列挙し、すべて
-`onlyIfCreatedBySetup: true`です。app database declaration、migration、bindingは削除対象にしません。
+`onlyIfCreatedBySetup: true`です。Control Plane Workerは依存resourceより後に作成し、cleanupでは最初に扱います。
+app database declarationとmigrationは削除対象にしません。
 live adapterはrun journalで「今回新規作成した」ことを証明できるresourceだけを削除し、既存/adopted resourceを
 削除してはいけません。D1と2つのR2 operationにはaccountless adapterがあり、R2はbucketを空にする処理や
 lifecycle ruleを扱いません。dry-runはcleanupを実行しません。
 
 version 1 plan自体にはlive create/update/delete、existing resource adoption、migration apply、rollback journal、
 clean-account E2Eは含まれません。これらの一部には注入可能なaccountless adapterがありますが、CLI live commandへ
-結線されていません。`cloudflare-workers`向けの最小Wrangler生成は
+結線されていません。Control Plane Worker operationはownershipとcleanup順だけをモデル化しており、remote
+Worker adapterや削除権限はまだ実装していません。`cloudflare-workers`向けの最小Wrangler生成は
 [production self-host baseline](../operations/self-host-production.md)で提供しますが、現在Workerが利用するD1と
 Admin rate-limit Durable Objectだけを含みます。JSONの`liveValidationRequired: true`とwarningは、このplanを
 Tier 2または本番成功証跡として扱えないことを明示します。残作業は

@@ -28,7 +28,7 @@ describe("ext setup production dry-run", () => {
       "create:usage-analytics-engine",
       "create:runtime-worker",
       "apply:control-plane-migrations",
-      "bind:control-plane-worker"
+      "create:control-plane-worker"
     ]);
     expect(plan.operations.at(-2)?.dependsOn).toEqual(["create:control-plane-d1"]);
     expect(
@@ -49,6 +49,16 @@ describe("ext setup production dry-run", () => {
       "create:runtime-worker",
       "apply:control-plane-migrations"
     ]);
+    expect(plan.operations.at(-1)).toMatchObject({
+      id: "create:control-plane-worker",
+      kind: "worker",
+      action: "create",
+      logicalName: "TENANTSCRIPT_CONTROL_PLANE",
+      implementationStatus: "integration-required"
+    });
+    expect(plan.operations.some((operation) => operation.id === "bind:control-plane-worker")).toBe(
+      false
+    );
   });
 
   it("limits cleanup to created resources in exact reverse order", () => {
@@ -63,6 +73,12 @@ describe("ext setup production dry-run", () => {
     }
     expect(JSON.stringify(plan.cleanup)).not.toContain("declare:app-database-boundary");
     expect(JSON.stringify(plan.cleanup)).not.toContain("apply:control-plane-migrations");
+    expect(plan.cleanup[0]?.targetOperationId).toBe("create:control-plane-worker");
+    expect(
+      plan.cleanup.findIndex((step) => step.targetOperationId === "create:control-plane-worker")
+    ).toBeLessThan(
+      plan.cleanup.findIndex((step) => step.targetOperationId === "create:runtime-worker")
+    );
   });
 
   it("publishes logical permissions and current-pricing verification for every service", () => {

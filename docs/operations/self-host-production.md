@@ -57,6 +57,10 @@ non-autoconfiguring Wrangler arguments and closes process output. It is not yet 
 Worker ownership reconciliation, so it does not replace the reviewed operator command or authorize
 automatic cleanup.
 
+The setup plan models the Control Plane Worker as a create/adopt ownership resource distinct from
+the selected tenant runtime Worker. This makes its future journal entry and reverse cleanup order
+explicit, but no accountless Worker ownership adapter or remote delete path exists yet.
+
 Do not treat `deploy --dry-run` as live resource, permission, migration, or request-path evidence.
 After deployment, collect a secret-free doctor report through a trusted adapter and evaluate it with
 `ext doctor --report`.
