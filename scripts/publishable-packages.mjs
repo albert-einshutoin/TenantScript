@@ -125,6 +125,18 @@ export function validatePackedPackage(packageContract, packResult) {
 export async function packAndValidatePublicPackages(rootDirectory) {
   const root = resolve(rootDirectory);
   const archiveDirectory = join(root, ".tmp", "npm-packages");
+  try {
+    const { inventory } = await createValidatedPackageArtifacts(root, archiveDirectory);
+    return inventory;
+  } finally {
+    await rm(archiveDirectory, { recursive: true, force: true });
+  }
+}
+
+export async function createValidatedPackageArtifacts(rootDirectory, outputDirectory) {
+  const root = resolve(rootDirectory);
+  const archiveDirectory = resolve(outputDirectory);
+  assertSafeArtifactDirectory(root, archiveDirectory);
   const packages = await discoverPublicPackages(root);
   await rm(archiveDirectory, { recursive: true, force: true });
   await mkdir(archiveDirectory, { recursive: true });
@@ -164,14 +176,27 @@ export async function packAndValidatePublicPackages(rootDirectory) {
       archives.push(archive.path);
     }
     await smokeInstallPackedPackages(root, packages, archives);
-    return inventory.map((entry) => ({
-      ...entry,
-      smokeVerified: true,
-      typesVerified: true
-    }));
+    return {
+      archives,
+      inventory: inventory.map((entry) => ({
+        ...entry,
+        smokeVerified: true,
+        typesVerified: true
+      }))
+    };
+  } catch (error) {
+    await rm(archiveDirectory, { recursive: true, force: true });
+    throw error;
   } finally {
     await cleanupPublicPackageArtifacts(root);
-    await rm(archiveDirectory, { recursive: true, force: true });
+  }
+}
+
+function assertSafeArtifactDirectory(root, directory) {
+  const temporaryRoot = resolve(root, ".tmp");
+  const path = relative(temporaryRoot, directory);
+  if (path === "" || path.startsWith("..") || path.includes("\0")) {
+    throw new Error("Public package artifact directory must be inside repository .tmp");
   }
 }
 
