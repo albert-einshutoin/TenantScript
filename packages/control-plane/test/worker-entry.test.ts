@@ -111,6 +111,47 @@ describe("Control Plane Worker configuration", () => {
     expect(response.status).toBe(503);
     expect(await response.text()).not.toContain("private.invalid");
   });
+
+  it("selects the authenticated app database before constructing tenant stores", async () => {
+    const appDatabase = failingDatabase("selected app database");
+    const compatibilityDatabase = failingDatabase("compatibility database");
+
+    const response = await worker.fetch(adminRequest("manager-token"), {
+      ADMIN_CURSOR_SECRET: "worker-routing-test-secret-with-32-bytes",
+      ADMIN_IDENTITIES_JSON: validIdentities,
+      APP_DATABASE_ROUTES_JSON: JSON.stringify({ app_1: "APP_ONE_DB" }),
+      APP_ONE_DB: appDatabase.database,
+      DB: compatibilityDatabase.database
+    });
+
+    expect(response.status).toBe(500);
+    expect(appDatabase.prepare).toHaveBeenCalled();
+    expect(compatibilityDatabase.prepare).not.toHaveBeenCalled();
+    expect(await response.text()).not.toContain("selected app database");
+  });
+
+  it("fails closed without touching D1 when the authenticated app is not provisioned", async () => {
+    const appDatabase = failingDatabase("other app database");
+    const compatibilityDatabase = failingDatabase("compatibility database");
+
+    const response = await worker.fetch(adminRequest("manager-token"), {
+      ADMIN_CURSOR_SECRET: "worker-routing-test-secret-with-32-bytes",
+      ADMIN_IDENTITIES_JSON: validIdentities,
+      APP_DATABASE_ROUTES_JSON: JSON.stringify({ app_2: "APP_TWO_DB" }),
+      APP_TWO_DB: appDatabase.database,
+      DB: compatibilityDatabase.database
+    });
+
+    expect(response.status).toBe(503);
+    expect(appDatabase.prepare).not.toHaveBeenCalled();
+    expect(compatibilityDatabase.prepare).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "app_database_unavailable",
+        message: "App database unavailable"
+      }
+    });
+  });
 });
 
 describe("Control Plane scheduled telemetry", () => {
@@ -166,6 +207,19 @@ function sessionRequest(token: string, includeOrigin: boolean): Request {
     headers.set("Origin", "https://admin.example.com");
   }
   return new Request("https://control-plane.example.com/v1/session", { headers });
+}
+
+function adminRequest(token: string): Request {
+  return new Request("https://control-plane.example.com/v1/admin/dashboard/installations", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+}
+
+function failingDatabase(message: string) {
+  const prepare = vi.fn(() => {
+    throw new Error(message);
+  });
+  return { database: { prepare } satisfies D1DatabaseLike, prepare };
 }
 
 function aggregateDatabase(): D1DatabaseLike {
