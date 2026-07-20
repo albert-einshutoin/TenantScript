@@ -188,12 +188,23 @@ export interface AuditEventView {
   createdAt: Date;
 }
 
+export interface OperationalHealthView {
+  date: string;
+  totalExecutions: number;
+  failedExecutions: number;
+  failureRateBps: number;
+  timeoutExecutions: number;
+  egressDeniedExecutions: number;
+  budgetExceededExecutions: number;
+}
+
 export interface DashboardSnapshot {
   installations: readonly InstallationView[];
   pluginVersions: readonly PluginVersionView[];
   approvals: readonly ApprovalView[];
   executions: readonly ExecutionView[];
   auditEvents: readonly AuditEventView[];
+  operationalHealth: OperationalHealthView;
   usage: DailyUsageSummaryView;
   schemaMigrations: readonly SchemaMigrationStatus[];
   telemetry: TelemetryStatus;
@@ -203,6 +214,7 @@ export interface DashboardSnapshot {
 export interface AdminApiClient extends AdminSessionClient {
   getDashboard: (session: AdminSession) => Promise<DashboardSnapshot>;
   getAuditEvents: () => Promise<Extract<DashboardSectionPage, { section: "auditEvents" }>>;
+  getOperationalHealth: () => Promise<OperationalHealthView>;
   getDashboardSection: (
     section: AdminDashboardSection,
     cursor: string
@@ -413,6 +425,18 @@ const usageSummarySchema = z
     date: z.string(),
     executions: z.number(),
     runtimeMs: z.number()
+  })
+  .strict();
+
+const operationalHealthSchema = z
+  .object({
+    date: z.iso.date(),
+    totalExecutions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    failedExecutions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    failureRateBps: z.number().int().min(0).max(10_000),
+    timeoutExecutions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    egressDeniedExecutions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    budgetExceededExecutions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
   })
   .strict();
 
@@ -707,6 +731,15 @@ const dashboardFixture: DashboardSnapshot = {
       createdAt: new Date("2026-06-16T00:07:00.000Z")
     }
   ],
+  operationalHealth: {
+    date: "2026-06-16",
+    totalExecutions: 34,
+    failedExecutions: 3,
+    failureRateBps: 882,
+    timeoutExecutions: 1,
+    egressDeniedExecutions: 1,
+    budgetExceededExecutions: 1
+  },
   usage: { date: "2026-06-16", executions: 34, runtimeMs: 742 },
   telemetry: { enabled: false, mode: "disabled", schemaVersion: 1 },
   schemaMigrations: [
@@ -783,6 +816,7 @@ export function createDemoAdminApiClient(): AdminApiClient {
             : []
       }),
     getAuditEvents: () => Promise.resolve({ section: "auditEvents", items: snapshot.auditEvents }),
+    getOperationalHealth: () => Promise.resolve(snapshot.operationalHealth),
     getDashboardSection: () =>
       Promise.reject(new AdminApiError(404, "no_more_results", "No more demo results")),
     searchExecutions: (request) => {
@@ -1022,6 +1056,7 @@ export function createUnavailableAdminApiClient(): AdminApiClient {
     resolveSession: unavailable,
     getDashboard: unavailable,
     getAuditEvents: unavailable,
+    getOperationalHealth: unavailable,
     getDashboardSection: unavailable,
     searchExecutions: unavailable,
     getExecutionDetail: unavailable,
@@ -1123,6 +1158,16 @@ export function createAdminApiClient(params: {
         items: page.data.items.map(auditEventView),
         ...(page.data.nextCursor === undefined ? {} : { nextCursor: page.data.nextCursor })
       };
+    },
+    getOperationalHealth: async () => {
+      const payload = await fetchAdminJson(
+        `${dashboardUrl}/operations`,
+        requireCredential(credential),
+        fetcher
+      );
+      const operationalHealth = operationalHealthSchema.safeParse(payload);
+      if (!operationalHealth.success) throw invalidResponse();
+      return operationalHealth.data;
     },
     getDashboardSection: async (section, cursor) => {
       const url = new URL(`${dashboardUrl}/${section}`);
@@ -1410,6 +1455,7 @@ function dashboardSnapshot(data: z.infer<typeof dashboardSchema>): DashboardSnap
     approvals: data.approvals.items,
     executions: data.executions.items,
     auditEvents: [],
+    operationalHealth: emptyOperationalHealth(data.usage.date),
     usage: data.usage,
     schemaMigrations: data.schemaMigrations,
     telemetry: data.telemetry,
@@ -1425,6 +1471,18 @@ function dashboardSnapshot(data: z.infer<typeof dashboardSchema>): DashboardSnap
         ? {}
         : { executions: data.executions.nextCursor })
     }
+  };
+}
+
+function emptyOperationalHealth(date: string): OperationalHealthView {
+  return {
+    date,
+    totalExecutions: 0,
+    failedExecutions: 0,
+    failureRateBps: 0,
+    timeoutExecutions: 0,
+    egressDeniedExecutions: 0,
+    budgetExceededExecutions: 0
   };
 }
 

@@ -34,9 +34,9 @@ describe("Control Plane success response schema catalog", () => {
       }
     }
 
-    expect(coveredMethods).toHaveLength(18);
-    expect(new Set(coveredMethods).size).toBe(18);
-    expect(Object.keys(CONTROL_PLANE_SUCCESS_RESPONSE_SCHEMAS)).toHaveLength(17);
+    expect(coveredMethods).toHaveLength(19);
+    expect(new Set(coveredMethods).size).toBe(19);
+    expect(Object.keys(CONTROL_PLANE_SUCCESS_RESPONSE_SCHEMAS)).toHaveLength(18);
   });
 
   it("exactly matches the committed public artifact and cannot mutate at runtime", async () => {

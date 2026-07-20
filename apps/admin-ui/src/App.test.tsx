@@ -63,6 +63,10 @@ describe("Admin UI auth foundation", () => {
     expect(
       within(migrations).getByText("Upgrade blockers before removing 1.0.0")
     ).toBeInTheDocument();
+    const operationalHealth = screen.getByRole("region", { name: "Operational health" });
+    expect(within(operationalHealth).getByText("8.82%")).toBeInTheDocument();
+    expect(within(operationalHealth).getByText("Budget blocks")).toBeInTheDocument();
+    expect(within(operationalHealth).getAllByText("1")).toHaveLength(3);
   });
 
   it("shows explicit opt-in without exposing the telemetry endpoint", async () => {
@@ -87,6 +91,34 @@ describe("Admin UI auth foundation", () => {
       );
     });
     expect(document.body.textContent).not.toContain("telemetry.example.com");
+  });
+
+  it("renders a zero-activity operational day without warning tones", async () => {
+    const baseClient = createDemoAdminApiClient();
+    const client: AdminApiClient = {
+      ...baseClient,
+      getOperationalHealth: () =>
+        Promise.resolve({
+          date: "2026-07-21",
+          totalExecutions: 0,
+          failedExecutions: 0,
+          failureRateBps: 0,
+          timeoutExecutions: 0,
+          egressDeniedExecutions: 0,
+          budgetExceededExecutions: 0
+        })
+    };
+    render(<App client={client} />);
+
+    await login("manager-token");
+    const operationalHealth = await screen.findByRole("region", { name: "Operational health" });
+    expect(within(operationalHealth).getByText("0.00%")).toBeInTheDocument();
+    expect(within(operationalHealth).getByText("Failure rate").parentElement).toHaveClass(
+      "default"
+    );
+    expect(within(operationalHealth).getByText("Budget blocks").parentElement).toHaveClass(
+      "default"
+    );
   });
 
   it("routes between operational panels and signs out", async () => {
@@ -807,6 +839,11 @@ describe("Admin UI auth foundation", () => {
     const refreshed: DashboardSnapshot = {
       ...initial,
       auditEvents: [],
+      operationalHealth: {
+        ...initial.operationalHealth,
+        failedExecutions: 0,
+        failureRateBps: 0
+      },
       cursors: {},
       installations: initial.installations.map((installation, index) =>
         index === 0 ? { ...installation, priority: 3, revision: 1 } : installation
@@ -816,6 +853,10 @@ describe("Admin UI auth foundation", () => {
       .fn<AdminApiClient["getDashboard"]>()
       .mockResolvedValueOnce(initial)
       .mockResolvedValueOnce(refreshed);
+    const getOperationalHealth = vi
+      .fn<AdminApiClient["getOperationalHealth"]>()
+      .mockResolvedValueOnce(initial.operationalHealth)
+      .mockResolvedValueOnce(refreshed.operationalHealth);
     const updateInstallationCommand = vi
       .fn<AdminApiClient["updateInstallationCommand"]>()
       .mockRejectedValueOnce(
@@ -827,7 +868,12 @@ describe("Admin UI auth foundation", () => {
         priority: 3,
         revision: 2
       });
-    const client: AdminApiClient = { ...baseClient, getDashboard, updateInstallationCommand };
+    const client: AdminApiClient = {
+      ...baseClient,
+      getDashboard,
+      getOperationalHealth,
+      updateInstallationCommand
+    };
     render(<App client={client} />);
 
     await login("manager-token");
@@ -842,6 +888,10 @@ describe("Admin UI auth foundation", () => {
     });
     expect(screen.getByRole("cell", { name: "3" })).toBeInTheDocument();
     expect(screen.getByLabelText("Priority")).toHaveValue("3");
+
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+    expect(screen.getByRole("region", { name: "Operational health" })).toHaveTextContent("0.00%");
+    expect(getOperationalHealth).toHaveBeenCalledTimes(2);
 
     fireEvent.click(screen.getByRole("button", { name: "Audit log" }));
     expect(screen.getByText("installation.command")).toBeInTheDocument();

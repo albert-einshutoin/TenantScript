@@ -214,6 +214,112 @@ describe("D1 Admin dashboard read model", () => {
     expect(wrongApp.items).toEqual([]);
   });
 
+  it("summarizes daily operational failures without crossing tenant or app boundaries", async () => {
+    await seedDashboard();
+    const store = createD1ControlPlaneStore(testEnv.DB);
+    const dashboard = createD1AdminDashboardStore(testEnv.DB);
+    const writeExecution = async (
+      id: string,
+      tenantId: string,
+      pluginId: string,
+      status: "success" | "error" | "timeout" | "egress_denied" | "budget_exceeded",
+      createdAt: string
+    ) =>
+      store.writeExecution({
+        id,
+        tenantId,
+        pluginId,
+        hookName: "invoice.created",
+        version: "1.0.0",
+        status,
+        durationMs: 10,
+        capabilityCalls: [],
+        createdAt: new Date(createdAt)
+      });
+
+    await writeExecution(
+      "health_success",
+      "tenant_1",
+      "tenant_1_plugin",
+      "success",
+      "2026-07-21T01:00:00.000Z"
+    );
+    await writeExecution(
+      "health_timeout",
+      "tenant_1",
+      "tenant_1_plugin",
+      "timeout",
+      "2026-07-21T02:00:00.000Z"
+    );
+    await writeExecution(
+      "health_egress",
+      "tenant_1",
+      "tenant_1_plugin",
+      "egress_denied",
+      "2026-07-21T03:00:00.000Z"
+    );
+    await writeExecution(
+      "health_budget",
+      "tenant_1",
+      "tenant_1_plugin",
+      "budget_exceeded",
+      "2026-07-21T04:00:00.000Z"
+    );
+    await writeExecution(
+      "health_next_day",
+      "tenant_1",
+      "tenant_1_plugin",
+      "error",
+      "2026-07-22T00:00:00.000Z"
+    );
+    await writeExecution(
+      "health_other_tenant",
+      "tenant_2",
+      "tenant_2_plugin",
+      "error",
+      "2026-07-21T05:00:00.000Z"
+    );
+    await writeExecution(
+      "health_other_app",
+      "tenant_other_app",
+      "tenant_other_app_plugin",
+      "error",
+      "2026-07-21T05:00:00.000Z"
+    );
+
+    await expect(
+      dashboard.readOperationalHealth?.({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        date: "2026-07-21"
+      })
+    ).resolves.toEqual({
+      date: "2026-07-21",
+      totalExecutions: 4,
+      failedExecutions: 3,
+      failureRateBps: 7500,
+      timeoutExecutions: 1,
+      egressDeniedExecutions: 1,
+      budgetExceededExecutions: 1
+    });
+
+    await expect(
+      dashboard.readOperationalHealth?.({
+        appId: "app_other",
+        tenantId: "tenant_1",
+        date: "2026-07-21"
+      })
+    ).resolves.toEqual({
+      date: "2026-07-21",
+      totalExecutions: 0,
+      failedExecutions: 0,
+      failureRateBps: 0,
+      timeoutExecutions: 0,
+      egressDeniedExecutions: 0,
+      budgetExceededExecutions: 0
+    });
+  });
+
   it("reads installation permission metadata through the real tenant/app D1 boundary", async () => {
     await seedDashboard();
     const reviews = createD1AdminInstallationDetailStore(testEnv.DB);

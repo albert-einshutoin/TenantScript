@@ -150,12 +150,17 @@ function AdminShell({
 
   useEffect(() => {
     let active = true;
-    void Promise.all([client.getDashboard(session), client.getAuditEvents()])
-      .then(([nextSnapshot, auditPage]) => {
+    void Promise.all([
+      client.getDashboard(session),
+      client.getAuditEvents(),
+      client.getOperationalHealth()
+    ])
+      .then(([nextSnapshot, auditPage, operationalHealth]) => {
         if (active) {
           setSnapshot({
             ...nextSnapshot,
             auditEvents: auditPage.items,
+            operationalHealth,
             cursors: {
               ...nextSnapshot.cursors,
               ...(auditPage.nextCursor === undefined ? {} : { auditEvents: auditPage.nextCursor })
@@ -174,10 +179,13 @@ function AdminShell({
   }, [client, session]);
 
   const refreshDashboard = useCallback(async () => {
-    const refreshed = await client.getDashboard(session);
-    // The additive audit endpoint is intentionally separate from the legacy dashboard contract.
-    // Preserve its independently paged slice when a mutation refreshes the remaining dashboard.
-    setSnapshot((current) => preserveAuditSlice(current, refreshed));
+    const [refreshed, operationalHealth] = await Promise.all([
+      client.getDashboard(session),
+      client.getOperationalHealth()
+    ]);
+    // Audit pagination is independent from mutation refreshes. Operational health, however, must
+    // move with usage so Overview never combines a current execution count with stale failures.
+    setSnapshot((current) => preserveAuditSlice(current, { ...refreshed, operationalHealth }));
   }, [client, session]);
 
   const loadMore = useCallback(
@@ -714,6 +722,23 @@ function OverviewPanel({ snapshot }: { snapshot: DashboardSnapshot }) {
         <Metric label="Pending approvals" value={String(pendingApprovals.length)} tone="warning" />
         <Metric label="Executions today" value={String(usage.executions)} />
         <Metric label="Runtime ms today" value={String(usage.runtimeMs)} />
+      </section>
+      <section className="metric-grid" aria-label="Operational health">
+        <Metric
+          label="Failure rate"
+          value={`${(snapshot.operationalHealth.failureRateBps / 100).toFixed(2)}%`}
+          tone={snapshot.operationalHealth.failedExecutions > 0 ? "warning" : "default"}
+        />
+        <Metric
+          label="Budget blocks"
+          value={String(snapshot.operationalHealth.budgetExceededExecutions)}
+          tone={snapshot.operationalHealth.budgetExceededExecutions > 0 ? "warning" : "default"}
+        />
+        <Metric label="Timeouts" value={String(snapshot.operationalHealth.timeoutExecutions)} />
+        <Metric
+          label="Egress denials"
+          value={String(snapshot.operationalHealth.egressDeniedExecutions)}
+        />
       </section>
       <SchemaMigrationsPanel migrations={snapshot.schemaMigrations} />
       <section className="data-panel">
@@ -1901,7 +1926,11 @@ function preserveAuditSlice(
   } else {
     cursors.auditEvents = auditCursor;
   }
-  return { ...refreshed, auditEvents: current.auditEvents, cursors };
+  return {
+    ...refreshed,
+    auditEvents: current.auditEvents,
+    cursors
+  };
 }
 
 function appendPage(snapshot: DashboardSnapshot, page: DashboardSectionPage): DashboardSnapshot {

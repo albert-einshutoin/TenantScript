@@ -68,6 +68,16 @@ export interface AdminUsageSummary {
   runtimeMs: number;
 }
 
+export interface AdminOperationalHealthSummary {
+  date: string;
+  totalExecutions: number;
+  failedExecutions: number;
+  failureRateBps: number;
+  timeoutExecutions: number;
+  egressDeniedExecutions: number;
+  budgetExceededExecutions: number;
+}
+
 export interface AdminAuditStateSummary {
   enabled?: boolean;
   priority?: number;
@@ -114,6 +124,11 @@ export interface AdminDashboardStore {
     tenantId: string;
     date: string;
   }) => Promise<AdminUsageSummary>;
+  readOperationalHealth?: (request: {
+    appId: string;
+    tenantId: string;
+    date: string;
+  }) => Promise<AdminOperationalHealthSummary>;
   readSchemaMigrations?: (request: { appId: string }) => Promise<readonly SchemaMigrationStatus[]>;
 }
 
@@ -149,6 +164,7 @@ export function createD1AdminDashboardStore(
       }
     },
     readUsageSummary: (request) => readUsageSummary(db, request),
+    readOperationalHealth: (request) => readOperationalHealth(db, request),
     readSchemaMigrations: (request) => schemaMigrations.readStatus(request)
   };
 }
@@ -381,6 +397,61 @@ async function readUsageSummary(
   };
 }
 
+async function readOperationalHealth(
+  db: D1DatabaseLike,
+  request: { appId: string; tenantId: string; date: string }
+): Promise<AdminOperationalHealthSummary> {
+  const nextDate = nextIsoDate(request.date);
+  const row = await db
+    .prepare(
+      [
+        "SELECT COUNT(e.id) AS total_executions,",
+        "COALESCE(SUM(CASE WHEN e.status <> 'success' THEN 1 ELSE 0 END), 0) AS failed_executions,",
+        "COALESCE(SUM(CASE WHEN e.status = 'timeout' THEN 1 ELSE 0 END), 0) AS timeout_executions,",
+        "COALESCE(SUM(CASE WHEN e.status = 'egress_denied' THEN 1 ELSE 0 END), 0) AS egress_denied_executions,",
+        "COALESCE(SUM(CASE WHEN e.status = 'budget_exceeded' THEN 1 ELSE 0 END), 0) AS budget_exceeded_executions",
+        "FROM executions e JOIN tenants t ON t.id = e.tenant_id",
+        "WHERE t.id = ?1 AND t.app_id = ?2 AND e.created_at >= ?3 AND e.created_at < ?4"
+      ].join(" ")
+    )
+    .bind(
+      request.tenantId,
+      request.appId,
+      `${request.date}T00:00:00.000Z`,
+      `${nextDate}T00:00:00.000Z`
+    )
+    .first<OperationalHealthRow>();
+  const totalExecutions = nonNegativeSafeInteger(
+    row?.total_executions ?? 0,
+    "invalid operational total"
+  );
+  const failedExecutions = nonNegativeSafeInteger(
+    row?.failed_executions ?? 0,
+    "invalid operational failure count"
+  );
+  // Basis points keep the public response deterministic across JavaScript and SQL runtimes.
+  const failureRateBps =
+    totalExecutions === 0 ? 0 : Math.round((failedExecutions / totalExecutions) * 10_000);
+  return {
+    date: request.date,
+    totalExecutions,
+    failedExecutions,
+    failureRateBps,
+    timeoutExecutions: nonNegativeSafeInteger(
+      row?.timeout_executions ?? 0,
+      "invalid operational timeout count"
+    ),
+    egressDeniedExecutions: nonNegativeSafeInteger(
+      row?.egress_denied_executions ?? 0,
+      "invalid operational egress denial count"
+    ),
+    budgetExceededExecutions: nonNegativeSafeInteger(
+      row?.budget_exceeded_executions ?? 0,
+      "invalid operational budget count"
+    )
+  };
+}
+
 interface SectionReadRequest extends AdminDashboardScope {
   section: AdminDashboardSection;
   limit: number;
@@ -513,6 +584,11 @@ function safeInteger(value: number, error: string): number {
   return value;
 }
 
+function nonNegativeSafeInteger(value: number, error: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(error);
+  return value;
+}
+
 interface InstallationSummaryRow {
   id: string;
   plugin_key: string;
@@ -567,6 +643,14 @@ interface AuditEventSummaryRow {
 interface UsageSummaryRow {
   executions: number;
   runtime_ms: number;
+}
+
+interface OperationalHealthRow {
+  total_executions: number;
+  failed_executions: number;
+  timeout_executions: number;
+  egress_denied_executions: number;
+  budget_exceeded_executions: number;
 }
 
 const encoder = new TextEncoder();

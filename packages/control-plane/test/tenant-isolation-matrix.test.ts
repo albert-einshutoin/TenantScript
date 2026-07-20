@@ -13,6 +13,7 @@ import type { ControlPlaneHttpHandlerOptions } from "../src/http-api.js";
 const expectedEndpointIds = [
   "session",
   "dashboard",
+  "dashboardOperations",
   "dashboardInstallations",
   "dashboardPluginVersions",
   "dashboardApprovals",
@@ -164,6 +165,7 @@ function scopeProbeOptions(
     case "session":
       return {};
     case "dashboard":
+    case "dashboardOperations":
     case "dashboardInstallations":
     case "dashboardPluginVersions":
     case "dashboardApprovals":
@@ -172,7 +174,8 @@ function scopeProbeOptions(
       return {
         dashboardStore: {
           readSection: (request) => fail(request),
-          readUsageSummary: (request) => fail(request)
+          readUsageSummary: (request) => fail(request),
+          readOperationalHealth: (request) => fail(request)
         },
         cursorCodec: {
           encode: () => Promise.reject(new Error("unexpected cursor encode")),

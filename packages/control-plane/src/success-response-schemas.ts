@@ -261,6 +261,15 @@ export const CONTROL_PLANE_SUCCESS_RESPONSE_SCHEMAS = deepFreeze({
       schemaVersion: { const: 1 }
     })
   }),
+  dashboardOperations: object({
+    date: text,
+    totalExecutions: nonNegativeInteger,
+    failedExecutions: nonNegativeInteger,
+    failureRateBps: { type: "integer", minimum: 0, maximum: 10_000 },
+    timeoutExecutions: nonNegativeInteger,
+    egressDeniedExecutions: nonNegativeInteger,
+    budgetExceededExecutions: nonNegativeInteger
+  }),
   dashboardInstallations: installationPage,
   dashboardPluginVersions: pluginVersionPage,
   dashboardApprovals: approvalPage,

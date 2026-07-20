@@ -189,6 +189,7 @@ export function createControlPlaneHttpHandler(
 export type AdminRoute =
   | "session"
   | "dashboard"
+  | "operations"
   | "installationCommand"
   | "installPreview"
   | "installCreate"
@@ -204,6 +205,7 @@ export type AdminRoute =
 export type AdminHttpEndpointId =
   | "session"
   | "dashboard"
+  | "dashboardOperations"
   | "dashboardInstallations"
   | "dashboardPluginVersions"
   | "dashboardApprovals"
@@ -261,6 +263,14 @@ export const ADMIN_HTTP_ENDPOINT_CONTRACTS = [
     isolation: "tenant-collection",
     route: "dashboard",
     success: { GET: { status: 200, body: "json", schema: "dashboard" } }
+  },
+  {
+    id: "dashboardOperations",
+    path: "/v1/admin/dashboard/operations",
+    methods: ["GET"],
+    isolation: "tenant-collection",
+    route: "operations",
+    success: { GET: { status: 200, body: "json", schema: "dashboardOperations" } }
   },
   {
     id: "dashboardInstallations",
@@ -1467,16 +1477,7 @@ async function resolveDashboard(
       corsHeaders
     );
   }
-  if (options.cursorCodec === undefined) {
-    return errorResponse(
-      503,
-      "cursor_service_unavailable",
-      "dashboard cursor service unavailable",
-      corsHeaders
-    );
-  }
   const dashboardStore = options.dashboardStore;
-  const cursorCodec = options.cursorCodec;
 
   const limit = dashboardLimit(url.searchParams.get("limit"));
   if (limit === null) {
@@ -1490,6 +1491,34 @@ async function resolveDashboard(
   if (forbidden !== null) return forbidden;
 
   try {
+    if (route === "operations") {
+      if (dashboardStore.readOperationalHealth === undefined) {
+        return errorResponse(
+          503,
+          "dashboard_store_unavailable",
+          "dashboard store unavailable",
+          corsHeaders
+        );
+      }
+      return jsonResponse(
+        200,
+        await dashboardStore.readOperationalHealth({
+          appId: identity.appId,
+          tenantId: identity.tenantId,
+          date: (options.now?.() ?? new Date()).toISOString().slice(0, 10)
+        }),
+        corsHeaders
+      );
+    }
+    if (options.cursorCodec === undefined) {
+      return errorResponse(
+        503,
+        "cursor_service_unavailable",
+        "dashboard cursor service unavailable",
+        corsHeaders
+      );
+    }
+    const cursorCodec = options.cursorCodec;
     if (route === "dashboard") {
       const sections: readonly AdminDashboardSection[] = [
         "installations",

@@ -314,6 +314,7 @@ export {
   type AdminExecutionSummary,
   type AdminExecutionFilters,
   type AdminInstallationSummary,
+  type AdminOperationalHealthSummary,
   type AdminPluginVersionSummary,
   type AdminUsageSummary
 } from "./admin-dashboard.js";

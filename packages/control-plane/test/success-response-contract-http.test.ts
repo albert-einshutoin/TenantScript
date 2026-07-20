@@ -71,6 +71,7 @@ function successRequests(): Request[] {
   return [
     get("/v1/session"),
     get("/v1/admin/dashboard"),
+    get("/v1/admin/dashboard/operations"),
     get("/v1/admin/dashboard/installations"),
     get("/v1/admin/dashboard/pluginVersions"),
     get("/v1/admin/dashboard/approvals"),
@@ -210,6 +211,15 @@ function successOptions(): ControlPlaneHttpHandlerOptions {
       }
     },
     readUsageSummary: async () => ({ date: "2026-07-20", executions: 1, runtimeMs: 12 }),
+    readOperationalHealth: async () => ({
+      date: "2026-07-20",
+      totalExecutions: 1,
+      failedExecutions: 0,
+      failureRateBps: 0,
+      timeoutExecutions: 0,
+      egressDeniedExecutions: 0,
+      budgetExceededExecutions: 0
+    }),
     readSchemaMigrations: async () => [
       {
         hookName: "invoice.created",
