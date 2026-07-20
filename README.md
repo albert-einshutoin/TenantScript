@@ -13,6 +13,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [SDK reference](docs/reference/sdk.md) — Phase 1 public TypeScript surfaceと安全境界
 - [Canonical glossary](docs/reference/glossary.md) — app、tenant、plugin、installation、capabilityなどの権限境界
 - [Schema diff in CI](docs/reference/schema-diff-ci.md) — breaking判定、exit code、warning、CI統合
+- [Public API stability](docs/reference/public-api-stability.md) — package exportとControl Plane REST surfaceのsemver gate
 - [Hook schema migration運用](docs/operations/schema-migrations.md) — app全体の利用追跡、廃止ゲート、Admin UI
 - [App database routing](docs/operations/app-database-routing.md) — app単位D1、fail-closed router、endpoint isolation matrix
 - [Public configuration reference](docs/reference/configuration.md) — Worker bindings、環境変数、default、secret境界の正本
