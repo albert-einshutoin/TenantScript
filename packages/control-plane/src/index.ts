@@ -366,3 +366,10 @@ export {
   type TelemetrySnapshotSource,
   type TelemetryStatus
 } from "./telemetry.js";
+
+export {
+  createAppDatabaseRouterFromBindings,
+  createStaticAppDatabaseRouter,
+  type AppDatabaseRoute,
+  type AppDatabaseRouter
+} from "./app-database-router.js";
