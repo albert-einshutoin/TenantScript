@@ -347,6 +347,28 @@ select:focus-visible {
   overflow-x: auto;
 }
 
+.execution-table-viewport {
+  max-height: 520px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.execution-table-viewport th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  background: #ffffff;
+}
+
+.virtual-execution-row {
+  height: 52px;
+}
+
+.virtual-spacer-row td {
+  border: 0;
+  padding: 0;
+}
+
 .compact-list {
   display: grid;
   gap: 4px;

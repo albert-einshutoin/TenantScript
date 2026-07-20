@@ -47,6 +47,13 @@ Production bundle size is enforced by the repository-verified
 `pnpm test:admin-ui-bundle-budget` from the repository root before changing frontend dependencies or
 chunk boundaries. This transfer-size gate is separate from live browser performance evidence.
 
+The executions screen keeps loaded cursor pages in memory but renders only the current scroll window.
+The repository-verified
+[`100k execution browser budget`](../../docs/reference/admin-ui-execution-performance.md) uses a
+synthetic Playwright fixture that is excluded from the production entry. Run
+`pnpm test:admin-ui-performance` from the repository root before changing row layout, virtualization,
+or execution detail actions.
+
 ## Control Plane connection
 
 公開設定のdefault、必須条件、secret境界を含む正本は

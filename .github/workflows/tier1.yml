@@ -24,6 +24,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Playwright binaries are not part of the pnpm store on a fresh hosted runner.
+      - run: pnpm --filter @tenantscript/admin-ui exec playwright install --with-deps chromium
       - run: pnpm typecheck
       - run: pnpm lint:boundaries
       - run: pnpm lint
@@ -31,6 +33,7 @@ jobs:
       - run: pnpm test:release-policy
       - run: pnpm test:release-automation
       - run: pnpm test:agent-scaffold
+      - run: pnpm test:admin-ui-performance
       - run: pnpm test:admin-ui-bundle-budget
       - run: pnpm test:packages
       - run: pnpm test:sbom

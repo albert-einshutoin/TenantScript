@@ -16,6 +16,7 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Public API stability](docs/reference/public-api-stability.md) — package exportとControl Plane REST surfaceのsemver gate
 - [Control Plane success response schemas](docs/reference/control-plane-success-responses.md) — 成功status/bodyの機械可読契約と実handler検証
 - [Admin UI performance budget](docs/reference/admin-ui-performance-budget.md) — 300 KiB初期page予算、全JS/CSS総量、Tier 1 gate
+- [Admin UI 100k execution browser budget](docs/reference/admin-ui-execution-performance.md) — executions仮想化、DOM上限、Chromium初回描画gate
 - [npm package release contract](docs/reference/npm-package-release.md) — source-only build、clean tarball、install/import smoke、publish境界
 - [Release automation](docs/reference/release-automation.md) — Changesets release PR、OIDC tag publish、外部activation境界
 - [Hook schema migration運用](docs/operations/schema-migrations.md) — app全体の利用追跡、廃止ゲート、Admin UI
