@@ -78,9 +78,11 @@ export {
 export {
   CloudflareR2SetupAdapterError,
   createCloudflareR2SetupAdapter,
+  deriveCloudflareR2BucketName,
   type CloudflareR2BucketConfiguration,
   type CloudflareR2SetupAdapterErrorCode,
-  type CloudflareR2SetupBucketsConfiguration
+  type CloudflareR2SetupBucketsConfiguration,
+  type CloudflareR2SetupOperationId
 } from "./cloudflare-r2-setup-adapter.js";
 
 export {

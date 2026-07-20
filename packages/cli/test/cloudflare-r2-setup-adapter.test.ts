@@ -5,6 +5,7 @@ import {
   createCloudflareApiTransport,
   createCloudflareR2SetupAdapter,
   createProductionSetupPlan,
+  deriveCloudflareR2BucketName,
   deriveSetupOperationIdempotencyKey,
   type CloudflareApiTransport,
   type SetupOperation
@@ -15,6 +16,36 @@ const artifacts = operation("create:artifact-r2");
 const archive = operation("create:execution-archive-r2");
 
 describe("Cloudflare R2 setup adapter", () => {
+  it("derives stable non-reflective targets for both owned R2 operations", () => {
+    expect(
+      deriveCloudflareR2BucketName("tenantscript-artifacts", runId, "create:artifact-r2")
+    ).toBe("tenantscript-artifacts-dc61af47dc53334b116c9413");
+    expect(
+      deriveCloudflareR2BucketName(
+        "tenantscript-execution-archive",
+        runId,
+        "create:execution-archive-r2"
+      )
+    ).toBe("tenantscript-execution-archive-ef113147c52c46fc03ed5bba");
+    expect(
+      deriveCloudflareR2BucketName("tenantscript-artifacts", "another-run", "create:artifact-r2")
+    ).not.toBe(deriveCloudflareR2BucketName("tenantscript-artifacts", runId, "create:artifact-r2"));
+    expect(
+      deriveCloudflareR2BucketName("tenantscript-artifacts", runId, "create:artifact-r2")
+    ).not.toContain(runId);
+  });
+
+  it.each([
+    ["unsafe base", "TenantScript", runId, "create:artifact-r2"],
+    ["oversized target", "a".repeat(39), runId, "create:artifact-r2"],
+    ["unsafe run", "tenantscript-artifacts", "secret-sentinel", "create:artifact-r2"],
+    ["unsupported operation", "tenantscript-artifacts", runId, "create:control-plane-d1"]
+  ])("rejects %s without reflecting target input", (_name, baseName, setupRunId, operationId) => {
+    expect(() => deriveCloudflareR2BucketName(baseName, setupRunId, operationId as never)).toThrow(
+      "Cloudflare R2 bucket target is invalid"
+    );
+  });
+
   it.each([
     [artifacts, "tenantscript-artifacts"],
     [archive, "tenantscript-execution-archive"]
@@ -466,20 +497,7 @@ function key(op: SetupOperation, action: "reconcile" | "cleanup"): string {
 }
 
 function derivedName(baseName: string, op: SetupOperation): string {
-  // The exact digest is intentionally asserted through adapter behavior; this helper is replaced
-  // with the observed stable output once the public derivation contract exists.
-  const keyValue = key(op, "reconcile");
-  return `${baseName}-${sha256Prefix(keyValue)}`;
-}
-
-function sha256Prefix(value: string): string {
-  // Web Crypto is async, while fixtures must be synchronous. These are fixed TDD vectors for the
-  // two operation keys and keep the test independent from a non-public production helper.
-  const vectors: Record<string, string> = {
-    [key(artifacts, "reconcile")]: "dc61af47dc53334b116c9413",
-    [key(archive, "reconcile")]: "ef113147c52c46fc03ed5bba"
-  };
-  return vectors[value] ?? "missing-vector";
+  return deriveCloudflareR2BucketName(baseName, runId, op.id as never);
 }
 
 function operation(id: string): SetupOperation {

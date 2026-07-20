@@ -11,6 +11,10 @@ const ARTIFACT_OPERATION_ID = "create:artifact-r2";
 const ARCHIVE_OPERATION_ID = "create:execution-archive-r2";
 const R2_RESOURCE_PREFIX = "r2:";
 
+export type CloudflareR2SetupOperationId =
+  | typeof ARTIFACT_OPERATION_ID
+  | typeof ARCHIVE_OPERATION_ID;
+
 type R2LocationHint = "apac" | "eeur" | "enam" | "weur" | "wnam" | "oc";
 type R2Jurisdiction = "default" | "eu" | "fedramp";
 type R2StorageClass = "Standard" | "InfrequentAccess";
@@ -53,6 +57,27 @@ export class CloudflareR2SetupAdapterError extends Error {
   }
 }
 
+export function deriveCloudflareR2BucketName(
+  baseName: string,
+  setupRunId: string,
+  operationId: CloudflareR2SetupOperationId
+): string {
+  if (
+    !isBaseName(baseName) ||
+    !isSetupRunId(setupRunId) ||
+    (operationId !== ARTIFACT_OPERATION_ID && operationId !== ARCHIVE_OPERATION_ID)
+  ) {
+    throw invalidBucketTarget();
+  }
+  const reconcileKey = deriveSetupOperationIdempotencyKey(setupRunId, operationId, "reconcile");
+  // R2 create has no documented idempotency key. Deriving the target from the canonical operation
+  // key lets deployment and cleanup share one name without exposing the persisted key itself.
+  const suffix = createHash("sha256").update(reconcileKey).digest("hex").slice(0, 24);
+  const target = `${baseName}-${suffix}`;
+  if (!isBucketName(target)) throw invalidBucketTarget();
+  return target;
+}
+
 export function createCloudflareR2SetupAdapter(params: {
   transport: CloudflareApiTransport;
   buckets: CloudflareR2SetupBucketsConfiguration;
@@ -72,7 +97,11 @@ export function createCloudflareR2SetupAdapter(params: {
         return { disposition: "adopted", resourceRef: resourceRef(bucket.name) };
       }
 
-      const name = deriveBucketName(configuration.baseName, request.idempotencyKey);
+      const name = deriveCloudflareR2BucketName(
+        configuration.baseName,
+        request.runId,
+        requireR2OperationId(request.operation)
+      );
       try {
         const existing = parseR2Bucket(
           await getBucket(params.transport, name, configuration.jurisdiction)
@@ -127,12 +156,11 @@ export function createCloudflareR2SetupAdapter(params: {
       if (configuration.mode !== "create") throw invalidRequest();
 
       const bucketName = parseResourceRef(request.resourceRef);
-      const reconcileKey = deriveSetupOperationIdempotencyKey(
+      const expectedName = deriveCloudflareR2BucketName(
+        configuration.baseName,
         request.runId,
-        request.operation.id,
-        "reconcile"
+        requireR2OperationId(request.operation)
       );
-      const expectedName = deriveBucketName(configuration.baseName, reconcileKey);
       if (bucketName !== expectedName) throw invalidRequest();
 
       let bucket: R2Bucket;
@@ -289,6 +317,12 @@ function configurationFor(
   throw unsupportedOperation();
 }
 
+function requireR2OperationId(operation: SetupOperation): CloudflareR2SetupOperationId {
+  if (isArtifactOperation(operation)) return ARTIFACT_OPERATION_ID;
+  if (isArchiveOperation(operation)) return ARCHIVE_OPERATION_ID;
+  throw unsupportedOperation();
+}
+
 function isArtifactOperation(operation: SetupOperation): boolean {
   return (
     operation.id === ARTIFACT_OPERATION_ID &&
@@ -307,13 +341,6 @@ function isArchiveOperation(operation: SetupOperation): boolean {
     operation.logicalName === "EXECUTION_ARCHIVE" &&
     operation.implementationStatus === "implemented"
   );
-}
-
-function deriveBucketName(baseName: string, reconcileKey: string): string {
-  // R2 create has no documented idempotency key. The persisted operation key provides a stable
-  // crash-resume target, while the 96-bit digest avoids exposing the full key in a provider name.
-  const suffix = createHash("sha256").update(reconcileKey).digest("hex").slice(0, 24);
-  return `${baseName}-${suffix}`;
 }
 
 function parseR2Bucket(value: unknown): R2Bucket {
@@ -396,6 +423,13 @@ function isBaseName(value: unknown): value is string {
   return typeof value === "string" && /^[a-z][a-z0-9-]{0,36}[a-z0-9]$/u.test(value);
 }
 
+function isSetupRunId(value: unknown): value is string {
+  return (
+    isSafeIdentifier(value, 128) &&
+    !/(?:secret-sentinel|bearer|eyJ[A-Za-z0-9_-]*\.|(?:^|:)sk[-_])/iu.test(value)
+  );
+}
+
 function isBucketName(value: unknown): value is string {
   return typeof value === "string" && /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/u.test(value);
 }
@@ -452,4 +486,8 @@ function invalidResponse(): CloudflareR2SetupAdapterError {
 
 function unsupportedOperation(): CloudflareR2SetupAdapterError {
   return new CloudflareR2SetupAdapterError("cloudflare_r2_unsupported_operation");
+}
+
+function invalidBucketTarget(): Error {
+  return new Error("Cloudflare R2 bucket target is invalid");
 }

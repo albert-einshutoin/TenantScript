@@ -17,6 +17,13 @@ persisted operation reconcile key and appends a 24-hex-character (96-bit) suffix
 is never exposed in the account-level bucket name. Derived and adopted names enforce R2's
 3–63-character, lowercase alphanumeric-and-hyphen naming contract before provider access.
 
+`deriveCloudflareR2BucketName` is the single public target contract for future Worker binding
+composition and ownership-safe cleanup. It accepts a base name, setup run ID, and only the exact
+artifact or execution-archive operation ID; it derives the canonical reconcile key internally.
+Callers cannot inject a final bucket name or raw key into create mode. The same inputs therefore
+produce the same target across adapter, renderer, resume, and cleanup boundaries without duplicating
+the digest algorithm.
+
 For every reconcile, the adapter first performs an exact-name `GET`:
 
 1. If the bucket exists and its configured jurisdiction and storage class match, it returns
