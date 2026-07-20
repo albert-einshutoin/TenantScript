@@ -373,3 +373,13 @@ export {
   type AppDatabaseRoute,
   type AppDatabaseRouter
 } from "./app-database-router.js";
+
+export {
+  ADMIN_HTTP_ENDPOINT_CONTRACTS,
+  matchAdminHttpEndpoint,
+  type AdminHttpEndpointContract,
+  type AdminHttpEndpointId,
+  type AdminHttpEndpointMatch,
+  type AdminHttpIsolation,
+  type AdminRoute
+} from "./http-api.js";
