@@ -349,3 +349,20 @@ export {
   type AdminRollbackStore,
   type D1AdminRollbackStoreOptions
 } from "./admin-rollbacks.js";
+
+export {
+  TELEMETRY_SCHEMA_VERSION,
+  createD1TelemetrySnapshotSource,
+  createHttpTelemetrySink,
+  parseTelemetryConfiguration,
+  publicTelemetryStatus,
+  runTelemetrySchedule,
+  type PublicTelemetryEvent,
+  type TelemetryAggregateSnapshot,
+  type TelemetryConfiguration,
+  type TelemetryRuntimePrimitive,
+  type TelemetryScheduleResult,
+  type TelemetrySink,
+  type TelemetrySnapshotSource,
+  type TelemetryStatus
+} from "./telemetry.js";

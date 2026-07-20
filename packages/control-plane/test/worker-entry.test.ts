@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import worker from "../src/worker-entry.js";
+import { describe, expect, it, vi } from "vitest";
+import type { D1DatabaseLike, D1PreparedStatementLike } from "../src/index.js";
+import worker, { runScheduledTelemetry } from "../src/worker-entry.js";
 
 const validIdentities = JSON.stringify({
   "manager-token": {
@@ -99,6 +100,64 @@ describe("Control Plane Worker configuration", () => {
       });
     }
   );
+
+  it("returns a redacted 503 for invalid telemetry opt-in configuration", async () => {
+    const response = await worker.fetch(sessionRequest("manager-token", false), {
+      ADMIN_IDENTITIES_JSON: validIdentities,
+      TENANTSCRIPT_TELEMETRY_ENABLED: "true",
+      TENANTSCRIPT_TELEMETRY_ENDPOINT: "http://private.invalid/events"
+    });
+
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("private.invalid");
+  });
+});
+
+describe("Control Plane scheduled telemetry", () => {
+  it("does not touch D1 or the network by default", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+
+    await expect(runScheduledTelemetry({}, { fetcher })).resolves.toEqual({
+      sent: false,
+      reason: "disabled"
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("sends anonymous aggregates only after explicit opt-in", async () => {
+    const db = aggregateDatabase();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 202 }));
+
+    await expect(
+      runScheduledTelemetry(
+        {
+          DB: db,
+          TENANTSCRIPT_TELEMETRY_ENABLED: "true",
+          TENANTSCRIPT_TELEMETRY_ENDPOINT: "https://telemetry.example.com/v1/events",
+          TENANTSCRIPT_PRODUCT_VERSION: "0.0.0",
+          TENANTSCRIPT_RUNTIME_PRIMITIVE: "cloudflare-workers"
+        },
+        { fetcher, now: () => new Date("2026-07-20T02:00:00.000Z") }
+      )
+    ).resolves.toEqual({ sent: true });
+
+    const [, init] = fetcher.mock.calls[0] ?? [];
+    expect(typeof init?.body).toBe("string");
+    const body = JSON.parse(init?.body as string) as unknown;
+    expect(body).toEqual({
+      schemaVersion: 1,
+      generatedAt: "2026-07-20T02:00:00.000Z",
+      productVersion: "0.0.0",
+      runtimePrimitive: "cloudflare-workers",
+      counts: {
+        enabledInstallations: 3,
+        executions: 9,
+        errors: { runtime: 1, timeout: 1, egressDenied: 1, budgetExceeded: 1 }
+      }
+    });
+    expect(init?.body).not.toContain("tenant");
+    expect(init?.body).not.toContain("plugin");
+  });
 });
 
 function sessionRequest(token: string, includeOrigin: boolean): Request {
@@ -107,4 +166,26 @@ function sessionRequest(token: string, includeOrigin: boolean): Request {
     headers.set("Origin", "https://admin.example.com");
   }
   return new Request("https://control-plane.example.com/v1/session", { headers });
+}
+
+function aggregateDatabase(): D1DatabaseLike {
+  return {
+    prepare: () => {
+      const statement: D1PreparedStatementLike = {
+        bind: () => statement,
+        run: () => Promise.reject(new Error("unexpected run")),
+        first: <T>() =>
+          Promise.resolve({
+            enabled_installations: 3,
+            executions: 9,
+            runtime_errors: 1,
+            timeouts: 1,
+            egress_denied: 1,
+            budget_exceeded: 1
+          } as T),
+        all: () => Promise.reject(new Error("unexpected all"))
+      };
+      return statement;
+    }
+  };
 }

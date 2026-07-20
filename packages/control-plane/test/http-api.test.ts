@@ -178,6 +178,30 @@ describe("Control Plane Admin dashboard contract", () => {
     expect(body.schemaMigrations).toEqual([
       expect.objectContaining({ hookName: "invoice.created" })
     ]);
+    expect(body.telemetry).toEqual({ enabled: false, mode: "disabled", schemaVersion: 1 });
+  });
+
+  it("returns only the public anonymous telemetry status when explicitly enabled", async () => {
+    const handler = createControlPlaneHttpHandler({
+      identityResolver: createIdentityResolver(),
+      dashboardStore: dashboardStore(),
+      cursorCodec: createAdminCursorCodec("cursor-secret-must-be-at-least-32-bytes-long"),
+      telemetryStatus: { enabled: true, mode: "anonymous-aggregate", schemaVersion: 1 },
+      allowedOrigins: [allowedOrigin],
+      now: () => new Date("2026-07-19T12:00:00.000Z")
+    });
+
+    const response = await handler(
+      sessionRequest({ token: "manager-secret-token", url: dashboardUrl() })
+    );
+    const body: TestDashboardBody = await response.json();
+
+    expect(body.telemetry).toEqual({
+      enabled: true,
+      mode: "anonymous-aggregate",
+      schemaVersion: 1
+    });
+    expect(JSON.stringify(body.telemetry)).not.toContain("endpoint");
   });
 
   it("fails closed for missing store and rejects invalid limits", async () => {
@@ -745,6 +769,7 @@ interface TestDashboardBody {
     nextCursor: string;
   };
   schemaMigrations: unknown[];
+  telemetry: { enabled: boolean; mode: string; schemaVersion: number };
 }
 
 function sessionRequest(params: { token: string; url?: string }): Request {
