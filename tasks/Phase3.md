@@ -34,13 +34,15 @@
 
 ## チャンク B: secret broker 強化(T05–T07)
 
-- [ ] **P3-T05**(M)envelope encryption
+- [x] **P3-T05**(M)envelope encryption
   - RED: 保存される token/secret が KMS 相当の鍵で暗号化され、平文が D1/R2/ログのどこにも現れない(全層スキャンテスト)
   - DoD: 暗号化・非露出テスト green
+  - Evidence: ADR-005、`packages/control-plane/test/secret-store.test.ts`
 
-- [ ] **P3-T06**(M)rotation
+- [x] **P3-T06**(M)rotation
   - RED: provider token の rotation 中も capability call が無停止で成功する(新旧鍵の並行受理)
   - DoD: rotation テスト green、手順がドキュメント化
+  - Evidence: `provider-token-rotation-store.test.ts`、`provider-token-rotation.test.ts`、`docs/operations/provider-token-rotation.md`
 
 - [x] **P3-T07**(S)provider 接続の汎用化
   - 内容: Slack 以外の OAuth provider を追加するための内部インターフェース安定化(contract test kit 適用)
