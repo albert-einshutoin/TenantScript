@@ -32,8 +32,10 @@ The renderer uses an exact input schema and emits only:
 - D1 binding `DB` and its migration directory;
 - SQLite Durable Object binding `ADMIN_MUTATION_RATE_LIMITER_DO` and class declaration.
 
-It writes an explicit output only when the target does not exist. Keep an existing config and review
-the generated diff rather than overwriting it.
+It writes an explicit `.jsonc` output only at the repository root and only when the target does not
+exist. Wrangler resolves entrypoint and migration paths from the config location, so nested or
+external output is rejected rather than generating a broken deployment. Keep an existing config and
+review the generated diff rather than overwriting it.
 
 ## 3. Apply and verify migrations
 

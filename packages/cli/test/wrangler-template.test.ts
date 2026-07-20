@@ -22,6 +22,7 @@ const validInput: ProductionWranglerInputV1 = {
 };
 
 const temporaryDirectories: string[] = [];
+const temporaryFiles: string[] = [];
 
 afterEach(async () => {
   await Promise.all(
@@ -29,6 +30,7 @@ afterEach(async () => {
       .splice(0)
       .map((directory) => rm(directory, { recursive: true, force: true }))
   );
+  await Promise.all(temporaryFiles.splice(0).map((path) => rm(path, { force: true })));
 });
 
 describe("production Wrangler template", () => {
@@ -115,8 +117,8 @@ describe("production Wrangler template", () => {
 
   it("writes atomically only when the explicit output path does not exist", async () => {
     const inputPath = await writeInput(validInput);
-    const directory = await temporaryDirectory();
-    const outputPath = join(directory, "wrangler.jsonc");
+    const outputPath = join(process.cwd(), `wrangler-${crypto.randomUUID()}.jsonc`);
+    temporaryFiles.push(outputPath);
     const firstIo = captureIo([], []);
 
     await expect(
@@ -167,6 +169,35 @@ describe("production Wrangler template", () => {
     expect(await readFile(outputPath, "utf8")).toBe(generated);
   });
 
+  it("rejects output outside the repository root because relative config paths would be invalid", async () => {
+    const inputPath = await writeInput(validInput);
+    const directory = await temporaryDirectory();
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        [
+          "setup",
+          "--profile",
+          "production",
+          "--runtime",
+          "cloudflare-workers",
+          "--dry-run",
+          "true",
+          "--wrangler-input",
+          inputPath,
+          "--output",
+          join(directory, "wrangler.jsonc")
+        ],
+        rollbackOnlyClient,
+        captureIo(stdout, stderr)
+      )
+    ).resolves.toBe(2);
+    expect(stdout).toEqual([]);
+    expect(stderr).toEqual(["invalid setup options"]);
+  });
+
   it("rejects secret-shaped unknown input with a stable CLI diagnostic", async () => {
     const inputPath = await writeInput({ ...validInput, apiToken: "secret-sentinel" });
     const stdout: string[] = [];
@@ -190,6 +221,35 @@ describe("production Wrangler template", () => {
       )
     ).resolves.toBe(2);
 
+    expect(stdout).toEqual([]);
+    expect(stderr).toEqual(["wrangler input is invalid"]);
+    expect(JSON.stringify(stderr)).not.toContain("secret-sentinel");
+  });
+
+  it("classifies malformed JSON as invalid without reflecting parser input", async () => {
+    const directory = await temporaryDirectory();
+    const inputPath = join(directory, "wrangler-input.json");
+    await writeFile(inputPath, '{"apiToken":"secret-sentinel"');
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        [
+          "setup",
+          "--profile",
+          "production",
+          "--runtime",
+          "cloudflare-workers",
+          "--dry-run",
+          "true",
+          "--wrangler-input",
+          inputPath
+        ],
+        rollbackOnlyClient,
+        captureIo(stdout, stderr)
+      )
+    ).resolves.toBe(2);
     expect(stdout).toEqual([]);
     expect(stderr).toEqual(["wrangler input is invalid"]);
     expect(JSON.stringify(stderr)).not.toContain("secret-sentinel");

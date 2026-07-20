@@ -14,8 +14,9 @@ ext setup \
   --output wrangler.jsonc
 ```
 
-The renderer rejects unknown fields, unresolved placeholders, invalid names/IDs, and an existing
-output file. It never accepts or emits credentials. The committed `wrangler.example.jsonc` uses a
+The renderer rejects unknown fields, unresolved placeholders, invalid names/IDs, output outside the
+repository root, and an existing output file. It never accepts or emits credentials. The committed
+`wrangler.example.jsonc` uses a
 synthetic D1 ID only for accountless Wrangler bundle validation; do not deploy it unchanged.
 
 Only bindings consumed by `packages/control-plane/src/worker-entry.ts` are generated today:

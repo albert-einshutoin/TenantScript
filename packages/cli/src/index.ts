@@ -1,5 +1,5 @@
 import { mkdir, open, readFile, readdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { bundlePlugin, runScopedHandler } from "@tenantscript/loader";
 import { parseManifest } from "@tenantscript/manifest";
 import type {
@@ -45,7 +45,6 @@ export {
 export {
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
-  writeProductionWranglerConfig,
   type ProductionWranglerInputV1
 } from "./wrangler-template.js";
 
@@ -192,7 +191,12 @@ async function runSetup(args: readonly string[], io: CliIo): Promise<number> {
   }
   const inputPath = options.get("--wrangler-input");
   const outputPath = options.get("--output");
-  if (outputPath !== undefined && inputPath === undefined) {
+  if (
+    outputPath !== undefined &&
+    (inputPath === undefined ||
+      dirname(resolve(outputPath)) !== process.cwd() ||
+      !basename(outputPath).endsWith(".jsonc"))
+  ) {
     io.stderr("invalid setup options");
     return 2;
   }
@@ -212,8 +216,9 @@ async function runSetup(args: readonly string[], io: CliIo): Promise<number> {
     content = renderProductionWranglerConfig(parseProductionWranglerInput(value));
   } catch (error) {
     io.stderr(
-      error instanceof Error && error.message === "wrangler input is invalid"
-        ? error.message
+      error instanceof SyntaxError ||
+        (error instanceof Error && error.message === "wrangler input is invalid")
+        ? "wrangler input is invalid"
         : "wrangler input could not be read"
     );
     return 2;
