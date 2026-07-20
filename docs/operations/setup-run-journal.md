@@ -37,6 +37,12 @@ resume.
 
 The executor derives a fixed-length SHA-256 idempotency key from run ID, operation ID, and action.
 The same key is reused when a process resumes an `in-progress` reconcile or `cleaning` cleanup.
+
+Reconcile requests also carry a closed `attempt` value. A freshly checkpointed `pending` entry is
+`initial`; an entry loaded as `in-progress` is `resume`. The value does not change the idempotency
+key and is not independent ownership proof. It lets resource adapters reject pre-existing targets
+on an initial attempt while limiting ambiguous-mutation recovery to read-only reconciliation on
+resume. Cleanup uses its existing phase and key contract and has no attempt field.
 Adapters must make both calls idempotent before they are used against a live account.
 
 Before creating a journal or making the first provider call, production composition must construct
