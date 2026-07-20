@@ -12,11 +12,22 @@ export interface PutSecretRequest {
 export interface SecretStore {
   putSecret: (request: PutSecretRequest) => Promise<SecretRef> | SecretRef;
   getSecret: (ref: SecretRef) => Promise<string | null> | string | null;
+  rewrapSecret: (ref: SecretRef) => Promise<RewrapSecretResult | null>;
+}
+
+export interface RewrapSecretResult {
+  ref: SecretRef;
+  previousKeyId: string;
+  currentKeyId: string;
+  changed: boolean;
 }
 
 export interface SecretStoreStorage {
   get: (key: string) => Promise<string | undefined> | string | undefined;
   put: (key: string, value: string) => Promise<void> | void;
+  // A rewrap must not overwrite an OAuth reconnect or token refresh that wins the race.
+  // Production adapters therefore need one transactional compare-and-swap operation.
+  replaceIfUnchanged: (key: string, expected: string, next: string) => Promise<boolean> | boolean;
 }
 
 export interface SecretEncryptionKey {
@@ -29,11 +40,23 @@ export interface SecretEncryptionKeyring {
   keyById: (keyId: string) => Promise<CryptoKey | null> | CryptoKey | null;
 }
 
+export interface EncodedSecretEncryptionKey {
+  id: string;
+  material: string;
+}
+
+export interface AesGcmSecretEncryptionKeyringConfig {
+  currentKeyId: string;
+  keys: readonly EncodedSecretEncryptionKey[];
+}
+
 export type SecretStoreErrorCode =
   | "invalid_secret_record"
   | "secret_encryption_failed"
+  | "secret_encryption_key_configuration_invalid"
   | "secret_encryption_key_invalid"
-  | "secret_encryption_key_unavailable";
+  | "secret_encryption_key_unavailable"
+  | "secret_record_changed";
 
 export class SecretStoreError extends Error {
   readonly code: SecretStoreErrorCode;
@@ -72,6 +95,11 @@ export function createInMemorySecretStore(): SecretStore {
       get: (storageKey) => secrets.get(storageKey),
       put: (storageKey, value) => {
         secrets.set(storageKey, value);
+      },
+      replaceIfUnchanged: (storageKey, expected, next) => {
+        if (secrets.get(storageKey) !== expected) return false;
+        secrets.set(storageKey, next);
+        return true;
       }
     },
     {
@@ -188,8 +216,143 @@ export function createDurableObjectSecretStore(
       } finally {
         if (rawDataKey !== null) new Uint8Array(rawDataKey).fill(0);
       }
+    },
+    rewrapSecret: async (ref) => {
+      validateSecretRef(ref);
+      const storageKey = secretKey(ref);
+      const record = await storage.get(storageKey);
+      if (record === undefined) return null;
+
+      const envelope = parseSecretEnvelope(record);
+      const currentKey = await resolveCurrentKey(keyring);
+      // The current key is authoritative for its ID. Authenticating with it prevents a custom
+      // keyring from hiding different key material behind the same public identifier.
+      const previousKey =
+        envelope.keyId === currentKey.id
+          ? currentKey.key
+          : await resolveDecryptionKey(keyring, envelope.keyId);
+      const rawDataKey = await unwrapDataKey(envelope, ref, previousKey);
+      try {
+        if (envelope.keyId === currentKey.id) {
+          return {
+            ref,
+            previousKeyId: envelope.keyId,
+            currentKeyId: currentKey.id,
+            changed: false
+          };
+        }
+        const rewrapped = await wrapDataKey(rawDataKey, ref, currentKey);
+        const nextRecord = JSON.stringify({
+          ...envelope,
+          keyId: currentKey.id,
+          keyIv: rewrapped.keyIv,
+          wrappedKey: rewrapped.wrappedKey
+        } satisfies SecretEnvelopeV1);
+        if (!(await storage.replaceIfUnchanged(storageKey, record, nextRecord))) {
+          throw new SecretStoreError(
+            "secret_record_changed",
+            "secret record changed during rewrap"
+          );
+        }
+        return {
+          ref,
+          previousKeyId: envelope.keyId,
+          currentKeyId: currentKey.id,
+          changed: true
+        };
+      } finally {
+        new Uint8Array(rawDataKey).fill(0);
+      }
     }
   };
+}
+
+export async function createAesGcmSecretEncryptionKeyring(
+  config: AesGcmSecretEncryptionKeyringConfig
+): Promise<SecretEncryptionKeyring> {
+  try {
+    const currentKeyId = config.currentKeyId;
+    validateKeyId(currentKeyId);
+    if (config.keys.length === 0) throw new Error("missing keys");
+    const keys = new Map<string, CryptoKey>();
+    for (const encoded of config.keys) {
+      validateKeyId(encoded.id);
+      if (keys.has(encoded.id)) throw new Error("duplicate key id");
+      const material = decodeBase64Url(encoded.material);
+      try {
+        if (material.byteLength !== AES_256_KEY_BYTES) throw new Error("invalid key length");
+        keys.set(
+          encoded.id,
+          await crypto.subtle.importKey("raw", material, { name: "AES-GCM" }, false, [
+            "encrypt",
+            "decrypt"
+          ])
+        );
+      } finally {
+        material.fill(0);
+      }
+    }
+    if (!keys.has(currentKeyId)) throw new Error("current key is missing");
+    return {
+      currentKey: () => {
+        const key = keys.get(currentKeyId);
+        if (key === undefined) throw invalidKeyConfiguration();
+        return { id: currentKeyId, key };
+      },
+      keyById: (keyId) => keys.get(keyId) ?? null
+    };
+  } catch {
+    throw invalidKeyConfiguration();
+  }
+}
+
+async function unwrapDataKey(
+  envelope: SecretEnvelopeV1,
+  ref: SecretRef,
+  key: CryptoKey
+): Promise<ArrayBuffer> {
+  try {
+    const rawDataKey = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: decodeBase64Url(envelope.keyIv),
+        additionalData: secretAdditionalData("key", ref, envelope.keyId),
+        tagLength: AES_GCM_TAG_BYTES * 8
+      },
+      key,
+      decodeBase64Url(envelope.wrappedKey)
+    );
+    if (rawDataKey.byteLength !== AES_256_KEY_BYTES) throw invalidSecretRecord();
+    return rawDataKey;
+  } catch {
+    throw invalidSecretRecord();
+  }
+}
+
+async function wrapDataKey(
+  rawDataKey: ArrayBuffer,
+  ref: SecretRef,
+  currentKey: SecretEncryptionKey
+): Promise<{ keyIv: string; wrappedKey: string }> {
+  const keyIv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTES));
+  try {
+    const wrappedKey = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv: keyIv,
+        additionalData: secretAdditionalData("key", ref, currentKey.id),
+        tagLength: AES_GCM_TAG_BYTES * 8
+      },
+      currentKey.key,
+      rawDataKey
+    );
+    return {
+      keyIv: encodeBase64Url(keyIv),
+      wrappedKey: encodeBase64Url(new Uint8Array(wrappedKey))
+    };
+  } catch {
+    throw new SecretStoreError("secret_encryption_failed", "secret encryption failed");
+  }
 }
 
 async function resolveCurrentKey(keyring: SecretEncryptionKeyring): Promise<SecretEncryptionKey> {
@@ -367,6 +530,13 @@ function decodeBase64Url(value: string): Uint8Array<ArrayBuffer> {
 
 function invalidSecretRecord(): SecretStoreError {
   return new SecretStoreError("invalid_secret_record", "secret record is invalid");
+}
+
+function invalidKeyConfiguration(): SecretStoreError {
+  return new SecretStoreError(
+    "secret_encryption_key_configuration_invalid",
+    "secret encryption key configuration is invalid"
+  );
 }
 
 function validateSecretRef(ref: SecretRef): void {

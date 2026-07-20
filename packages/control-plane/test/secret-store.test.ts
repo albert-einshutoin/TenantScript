@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  createAesGcmSecretEncryptionKeyring,
   createDurableObjectSecretStore,
   type SecretEncryptionKeyring,
   type SecretRef,
@@ -108,6 +109,125 @@ describe("encrypted secret store", () => {
     );
   });
 
+  it("rewraps only the DEK so the old KEK can be retired", async () => {
+    const records = new Map<string, string>();
+    const oldKey = await importSyntheticKey(91);
+    const newKey = await importSyntheticKey(92);
+    const ref = secretRef("tenant_1", "workspace_1");
+    const oldStore = createDurableObjectSecretStore(
+      mapStorage(records),
+      staticKeyring("key-v1", new Map([["key-v1", oldKey]]))
+    );
+    await oldStore.putSecret({ ref, value: "rewrap-without-data-decrypt" });
+    const before = JSON.parse(onlyRecord(records)) as Record<string, unknown>;
+
+    const rotatedStore = createDurableObjectSecretStore(
+      mapStorage(records),
+      staticKeyring(
+        "key-v2",
+        new Map([
+          ["key-v1", oldKey],
+          ["key-v2", newKey]
+        ])
+      )
+    );
+    await expect(rotatedStore.rewrapSecret(ref)).resolves.toEqual({
+      ref,
+      previousKeyId: "key-v1",
+      currentKeyId: "key-v2",
+      changed: true
+    });
+
+    const after = JSON.parse(onlyRecord(records)) as Record<string, unknown>;
+    expect(after.keyId).toBe("key-v2");
+    expect(after.iv).toBe(before.iv);
+    expect(after.ciphertext).toBe(before.ciphertext);
+    expect(after.keyIv).not.toBe(before.keyIv);
+    expect(after.wrappedKey).not.toBe(before.wrappedKey);
+
+    const newKeyOnlyStore = createDurableObjectSecretStore(
+      mapStorage(records),
+      staticKeyring("key-v2", new Map([["key-v2", newKey]]))
+    );
+    await expect(newKeyOnlyStore.getSecret(ref)).resolves.toBe("rewrap-without-data-decrypt");
+  });
+
+  it("does not overwrite a concurrent secret update during rewrap", async () => {
+    const oldKey = await importSyntheticKey(93);
+    const newKey = await importSyntheticKey(94);
+    const ref = secretRef("tenant_1", "workspace_1");
+    const records = new Map<string, string>();
+    const originalStore = createDurableObjectSecretStore(
+      mapStorage(records),
+      staticKeyring("key-v1", new Map([["key-v1", oldKey]]))
+    );
+    await originalStore.putSecret({ ref, value: "original-secret" });
+
+    const concurrentRecords = new Map<string, string>();
+    const concurrentStore = createDurableObjectSecretStore(
+      mapStorage(concurrentRecords),
+      staticKeyring("key-v1", new Map([["key-v1", oldKey]]))
+    );
+    await concurrentStore.putSecret({ ref, value: "concurrent-secret" });
+    const concurrentRecord = onlyRecord(concurrentRecords);
+    const storage = mapStorage(records);
+    storage.replaceIfUnchanged = vi.fn((key: string) => {
+      records.set(key, concurrentRecord);
+      return false;
+    });
+    const rotatedStore = createDurableObjectSecretStore(
+      storage,
+      staticKeyring(
+        "key-v2",
+        new Map([
+          ["key-v1", oldKey],
+          ["key-v2", newKey]
+        ])
+      )
+    );
+
+    await expect(rotatedStore.rewrapSecret(ref)).rejects.toThrow(
+      "secret record changed during rewrap"
+    );
+    await expect(originalStore.getSecret(ref)).resolves.toBe("concurrent-secret");
+  });
+
+  it("returns null for a missing rewrap and validates an already-current envelope", async () => {
+    const records = new Map<string, string>();
+    const storage = mapStorage(records);
+    const replaceIfUnchanged = vi.spyOn(storage, "replaceIfUnchanged");
+    const store = createDurableObjectSecretStore(storage, await keyring("key-v1", 95));
+    const ref = secretRef("tenant_1", "workspace_1");
+
+    await expect(store.rewrapSecret(ref)).resolves.toBeNull();
+    await store.putSecret({ ref, value: "already-current" });
+    await expect(store.rewrapSecret(ref)).resolves.toEqual({
+      ref,
+      previousKeyId: "key-v1",
+      currentKeyId: "key-v1",
+      changed: false
+    });
+    expect(replaceIfUnchanged).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inconsistent current key instead of treating the same key id as current", async () => {
+    const records = new Map<string, string>();
+    const originalKey = await importSyntheticKey(96);
+    const inconsistentKey = await importSyntheticKey(97);
+    const ref = secretRef("tenant_1", "workspace_1");
+    const originalStore = createDurableObjectSecretStore(
+      mapStorage(records),
+      staticKeyring("key-v1", new Map([["key-v1", originalKey]]))
+    );
+    await originalStore.putSecret({ ref, value: "same-id-different-key" });
+
+    const inconsistentStore = createDurableObjectSecretStore(mapStorage(records), {
+      currentKey: () => ({ id: "key-v1", key: inconsistentKey }),
+      keyById: () => originalKey
+    });
+    await expect(inconsistentStore.rewrapSecret(ref)).rejects.toThrow("secret record is invalid");
+  });
+
   it("rejects keys that are not non-extractable AES-256-GCM keys", async () => {
     const shortKey = await crypto.subtle.importKey(
       "raw",
@@ -156,11 +276,63 @@ describe("encrypted secret store", () => {
   });
 });
 
+describe("AES-GCM secret encryption keyring", () => {
+  it("imports current and retained 256-bit keys as non-extractable KEKs", async () => {
+    const keyring = await createAesGcmSecretEncryptionKeyring({
+      currentKeyId: "key-v2",
+      keys: [
+        { id: "key-v1", material: syntheticKeyMaterial(101, 32) },
+        { id: "key-v2", material: syntheticKeyMaterial(102, 32) }
+      ]
+    });
+
+    const current = await keyring.currentKey();
+    expect(current.id).toBe("key-v2");
+    expect(current.key.algorithm).toMatchObject({ name: "AES-GCM", length: 256 });
+    expect(current.key.extractable).toBe(false);
+    expect(await keyring.keyById("key-v1")).toBeInstanceOf(CryptoKey);
+    expect(await keyring.keyById("missing")).toBeNull();
+  });
+
+  it.each([
+    ["empty keyring", "key-v1", []],
+    ["missing current key", "key-v2", [{ id: "key-v1", material: syntheticKeyMaterial(1, 32) }]],
+    [
+      "duplicate key id",
+      "key-v1",
+      [
+        { id: "key-v1", material: syntheticKeyMaterial(1, 32) },
+        { id: "key-v1", material: syntheticKeyMaterial(2, 32) }
+      ]
+    ],
+    ["invalid key id", "bad key", [{ id: "bad key", material: syntheticKeyMaterial(1, 32) }]],
+    ["padded material", "key-v1", [{ id: "key-v1", material: `${syntheticKeyMaterial(1, 32)}=` }]],
+    ["short material", "key-v1", [{ id: "key-v1", material: syntheticKeyMaterial(1, 31) }]],
+    ["long material", "key-v1", [{ id: "key-v1", material: syntheticKeyMaterial(1, 33) }]],
+    ["invalid encoding", "key-v1", [{ id: "key-v1", material: "not+base64url" }]]
+  ])("rejects %s without echoing key material", async (_name, currentKeyId, keys) => {
+    let caught: unknown;
+    try {
+      await createAesGcmSecretEncryptionKeyring({ currentKeyId, keys });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("secret encryption key configuration is invalid");
+    for (const key of keys) expect((caught as Error).message).not.toContain(key.material);
+  });
+});
+
 function mapStorage(records: Map<string, string>): SecretStoreStorage {
   return {
     get: (key) => records.get(key),
     put: (key, value) => {
       records.set(key, value);
+    },
+    replaceIfUnchanged: (key, expected, next) => {
+      if (records.get(key) !== expected) return false;
+      records.set(key, next);
+      return true;
     }
   };
 }
@@ -222,4 +394,11 @@ function serializedEnvelope(overrides: Readonly<Record<string, unknown>>): strin
     ciphertext: "A".repeat(23),
     ...overrides
   });
+}
+
+function syntheticKeyMaterial(fill: number, length: number): string {
+  const bytes = new Uint8Array(length).fill(fill);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
 }
