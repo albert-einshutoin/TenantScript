@@ -383,6 +383,10 @@ describe("Admin UI auth foundation", () => {
     "applies RBAC installation controls for %s",
     async (role, canManage) => {
       const baseClient = createDemoAdminApiClient();
+      let releaseDashboard!: () => void;
+      const dashboardReady = new Promise<void>((resolve) => {
+        releaseDashboard = resolve;
+      });
       const client: AdminApiClient = {
         ...baseClient,
         resolveSession: () =>
@@ -391,7 +395,11 @@ describe("Admin UI auth foundation", () => {
             role,
             appId: "app_demo",
             tenantId: "tenant_demo"
-          })
+          }),
+        getDashboard: async (session) => {
+          await dashboardReady;
+          return await baseClient.getDashboard(session);
+        }
       };
       render(<App client={client} />);
 
@@ -399,6 +407,11 @@ describe("Admin UI auth foundation", () => {
       fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
       await screen.findByText(`${role}-subject`);
       fireEvent.click(screen.getByRole("button", { name: "Installations" }));
+      releaseDashboard();
+
+      expect(
+        await screen.findByRole("button", { name: "Permission review for large-invoice-notify" })
+      ).toBeEnabled();
 
       if (canManage) {
         expect(screen.getByRole("button", { name: "Manage large-invoice-notify" })).toBeEnabled();
