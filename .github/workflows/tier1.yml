@@ -34,6 +34,17 @@ jobs:
       - run: pnpm test:release-automation
       - run: pnpm test:agent-scaffold
       - run: pnpm test:admin-ui-accessibility
+      - id: admin-ui-visual
+        run: pnpm test:admin-ui-visual
+      - uses: actions/upload-artifact@v4
+        if: failure() && steps.admin-ui-visual.outcome == 'failure'
+        with:
+          name: admin-ui-visual-failure-${{ github.sha }}
+          path: |
+            apps/admin-ui/test-results
+            apps/admin-ui/playwright-report
+          if-no-files-found: error
+          retention-days: 14
       - run: pnpm test:admin-ui-performance
       - run: pnpm test:admin-ui-bundle-budget
       - run: pnpm test:packages

@@ -26,9 +26,10 @@
   - DoD: a11y テストが CI 常設
   - Evidence: Issue #251でloginと全主要routeのunfiltered axe zero、install・capability確認・rollback・approveのkeyboard-only journey、modal focus trap・復帰をTier 1へ常設
 
-- [ ] **P3-T03**(M)visual regression
+- [x] **P3-T03**(M)visual regression
   - 内容: 320 / 768 / 1024 / 1440 のスクリーンショット比較(Playwright)。主要状態(空・ロード・エラー・大量データ)を含む
   - DoD: visual regression が CI 常設、ベースライン承認フロー確立
+  - Evidence: Issue #253で320 / 768 / 1024 / 1440の主要8 surface、empty・loading・error・large dataset・confirmation dialog、strict Linux baseline、mobile overflow、failure artifact、承認runbookをTier 1へ常設
 
 - [x] **P3-T04**(S)UI パフォーマンス
   - 内容: 大量 executions(10万行想定)でのページング・仮想化。バンドルサイズ予算(app ページ < 300kb gz)を CI で監視
