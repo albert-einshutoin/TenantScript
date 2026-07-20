@@ -10,6 +10,8 @@ Before changing code, read:
 - [Architecture Decision Records](docs/adr/README.md): canonical decisions that constrain runtime, licensing, approval flow, and future architecture.
 - [Benchmark evidence](docs/benchmarks/README.md): measured, blocked, and planned validation with reproducibility requirements.
 - [Security policy](SECURITY.md): private vulnerability reporting and sensitive-data rules.
+- [Code of Conduct](CODE_OF_CONDUCT.md): community behavior, confidential reporting, and enforcement.
+- [Good-first-issue pipeline](docs/community/good-first-issues.md): bounded newcomer tasks with explicit verification.
 - [AGENTS.md](AGENTS.md): concise repository workflow and safety guardrails for humans and coding agents.
 
 If these documents conflict, an accepted ADR governs the architecture, while the current issue or task defines the approved change scope. Ask in the issue before expanding that scope.
@@ -143,4 +145,5 @@ the private process in [`SECURITY.md`](SECURITY.md).
 
 Review the change, not the person. Explain security or architecture concerns with concrete evidence and offer a path forward. Harassment, disclosure of private information, and unsafe publication of vulnerabilities are not acceptable.
 
-Project decision-making and the path to co-maintainership are described in [GOVERNANCE.md](GOVERNANCE.md).
+All participation follows [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Project decision-making and the
+path to co-maintainership are described in [GOVERNANCE.md](GOVERNANCE.md).

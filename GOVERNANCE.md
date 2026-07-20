@@ -58,6 +58,22 @@ Authors do not merge their own security-sensitive or architecture-changing pull 
 
 Emergency security containment may temporarily precede the normal process when public delay increases adopter risk. The maintainer records the scope privately in the advisory, limits the change to containment, and adds tests, disclosure, and public rationale when coordinated disclosure permits.
 
+## Release decisions
+
+Maintainers publish a release only when scoped checks pass, supported-version and migration
+documentation is current, and external or manual gates are explicit. Repository implementation,
+runtime verification, and release readiness are separate claims. A failed required check,
+unresolved security concern, or missing publication prerequisite blocks release without inventing a
+date. Security releases follow [SECURITY.md](SECURITY.md) and private advisory coordination.
+
+## Conflicts of interest
+
+Contributors and maintainers disclose financial, employment, customer, or personal interests that
+could reasonably affect a decision. An affected maintainer recuses themselves from final review,
+moderation, or access decisions when another maintainer is available. Sponsorship, employment, or
+commercial adoption never overrides security, review, or release gates. Conduct reports follow
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md); a person named in a report cannot decide their own case.
+
 ## Becoming a co-maintainer
 
 Co-maintainership is earned through sustained, trustworthy project work rather than a fixed number of commits. A candidate should demonstrate:
@@ -71,6 +87,15 @@ Co-maintainership is earned through sustained, trustworthy project work rather t
 Existing maintainers discuss the candidate using public contribution evidence and private security or conduct information only when necessary. Maintainers seek consensus, document the granted role and scope, and begin with the minimum repository permission required. No external person or organization receives maintainer status solely through sponsorship, employment, or affiliation.
 
 Co-maintainers are expected to disclose conflicts of interest, recuse themselves when independent judgment is compromised, protect embargoed vulnerability information, and hand off responsibilities when inactive for an extended period.
+
+## Inactivity and removal
+
+A maintainer who expects extended inactivity hands off owned reviews, releases, advisories, and
+credentials. Access may be reduced after sustained inactivity to preserve least privilege and can
+be restored through the same trust-based process. Status may be suspended or removed for abuse of
+access, intentional bypass of security gates, failure to protect confidential data, or a
+substantiated Code of Conduct violation. Access is revoked immediately when it creates material
+risk; remaining maintainers document the project impact when safety and privacy permit.
 
 ## Changes to governance
 

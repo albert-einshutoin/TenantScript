@@ -19,6 +19,7 @@ Fixes #
 - [ ] **REFACTOR**: I reviewed naming, duplication, package boundaries, error handling, and non-obvious rationale.
 - [ ] The PR is focused on one issue and contains no unrelated changes.
 - [ ] I reviewed the final diff and resolved every actionable review thread.
+- [ ] My contribution and review interactions follow [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md).
 
 ## Security and compatibility
 
