@@ -1,8 +1,32 @@
 {
   "name": "@tenantscript/control-plane",
   "version": "0.0.0",
+  "description": "TenantScript Control Plane services, Admin API contracts, RBAC, storage, audit, and usage primitives.",
+  "keywords": [
+    "tenantscript",
+    "control-plane",
+    "saas",
+    "plugins",
+    "cloudflare"
+  ],
+  "homepage": "https://github.com/albert-einshutoin/TenantScript#readme",
+  "bugs": {
+    "url": "https://github.com/albert-einshutoin/TenantScript/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/albert-einshutoin/TenantScript.git",
+    "directory": "packages/control-plane"
+  },
   "type": "module",
   "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -14,6 +38,7 @@
     }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run && vitest run --config vitest.workers.config.ts",

@@ -1,8 +1,32 @@
 {
   "name": "@tenantscript/plugin-sdk",
   "version": "0.0.0",
+  "description": "Type-safe authoring helpers for defining and testing TenantScript plugins.",
+  "keywords": [
+    "tenantscript",
+    "sdk",
+    "saas",
+    "plugins",
+    "typescript"
+  ],
+  "homepage": "https://github.com/albert-einshutoin/TenantScript#readme",
+  "bugs": {
+    "url": "https://github.com/albert-einshutoin/TenantScript/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/albert-einshutoin/TenantScript.git",
+    "directory": "packages/plugin-sdk"
+  },
   "type": "module",
   "license": "Apache-2.0",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -10,6 +34,7 @@
     }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
