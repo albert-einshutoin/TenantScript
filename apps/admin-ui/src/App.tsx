@@ -185,9 +185,7 @@ function AdminShell({
     ]);
     // Audit pagination is independent from mutation refreshes. Operational health, however, must
     // move with usage so Overview never combines a current execution count with stale failures.
-    setSnapshot((current) =>
-      preserveAuditSlice(current, { ...refreshed, operationalHealth })
-    );
+    setSnapshot((current) => preserveAuditSlice(current, { ...refreshed, operationalHealth }));
   }, [client, session]);
 
   const loadMore = useCallback(
