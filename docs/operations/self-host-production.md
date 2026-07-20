@@ -31,10 +31,12 @@ ownership-aware cleanup share stable targets without exposing the run ID or full
 Resource IDs are deployment metadata, but the repository still does not commit account-specific
 values.
 
-Use input schema version 3 for the complete accountless baseline. It adds the explicit
-`USAGE_ANALYTICS` dataset binding. Version 2 remains readable without enabling Analytics Engine;
-version 1 also deliberately renders the earlier D1/Worker-only baseline without an R2 binding or
-scheduled trigger. Upgrading the schema never enables data movement or telemetry implicitly.
+Use input schema version 4 for the complete accountless baseline. It adds the provider secret-store
+Durable Object declaration on top of the explicit
+`USAGE_ANALYTICS` dataset binding. Version 3 remains readable without enabling provider secret
+storage, version 2 does not enable Analytics Engine, and version 1 deliberately renders the earlier
+D1/Worker-only baseline without an R2 binding or scheduled trigger. Upgrading the schema never
+enables data movement or telemetry implicitly.
 
 The renderer uses an exact input schema and emits only:
 
@@ -42,7 +44,8 @@ The renderer uses an exact input schema and emits only:
 - D1 binding `DB` and its migration directory;
 - private R2 binding `EXECUTION_ARCHIVE`, the explicit hot-retention value, and a daily trigger;
 - Analytics Engine dataset binding `USAGE_ANALYTICS`;
-- SQLite Durable Object binding `ADMIN_MUTATION_RATE_LIMITER_DO` and declarative `exports` lifecycle.
+- SQLite Durable Object bindings `ADMIN_MUTATION_RATE_LIMITER_DO` and
+  `PROVIDER_SECRET_STORE_DO`, with declarative `exports` lifecycle.
 
 It writes an explicit `.jsonc` output only at the repository root and only when the target does not
 exist. Wrangler resolves entrypoint and migration paths from the config location, so nested or
@@ -75,10 +78,11 @@ the selected tenant runtime Worker. The accountless
 and ownership-verified cleanup. It is not yet composed into a credential-bearing `ext setup`
 command, and it is not live Cloudflare evidence.
 
-The rate-limiter Durable Object is not a separately created setup resource. Its binding and SQLite
-class lifecycle are reconciled atomically by the Control Plane Worker deploy through Wrangler
-`exports`. Automatic rollback never emits a destructive Durable Object tombstone, and deleting the
-Worker must not be reported as proof that Durable Object data was deleted.
+The rate-limiter and provider secret-store Durable Objects are not separately created setup
+resources. Their bindings and SQLite class lifecycle are reconciled atomically by the Control Plane
+Worker deploy through Wrangler `exports`. Automatic rollback never emits a destructive Durable
+Object tombstone, and deleting the Worker must not be reported as proof that Durable Object data
+was deleted.
 
 Do not treat `deploy --dry-run` as live resource, permission, migration, or request-path evidence.
 After deployment, collect a secret-free doctor report through a trusted adapter and evaluate it with
@@ -98,6 +102,12 @@ Never add API tokens, KEKs, bootstrap identity tokens, service tokens, `ADMIN_CU
 provider credentials to Wrangler `vars`, input JSON, issue comments, CI logs, or committed files. Use
 the operator-controlled secret mechanism (for example `wrangler secret put`) and follow the relevant
 rotation runbook. The template does not guess or generate secrets.
+
+`PROVIDER_SECRET_KEYRING_JSON` is an exact JSON object with `currentKeyId` and a `keys` array. Every
+entry contains a non-secret identifier and unpadded base64url encoding of exactly 32 random bytes.
+Provision the entire JSON value as a Worker secret. Retain old keys during rewrap and verify the
+[secret key rotation gate](secret-key-rotation.md) before retiring one; do not paste real material
+into a command transcript or shell history shared with others.
 
 ## 5. Production checklist
 
@@ -131,9 +141,10 @@ Artifact and execution archive R2 have an accountless create/adopt/cleanup adapt
 archive R2 is wired for the compatibility `DB`; artifact storage and sharded retention composition
 remain absent. Analytics Engine usage now has D1-backed daily summaries, a production Worker query
 path, and an explicit Wrangler binding. Cloudflare creates the dataset on its first write, so setup
-does not model a separate create/delete lifecycle. Other missing composition includes the provider
-secret-store Durable Object, approval Workflow, the execution-recording caller, and tenant
-runtime/dispatch binding. Track the remaining
+does not model a separate create/delete lifecycle. The encrypted provider secret store now has a
+tenant-isolated production Durable Object adapter and declarative binding, while provider-facing
+OAuth composition, live key provisioning/rotation evidence, approval Workflow, the
+execution-recording caller, and tenant runtime/dispatch binding remain incomplete. Track the remaining
 setup/IaC/Tier 2 work in
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34). Their absence must remain
 visible in reviews and release evidence.
