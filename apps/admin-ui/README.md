@@ -36,6 +36,12 @@ The Overview screen shows app-wide hook schema migration usage to `owner`, `admi
 evidence only; the host publishing workflow must still use the removal gate documented in
 [`docs/operations/schema-migrations.md`](../../docs/operations/schema-migrations.md).
 
+Operational health is loaded independently from `GET /v1/admin/dashboard/operations` so the legacy
+dashboard response remains backward compatible. The server derives app, tenant, and UTC day from
+the authenticated request and reports an integer basis-point failure rate plus actual timeout,
+egress-denial, and budget-exceeded counts. The UI never estimates budget utilization when a budget
+limit is not available in the dashboard read model.
+
 The header shows whether anonymous aggregate telemetry is `On` or `Off`. The server response never
 includes the receiver endpoint. Telemetry is off by default and is configured only in the Control
 Plane Worker; see

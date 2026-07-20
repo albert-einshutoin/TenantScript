@@ -765,6 +765,72 @@ describe("Admin API environment selection", () => {
     );
   });
 
+  it("loads strict operational health without sending tenant scope fields", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          date: "2026-07-21",
+          totalExecutions: 34,
+          failedExecutions: 3,
+          failureRateBps: 882,
+          timeoutExecutions: 1,
+          egressDeniedExecutions: 1,
+          budgetExceededExecutions: 1
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getOperationalHealth()).resolves.toEqual({
+      date: "2026-07-21",
+      totalExecutions: 34,
+      failedExecutions: 3,
+      failureRateBps: 882,
+      timeoutExecutions: 1,
+      egressDeniedExecutions: 1,
+      budgetExceededExecutions: 1
+    });
+    const [url] = fetcher.mock.calls[1] ?? [];
+    expect(requestUrl(url)).toBe("https://api.example.com/v1/admin/dashboard/operations");
+    expect(requestUrl(url)).not.toContain("tenantId");
+  });
+
+  it("rejects operational health with out-of-contract fields or rates", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(sessionPayload()))
+      .mockResolvedValueOnce(
+        Response.json({
+          date: "2026-07-21",
+          totalExecutions: 1,
+          failedExecutions: 1,
+          failureRateBps: 10_001,
+          timeoutExecutions: 0,
+          egressDeniedExecutions: 0,
+          budgetExceededExecutions: 0,
+          rawError: "customer payload"
+        })
+      );
+    const client = createAdminApiClient({
+      isDevelopment: false,
+      demoMode: false,
+      controlPlaneUrl: "https://api.example.com",
+      fetcher
+    });
+    await client.resolveSession({ token: "secret-token" });
+
+    await expect(client.getOperationalHealth()).rejects.toEqual(
+      new AdminApiError(502, "invalid_response", "control-plane returned an invalid response")
+    );
+  });
+
   it("maps every paginated dashboard section DTO", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
