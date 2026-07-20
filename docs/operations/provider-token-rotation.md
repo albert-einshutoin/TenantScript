@@ -68,8 +68,9 @@ pnpm test:security
 
 このaccountless testはfallback分類、上限、encrypted CAS、promotion/rollback/finalize、secret-free errorを
 検証します。Slackのauthorization code交換はfixed-origin、exact redirect、one-shot、bounded responseの
-HTTP clientまでrepository verifiedです。OAuth stateの発行・一回限り検証、管理HTTP endpoint、Worker
-composition、Slack refresh tokenの暗号化永続化とexpiry-aware更新state machine、Admin UI/CLI、provider側
+HTTP clientまでrepository verifiedです。OAuth stateの発行・tenant/browser-boundな一回限り検証は
+Durable Object storeまでrepository verifiedです。管理HTTP callback、Worker composition、Slack refresh tokenの
+暗号化永続化とexpiry-aware更新state machine、Admin UI/CLI、provider側
 失効、Cloudflare adapterのlive transactionはまだ検証しません。refresh credentialを失うtoken-rotation
 responseは現時点でfail closedです。deploymentはこれらを追加し、実providerでcredential分類と無停止切替を
 検証する必要があります。
