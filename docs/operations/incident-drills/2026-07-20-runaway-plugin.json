@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "TS-INCIDENT-DRILL-2026-001",
+  "kind": "tabletop",
+  "visibility": "public-synthetic",
+  "scenario": "A synthetic plugin allocation storm exceeds its worker memory budget, repeated failures quarantine the installation, and an operator validates explicit recovery.",
+  "severity": "high",
+  "startedAt": "2026-07-20T00:00:00.000Z",
+  "completedAt": "2026-07-20T00:05:00.000Z",
+  "stages": [
+    {
+      "name": "detect",
+      "at": "2026-07-20T00:00:00.000Z",
+      "evidence": "packages/loader/test/chaos-suite.test.ts"
+    },
+    {
+      "name": "scope",
+      "at": "2026-07-20T00:01:00.000Z",
+      "evidence": "docs/security/threat-model.md"
+    },
+    {
+      "name": "contain",
+      "at": "2026-07-20T00:02:00.000Z",
+      "evidence": "packages/control-plane/test/runaway-guard.workers.test.ts"
+    },
+    {
+      "name": "recover",
+      "at": "2026-07-20T00:03:00.000Z",
+      "evidence": "docs/operations/runaway-quarantine.md"
+    },
+    {
+      "name": "postmortem",
+      "at": "2026-07-20T00:04:00.000Z",
+      "evidence": "docs/operations/incident-response.md"
+    }
+  ],
+  "outcome": "passed",
+  "remainingLimitations": [
+    "This was an accountless public synthetic tabletop and did not use a live Cloudflare deployment or customer traffic.",
+    "Paid-plan runtime enforcement, live notification delivery, and external provider coordination remain unverified.",
+    "Production thresholds must be selected from observed deployment behavior and were not invented for this drill."
+  ]
+}

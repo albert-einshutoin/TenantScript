@@ -31,3 +31,17 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @tenantscript/capabilities test -- test/approval-lifecycle.test.ts
+
+  chaos-contract:
+    name: accountless chaos scenarios
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'albert-einshutoin'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:chaos
