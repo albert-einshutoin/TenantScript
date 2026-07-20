@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { bundlePlugin, runScopedHandler } from "@tenantscript/loader";
 import { parseManifest } from "@tenantscript/manifest";
@@ -11,6 +11,17 @@ import type {
   RollbackResult
 } from "@tenantscript/control-plane";
 import { runRollbackDrill } from "./rollback-drill.js";
+import { evaluateDoctorReport, parseDoctorReport } from "./doctor.js";
+
+export {
+  evaluateDoctorReport,
+  parseDoctorReport,
+  type DoctorFinding,
+  type DoctorFindingCode,
+  type DoctorReportV1,
+  type DoctorResult,
+  type DoctorRuntimePrimitive
+} from "./doctor.js";
 
 export {
   measureRollbackDrill,
@@ -89,6 +100,9 @@ export async function runExtCli(
   if (command === "approvals") {
     return await runApprovalDecision(args, client, io);
   }
+  if (command === "doctor") {
+    return await runDoctor(args, io);
+  }
   if (command !== "rollback") {
     io.stderr(`unknown command: ${command ?? ""}`);
     return 2;
@@ -115,6 +129,48 @@ export async function runExtCli(
     })
   );
   return 0;
+}
+
+async function runDoctor(args: readonly string[], io: CliIo): Promise<number> {
+  if (args.length === 0) {
+    io.stderr("missing required doctor option: --report");
+    return 2;
+  }
+  if (args.length !== 2 || args[0] !== "--report" || args[1] === undefined) {
+    io.stderr("invalid doctor options");
+    return 2;
+  }
+  try {
+    const value: unknown = JSON.parse(await readDoctorReport(args[1]));
+    const result = evaluateDoctorReport(parseDoctorReport(value));
+    io.stdout(JSON.stringify(result));
+    return result.healthy ? 0 : 1;
+  } catch (error) {
+    io.stderr(error instanceof SyntaxError ? "doctor report is invalid" : doctorDiagnostic(error));
+    return 2;
+  }
+}
+
+const MAX_DOCTOR_REPORT_BYTES = 65_536;
+
+async function readDoctorReport(path: string): Promise<string> {
+  const handle = await open(path, "r");
+  try {
+    // The closed report is tiny. Reading only one byte beyond the limit prevents a local path from
+    // turning an offline diagnostic into an unbounded memory read while still detecting truncation.
+    const buffer = Buffer.alloc(MAX_DOCTOR_REPORT_BYTES + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > MAX_DOCTOR_REPORT_BYTES) throw new Error("doctor report is invalid");
+    return buffer.subarray(0, bytesRead).toString("utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+function doctorDiagnostic(error: unknown): string {
+  return error instanceof Error && error.message === "doctor report is invalid"
+    ? error.message
+    : "doctor report could not be read";
 }
 
 export function createHttpRollbackClient(
