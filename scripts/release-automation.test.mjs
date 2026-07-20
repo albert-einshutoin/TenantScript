@@ -72,7 +72,10 @@ test("release PR and publish workflows preserve the no-token OIDC boundary", asy
     readFile(new URL("../docs/reference/release-automation.md", import.meta.url), "utf8")
   ]);
 
-  assert.match(releasePr, /changesets\/action@v1/u);
+  assert.match(
+    releasePr,
+    /changesets\/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1\.9\.0/u
+  );
   assert.match(releasePr, /version:\s*pnpm changeset:version/u);
   assert.match(releasePr, /vars\.RELEASE_AUTOMATION_ENABLED == 'true'/u);
   assert.doesNotMatch(releasePr, /publish:/u);
