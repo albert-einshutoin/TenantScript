@@ -26,10 +26,12 @@ export function ModalDialog({
 
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (cancelDisabled && focusableDialogElements(dialog).length === 0) {
-      // Privileged mutations temporarily disable every action. Keeping the dialog itself focused
-      // preserves the modal boundary instead of letting Tab escape while the request is in flight.
-      dialog?.focus();
+    if (!cancelDisabled) return;
+    const focusable = focusableDialogElements(dialog);
+    if (!focusable.some((element) => element === document.activeElement)) {
+      // Privileged mutations can disable the currently focused action. Move to another enabled
+      // control, or the dialog itself, so Tab cannot escape while the request is in flight.
+      (focusable[0] ?? dialog)?.focus();
     }
   }, [cancelDisabled]);
 

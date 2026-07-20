@@ -67,9 +67,26 @@ describe("ModalDialog keyboard focus boundary", () => {
     fireEvent.keyDown(dialog, { key: "Tab" });
     expect(screen.getByRole("button", { name: "Confirm" })).toHaveFocus();
   });
+
+  it("moves focus off an action that becomes disabled", async () => {
+    const { rerender } = render(<DialogHarness keepInputEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Open confirmation" }));
+    await flushAnimationFrame();
+    screen.getByRole("button", { name: "Confirm" }).focus();
+
+    rerender(<DialogHarness cancelDisabled keepInputEnabled />);
+
+    expect(screen.getByRole("textbox", { name: "Decision reason" })).toHaveFocus();
+  });
 });
 
-function DialogHarness({ cancelDisabled = false }: { cancelDisabled?: boolean }) {
+function DialogHarness({
+  cancelDisabled = false,
+  keepInputEnabled = false
+}: {
+  cancelDisabled?: boolean;
+  keepInputEnabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -89,6 +106,7 @@ function DialogHarness({ cancelDisabled = false }: { cancelDisabled?: boolean })
             setOpen(false);
           }}
         >
+          {keepInputEnabled ? <input aria-label="Decision reason" /> : null}
           <button type="button" disabled={cancelDisabled}>
             Confirm
           </button>
