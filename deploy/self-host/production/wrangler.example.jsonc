@@ -19,10 +19,10 @@
       }
     ]
   },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["AdminMutationRateLimitDurableObject"]
+  "exports": {
+    "AdminMutationRateLimitDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
     }
-  ]
+  }
 }

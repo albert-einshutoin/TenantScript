@@ -89,13 +89,14 @@ describe("production Wrangler template", () => {
           }
         ]
       },
-      migrations: [
-        {
-          tag: "v1",
-          new_sqlite_classes: ["AdminMutationRateLimitDurableObject"]
+      exports: {
+        AdminMutationRateLimitDurableObject: {
+          type: "durable-object",
+          storage: "sqlite"
         }
-      ]
+      }
     });
+    expect(JSON.parse(first)).not.toHaveProperty("migrations");
     expect(first).not.toMatch(
       /ARTIFACTS|EXECUTION_ARCHIVE|PROVIDER_SECRET_STORE_DO|APPROVAL_WORKFLOW|USAGE_ANALYTICS/u
     );

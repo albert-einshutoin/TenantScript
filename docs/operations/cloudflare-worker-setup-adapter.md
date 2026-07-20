@@ -6,6 +6,11 @@ marker in the same upload with `--tag`. Cloudflare exposes that value as the cur
 `workers/tag` annotation, so a journal checkpoint loss can be reconciled without treating the name
 or `initial | resume` context as ownership proof.
 
+The same Worker deploy carries the rate-limiter Durable Object binding and SQLite `exports`
+declaration. The setup plan therefore has no separate create/cleanup operation for that namespace.
+Its lifecycle is coupled to the Worker deployment, while destructive class tombstones remain an
+explicit operator-owned migration outside automatic setup rollback.
+
 The adapter uses [Workers Search](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/search/)
 with a bounded name query, then reads [Worker settings](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/script_and_version_settings/)
 to verify the annotation. Cleanup rechecks the deterministic name, the digest of Cloudflare's
@@ -27,5 +32,5 @@ immutable Worker ID, and the ownership marker before calling the
   drift requires operator review and blocks deletion.
 
 This is Tier 1 accountless contract evidence. It does not prove Cloudflare credentials, propagation,
-Durable Object migrations, request routing, or clean-account setup. Those require the separate Tier
-2 live workflow.
+Durable Object lifecycle reconciliation, request routing, or clean-account setup. Those require the
+separate Tier 2 live workflow.

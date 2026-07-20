@@ -22,12 +22,17 @@ synthetic D1 ID only for accountless Wrangler bundle validation; do not deploy i
 
 The CLI also exposes a closed pinned-Wrangler deploy process, documented in the
 [Worker deploy process runbook](../../../docs/operations/wrangler-worker-deploy-process.md). It does
-not yet reconcile remote Worker ownership or replace the manual reviewed deployment flow.
+compose with an accountless remote Worker ownership adapter, but neither boundary is wired into a
+credential-bearing `ext setup` command or a replacement for the manual reviewed deployment flow.
 
 Only bindings consumed by `packages/control-plane/src/worker-entry.ts` are generated today:
 
 - `DB`
 - `ADMIN_MUTATION_RATE_LIMITER_DO`
+
+The Durable Object binding and SQLite `exports` declaration are deployed as part of the Control
+Plane Worker. They are not a separate setup resource, and automatic rollback does not emit a
+destructive class tombstone.
 
 Artifact/archive R2, provider secret store, approval Workflow, Analytics Engine usage, and tenant
 runtime bindings remain `integration-required`. They are deliberately absent until their production

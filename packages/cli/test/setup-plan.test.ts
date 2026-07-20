@@ -22,7 +22,6 @@ describe("ext setup production dry-run", () => {
       "declare:app-database-boundary",
       "create:artifact-r2",
       "create:execution-archive-r2",
-      "create:admin-rate-limiter-do",
       "create:secret-store-do",
       "create:approval-workflow",
       "create:usage-analytics-engine",
@@ -42,7 +41,6 @@ describe("ext setup production dry-run", () => {
       "create:control-plane-d1",
       "create:artifact-r2",
       "create:execution-archive-r2",
-      "create:admin-rate-limiter-do",
       "create:secret-store-do",
       "create:approval-workflow",
       "create:usage-analytics-engine",
@@ -59,6 +57,9 @@ describe("ext setup production dry-run", () => {
     expect(plan.operations.some((operation) => operation.id === "bind:control-plane-worker")).toBe(
       false
     );
+    expect(
+      plan.operations.some((operation) => operation.id === "create:admin-rate-limiter-do")
+    ).toBe(false);
   });
 
   it("limits cleanup to created resources in exact reverse order", () => {
@@ -73,6 +74,7 @@ describe("ext setup production dry-run", () => {
     }
     expect(JSON.stringify(plan.cleanup)).not.toContain("declare:app-database-boundary");
     expect(JSON.stringify(plan.cleanup)).not.toContain("apply:control-plane-migrations");
+    expect(JSON.stringify(plan.cleanup)).not.toContain("admin-rate-limiter-do");
     expect(plan.cleanup[0]?.targetOperationId).toBe("create:control-plane-worker");
     expect(
       plan.cleanup.findIndex((step) => step.targetOperationId === "create:control-plane-worker")
