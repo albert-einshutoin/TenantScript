@@ -24,12 +24,25 @@ export function ModalDialog({
     };
   }, []);
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (cancelDisabled && focusableDialogElements(dialog).length === 0) {
+      // Privileged mutations temporarily disable every action. Keeping the dialog itself focused
+      // preserves the modal boundary instead of letting Tab escape while the request is in flight.
+      dialog?.focus();
+    }
+  }, [cancelDisabled]);
+
   const trapFocus = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "Tab") return;
     const focusable = focusableDialogElements(dialogRef.current);
     const first = focusable[0];
     const last = focusable.at(-1);
-    if (first === undefined || last === undefined) return;
+    if (first === undefined || last === undefined) {
+      event.preventDefault();
+      dialogRef.current?.focus();
+      return;
+    }
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();
@@ -45,6 +58,7 @@ export function ModalDialog({
       role="dialog"
       aria-modal="true"
       aria-label={label}
+      tabIndex={-1}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !cancelDisabled) {
           event.preventDefault();

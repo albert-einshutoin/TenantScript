@@ -40,6 +40,17 @@ describe("ModalDialog keyboard focus boundary", () => {
 
     expect(screen.getByRole("dialog", { name: "Confirmation" })).toBeInTheDocument();
   });
+
+  it("keeps focus inside the dialog when every action is disabled", async () => {
+    render(<DialogHarness cancelDisabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Open confirmation" }));
+    await flushAnimationFrame();
+
+    const dialog = screen.getByRole("dialog", { name: "Confirmation" });
+    expect(dialog).toHaveFocus();
+    fireEvent.keyDown(dialog, { key: "Tab" });
+    expect(dialog).toHaveFocus();
+  });
 });
 
 function DialogHarness({ cancelDisabled = false }: { cancelDisabled?: boolean }) {
@@ -62,9 +73,12 @@ function DialogHarness({ cancelDisabled = false }: { cancelDisabled?: boolean })
             setOpen(false);
           }}
         >
-          <button type="button">Confirm</button>
+          <button type="button" disabled={cancelDisabled}>
+            Confirm
+          </button>
           <button
             type="button"
+            disabled={cancelDisabled}
             onClick={() => {
               setOpen(false);
             }}
