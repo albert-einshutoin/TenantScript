@@ -78,6 +78,57 @@ describe("Cloudflare doctor collector", () => {
     });
   });
 
+  it("derives secret presence from the same Worker settings snapshot", async () => {
+    const collector = createCollector({
+      settings: {
+        bindings: [
+          {
+            name: "ADMIN_CURSOR_SECRET",
+            type: "secret_text",
+            text: "secret-sentinel"
+          }
+        ]
+      },
+      deriveSecretFromSettings: true
+    });
+
+    const report = await collector.collect();
+
+    expect(report.secrets).toEqual({ ADMIN_CURSOR_SECRET: true });
+    expect(JSON.stringify(report)).not.toContain("secret-sentinel");
+  });
+
+  it("reports a missing Worker secret binding without requiring a second probe", async () => {
+    const collector = createCollector({
+      settings: { bindings: [] },
+      deriveSecretFromSettings: true
+    });
+
+    await expect(collector.collect()).resolves.toMatchObject({
+      secrets: { ADMIN_CURSOR_SECRET: false }
+    });
+  });
+
+  it.each([
+    [
+      "duplicate secret binding",
+      [
+        { name: "ADMIN_CURSOR_SECRET", type: "secret_text" },
+        { name: "ADMIN_CURSOR_SECRET", type: "secret_text" }
+      ]
+    ],
+    ["wrong secret binding type", [{ name: "ADMIN_CURSOR_SECRET", type: "plain_text" }]]
+  ])("rejects an ambiguous Worker secret observation: %s", async (_name, bindings) => {
+    const collector = createCollector({
+      settings: { bindings },
+      deriveSecretFromSettings: true
+    });
+
+    await expect(collector.collect()).rejects.toMatchObject({
+      code: "cloudflare_doctor_invalid_response"
+    });
+  });
+
   it.each([
     ["unknown settings field", { bindings: [], token: "secret-sentinel" }],
     [
@@ -134,6 +185,21 @@ describe("Cloudflare doctor collector", () => {
     expect(error.message).not.toContain("secret-sentinel");
   });
 
+  it("rejects a non-boolean value from an injected secret presence override", async () => {
+    const collector = createCloudflareDoctorCollector({
+      transport: { request: vi.fn(() => Promise.resolve({ bindings: [] })) },
+      workerName,
+      databaseId,
+      migrationReader: { listApplied: () => expectedMigrationNames },
+      secretPresence: { has: () => Promise.resolve(null as never) },
+      runtime: { configured: "cloudflare-workers", supported: ["cloudflare-workers"] }
+    });
+
+    await expect(collector.collect()).rejects.toMatchObject({
+      code: "cloudflare_doctor_invalid_response"
+    });
+  });
+
   it("rejects invalid configuration with a stable public error", () => {
     expect(() =>
       createCloudflareDoctorCollector({
@@ -159,6 +225,7 @@ function createCollector(
     settings?: unknown;
     applied?: readonly string[];
     secretPresent?: boolean;
+    deriveSecretFromSettings?: boolean;
   } = {}
 ) {
   const transport: CloudflareApiTransport = {
@@ -174,9 +241,13 @@ function createCollector(
     migrationReader: {
       listApplied: vi.fn(() => options.applied ?? expectedMigrationNames)
     },
-    secretPresence: {
-      has: vi.fn(() => options.secretPresent ?? true)
-    },
+    ...(options.deriveSecretFromSettings
+      ? {}
+      : {
+          secretPresence: {
+            has: vi.fn(() => options.secretPresent ?? true)
+          }
+        }),
     runtime: {
       configured: "cloudflare-workers",
       supported: ["cloudflare-workers"]

@@ -123,9 +123,11 @@ exit `2`のstderrは固定diagnosticだけを返し、入力pathやJSON内容を
 ### Cloudflare read-only collector
 
 `createCloudflareDoctorCollector`は既存の`CloudflareApiTransport`でWorker settingsを読み、注入された
-migration history readerとsecret presence probeを合わせてclosed version 2 reportを生成します。
+migration history readerと合わせてclosed version 2 reportを生成します。`ADMIN_CURSOR_SECRET`は同じ
+settings snapshot内の`secret_text` binding名からpresenceだけを導出します。既存integration向けの
+`secretPresence` overrideも利用できますが、新規Cloudflare compositionでは省略して時点ずれを避けます。
 provider responseからは対象bindingのpresenceだけを残し、database ID、Durable Object class、annotation、
-provider error本文をreportやpublic errorへ渡しません。migration historyはrepository manifestの厳密なprefixだけを
+secret value、provider error本文をreportやpublic errorへ渡しません。migration historyはrepository manifestの厳密なprefixだけを
 受け付け、secret probeは`ADMIN_CURSOR_SECRET`のboolean presenceだけを返す必要があります。
 
 CloudflareのD1 read endpointは`D1 Read`または`D1 Write`、Workerのread endpointもread/writeを含む複数の
