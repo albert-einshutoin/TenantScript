@@ -11,6 +11,9 @@ sources instead of inferring architecture or live deployment details.
 
 - [Project status and documentation map](README.md)
 - [Contribution workflow and quality gates](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Good-first-issue pipeline](docs/community/good-first-issues.md)
+- [Phase 2 gate evidence](docs/reviews/phase2-gate-evidence.md)
 - [Repository agent guardrails](AGENTS.md)
 - [Security reporting policy](SECURITY.md)
 - [Product direction and decisions](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md)

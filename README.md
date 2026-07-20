@@ -18,10 +18,13 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Rollback troubleshooting](docs/operations/rollback-troubleshooting.md) — 検知、復旧、実行確認、MTTR drill
 - [Contributing](CONTRIBUTING.md) — 開発環境、TDD、security、issue・PRレビュー手順
 - [Governance](GOVERNANCE.md) — maintainer責任、ADR意思決定、co-maintainerへの経路
+- [Code of Conduct](CODE_OF_CONDUCT.md) — community standards、非公開報告、enforcement
+- [Good first issues](docs/community/good-first-issues.md) — 境界・TDD・DoDが明確な入門タスク
 - [プロダクト戦略 & MVP仕様](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md) — v0.4 Working Draft
 - [開発プラン & フェーズ別タスク](tasks/README.md) — TDDベースのPhase 0〜4タスク分解(言語: TypeScript、D-017)
 - [ベンチマーク証跡](docs/benchmarks/README.md) — Phase 0 runtime latency と Phase 1 rollback drill
 - [Phase 0 gate evidence](docs/reviews/phase0-gate-evidence.md) — 完了済み証跡と外部ブロッカーの公開スナップショット
+- [Phase 2 gate evidence](docs/reviews/phase2-gate-evidence.md) — repository証跡と外部運用blockerの分離
 - [Admin変更APIのrate limit運用](docs/operations/admin-mutation-rate-limits.md) — Durable Object binding、fail-closed方針、設定範囲
 - [Admin installの冪等再試行](docs/operations/admin-install-idempotency.md) — Idempotency-Key、409、D1原子性、保存期間
 - [Installation grant承認](docs/operations/installation-grant-approval.md) — operator申請、admin承認、D1原子性、migration順序
