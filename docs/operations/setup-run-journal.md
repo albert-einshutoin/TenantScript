@@ -5,10 +5,11 @@ reconciliation. The journal is the ownership boundary for future live Cloudflare
 cleanup from deleting resources that existed before the current run.
 
 The executor and file journal are accountless orchestration foundations. The hardened
-[Cloudflare API transport](cloudflare-api-transport.md) and ownership-aware
-[D1 setup adapter](cloudflare-d1-setup-adapter.md) are available, but full resource composition,
-credential flow, D1 migrations, remaining resource mutations, and clean-account Tier 2 evidence are
-not implemented yet. Do not represent a synthetic adapter run as a successful deployment.
+[Cloudflare API transport](cloudflare-api-transport.md), ownership-aware
+[D1 setup adapter](cloudflare-d1-setup-adapter.md), and exact-ID
+[provider routing](setup-provider-router.md) are available, but credential flow, D1 migrations,
+remaining resource adapters, CLI live composition, and clean-account Tier 2 evidence are not
+implemented yet. Do not represent a synthetic adapter run as a successful deployment.
 
 ## Ownership dispositions
 

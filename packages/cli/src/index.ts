@@ -76,6 +76,13 @@ export {
 } from "./cloudflare-d1-setup-adapter.js";
 
 export {
+  createSetupProviderRouter,
+  SetupProviderRouterError,
+  type SetupProviderRoute,
+  type SetupProviderRouterErrorCode
+} from "./setup-provider-router.js";
+
+export {
   parseProductionWranglerInput,
   renderProductionWranglerConfig,
   type ProductionWranglerInputV1
