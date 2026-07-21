@@ -4,7 +4,11 @@
   "baselineCommit": "45a26e232fffa1a50c7973b976fe7a05bfc97a0a",
   "target": {
     "name": "Built-in ext init plugin scaffold",
-    "scope": ["packages/cli/src/plugin-scaffold.ts", "packages/cli/test/init.test.ts"]
+    "scope": [
+      "packages/cli/src/index.ts",
+      "packages/cli/src/plugin-scaffold.ts",
+      "packages/cli/test/init.test.ts"
+    ]
   },
   "reviewer": {
     "identity": "TenantScript maintainers",
@@ -16,11 +20,12 @@
       "name": "security",
       "status": "pass",
       "evidence": [
+        "packages/cli/src/index.ts",
         "packages/cli/src/plugin-scaffold.ts",
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "The scaffold requests no capabilities, denies egress, uses bounded limits, rejects undeclared hooks, and is audited before its generated tests run."
+      "notes": "The CLI bounds names and hooks before interpolation; the scaffold requests no capabilities, denies egress, uses bounded limits, rejects undeclared hooks, and is audited before its generated tests run."
     },
     {
       "name": "compatibility",
@@ -60,6 +65,7 @@
     }
   ],
   "evidenceDigests": {
+    "packages/cli/src/index.ts": "6302b27628c904735c64d601af0f32f2efc90a07b333a13078a8144b4fe111d7",
     "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
     "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc",
     "scripts/agent-plugin-scaffold-e2e.test.mjs": "7349fa72e5648b2d2f65f86b04cf8a04de80a2c4968a3c4d957b8e1d4d9b05fb",
