@@ -273,6 +273,26 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects capabilities in bracketed CommonJS handler exports", () => {
+    const sources = [
+      'exports["handlers"] = { event(_payload, ctx) { return ctx.capability("slack.send", {}); } };',
+      'module.exports["handlers"] = { event(_payload, ctx) { return ctx.capability("slack.send", {}); } };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects renamed context bindings in referenced function-expression handlers", () => {
     expect(
       auditPluginPackage({
@@ -582,6 +602,26 @@ describe("plugin audit", () => {
     ).toEqual([
       finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
     ]);
+  });
+
+  it("detects optional global fetch calls", () => {
+    const sources = [
+      'fetch?.("https://direct.invalid");',
+      'globalThis.fetch?.("https://direct.invalid");'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+      ]);
+    }
   });
 
   it("reports deterministic exact findings without reflecting input values", () => {

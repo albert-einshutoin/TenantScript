@@ -245,11 +245,12 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
       }
     }
     if (
-      matchesTokenSequence(tokens, index, ["globalThis", ".", "fetch", "("]) ||
+      (matchesTokenSequence(tokens, index, ["globalThis", ".", "fetch"]) &&
+        callOpenAfterMember(tokens, index + 2) !== -1) ||
       (tokens[bracketedPropertyReceiverIndex(tokens, index, "fetch")]?.value === "globalThis" &&
         callOpenAfterMember(tokens, index + 1) !== -1) ||
       (tokens[index]?.value === "fetch" &&
-        tokens[index + 1]?.value === "(" &&
+        callOpenAfterMember(tokens, index) !== -1 &&
         tokens[index - 1]?.value !== ".")
     ) {
       hasDirectEgressCall = true;
@@ -412,7 +413,19 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   const hasLoweredHandlerExport = hasEsbuildCommonJsHandlerExport(tokens);
   const definePluginHandlerBindings = collectDefinePluginHandlerBindings(tokens, enclosingObjects);
   for (let index = 0; index < tokens.length; index += 1) {
-    if (![":", "="].includes(tokens[index + 1]?.value ?? "") || tokens[index + 2]?.value !== "{") {
+    const candidate = tokens[index];
+    const isBracketedHandlersProperty =
+      candidate?.kind === "string" &&
+      candidate.literalValid === true &&
+      candidate.value === "handlers" &&
+      tokens[index - 1]?.value === "[" &&
+      tokens[index + 1]?.value === "]";
+    const assignmentIndex = index + (isBracketedHandlersProperty ? 2 : 1);
+    const handlersOpen = assignmentIndex + 1;
+    if (
+      ![":", "="].includes(tokens[assignmentIndex]?.value ?? "") ||
+      tokens[handlersOpen]?.value !== "{"
+    ) {
       continue;
     }
     const isDirectHandlersDeclaration =
@@ -429,10 +442,10 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
       (braceDepths[index] ?? 0) === 0 &&
       isTopLevelVariableDeclarator(tokens, index);
     if (!isDirectHandlersDeclaration && !isReferencedHandlersDeclaration) continue;
-    const handlersClose = findMatchingToken(tokens, index + 2, "{", "}");
+    const handlersClose = findMatchingToken(tokens, handlersOpen, "{", "}");
     if (handlersClose === -1) continue;
     let depth = 0;
-    for (let field = index + 3; field < handlersClose; field += 1) {
+    for (let field = handlersOpen + 1; field < handlersClose; field += 1) {
       if (depth === 0) {
         // Object-method handlers have no colon, so recognize only a direct property name followed
         // by parameters and a body. Requiring the body avoids treating `event: factory(a, b)` as
@@ -580,6 +593,17 @@ function isPluginHandlersDeclaration(
   enclosingObjectOpen: number | undefined,
   hasLoweredHandlerExport: boolean
 ): boolean {
+  if (tokens[handlersIndex]?.kind === "string" && tokens[handlersIndex].literalValid === true) {
+    if (tokens[handlersIndex + 2]?.value !== "=") return false;
+    const receiverIndex = bracketedPropertyReceiverIndex(tokens, handlersIndex, "handlers");
+    const isDirectCommonJsExport =
+      tokens[receiverIndex]?.value === "exports" && tokens[receiverIndex - 1]?.value !== ".";
+    const isModuleCommonJsExport =
+      tokens[receiverIndex]?.value === "exports" &&
+      tokens[receiverIndex - 1]?.value === "." &&
+      tokens[receiverIndex - 2]?.value === "module";
+    return handlersDepth === 0 && (isDirectCommonJsExport || isModuleCommonJsExport);
+  }
   if (tokens[handlersIndex + 1]?.value === "=") {
     const isExportedBinding =
       ["const", "let", "var"].includes(tokens[handlersIndex - 1]?.value ?? "") &&
