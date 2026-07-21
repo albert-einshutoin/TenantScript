@@ -34,6 +34,8 @@ Execution persistence is authoritative. Supply an `ExecutionUsageRecorder` and a
 reader; never derive usage or capability calls from tenant-code output. The synchronous caller
 records `cpuMs: 0` because wall time is not CPU time. Reconcile exact Cloudflare `CPUTimeMs`
 asynchronously from Workers Trace Events Logpush before using CPU usage for cost reporting.
+Evidence diagnostics are best-effort and never delay execution persistence. A `reportFailure`
+implementation that needs delivery guarantees must schedule its own Cloudflare `waitUntil` work.
 
 See the [SDK reference](https://github.com/albert-einshutoin/TenantScript/blob/main/docs/reference/sdk.md#tenantscriptloader)
 and [usage meter operations](https://github.com/albert-einshutoin/TenantScript/blob/main/docs/operations/usage-meter.md)

@@ -251,12 +251,16 @@ export function createCloudflareDynamicWorkerCaller(
       } catch {
         if (configuration.reportFailure !== undefined) {
           try {
-            await configuration.reportFailure({
-              code: "runtime_evidence_unavailable",
-              executionId: request.executionId,
-              tenantId: request.tenantId,
-              pluginId: request.pluginId
-            });
+            // Diagnostics are best-effort. The sink owns any platform waitUntil scheduling; this
+            // caller must continue to authoritative recording even if the sink never settles.
+            void Promise.resolve(
+              configuration.reportFailure({
+                code: "runtime_evidence_unavailable",
+                executionId: request.executionId,
+                tenantId: request.tenantId,
+                pluginId: request.pluginId
+              })
+            ).catch(() => undefined);
           } catch {
             // Diagnostics cannot become a second runtime or execution-recording authority.
           }

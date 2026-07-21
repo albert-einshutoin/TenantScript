@@ -485,7 +485,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
       Promise.resolve(request.execution)
     );
-    const reportFailure = vi.fn(() => Promise.reject(new Error("reporter-secret-sentinel")));
+    const reportFailure = vi.fn(() => new Promise<void>(() => undefined));
     const caller = createCloudflareDynamicWorkerCaller({
       loader,
       compatibilityDate: "2026-07-21",
@@ -496,21 +496,32 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       reportFailure
     });
 
-    await expect(
-      caller.run({
-        executionId: "exec_evidence_failure",
-        tenantId: "tenant_1",
-        installationId: "installation_1",
-        pluginId: "plugin_1",
-        hookName: "invoice.created",
-        hookType: "event",
-        version: "1.0.0",
-        artifactSha256: sha256("runtime-code"),
-        grantRevision: "grant_1",
-        payload: {},
-        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
-      })
-    ).resolves.toMatchObject({ value: "completed", execution: { status: "success" } });
+    const run = caller.run({
+      executionId: "exec_evidence_failure",
+      tenantId: "tenant_1",
+      installationId: "installation_1",
+      pluginId: "plugin_1",
+      hookName: "invoice.created",
+      hookType: "event",
+      version: "1.0.0",
+      artifactSha256: sha256("runtime-code"),
+      grantRevision: "grant_1",
+      payload: {},
+      limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
+    });
+    await vi.waitFor(() => {
+      expect(reportFailure).toHaveBeenCalledOnce();
+    });
+    await vi.waitFor(
+      () => {
+        expect(record).toHaveBeenCalledOnce();
+      },
+      { timeout: 100 }
+    );
+    await expect(run).resolves.toMatchObject({
+      value: "completed",
+      execution: { status: "success" }
+    });
     expect(reportFailure).toHaveBeenCalledWith({
       code: "runtime_evidence_unavailable",
       executionId: "exec_evidence_failure",
