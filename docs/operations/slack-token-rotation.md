@@ -61,6 +61,11 @@ only the current access token. A concurrent in-flight refresh may continue using
 token. Expired, malformed, and intervention-required states return stable, secret-free errors. Do not
 expose this resolver to browser, plugin, audit, telemetry, or Admin API input.
 
+Production `slack.send` composition passes this method directly to
+`createSlackSendProvider({ resolveAccessToken })`. The provider resolves after input and grant
+validation, so a due credential advances to its next CAS generation before the fixed Slack request.
+Neither lifecycle metadata nor raw tokens are added to the capability result or audit record.
+
 ## Repository verification
 
 ```sh
@@ -70,6 +75,7 @@ pnpm --filter @tenantscript/control-plane exec vitest run test/slack-token-refre
 pnpm --filter @tenantscript/control-plane exec vitest run test/slack-credential-lifecycle.test.ts
 pnpm --filter @tenantscript/control-plane exec vitest run --config vitest.workers.config.ts test/slack-credential-lifecycle.workers.test.ts
 pnpm --filter @tenantscript/control-plane test:security
+pnpm --filter @tenantscript/example-saas exec vitest run test/slack-production-composition.e2e.test.ts
 ```
 
 These tests cover fixed transport, no-retry failures, expiry, encrypted CAS, concurrent requests,

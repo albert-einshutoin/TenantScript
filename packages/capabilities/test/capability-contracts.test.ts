@@ -7,7 +7,8 @@ import {
   createInvoiceReadProvider,
   createInMemoryKvStateStorage,
   createKvStateProvider,
-  createMockSlackSendProvider
+  createMockSlackSendProvider,
+  createSlackSendProvider
 } from "../src/index.js";
 import { runCapabilityContract } from "./contract-kit.js";
 
@@ -120,6 +121,28 @@ runCapabilityContract({
   expectedAllowedResult: { ok: true, provider: "mock-slack" },
   expectedDeniedMessage: "slack.send channel C999 is outside granted scope",
   sensitiveValue: "xoxb-contract-secret"
+});
+
+runCapabilityContract({
+  capability: "slack.send",
+  grant: { channel: "C123" },
+  allowedInput: { channel: "C123", text: "hello" },
+  deniedInput: { channel: "C999", text: "blocked" },
+  createProvider: () =>
+    createSlackSendProvider({
+      resolveAccessToken: () => Promise.resolve("xoxb-production-contract-secret"),
+      fetcher: vi.fn().mockResolvedValue(
+        Response.json({
+          ok: true,
+          channel: "C123",
+          ts: "1712345678.123456",
+          message: { type: "message", text: "hello", ts: "1712345678.123456" }
+        })
+      )
+    }),
+  expectedAllowedResult: { channel: "C123", timestamp: "1712345678.123456" },
+  expectedDeniedMessage: "slack.send channel C999 is outside granted scope",
+  sensitiveValue: "xoxb-production-contract-secret"
 });
 
 runCapabilityContract({

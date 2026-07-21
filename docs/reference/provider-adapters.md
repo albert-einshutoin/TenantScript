@@ -47,19 +47,50 @@ state storeは[OAuth state store](../operations/oauth-state-store.md)、公開HT
 [Slack OAuth callback](../operations/slack-oauth-callback.md)、交換とlive evidence境界は
 [Slack OAuth v2 exchange boundary](../operations/slack-oauth-exchange.md)を参照してください。
 
+## Slack send provider
+
+`createSlackSendProvider`はproduction向け`slack.send` adapterです。pluginから受け取るinputは
+`{ channel, text }`だけに閉じ、channel IDと40,000 byte以下の非空textをcredential解決前に検証します。
+adapterは`resolveAccessToken`をcallごとに実行し、tokenを固定の
+`POST https://slack.com/api/chat.postMessage`の`Authorization: Bearer`へだけ注入します。
+
+```ts
+const lifecycle = createSlackCredentialLifecycleManager({
+  secretStore,
+  ref,
+  refreshClient
+});
+const provider = createSlackSendProvider({
+  resolveAccessToken: lifecycle.resolveAccessToken
+});
+```
+
+transportはredirectを追わず、既定10秒でabortし、再試行しません。副作用のある送信でtimeout、接続断、
+HTTP failure、rate limit、壊れたresponseを再試行すると、Slackが最初のmessageを受理済みの場合に重複する
+ためです。responseは最大64 KiBのJSONだけを読み、成功時も`{ channel, timestamp }`へ縮小します。
+Slackの明示的な`ok: false`は`slack_send_delivery_rejected`、結果が不明な失敗は
+`slack_send_delivery_ambiguous`としてadapter内部で分類されます。broker境界からpluginとauditへは
+provider detailやcredentialを含まない安定したfailureだけが渡ります。
+
+この構成はserver-side trusted boundary専用です。`resolveAccessToken`、provider instance、または
+`Authorization` headerをbrowserやpluginへ渡してはいけません。rotationの運用境界は
+[Slack bot token rotation](../operations/slack-token-rotation.md)を参照してください。
+
 ## 検証境界
 
 ```sh
 # cwd: repository root
 # expected-exit: 0
 pnpm --filter @tenantscript/capabilities exec vitest run test/github-provider.test.ts test/capability-contracts.test.ts
+pnpm --filter @tenantscript/capabilities exec vitest run test/slack-send-provider.test.ts test/capability-contracts.test.ts
 pnpm --filter @tenantscript/capabilities test:security
 pnpm --filter @tenantscript/control-plane exec vitest run test/slack-oauth-client.test.ts
 pnpm --filter @tenantscript/control-plane exec vitest run test/oauth-state-store.test.ts
 pnpm --filter @tenantscript/control-plane exec vitest run test/slack-oauth-callback.test.ts
+pnpm --filter @tenantscript/example-saas exec vitest run test/slack-production-composition.e2e.test.ts
 ```
 
 これはaccountlessなadapter contractです。GitHub OAuth callback、GitHub App installation token発行、
-production HTTP transport、live APIのrate limit/credential classificationは検証しません。deploymentは
-公式API responseを用いたTier 2 testを追加し、token永続化とrotation手順は
+Slack/GitHub live APIのrate limit・credential classificationは検証しません。deploymentは公式API
+responseを用いたTier 2 testを追加し、token永続化とrotation手順は
 [Provider token rotation](../operations/provider-token-rotation.md)に従ってください。

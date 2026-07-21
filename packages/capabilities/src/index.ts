@@ -16,6 +16,13 @@ export interface CapabilityGrant {
 export type CapabilityGrants = Record<string, CapabilityGrant>;
 export type CapabilityProvider = (input: unknown) => unknown;
 
+export {
+  createSlackSendProvider,
+  SlackSendProviderError,
+  type SlackSendProviderErrorCode,
+  type SlackSendProviderOptions
+} from "./slack-send-provider.js";
+
 export interface ProviderToken {
   id: string;
   value: string;
