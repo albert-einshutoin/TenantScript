@@ -76,6 +76,37 @@ describe("Slack credential lifecycle", () => {
     });
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(refresh).toHaveBeenCalledWith("xoxe-1-refresh");
+    await expect(manager.refreshIfDue()).resolves.toMatchObject({
+      generation: 2,
+      refreshed: false
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a stale generation before provider access", async () => {
+    const base = await initializedStore();
+    let injected = false;
+    const secretStore: SecretStore = {
+      ...base,
+      compareAndSwapSecret: async (request) => {
+        if (!injected) {
+          injected = true;
+          const newer = JSON.parse(request.expectedValue as string) as Record<string, unknown>;
+          newer.generation = 2;
+          await base.putSecret({ ref: request.ref, value: JSON.stringify(newer) });
+        }
+        return base.compareAndSwapSecret(request);
+      }
+    };
+    const refresh = vi.fn<SlackTokenRefreshClient["refresh"]>();
+    const manager = dueManager(secretStore, refresh);
+
+    await expect(manager.refreshIfDue()).resolves.toMatchObject({
+      status: "ready",
+      generation: 2,
+      refreshed: false
+    });
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("uses CAS as a single-writer gate for concurrent refresh attempts", async () => {

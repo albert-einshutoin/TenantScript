@@ -93,6 +93,10 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
     expect(callback.status).toBe(303);
     expect(callback.headers.get("Location")).toBe(successRedirectUri);
     expect(callback.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(JSON.stringify([...callback.headers])).not.toContain(rawToken);
+    expect(JSON.stringify([...callback.headers])).not.toContain(rawRefreshToken);
+    expect(await callback.clone().text()).not.toContain(rawToken);
+    expect(await callback.clone().text()).not.toContain(rawRefreshToken);
     expect(replay.status).toBe(303);
     expect(replay.headers.get("Location")).toBe(failureRedirectUri);
     expect(slackFetch).toHaveBeenCalledTimes(1);

@@ -18,8 +18,8 @@ The service performs operations in this order:
 2. atomically consume state with the initiating browser binding;
 3. restore the server-owned app, tenant, actor, and exact redirect URI;
 4. call the existing `connectSlackWorkspace` boundary with only that restored scope;
-5. let that boundary exchange the code once, write the token only to `SecretStore`, and persist only
-   non-secret Slack connection metadata.
+5. let that boundary exchange the code once, write a long-lived token or complete rotating credential
+   state only to `SecretStore`, and persist only non-secret Slack connection metadata.
 
 The provider code is never sent before state succeeds. This matters because Slack authorization codes
 are short-lived and one-shot: consuming them for an invalid or cross-tenant callback would turn a CSRF
@@ -86,7 +86,8 @@ Accountless Worker tests are not proof of a deployed callback, browser cookie po
 Operators should prefer same-site Admin UI and Control Plane hosts because browsers that block all
 cross-site cookies can still prevent the install-start binding from being returned.
 
-Refresh-token persistence and refresh lifecycle remain separate. TenantScript continues to reject
+Bot refresh credentials and expiry are handled by the separate
+[Slack token rotation](slack-token-rotation.md) lifecycle. TenantScript continues to reject
 organization-wide Enterprise Grid installs until enterprise authority is represented and enforced.
 
 ## Repository verification

@@ -45,6 +45,7 @@ describe("Slack token refresh client", () => {
   it.each([
     ["provider rejection", () => Response.json({ ok: false, error: "invalid_refresh_token" })],
     ["HTTP failure", () => new Response("provider-secret", { status: 503 })],
+    ["rate limit", () => new Response("provider-secret", { status: 429 })],
     [
       "redirect",
       () => new Response(null, { status: 302, headers: { Location: "https://evil.example/" } })
@@ -81,6 +82,48 @@ describe("Slack token refresh client", () => {
       code: "slack_token_refresh_invalid_request"
     });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a connection loss with the single-use refresh token", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error("network secret"));
+    const client = createSlackTokenRefreshClient({
+      clientId: "123456789.987654321",
+      clientSecret: "synthetic-client-secret",
+      fetcher
+    });
+
+    await expect(client.refresh("xoxe-1-synthetic-refresh")).rejects.toMatchObject({
+      code: "slack_token_refresh_intervention_required"
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the timeout active while reading the response body", async () => {
+    const fetcher = vi.fn<typeof fetch>((_input, init) =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () => {
+                controller.error(new Error("body secret"));
+              });
+            }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+    );
+    const client = createSlackTokenRefreshClient({
+      clientId: "123456789.987654321",
+      clientSecret: "synthetic-client-secret",
+      fetcher,
+      timeoutMs: 20
+    });
+
+    await expect(client.refresh("xoxe-1-synthetic-refresh")).rejects.toMatchObject({
+      code: "slack_token_refresh_intervention_required"
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
 

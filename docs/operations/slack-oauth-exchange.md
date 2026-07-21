@@ -42,11 +42,13 @@ The returned projection contains only:
 - `workspaceId`
 - optional `workspaceName`
 - optional `botUserId`
+- `refreshToken` and `expiresIn` only when Slack returns the complete bounded bot rotation pair
 
-Token-rotation responses are rejected until refresh credentials have an encrypted persistence and refresh
-state machine; accepting the expiring access token while discarding its refresh token would create a
-delayed outage. Provider errors, client credentials, authorization codes, access tokens, refresh tokens,
-response bodies, and redirect URIs are never placed in the public error object. Stable codes distinguish
+Partial rotation pairs and rotating user credentials are rejected. Complete bot rotation pairs are
+persisted and refreshed by the [Slack token rotation](slack-token-rotation.md) lifecycle; accepting an
+expiring access token while discarding its refresh token would create a delayed outage. Provider errors,
+client credentials, authorization codes, access tokens, refresh tokens, response bodies, and redirect
+URIs are never placed in the public error object. Stable codes distinguish
 invalid configuration, invalid requests, provider rejection, and unavailable or malformed provider
 responses. Documented transient Slack method errors (`service_unavailable`, `internal_error`,
 `request_timeout`, and `ratelimited`) map to unavailable without exposing the raw provider error, so an
@@ -67,9 +69,9 @@ The production callback composition now provides:
 4. `createDurableObjectNamespaceSecretStore` for encrypted token persistence;
 5. tenant-scoped connection metadata persistence selected by server-restored app authority.
 
-Encrypted refresh-token persistence and an expiry-aware refresh state machine are still required before
-enabling Slack token rotation. Enterprise-scope connection modeling must precede organization-wide installs,
-and live Slack evidence remains in the credential-bearing Tier 2 lane.
+Encrypted bot refresh-token persistence and an expiry-aware single-writer state machine are implemented.
+Enterprise-scope connection modeling must precede organization-wide installs, and live Slack evidence
+remains in the credential-bearing Tier 2 lane.
 
 Do not call `exchangeCode` directly from an unauthenticated callback, browser bundle, plugin, or capability
 input. Never pass its raw token result to logs, diagnostics, audit fields, issues, or pull requests.
@@ -85,7 +87,7 @@ pnpm test:security
 ```
 
 These commands verify fixed-origin request construction, exact redirect matching, complete documented
-success fixtures, fail-closed token-rotation responses, response bounds, timeout behavior, non-retry, and
-secret-free errors. They also verify enterprise-wide install rejection and transient provider-error
+success fixtures, fail-closed partial rotation responses, response bounds, timeout behavior, non-retry,
+and secret-free errors. They also verify enterprise-wide install rejection and transient provider-error
 classification. The separate state-store suite verifies OAuth state; these client tests do not contact
 Slack and neither suite is live provider evidence.
