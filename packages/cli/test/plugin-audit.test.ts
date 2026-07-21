@@ -310,6 +310,27 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects capability and egress calls invoked through Function.prototype.apply", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle(
+          'context.capability.apply(undefined, ["admin.delete", {}]); globalThis.fetch.apply(undefined, ["https://example.com"]);'
+        )
+      }).findings
+    ).toEqual([
+      finding(
+        "bundle_capability_usage_dynamic",
+        "warning",
+        "bundle.capabilityCalls.*",
+        "heuristic"
+      ),
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    ]);
+  });
+
   it("detects capabilities in bracketed CommonJS handler exports", () => {
     const sources = [
       'exports["handlers"] = { event(_payload, ctx) { return ctx.capability("slack.send", {}); } };',

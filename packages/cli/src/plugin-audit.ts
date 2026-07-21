@@ -253,8 +253,15 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
         callClose === -1 ? [] : splitTopLevel(tokens.slice(callOpen + 1, callClose), ",");
       const usesFunctionCall =
         tokens[callOpen - 1]?.value === "call" && tokens[callOpen - 2]?.value === ".";
+      const usesFunctionApply =
+        tokens[callOpen - 1]?.value === "apply" && tokens[callOpen - 2]?.value === ".";
       const argument = argumentsList[usesFunctionCall ? 1 : 0] ?? [];
-      if (argument.length === 1 && argument[0]?.kind === "string" && argument[0].literalValid) {
+      if (
+        !usesFunctionApply &&
+        argument.length === 1 &&
+        argument[0]?.kind === "string" &&
+        argument[0].literalValid
+      ) {
         staticCalls.add(argument[0].value);
       } else {
         hasDynamicCapabilityCall = true;
@@ -308,7 +315,8 @@ function callOpenAfterMember(tokens: readonly BundleToken[], memberEnd: number):
   if (tokens[memberEnd + 1]?.value === "(") return memberEnd + 1;
   if (tokens[memberEnd + 1]?.value !== ".") return -1;
   if (tokens[memberEnd + 2]?.value === "(") return memberEnd + 2;
-  return tokens[memberEnd + 2]?.value === "call" && tokens[memberEnd + 3]?.value === "("
+  return ["apply", "call"].includes(tokens[memberEnd + 2]?.value ?? "") &&
+    tokens[memberEnd + 3]?.value === "("
     ? memberEnd + 3
     : -1;
 }
