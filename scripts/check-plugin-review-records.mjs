@@ -16,6 +16,7 @@ const secretLikePatterns = [
   /\bBearer\s+[A-Za-z0-9._~+/-]{12,}/i,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/
 ];
+const accountIdentifierPatterns = [/dash\.cloudflare\.com\/[0-9a-f]{16,}/i];
 const machinePathPattern = /(?:\/Users\/|\/Volumes\/|[A-Za-z]:\\Users\\)/;
 const errors = [];
 
@@ -381,6 +382,9 @@ function findSensitiveContent(value, path) {
     }
     if (secretLikePatterns.some((pattern) => pattern.test(value))) {
       errors.push(`${path}: secret-like value is forbidden`);
+    }
+    if (accountIdentifierPatterns.some((pattern) => pattern.test(value))) {
+      errors.push(`${path}: account identifier is forbidden`);
     }
   }
 }

@@ -118,6 +118,9 @@ test("rejects sensitive fields, secret-like values, and machine-local paths", ()
     // Assemble scanner fixtures at runtime so the repository never contains a token-shaped literal
     // or a machine-local absolute path that generic secret scanners could misclassify.
     record.limitations = [["Reviewed at /Us", "ers/example/private checkout"].join("")];
+    record.limitations.push(
+      ["https://dash.cloudflare.com/", "0123456789abcdef", "/workers"].join("")
+    );
     record.nonGuarantees = [
       ["Credential ghp", "_abcdefghijklmnopqrstuvwxyz123456 was not exercised."].join("")
     ];
@@ -129,6 +132,7 @@ test("rejects sensitive fields, secret-like values, and machine-local paths", ()
     assert.match(result.stderr, /sensitive field reviewer\.token is forbidden/);
     assert.match(result.stderr, /machine-local path is forbidden/);
     assert.match(result.stderr, /secret-like value is forbidden/);
+    assert.match(result.stderr, /account identifier is forbidden/);
   });
 });
 
