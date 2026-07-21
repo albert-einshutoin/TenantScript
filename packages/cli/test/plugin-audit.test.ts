@@ -75,6 +75,33 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects renamed context bindings in top-level exported handlers", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'exports.handlers = { event: async (_payload, runtime) => runtime.capability("slack.send", {}) };'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
+  it("keeps malformed delimiter analysis within a bounded CPU budget", () => {
+    const startedAt = performance.now();
+    const report = auditPluginPackage({
+      manifest: validManifest(),
+      packageJson: validPackageJson(),
+      expectedSdkVersion: "1.2.3",
+      bundleCode: "{".repeat(20_000)
+    });
+
+    expect(report).toEqual({ version: 1, passed: true, findings: [] });
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
+
   it("decodes escaped static capability names before comparing grants", () => {
     const manifest = validManifest();
     manifest.capabilities = { "slack.send": {} };

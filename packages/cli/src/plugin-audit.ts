@@ -194,6 +194,8 @@ interface BundleToken {
   literalValid?: boolean;
 }
 
+const tokenPairCache = new WeakMap<readonly BundleToken[], ReadonlyMap<number, number>>();
+
 function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
   const tokens = tokenizeBundle(bundleCode);
   const capabilityBindings = collectCapabilityBindings(tokens);
@@ -296,7 +298,13 @@ function registerHandlerContextParameters(
   }
 
   for (let index = 0; index < tokens.length; index += 1) {
-    if (!matchesTokenSequence(tokens, index, ["handlers", ":", "{"])) continue;
+    if (
+      tokens[index]?.value !== "handlers" ||
+      ![":", "="].includes(tokens[index + 1]?.value ?? "") ||
+      tokens[index + 2]?.value !== "{"
+    ) {
+      continue;
+    }
     const handlersClose = findMatchingToken(tokens, index + 2, "{", "}");
     if (handlersClose === -1) continue;
     let depth = 0;
@@ -370,15 +378,33 @@ function findMatchingToken(
   open: string,
   close: string
 ): number {
-  let depth = 0;
-  for (let index = openIndex; index < tokens.length; index += 1) {
-    if (tokens[index]?.value === open) depth += 1;
-    else if (tokens[index]?.value === close) {
-      depth -= 1;
-      if (depth === 0) return index;
+  let pairs = tokenPairCache.get(tokens);
+  if (pairs === undefined) {
+    pairs = buildTokenPairs(tokens);
+    tokenPairCache.set(tokens, pairs);
+  }
+  const closeIndex = pairs.get(openIndex);
+  return tokens[openIndex]?.value === open && tokens[closeIndex ?? -1]?.value === close
+    ? (closeIndex ?? -1)
+    : -1;
+}
+
+function buildTokenPairs(tokens: readonly BundleToken[]): ReadonlyMap<number, number> {
+  // Pair delimiters once so malformed input at the 4 MiB limit cannot turn repeated handler and
+  // destructuring probes into quadratic scans.
+  const pairs = new Map<number, number>();
+  const stack: Array<{ index: number; value: string }> = [];
+  const expectedOpen: Record<string, string> = { ")": "(", "}": "{", "]": "[" };
+  for (let index = 0; index < tokens.length; index += 1) {
+    const value = tokens[index]?.value ?? "";
+    if (["(", "{", "["].includes(value)) {
+      stack.push({ index, value });
+    } else if (value in expectedOpen && stack.at(-1)?.value === expectedOpen[value]) {
+      const opening = stack.pop();
+      if (opening !== undefined) pairs.set(opening.index, index);
     }
   }
-  return -1;
+  return pairs;
 }
 
 function tokenizeBundle(source: string): BundleToken[] {
