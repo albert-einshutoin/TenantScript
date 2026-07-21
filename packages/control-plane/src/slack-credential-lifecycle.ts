@@ -22,8 +22,7 @@ interface SlackCredentialRefreshingStateV1 extends Omit<SlackCredentialReadyStat
   startedAt: string;
 }
 
-interface SlackCredentialInterventionStateV1
-  extends Omit<SlackCredentialReadyStateV1, "status"> {
+interface SlackCredentialInterventionStateV1 extends Omit<SlackCredentialReadyStateV1, "status"> {
   status: "intervention_required";
 }
 

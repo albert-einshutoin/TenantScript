@@ -111,7 +111,9 @@ describe("Slack credential lifecycle", () => {
 
   it("uses CAS as a single-writer gate for concurrent refresh attempts", async () => {
     const secretStore = await initializedStore();
-    let release: ((value: { accessToken: string; refreshToken: string; expiresIn: number }) => void) | undefined;
+    let release:
+      | ((value: { accessToken: string; refreshToken: string; expiresIn: number }) => void)
+      | undefined;
     const refresh = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -167,7 +169,9 @@ describe("Slack credential lifecycle", () => {
 
   it("keeps the prior access token usable while one refresh is in flight", async () => {
     const secretStore = await initializedStore();
-    let release: ((value: { accessToken: string; refreshToken: string; expiresIn: number }) => void) | undefined;
+    let release:
+      | ((value: { accessToken: string; refreshToken: string; expiresIn: number }) => void)
+      | undefined;
     const refresh = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
