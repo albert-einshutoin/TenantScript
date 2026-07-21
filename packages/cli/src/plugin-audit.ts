@@ -726,8 +726,10 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     }
   }
 
-  const hasLoweredHandlerExport = hasEsbuildCommonJsHandlerExport(tokens);
+  const loweredHandlerBindings = collectEsbuildCommonJsHandlerBindings(tokens);
+  const hasLoweredHandlerExport = loweredHandlerBindings.has("handlers");
   const referencedHandlerBindings = new Set([
+    ...loweredHandlerBindings,
     ...collectDefinePluginHandlerBindings(tokens, enclosingObjects),
     ...collectCommonJsObjectExportBindings(tokens, new Set(["handlers"]), false)
   ]);
@@ -1260,18 +1262,21 @@ function collectEsbuildCommonJsPluginBindings(tokens: readonly BundleToken[]): S
   return assignsCommonJsModule ? bindings : new Set<string>();
 }
 
-function hasEsbuildCommonJsHandlerExport(tokens: readonly BundleToken[]): boolean {
-  let mapsHandlersBinding = false;
+function collectEsbuildCommonJsHandlerBindings(tokens: readonly BundleToken[]): Set<string> {
+  const bindings = new Set<string>();
   let assignsCommonJsModule = false;
   for (let index = 0; index < tokens.length; index += 1) {
-    if (matchesTokenSequence(tokens, index, ["handlers", ":", "(", ")", "=", ">", "handlers"])) {
-      mapsHandlersBinding = true;
+    if (
+      matchesTokenSequence(tokens, index, ["handlers", ":", "(", ")", "=", ">"]) &&
+      tokens[index + 6]?.kind === "identifier"
+    ) {
+      bindings.add(tokens[index + 6]?.value ?? "");
     }
     if (matchesTokenSequence(tokens, index, ["module", ".", "exports", "=", "__toCommonJS", "("])) {
       assignsCommonJsModule = true;
     }
   }
-  return mapsHandlersBinding && assignsCommonJsModule;
+  return assignsCommonJsModule ? bindings : new Set<string>();
 }
 
 function createCapabilityScope(
@@ -1462,7 +1467,9 @@ function collectNestedShadowRanges(
           const callableBody = enclosingNestedCallableBody(tokens, index, outer);
           if (callableBody !== undefined) shadows.push(callableBody);
         } else {
-          registerEnclosingBlock(patternOpen);
+          const loopShadow = loopHeaderShadowRange(tokens, patternOpen, outer);
+          if (loopShadow !== undefined) shadows.push(loopShadow);
+          else registerEnclosingBlock(patternOpen);
         }
       }
     }
@@ -1486,7 +1493,9 @@ function collectNestedShadowRanges(
       ) {
         // Lexical declarations shadow for the entire containing block, including the temporal dead
         // zone before the declaration. Excluding only the post-declaration range would be unsound.
-        registerEnclosingBlock(index);
+        const loopShadow = loopHeaderShadowRange(tokens, index, outer);
+        if (loopShadow !== undefined) shadows.push(loopShadow);
+        else registerEnclosingBlock(index);
       } else if (
         tokens[index - 1]?.value !== "." &&
         tokens[index + 1]?.value === "=" &&
@@ -1528,6 +1537,32 @@ function collectNestedShadowRanges(
     }
   }
   return shadows;
+}
+
+function loopHeaderShadowRange(
+  tokens: readonly BundleToken[],
+  bindingIndex: number,
+  outer: BindingRange
+): BindingRange | undefined {
+  for (let index = bindingIndex - 1; index >= outer.start; index -= 1) {
+    if (tokens[index]?.value !== "(") continue;
+    const isForHeader =
+      tokens[index - 1]?.value === "for" ||
+      (tokens[index - 1]?.value === "await" && tokens[index - 2]?.value === "for");
+    if (!isForHeader) continue;
+    const close = findMatchingToken(tokens, index, "(", ")");
+    if (close < bindingIndex) continue;
+    const block = blockBodyRange(tokens, close + 1);
+    if (block !== undefined && block.end <= outer.end) {
+      // A loop-header lexical binding starts at its declaration and covers only that loop. Using
+      // the handler's enclosing block would either miss the body or suppress unrelated broker use.
+      return { start: bindingIndex, end: block.end };
+    }
+    const bodyStart = close + 1;
+    const bodyEnd = findExpressionBoundary(tokens, bodyStart, outer.end);
+    return bodyStart <= bodyEnd ? { start: bindingIndex, end: bodyEnd } : undefined;
+  }
+  return undefined;
 }
 
 function enclosingNestedCallableBody(

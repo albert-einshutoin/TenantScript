@@ -59,6 +59,27 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("audits renamed handler exports lowered by the production bundle pipeline", async () => {
+    const root = await createTempDir();
+    const entry = join(root, "plugin.ts");
+    await writeFile(
+      entry,
+      'const myHandlers = { event(_payload, ctx) { return ctx.capability("admin.delete", {}); } }; export { myHandlers as handlers };'
+    );
+    const bundle = await bundlePlugin(entry);
+
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: bundle.code
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("audits plugin dispatch lowered by the production bundle pipeline", async () => {
     const root = await createTempDir();
     const entry = join(root, "plugin.ts");
@@ -1103,6 +1124,25 @@ describe("plugin audit", () => {
       '{ let [ctx] = fake; ctx.capability("slack.send", {}); }',
       '{ class ctx { static capability() {} } ctx.capability("slack.send", {}); }',
       'try { throw fake; } catch (ctx) { ctx.capability("slack.send", {}); }'
+    ];
+
+    for (const body of bodies) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode: `export const handlers = { event(_payload, ctx) { ${body} } };`
+        }).findings
+      ).toEqual([]);
+    }
+  });
+
+  it("does not reuse a handler context receiver across loop-header shadows", () => {
+    const bodies = [
+      'for (const ctx of clients) { ctx.capability("admin.delete", {}); }',
+      'for (let ctx in clients) { ctx.capability("admin.delete", {}); }',
+      'for (const { ctx } of clients) { ctx.capability("admin.delete", {}); }'
     ];
 
     for (const body of bodies) {
