@@ -374,6 +374,15 @@ export function createControlPlaneApi(params: {
   };
 }
 
+export function createSlackWorkspaceConnector(params: {
+  store: ControlPlaneStore;
+  secretStore: SecretStore;
+  slackConnections: SlackConnectionStore;
+  slackOAuth: SlackOAuthClient;
+}): (request: ConnectSlackWorkspaceRequest) => Promise<SlackConnectionRecord> {
+  return (request) => connectSlackWorkspace(params.store, request, params);
+}
+
 export function createStaticTokenIdentityResolver<TIdentity extends AuthenticatedIdentity>(
   identitiesByToken: Record<string, TIdentity>
 ): IdentityResolver {
@@ -516,6 +525,7 @@ async function connectSlackWorkspace(
     redirectUri: request.redirectUri
   });
   const secretRef = slackSecretRef({
+    appId: request.appId,
     tenantId: request.tenantId,
     workspaceId: token.workspaceId
   });
@@ -796,9 +806,14 @@ function requireUsageMeter(usageMeter: UsageMeter | undefined): UsageMeter {
   return usageMeter;
 }
 
-function slackSecretRef(params: { tenantId: string; workspaceId: string }): SecretRef {
+function slackSecretRef(params: {
+  appId: string;
+  tenantId: string;
+  workspaceId: string;
+}): SecretRef {
   return {
     provider: "slack",
+    appId: params.appId,
     tenantId: params.tenantId,
     secretId: `slack:${params.workspaceId}`
   };

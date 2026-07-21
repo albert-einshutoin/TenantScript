@@ -361,6 +361,7 @@ describe("createControlPlaneApi Slack OAuth connection", () => {
       botUserId: "B123",
       secretRef: {
         provider: "slack",
+        appId: "app_1",
         tenantId: "tenant_1",
         secretId: "slack:T123"
       },
@@ -375,6 +376,37 @@ describe("createControlPlaneApi Slack OAuth connection", () => {
       executions: store.executions
     });
     expect(publicSurfaces).not.toContain(rawToken);
+  });
+
+  it("keeps provider secrets isolated when app shards reuse tenant and workspace IDs", async () => {
+    const secretStore = createInMemorySecretStore();
+    const connect = async (appId: string, accessToken: string) => {
+      const store = new InMemoryControlPlaneStore();
+      store.seedApp({ id: appId, name: appId });
+      store.seedTenant({ id: "prod", appId, name: "Production" });
+      const api = createControlPlaneApi({
+        store,
+        artifacts: new InMemoryArtifactStore(),
+        secretStore,
+        slackConnections: createInMemorySlackConnectionStore(),
+        slackOAuth: {
+          exchangeCode: () => Promise.resolve({ accessToken, workspaceId: "T_SHARED" })
+        }
+      });
+      return api.connectSlackWorkspace({
+        appId,
+        tenantId: "prod",
+        code: `code-${appId}`,
+        redirectUri: "https://control.example.test/v1/provider-callbacks/slack"
+      });
+    };
+
+    const first = await connect("app_one", "xoxb-app-one");
+    const second = await connect("app_two", "xoxb-app-two");
+
+    expect(first.secretRef).not.toEqual(second.secretRef);
+    await expect(secretStore.getSecret(first.secretRef)).resolves.toBe("xoxb-app-one");
+    await expect(secretStore.getSecret(second.secretRef)).resolves.toBe("xoxb-app-two");
   });
 });
 

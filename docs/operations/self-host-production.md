@@ -40,9 +40,11 @@ enables data movement, provider access, or telemetry implicitly.
 
 The Worker can expose authenticated Slack install-start after operators add
 `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_SCOPES`, and `SLACK_OAUTH_REDIRECT_URI` alongside the generated
-`OAUTH_STATE_STORE_DO` binding. Provider-specific values are not yet part of the strict setup input,
-so add them through a reviewed Wrangler environment change and verify the
-[Slack OAuth install-start contract](slack-oauth-install-start.md). Partial configuration fails closed.
+`OAUTH_STATE_STORE_DO` binding. Completing the [Slack OAuth callback](slack-oauth-callback.md) also
+requires the generated provider-secret Durable Object, a provider keyring, the Slack client secret,
+fixed success/failure destinations, and a compatible or routed app database. Provider-specific values
+are not yet part of the strict setup input, so add them through a reviewed Wrangler environment change.
+Partial configuration fails closed.
 
 The renderer uses an exact input schema and emits only:
 
@@ -116,6 +118,11 @@ Provision the entire JSON value as a Worker secret. Retain old keys during rewra
 [secret key rotation gate](secret-key-rotation.md) before retiring one; do not paste real material
 into a command transcript or shell history shared with others.
 
+Provision `SLACK_OAUTH_CLIENT_SECRET` through the same Worker secret mechanism, never as a committed
+Wrangler `vars` value. The setup renderer intentionally does not emit the client secret or provider
+keyring. Review the non-secret client ID, exact callback URI, and fixed success/failure destinations in
+Wrangler separately, then verify the complete callback configuration before exposing install-start.
+
 ## 5. Production checklist
 
 - **RBAC:** bootstrap only through a time-bounded operator path, create least-privilege service
@@ -149,8 +156,9 @@ archive R2 is wired for the compatibility `DB`; artifact storage and sharded ret
 remain absent. Analytics Engine usage now has D1-backed daily summaries, a production Worker query
 path, and an explicit Wrangler binding. Cloudflare creates the dataset on its first write, so setup
 does not model a separate create/delete lifecycle. The encrypted provider secret store now has a
-tenant-isolated production Durable Object adapter and declarative binding, while provider-facing
-OAuth composition, live key provisioning/rotation evidence, approval Workflow, the
+tenant-isolated production Durable Object adapter and declarative binding, and Slack OAuth has an
+accountless repository-verified Worker composition. Live key provisioning/rotation and credentialed
+Slack callback evidence, approval Workflow, the
 execution-recording caller, and tenant runtime/dispatch binding remain incomplete. Track the remaining
 setup/IaC/Tier 2 work in
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34). Their absence must remain

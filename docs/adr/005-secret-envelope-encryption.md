@@ -29,10 +29,10 @@ secret and is then encrypted by the current deployment key-encryption key (KEK).
 independent random 96-bit IVs and 128-bit authentication tags. The temporary raw DEK copy needed for
 wrapping is erased after use; the KEK must be non-extractable.
 
-The provider, tenant ID, and secret ID are encoded with the envelope version and a key/data purpose as
+The provider, app ID, tenant ID, and secret ID are encoded with the envelope version and a key/data purpose as
 length-delimited JSON additional authenticated data. The wrapped DEK also binds the public KEK ID.
 This binds both ciphertext layers to one complete secret ref: copying a valid record to another
-provider, tenant, or secret key fails authentication.
+provider, app, tenant, or secret key fails authentication.
 
 Storage contains a closed JSON envelope with exactly these fields:
 
@@ -78,6 +78,8 @@ or next plaintext through an API, log, audit record, or conflict error.
 
 - Storage no longer contains plaintext provider tokens or plaintext DEKs, and authenticated
   encryption detects record modification or movement across secret refs.
+- Secret refs include app, tenant, provider, and secret scope. Provider-secret Durable Objects shard
+  by the app/tenant pair so app-level D1 shards may safely reuse tenant and provider identifiers.
 - The implementation uses the Web Crypto surface shared by Workers and the accountless test runtime;
   no Node-only crypto dependency or custom cipher construction is introduced.
 - Deployments must provide an AES-256-GCM keyring. There is deliberately no plaintext or default-key
@@ -92,3 +94,6 @@ or next plaintext through an API, log, audit record, or conflict error.
 - Provider-token rotation remains separate from encryption-key rotation. The accountless encrypted
   state machine and capability fallback are implemented, while production OAuth/admin orchestration,
   live provider validation, and provider-side revocation remain deployment responsibilities.
+- Pre-release records written before app-scoped refs do not pass the closed production protocol.
+  Operators must migrate them through a reviewed decrypt-and-reencrypt procedure or reconnect the
+  provider; silently guessing app authority from a tenant ID is forbidden.

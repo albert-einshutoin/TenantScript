@@ -39,6 +39,7 @@ describe("D1 Admin provider connection inventory", () => {
       workspaceName: "Own workspace",
       botUserId: "bot_own",
       secretRef: {
+        appId: "app_1",
         tenantId: "tenant_1",
         provider: "slack",
         secretId: "secret-own"
@@ -50,6 +51,7 @@ describe("D1 Admin provider connection inventory", () => {
       tenantId: "tenant_1",
       workspaceId: "workspace_own_without_optional_metadata",
       secretRef: {
+        appId: "app_1",
         tenantId: "tenant_1",
         provider: "slack",
         secretId: "secret-own-without-optional-metadata"
@@ -63,6 +65,7 @@ describe("D1 Admin provider connection inventory", () => {
       workspaceName: "",
       botUserId: "",
       secretRef: {
+        appId: "app_1",
         tenantId: "tenant_1",
         provider: "slack",
         secretId: "secret-own-with-blank-optional-metadata"
@@ -74,6 +77,7 @@ describe("D1 Admin provider connection inventory", () => {
       tenantId: "tenant_2",
       workspaceId: "workspace_other_tenant",
       secretRef: {
+        appId: "app_1",
         tenantId: "tenant_2",
         provider: "slack",
         secretId: "secret-other-tenant"
@@ -85,6 +89,7 @@ describe("D1 Admin provider connection inventory", () => {
       tenantId: "tenant_other",
       workspaceId: "workspace_other_app",
       secretRef: {
+        appId: "app_other",
         tenantId: "tenant_other",
         provider: "slack",
         secretId: "secret-other-app"

@@ -1,12 +1,14 @@
 # Slack OAuth callback composition
 
-`createSlackOAuthCallbackService` is the repository-verified orchestration boundary between the
-one-time OAuth state store and the existing Slack connection flow. Its untrusted input is limited to
-`state`, the server-managed browser binding, and Slack's temporary authorization `code`.
+`GET /v1/provider-callbacks/slack` is the repository-verified public browser return boundary for a
+Slack workspace installation. Its untrusted input is limited to one `state` value, Slack's temporary
+authorization `code`, and the server-managed browser-binding cookie. The route invokes
+`createSlackOAuthCallbackService` only after the HTTP boundary validates that closed input.
 
-This service is not an HTTP route. The [authenticated install-start](slack-oauth-install-start.md)
-now issues the browser binding cookie and one-time state; a future management callback must read and
-clear that cookie before calling this safe core.
+The callback is intentionally separate from authenticated Admin API routes. Slack returns through a
+top-level redirect, so requests carrying an `Origin` header fail to the fixed failure destination
+before state is consumed. The one-time state and browser binding restore the initiating app, tenant,
+actor, and redirect URI without accepting ambient Admin authorization or caller-selected scope.
 
 ## Trusted sequencing
 
@@ -41,14 +43,48 @@ Codes, state values, browser bindings, provider responses, tokens, and internal 
 reflected. Do not automatically retry after state was consumed: the provider may already have accepted
 the code. A new authenticated install-start flow must issue fresh state and obtain a fresh code.
 
-## Remaining production boundary
+## HTTP and Worker contract
 
-Before exposing this callback service to a browser, implement a reviewed management HTTP flow that provides:
+The public route accepts only `GET`, an exact `state`/`code` query, a single exact binding cookie, no
+`Origin` header, and browser fetch metadata for a top-level document navigation (`navigate` /
+`document`). Query and cookie headers are bounded. This rejects both credentialed fetches and no-CORS
+image/script subresources before state consumption. Every exact callback response deletes the binding
+cookie and sends `no-store`, a deny-all CSP, `no-referrer`, and `nosniff` headers.
 
-- a bounded callback parser and stable success/failure redirect without query reflection;
-- explicit deletion of the install-start browser binding cookie after callback handling;
-- Worker composition of the state, Slack client, encrypted provider-secret DO, and D1 connection store;
-- credential-bearing Slack and Cloudflare Tier 2 evidence.
+Success and all handled failures use `303` redirects to distinct, canonical HTTPS destinations fixed
+in Worker configuration. Neither destination is derived from the callback. An unconfigured or partially
+configured callback returns a stable secret-free `503` and still deletes the binding cookie.
+
+Production Worker composition uses the state Durable Object, fixed-origin Slack client, encrypted
+provider-secret Durable Object, and the D1 connection store selected by the app ID restored from state.
+For sharded deployments, callback query input cannot choose the database. The restored app ID is also
+part of the encrypted secret ref and its Durable Object shard, so two app databases may reuse the same
+tenant and Slack workspace IDs without sharing or overwriting tokens.
+
+| Name                               | Contract                                                              |
+| ---------------------------------- | --------------------------------------------------------------------- |
+| `SLACK_OAUTH_CLIENT_SECRET`        | Slack application secret. Provision only as a Worker secret.          |
+| `SLACK_OAUTH_SUCCESS_REDIRECT_URI` | Fixed canonical HTTPS destination after a completed connection.       |
+| `SLACK_OAUTH_FAILURE_REDIRECT_URI` | Distinct fixed canonical HTTPS destination for every handled failure. |
+
+Enabling any callback-specific value requires all three plus `OAUTH_STATE_STORE_DO`,
+`PROVIDER_SECRET_STORE_DO`, `PROVIDER_SECRET_KEYRING_JSON`, `SLACK_OAUTH_CLIENT_ID`, the exact
+`SLACK_OAUTH_REDIRECT_URI`, `SLACK_OAUTH_SCOPES`, and either `DB` or `APP_DATABASE_ROUTES_JSON`. The
+shipped Worker evaluates install-start and callback composition together, so callback activation also
+requires the configured scope set even though the callback does not accept or modify it. Partial
+configuration fails closed. The setup renderer does not yet emit provider-specific values, so operators
+must review and provision them explicitly.
+
+The Worker parses and imports the provider keyring before registering the callback handler. A malformed,
+missing-current, or invalid-length key therefore fails with `503` before one-time state or Slack code is
+consumed, allowing the operator to repair configuration and restart the same still-valid callback.
+
+## Remaining production evidence
+
+Credential-bearing Slack and Cloudflare Tier 2 evidence remains blocked on maintainer-owned accounts.
+Accountless Worker tests are not proof of a deployed callback, browser cookie policy, or live installation.
+Operators should prefer same-site Admin UI and Control Plane hosts because browsers that block all
+cross-site cookies can still prevent the install-start binding from being returned.
 
 Refresh-token persistence and refresh lifecycle remain separate. TenantScript continues to reject
 organization-wide Enterprise Grid installs until enterprise authority is represented and enforced.
@@ -59,9 +95,12 @@ organization-wide Enterprise Grid installs until enterprise authority is represe
 # cwd: repository root
 # expected-exit: 0
 pnpm --filter @tenantscript/control-plane exec vitest run test/slack-oauth-callback.test.ts
+pnpm --filter @tenantscript/control-plane exec vitest run test/slack-oauth-callback-http.test.ts
+pnpm --filter @tenantscript/control-plane exec vitest run --config vitest.workers.config.ts test/slack-oauth-callback-http.workers.test.ts
 pnpm --filter @tenantscript/control-plane test:security
 ```
 
-These tests cover closed input, state-first sequencing, server-owned scope, concurrent replay, stable
-secret-free failures, and provider rejection classification. They are accountless evidence and do not
-prove cookie behavior, a deployed callback, or a live Slack installation.
+These tests cover closed and bounded HTTP input, state-first sequencing, server-owned scope, cookie
+deletion, fixed redirects, database routing, encrypted token storage, replay, stable secret-free failures,
+and provider rejection classification. They are accountless evidence and do not prove deployed-browser
+cookie behavior or a live Slack installation.

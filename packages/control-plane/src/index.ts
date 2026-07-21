@@ -73,6 +73,7 @@ export {
 export {
   ControlPlaneApiError,
   createControlPlaneApi,
+  createSlackWorkspaceConnector,
   createStaticTokenIdentityResolver,
   toControlPlaneErrorResponse,
   type ApprovalDecision,
@@ -262,6 +263,14 @@ export {
   type SlackOAuthCallbackErrorCode,
   type SlackOAuthCallbackService
 } from "./slack-oauth-callback.js";
+export {
+  createSlackOAuthCallbackHttpHandler,
+  PROVIDER_CALLBACK_HTTP_ENDPOINT_CONTRACTS,
+  SLACK_OAUTH_CALLBACK_PATH,
+  slackOAuthCallbackUnavailableResponse,
+  type SlackOAuthCallbackHttpConfiguration,
+  type SlackOAuthCallbackHttpHandler
+} from "./slack-oauth-callback-http.js";
 export {
   createSlackOAuthInstallStartService,
   SLACK_OAUTH_BROWSER_BINDING_COOKIE,

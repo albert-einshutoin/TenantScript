@@ -1,5 +1,6 @@
 export interface SecretRef {
   provider: string;
+  appId: string;
   tenantId: string;
   secretId: string;
 }
@@ -538,7 +539,7 @@ function secretAdditionalData(
   keyId?: string
 ): Uint8Array<ArrayBuffer> {
   // Length-delimited JSON avoids ambiguous concatenation and binds a valid ciphertext to exactly
-  // one provider, tenant, and secret identifier without persisting those values in the envelope.
+  // one provider, app, tenant, and secret identifier without persisting those values in the envelope.
   return new Uint8Array(
     textEncoder.encode(
       JSON.stringify([
@@ -547,6 +548,7 @@ function secretAdditionalData(
         purpose,
         ...(keyId === undefined ? [] : [keyId]),
         ref.provider,
+        ref.appId,
         ref.tenantId,
         ref.secretId
       ])
@@ -598,13 +600,18 @@ function validateOptionalSecretValue(value: string | null): void {
 }
 
 function validateSecretRef(ref: SecretRef): void {
-  if (ref.provider.length === 0 || ref.tenantId.length === 0 || ref.secretId.length === 0) {
+  if (
+    ref.provider.length === 0 ||
+    ref.appId.length === 0 ||
+    ref.tenantId.length === 0 ||
+    ref.secretId.length === 0
+  ) {
     throw new Error("secret ref parts must not be empty");
   }
 }
 
 function secretKey(ref: SecretRef): string {
-  return [ref.provider, ref.tenantId, ref.secretId].map(escapeSecretKeyPart).join(":");
+  return [ref.provider, ref.appId, ref.tenantId, ref.secretId].map(escapeSecretKeyPart).join(":");
 }
 
 function escapeSecretKeyPart(part: string): string {

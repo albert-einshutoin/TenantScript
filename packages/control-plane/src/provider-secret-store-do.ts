@@ -93,6 +93,10 @@ export class ProviderSecretStoreDurableObject {
   }
 }
 
+export async function validateProviderSecretKeyringConfiguration(value: string): Promise<void> {
+  await createAesGcmSecretEncryptionKeyring(parseKeyringConfiguration(value));
+}
+
 function invalidRequestResponse(): Response {
   return Response.json(
     { error: { code: "provider_secret_store_invalid_request" } },
@@ -106,7 +110,7 @@ export function createDurableObjectNamespaceSecretStore<TId>(
   const request = async (operation: ProviderSecretOperation, input: unknown): Promise<unknown> => {
     const ref = operationRef(input);
     if (!isSecretRef(ref)) throw unavailable();
-    const objectName = await tenantObjectName(ref.tenantId);
+    const objectName = await tenantObjectName(ref.appId, ref.tenantId);
     const body = encodeBoundedJson(input, PROVIDER_SECRET_REQUEST_BYTES);
     try {
       const stub = namespace.get(namespace.idFromName(objectName));
@@ -250,8 +254,9 @@ function isProviderSecretValue(value: unknown): value is string {
 
 function isSecretRef(value: unknown): value is SecretRef {
   return (
-    isExactRecord(value, ["provider", "tenantId", "secretId"]) &&
+    isExactRecord(value, ["provider", "appId", "tenantId", "secretId"]) &&
     isBoundedText(value.provider) &&
+    isBoundedText(value.appId) &&
     isBoundedText(value.tenantId) &&
     isBoundedText(value.secretId)
   );
@@ -306,8 +311,13 @@ function parseKeyringConfiguration(value: string | undefined): AesGcmSecretEncry
   };
 }
 
-async function tenantObjectName(tenantId: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(tenantId));
+async function tenantObjectName(appId: string, tenantId: string): Promise<string> {
+  // Length-delimited JSON prevents ambiguous app/tenant concatenation while keeping raw authority
+  // out of the Durable Object name exposed to the platform.
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    textEncoder.encode(JSON.stringify([appId, tenantId]))
+  );
   return `provider-secrets-v1-${[...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("")}`;
