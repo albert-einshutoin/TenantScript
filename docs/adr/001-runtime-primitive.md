@@ -58,6 +58,24 @@ In order to use Dynamic Workers, you must switch to a paid plan
 [account-specific dashboard URL redacted] [code: 10195]
 ```
 
+On 2026-07-21, Issue #288 added an accountless production-caller contract for the preferred
+Dynamic Workers candidate. It verifies artifact integrity, derives cached worker IDs from the full
+tenant capability scope, disables global outbound access, applies per-invocation limits, bounds the
+wire contract, and records trusted execution evidence through the control-plane recorder. Its Tier
+1 security tests do not substitute for the blocked live latency or isolation comparison.
+
+The caller intentionally records zero CPU milliseconds synchronously. Cloudflare documents exact
+`CPUTimeMs` on the asynchronous Workers Trace Events Logpush dataset, while the Tail handler event
+schema does not expose CPU time. Logpush reconciliation remains follow-up work and must be complete
+before exact CPU-cost claims.
+
+Additional sources checked on 2026-07-21:
+
+- <https://developers.cloudflare.com/dynamic-workers/usage/bindings/>
+- <https://developers.cloudflare.com/dynamic-workers/usage/limits/>
+- <https://developers.cloudflare.com/workers/runtime-apis/handlers/tail/>
+- <https://developers.cloudflare.com/logs/logpush/logpush-job/datasets/account/workers_trace_events/>
+
 ## Decision
 
 No final runtime primitive is selected yet.
