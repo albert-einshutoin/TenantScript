@@ -338,55 +338,68 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
   });
 
   it("aborts a wall-clock timeout and records a stable timeout execution", async () => {
-    let invokedRequest: Request | undefined;
-    const loader = createCachingLoader(
-      (request) =>
-        new Promise<Response>(() => {
-          invokedRequest = request;
+    vi.useFakeTimers();
+    try {
+      let invokedRequest: Request | undefined;
+      let resolveInvocationStarted: (() => void) | undefined;
+      const invocationStarted = new Promise<void>((resolve) => {
+        resolveInvocationStarted = resolve;
+      });
+      const loader = createCachingLoader(
+        (request) =>
+          new Promise<Response>(() => {
+            invokedRequest = request;
+            resolveInvocationStarted?.();
+          })
+      );
+      const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
+        Promise.resolve(request.execution)
+      );
+      const caller = createCloudflareDynamicWorkerCaller({
+        loader,
+        compatibilityDate: "2026-07-21",
+        loadArtifact: () => Promise.resolve("runtime-code"),
+        createScopeBindings: () => ({}),
+        readInvocationEvidence: () =>
+          Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
+        recorder: { record },
+        now: () => new Date("2026-07-21T01:00:00.000Z"),
+        monotonicNow: monotonicClock([100, 107])
+      });
+
+      const run = caller
+        .run({
+          executionId: "exec_timeout",
+          tenantId: "tenant_1",
+          installationId: "installation_1",
+          pluginId: "plugin_1",
+          hookName: "invoice.created",
+          hookType: "event",
+          version: "1.0.0",
+          artifactSha256: sha256("runtime-code"),
+          grantRevision: "grant_1",
+          payload: {},
+          limits: { cpuMs: 10, timeoutMs: 5, subrequests: 2 }
         })
-    );
-    const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
-      Promise.resolve(request.execution)
-    );
-    const caller = createCloudflareDynamicWorkerCaller({
-      loader,
-      compatibilityDate: "2026-07-21",
-      loadArtifact: () => Promise.resolve("runtime-code"),
-      createScopeBindings: () => ({}),
-      readInvocationEvidence: () =>
-        Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
-      recorder: { record },
-      now: () => new Date("2026-07-21T01:00:00.000Z"),
-      monotonicNow: monotonicClock([100, 107])
-    });
+        .catch((error: unknown) => error);
+      await invocationStarted;
+      await vi.advanceTimersByTimeAsync(5);
+      const thrown = await run;
 
-    const thrown = await caller
-      .run({
-        executionId: "exec_timeout",
-        tenantId: "tenant_1",
-        installationId: "installation_1",
-        pluginId: "plugin_1",
-        hookName: "invoice.created",
-        hookType: "event",
-        version: "1.0.0",
-        artifactSha256: sha256("runtime-code"),
-        grantRevision: "grant_1",
-        payload: {},
-        limits: { cpuMs: 10, timeoutMs: 5, subrequests: 2 }
-      })
-      .catch((error: unknown) => error);
-
-    expect(thrown).toMatchObject({
-      code: "runtime_invocation_timed_out",
-      message: "runtime_invocation_timed_out"
-    });
-    expect(invokedRequest?.signal.aborted).toBe(true);
-    expect(record).toHaveBeenCalledOnce();
-    expect(record.mock.calls[0]?.[0].execution).toMatchObject({
-      status: "timeout",
-      durationMs: 7,
-      error: "dynamic_worker_timeout"
-    });
+      expect(thrown).toMatchObject({
+        code: "runtime_invocation_timed_out",
+        message: "runtime_invocation_timed_out"
+      });
+      expect(invokedRequest?.signal.aborted).toBe(true);
+      expect(record).toHaveBeenCalledOnce();
+      expect(record.mock.calls[0]?.[0].execution).toMatchObject({
+        status: "timeout",
+        durationMs: 7,
+        error: "dynamic_worker_timeout"
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([
