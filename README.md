@@ -1,100 +1,101 @@
 # TenantScript
 
-Cloudflare-native SaaS Extension Control Plane — B2B SaaSが顧客ごとのコード・自動化・承認フロー・Webhook変換・API policyを、安全に、監査可能に、version管理された形で実行できるようにするためのOSSプロジェクト(計画段階)。
+TenantScriptは、B2B SaaSが顧客ごとのplugin、automation、approval、Webhook変換、API
+policyを、安全に実行・監査・version管理するためのCloudflare-nativeなSaaS Extension Control
+Planeです。host SaaSへtyped hookまたはproxyを接続し、pluginにはraw credentialではなくtenant-scoped
+capabilityだけを渡します。
 
-Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして使い、その上のControl Plane(manifest、permission、versioning、rollback、execution logs、approval)を提供する。
+**Status: Public Alpha — Repository verified.** 公開source、accountless E2E、security suite、package
+build、Cloudflare Worker dry-runは継続検証されています。一方、v1.0、npm公開、maintainer環境での
+credentialed live運用は未完了です。repositoryの成功を本番稼働実績とは扱いません。
 
-## ドキュメント
+Pure OSS（Apache-2.0）で、運用形態はself-hostです。
 
-- [Audience別ドキュメント入口](docs/README.md) — adopter、plugin/host作者、operator、security reviewer、contributorの最短導線
-- [Operator troubleshooting index](docs/operations/README.md) — 症状、安全な観測点、runbook、禁止操作の運用入口
-- [Proxy mode quickstart](docs/quickstarts/zero-integration-proxy-mode.md) — host改修なしでwebhook変換を15分で再現
-- [SDK integration quickstart](docs/quickstarts/sdk-integration.md) — typed hook、plugin、capability、dry-run deployをTDDで接続
-- [SDK reference](docs/reference/sdk.md) — Phase 1 public TypeScript surfaceと安全境界
-- [Canonical glossary](docs/reference/glossary.md) — app、tenant、plugin、installation、capabilityなどの権限境界
-- [Schema diff in CI](docs/reference/schema-diff-ci.md) — breaking判定、exit code、warning、CI統合
-- [Public API stability](docs/reference/public-api-stability.md) — package exportとControl Plane REST surfaceのsemver gate
-- [Control Plane success response schemas](docs/reference/control-plane-success-responses.md) — 成功status/bodyの機械可読契約と実handler検証
-- [Admin UI performance budget](docs/reference/admin-ui-performance-budget.md) — 300 KiB初期page予算、全JS/CSS総量、Tier 1 gate
-- [Admin UI 100k execution browser budget](docs/reference/admin-ui-execution-performance.md) — executions仮想化、DOM上限、Chromium初回描画gate
-- [npm package release contract](docs/reference/npm-package-release.md) — source-only build、clean tarball、install/import smoke、publish境界
-- [Release automation](docs/reference/release-automation.md) — Changesets release PR、OIDC tag publish、外部activation境界
-- [Hook schema migration運用](docs/operations/schema-migrations.md) — app全体の利用追跡、廃止ゲート、Admin UI
-- [App database routing](docs/operations/app-database-routing.md) — app単位D1、fail-closed router、endpoint isolation matrix
-- [Public configuration reference](docs/reference/configuration.md) — Worker bindings、環境変数、default、secret境界の正本
-- [Production self-host baseline](docs/operations/self-host-production.md) — fail-closed Wrangler生成、migration、secret、RBAC・budget・retention境界
-- [Setup run journal](docs/operations/setup-run-journal.md) — resumable reconcile、resource ownership、逆順cleanup、crash recovery契約
-- [Control Plane error catalog](docs/reference/control-plane-errors.md) — stable code、HTTP status、retry/client action、安全な404境界
-- [CLI command reference](docs/reference/cli.md) — 実装済みcommand、必須option、JSON output、exit code
-- [Runaway installation隔離](docs/operations/runaway-quarantine.md) — 連続失敗・timeout、自動disable、明示復旧
-- [Incident response runbook](docs/operations/incident-response.md) — plugin・capability・budget・D1/R2障害の封じ込め、復旧、公開drill契約
-- [Opt-in telemetry and privacy](docs/privacy/telemetry.md) — default-off、匿名集計schema、receiver制約、Admin UI表示
-- [Adopters](ADOPTERS.md) — 明示同意による公開採用報告と匿名feedback導線
-- [Rollback troubleshooting](docs/operations/rollback-troubleshooting.md) — 検知、復旧、実行確認、MTTR drill
-- [Contributing](CONTRIBUTING.md) — 開発環境、TDD、security、issue・PRレビュー手順
-- [Release SBOM](docs/reference/release-sbom.md) — 検証済みnpm tarball由来のCycloneDX dependency graphとCI artifact
-- [Governance](GOVERNANCE.md) — maintainer責任、ADR意思決定、co-maintainerへの経路
-- [Code of Conduct](CODE_OF_CONDUCT.md) — community standards、非公開報告、enforcement
-- [Good first issues](docs/community/good-first-issues.md) — 境界・TDD・DoDが明確な入門タスク
-- [プロダクト戦略 & MVP仕様](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md) — v0.4 Working Draft
-- [開発プラン & フェーズ別タスク](tasks/README.md) — TDDベースのPhase 0〜4タスク分解(言語: TypeScript、D-017)
-- [ベンチマーク証跡](docs/benchmarks/README.md) — Phase 0 runtime latency と Phase 1 rollback drill
-- [Phase 0 gate evidence](docs/reviews/phase0-gate-evidence.md) — 完了済み証跡と外部ブロッカーの公開スナップショット
-- [Phase 2 gate evidence](docs/reviews/phase2-gate-evidence.md) — repository証跡と外部運用blockerの分離
-- [Admin変更APIのrate limit運用](docs/operations/admin-mutation-rate-limits.md) — Durable Object binding、fail-closed方針、設定範囲
-- [Admin installの冪等再試行](docs/operations/admin-install-idempotency.md) — Idempotency-Key、409、D1原子性、保存期間
-- [Installation grant承認](docs/operations/installation-grant-approval.md) — operator申請、admin承認、D1原子性、migration順序
-- [Admin rollbackの結果復旧](docs/operations/admin-rollback-idempotency.md) — 応答喪失、revision CAS、audit result再取得
-- [Security suite v2 threat map](docs/security/security-suite-v2.md) — Phase 1攻撃面、常設テスト、依存境界CI
-- [Security suite v3 RBAC attack map](docs/security/security-suite-v3.md) — role/scope/tenant昇格攻撃、identity由来audit、常設証跡
-- [Audit integrity](docs/security/audit-integrity.md) — write-once D1境界、tenant/app hash chain、改ざん検知と運用責任
-- [Execution retention](docs/operations/execution-retention.md) — D1 hot retention、R2 archive、透過検索、self-host設定例
-- [Compliance export](docs/operations/audit-export.md) — 期間指定NDJSON、データ最小化、署名manifest、鍵ローテーション
-- [Threat model](docs/security/threat-model.md) — 信頼境界、攻撃面、mitigation、常設テスト、未検証範囲
-- [Community security review](docs/security/community-review-packet.md) — 固定commitを対象にした第三者レビュー範囲、報告経路、完了証跡
-- [RBAC matrix](docs/security/rbac-matrix.md) — roleごとの操作権限、`manager` claimからの移行、未実装境界
-- [Service token security](docs/security/service-tokens.md) — scope・期限・hash-only保存・即時失効・漏えい対応
-- [Security policy](SECURITY.md) — supported versions、非公開の脆弱性報告窓口、対応SLA
-- [Usage meter運用契約](docs/operations/usage-meter.md) — Analytics Engine固定schema、fail-open、UTC期間集計
-- [Agent onboarding](llms.txt) — 公開docs、package entrypoint、TDD、credential境界の短い索引
-- [Cloudflare API transport](docs/operations/cloudflare-api-transport.md) — fixed-origin、mutation非retry、response上限、credential非露出の境界
-- [Cloudflare D1 setup adapter](docs/operations/cloudflare-d1-setup-adapter.md) — deterministic create、explicit adoption、ownership-verified cleanup
-- [Cloudflare R2 setup adapter](docs/operations/cloudflare-r2-setup-adapter.md) — 2 bucketの安定create/resume、explicit adoption、ownership-safe cleanup
-- [Cloudflare D1 migrations](docs/operations/cloudflare-d1-migrations.md) — pinned SQL catalog、closed history query、fail-closed Wrangler apply、response-loss resume
-- [Pinned Wrangler Worker deploy](docs/operations/wrangler-worker-deploy-process.md) — strict exact argv、autoconfig無効化、path/secret/process fail-closed境界
-- [Cloudflare Worker setup adapter](docs/operations/cloudflare-worker-setup-adapter.md) — deterministic target、atomic ownership marker、resume-safe reconcile、ownership-verified cleanup
-- [Setup provider router](docs/operations/setup-provider-router.md) — exact operation ownership、mutation前の全route coverage検証、shared cleanup routing
-- [OAuth state store](docs/operations/oauth-state-store.md) — tenant-bound state、browser binding、digest-only永続化、一回限りconsume
-- [Slack OAuth install-start](docs/operations/slack-oauth-install-start.md) — 認証済みtenant scope、固定Slack認可URL、`__Host-` browser cookie
-- [Slack OAuth callback](docs/operations/slack-oauth-callback.md) — bounded public HTTP、state-first sequencing、固定redirect、暗号化token保存
-- [Slack OAuth v2 exchange](docs/operations/slack-oauth-exchange.md) — fixed-origin code交換、exact redirect、bounded response、live evidence境界
+## できること
 
-## ローカル検証とCI
+- typed hook、manifest、plugin bundleをversion管理し、tenantごとにinstall・enable・rollbackする
+- `slack.send`、`github.issue.create`、`http.fetch`などをgrant、rate limit、audit、idempotency付きの
+  broker経由で実行する
+- approval、RBAC、service token、execution log、usage、audit chain、retentionをControl Planeで管理する
+- host改修を抑えたproxy modeでWebhookをtenant別に変換・転送する
+- encrypted provider secret、Slack OAuth、token rotationをplugin/browserへcredentialを渡さず扱う
+- Admin UI、CLI、self-host Wrangler template、doctor、upgrade/recovery runbookを利用する
 
-コントリビューターがPull Requestを送る前に実行する標準の品質ゲートは `pnpm verify` です。型検査、lint、通常テスト、カバレッジ、セキュリティスイート、high以上の依存関係監査、format確認を決定的な順序で実行します。Cloudflareアカウントや資格情報を使わないaccountlessな検証です。
+実装済みと計画中の境界は[Audience別ドキュメント入口](docs/README.md)と
+[Phase 2 gate evidence](docs/reviews/phase2-gate-evidence.md)で確認できます。
+
+## まず15分で試す
+
+必要なのはNode.js 24、Corepack、pnpm 10.12.1です。Cloudflare account、Slack credential、npm公開packageは
+不要です。
 
 ```sh
 # cwd: repository root
 # expected-exit: 0
+corepack enable
 pnpm install --frozen-lockfile
+pnpm --filter @tenantscript/example-saas test -- zero-integration
+```
+
+このE2Eは、Stripe形式のWebhookを固定mappingからtenantへ解決し、pluginで変換してallowlisted originへ
+転送する一連の契約を再現します。実際のnetwork送信やcredentialは使用しません。設定と期待結果は
+[Zero-Integration Proxy Mode Quickstart](docs/quickstarts/zero-integration-proxy-mode.md)にあります。
+
+既存SaaSへtyped hookとplugin SDKを埋め込む場合は
+[SDK Integration Quickstart](docs/quickstarts/sdk-integration.md)から始めてください。
+
+## 構成
+
+| Surface              | 役割                                                               | 現在の証跡                         |
+| -------------------- | ------------------------------------------------------------------ | ---------------------------------- |
+| Host / Plugin SDK    | typed hook、manifest、handler、capability context                  | unit + integration tests           |
+| Capability broker    | scope、rate limit、journal、audit、provider adapter                | contract + security tests          |
+| Control Plane Worker | install、approval、rollback、RBAC、OAuth、usage、audit             | unit + workerd tests               |
+| Admin UI             | install review、approval、rollback、execution/audit/connection閲覧 | component + Playwright gates       |
+| CLI / self-host      | setup plan、doctor、deploy、migration、rollback                    | accountless E2E + Wrangler dry-run |
+| Proxy                | tenant mapping、transform、destination allowlist                   | zero-integration E2E               |
+
+公開TypeScript APIとHTTP contractは
+[Public API stability](docs/reference/public-api-stability.md)でsnapshot化され、breaking changeはChangesetsと
+migration guideでgateされます。
+
+## 品質と検証境界
+
+変更前の標準gateは次の1コマンドです。
+
+```sh
+# cwd: repository root
+# expected-exit: 0
 pnpm verify
 ```
 
-調査中に対象を絞る場合は、カバレッジ閾値を確認する `pnpm test:coverage` と、tenant境界・権限昇格・egressなどを確認する `pnpm test:security` を個別に実行できます。最終確認では個別コマンドの代わりに `pnpm verify` を実行してください。
+`pnpm verify`はtypecheck、lint、全test、coverage、security suite、high以上のdependency audit、formatを
+実行します。反復中は`pnpm test:coverage`と`pnpm test:security`を個別に使い、最終確認では全gateへ
+戻ってください。
 
-- **Tier 1 (`.github/workflows/tier1.yml`)**: forkのPull Requestと `main` へのpushで動くaccountless quality gateです。Cloudflare secretsを参照せず、固定バージョンのOSV Scannerを含むため、外部コントリビューターも同じ品質境界で検証できます。
-- **Tier 2 Live (`.github/workflows/tier2-live.yml`)**: maintainer管理のscheduleまたは手動実行に限定した検証レーンです。Cloudflareアカウント、資格情報、paid planを必要とするsmoke testやlatency benchmarkはこのレーンだけに追加し、fork-safeな検証をTier 1から移動しません。現在はaccountless chaosシナリオをnightlyで実行しますが、live smokeと資格情報を伴う検証は未構成です。
+- **Tier 1 (`.github/workflows/tier1.yml`)** — fork-safeなaccountless CI。Cloudflare secretを参照せず、build、package、SBOM、API
+  compatibility、browser、security、OSV scanを検証します。
+- **Tier 2 Live (`.github/workflows/tier2-live.yml`)** — maintainer管理のcredentialと外部環境が必要なlaneです。現時点ではlive Cloudflare
+  deployment、live Slack send/refresh、latency benchmarkの証跡は揃っていません。
+
+securityの設計と報告先は[Threat model](docs/security/threat-model.md)と
+[Security policy](SECURITY.md)を参照してください。
 
 ## 既知の環境制約
 
-以下はコードやローカル環境の失敗ではなく、maintainerが外部サービス側で解消する公開準備ブロッカーです。通常の開発、fork PR、`pnpm verify`にはCloudflare・npmの認証情報は不要です。
+公開前blockerの正本は[Phase 0 gate evidence](docs/reviews/phase0-gate-evidence.md)です。実装済みの
+accountless経路と、maintainerだけが取得できるlive evidenceを分けています。
 
-| 制約                                  | 影響する作業                                                                                                                                                                       | 影響しないローカル作業                                              | 解消主体                                                            |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Cloudflare Workers Paid plan          | Dynamic Workersのlive deploy、latency benchmark、runtime primitiveの最終決定。詳細は[ADR-001](docs/adr/001-runtime-primitive.md)と[Phase 0 benchmark](docs/benchmarks/phase0.md)。 | Tier 1、unit/workerd tests、Wrangler dry-run。                      | Maintainerがpaid accountを用意し、Tier 2でlive evidenceを取得する。 |
-| npm `@tenantscript` scopeの予約・公開 | package名の確定、registry publish、外部install検証。[Issue #3](https://github.com/albert-einshutoin/TenantScript/issues/3)で追跡。                                                 | `workspace:*`によるmonorepo内参照、frozen install、全ローカル検証。 | Maintainerがnpm authenticationを行い、scopeと公開方針を確定する。   |
+| Blocker                                                                             | Repository内で完了している範囲                    | 残る外部証跡                                                                                                                    |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [fork-safe CI #2](https://github.com/albert-einshutoin/TenantScript/issues/2)       | Tier 1 workflowとaccountless gates                | maintainer以外のfork PR完走                                                                                                     |
+| [npm scope #3](https://github.com/albert-einshutoin/TenantScript/issues/3)          | tarball、SBOM、OIDC publish workflow              | npm `@tenantscript` authentication、scope予約・初回publish・provenance                                                          |
+| [Cloudflare runtime #4](https://github.com/albert-einshutoin/TenantScript/issues/4) | workerd testsとWrangler dry-run                   | paid planでのlive deploy・benchmark。詳細は[ADR-001](docs/adr/001-runtime-primitive.md)と[benchmark](docs/benchmarks/phase0.md) |
+| [security review #32](https://github.com/albert-einshutoin/TenantScript/issues/32)  | threat model、review packet、fuzz、advisory drill | 独立reviewのCRITICAL/HIGH解消証跡                                                                                               |
+| [v1.0 launch #35](https://github.com/albert-einshutoin/TenantScript/issues/35)      | release gatesと公開runbook                        | adopter、external contributor、self-host検証者、release実行                                                                     |
 
-外部アカウントがなくても、公開コードとdeployment bundleのローカル品質は次のaccountless経路で確認できます。
+外部credentialや有料planを必要とする作業を、通常のfork開発やローカル検証の前提にはしません。
+deployment bundleまでは次のaccountless経路で確認できます。
 
 ```sh
 # cwd: repository root
@@ -103,15 +104,24 @@ pnpm verify
 pnpm --filter @tenantscript/runtime-bench exec wrangler deploy --config wrangler.jsonc --dry-run
 ```
 
-## 方針
+## ドキュメント
 
-- **Pure OSS**: 収益化を目的としない。self-hostが唯一の運用形態(ドキュメント D-008)。
-- **Markdownがsource of truth**: docx等が必要な場合は都度mdからエクスポートする(例: pandoc)。
-- **GitHub Flow**: `main` を唯一の長期ブランチとし、作業は短命の `feature/*` ブランチから Pull Request で統合する。`develop` / `release/*` / `hotfix/*` は使わない。
-- **ステータス**: Phase 0 のaccountless実装・E2E・security suite・coverage gateは完了し、[Phase 0 gate evidence](docs/reviews/phase0-gate-evidence.md)に残る外部証跡を分離している。Phase 1 MVP は control-plane / rollback / approval / budget / proxy / CLI / usage meter / Admin UI / security suite v2と導入ドキュメントまで実装済みで、partner onboarding・refactor pass・Phase 1 gate reviewが未完了。
+- [Audience別ドキュメント入口](docs/README.md) — adopter、plugin author、host developer、operator、security reviewer、contributor
+- [Operator troubleshooting index](docs/operations/README.md) — 症状、安全な観測、復旧runbook、禁止操作
+- [SDK reference](docs/reference/sdk.md) — public TypeScript surfaceとcapability境界
+- [Canonical glossary](docs/reference/glossary.md) — app、tenant、plugin、installation、capabilityの権限境界
+- [Public configuration](docs/reference/configuration.md) — Worker binding、環境変数、default、secret
+- [Control Plane errors](docs/reference/control-plane-errors.md) — stable code、retryability、safe client action
+- [Production self-host baseline](docs/operations/self-host-production.md) — binding、migration、secret、RBAC、budget、retention
+- [CLI reference](docs/reference/cli.md) — command、引数、JSON、exit code
+- [Roadmap and package boundaries](tasks/README.md) — Phase 0〜4、TDD、dependency direction
+- [Agent onboarding](llms.txt) — coding agent向けの短い索引
 
-## 現在のブロッカー
+## Contributing
 
-- [#2](https://github.com/albert-einshutoin/TenantScript/issues/2): fork PR で Tier 1(accountless) が完走することの検証
-- [#3](https://github.com/albert-einshutoin/TenantScript/issues/3): npm `@tenantscript` scope の確保
-- [#4](https://github.com/albert-einshutoin/TenantScript/issues/4): Cloudflare paid Workers account での live runtime benchmark
+[Contributing guide](CONTRIBUTING.md)にGitHub Flow、TDD、security check、PR手順があります。初参加では
+[Good first issues](docs/community/good-first-issues.md)から、設計判断は[ADR index](docs/adr/README.md)から
+確認してください。community運営は[Governance](GOVERNANCE.md)と
+[Code of Conduct](CODE_OF_CONDUCT.md)に従います。
+
+TenantScriptは[Apache License 2.0](LICENSE)で公開されています。
