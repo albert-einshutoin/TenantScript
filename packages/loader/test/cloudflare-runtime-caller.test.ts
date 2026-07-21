@@ -74,7 +74,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     const runtimeModule = loader.loadedCode?.modules["tenantscript-runtime.js"];
     expect(runtimeModule).toBeTypeOf("string");
     if (typeof runtimeModule !== "string") throw new Error("runtime module was not generated");
-    expect(runtimeModule).toContain('import pluginModule from "./tenant-plugin.cjs"');
+    expect(runtimeModule).toContain('await import("./tenant-plugin.cjs")');
     expect(runtimeModule).toContain("pluginModule.plugin ?? pluginModule.default");
     expect(runtimeModule).toContain("plugin.dispatch");
     expect(runtimeModule).toContain("pluginModule.handlers");
@@ -83,9 +83,9 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     );
     expect(runtimeModule).toContain("assertJsonValue(value);");
     expect(runtimeModule).toContain("invalid TenantScript plugin return value");
-    expect(runtimeModule).toContain("validateLegacyHookReturn(input.hookType");
+    expect(runtimeModule).toContain("validateHookReturn(input.hookType, result.value)");
     const lossyRuntimeSource = runtimeModule.replace(
-      'import pluginModule from "./tenant-plugin.cjs";',
+      'const pluginModule = await import("./tenant-plugin.cjs");',
       'const pluginModule = { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } };'
     );
     const runtimeNamespace = (await import(
@@ -109,7 +109,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       )
     ).rejects.toThrow("invalid TenantScript plugin return value");
     const legacyRuntimeSource = runtimeModule.replace(
-      'import pluginModule from "./tenant-plugin.cjs";',
+      'const pluginModule = await import("./tenant-plugin.cjs");',
       'const pluginModule = { handlers: { "invoice.policy": async () => ({ arbitrary: true }) } };'
     );
     const legacyRuntimeNamespace = (await import(
@@ -766,6 +766,10 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       { ...base, payload: new Map([["invoiceId", "inv_1"]]) },
       { ...base, payload: { invoiceId: undefined } },
       { ...base, payload: { amount: Number.NaN } },
+      {
+        ...base,
+        payload: Object.defineProperty([], "token", { value: "hidden", enumerable: false })
+      },
       { ...base, payload: { value: "x".repeat(1_048_577) } }
     ];
     const codes: unknown[] = [];

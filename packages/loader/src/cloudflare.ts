@@ -12,7 +12,7 @@ const MAX_DYNAMIC_WORKER_TIMEOUT_MS = 2_147_483_647;
 // Invocation must fail before tenant code runs when the authoritative recorder cannot persist it.
 const MAX_RECORDED_HOOK_NAME_LENGTH = 256;
 const MAX_RECORDED_PLUGIN_VERSION_LENGTH = 128;
-const DYNAMIC_WORKER_RUNTIME_VERSION = "v1";
+const DYNAMIC_WORKER_RUNTIME_VERSION = "v2";
 const DYNAMIC_WORKER_MAIN_MODULE = "tenantscript-runtime.js";
 const DYNAMIC_WORKER_PLUGIN_MODULE = "tenant-plugin.cjs";
 
@@ -633,6 +633,7 @@ function assertLosslessJsonValue(value: unknown, ancestors = new Set<object>()):
     if (Array.isArray(value)) {
       if (
         Object.keys(value).length !== value.length ||
+        Object.getOwnPropertyNames(value).length !== value.length + 1 ||
         Object.getOwnPropertySymbols(value).length !== 0
       ) {
         throw new Error("value is not lossless JSON");
@@ -668,19 +669,27 @@ function assertLosslessJsonValue(value: unknown, ancestors = new Set<object>()):
 // ext deploy emits a CommonJS bundle whose scaffold exports `plugin.dispatch` (older entries may
 // export `handlers`). A fixed trusted wrapper adapts either verified CJS shape to Worker fetch.
 const DYNAMIC_WORKER_RUNTIME_SOURCE = String.raw`
-import pluginModule from "./tenant-plugin.cjs";
-
-const plugin = pluginModule.plugin ?? pluginModule.default;
-const handlers = pluginModule.handlers;
+const SafeSet = Set;
+const safeArrayIsArray = Array.isArray;
+const safeNumberIsFinite = Number.isFinite;
+const safeObjectHasOwn = Object.hasOwn;
+const safeObjectKeys = Object.keys;
+const safeObjectGetOwnPropertyNames = Object.getOwnPropertyNames;
+const safeObjectGetOwnPropertySymbols = Object.getOwnPropertySymbols;
+const safeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const safeObjectGetPrototypeOf = Object.getPrototypeOf;
+const safeObjectPrototype = Object.prototype;
+const safeRequestJson = Function.call.bind(Request.prototype.json);
+const safeResponseJson = Response.json.bind(Response);
 
 // Response.json is a serializer, not a lossless validator. Reject unsupported plugin values before
 // a successful execution can be recorded with output that differs from the plugin result.
-function assertJsonValue(value, ancestors = new Set()) {
+function assertJsonValue(value, ancestors = new SafeSet()) {
   if (
     value === null ||
     typeof value === "string" ||
     typeof value === "boolean" ||
-    (typeof value === "number" && Number.isFinite(value) && !Object.is(value, -0))
+    (typeof value === "number" && safeNumberIsFinite(value) && !Object.is(value, -0))
   ) {
     return;
   }
@@ -689,32 +698,33 @@ function assertJsonValue(value, ancestors = new Set()) {
   }
   ancestors.add(value);
   try {
-    if (Array.isArray(value)) {
+    if (safeArrayIsArray(value)) {
       if (
-        Object.keys(value).length !== value.length ||
-        Object.getOwnPropertySymbols(value).length !== 0
+        safeObjectKeys(value).length !== value.length ||
+        safeObjectGetOwnPropertyNames(value).length !== value.length + 1 ||
+        safeObjectGetOwnPropertySymbols(value).length !== 0
       ) {
         throw new Error("invalid TenantScript plugin return value");
       }
       for (let index = 0; index < value.length; index += 1) {
-        if (!Object.hasOwn(value, index)) {
+        if (!safeObjectHasOwn(value, index)) {
           throw new Error("invalid TenantScript plugin return value");
         }
         assertJsonValue(value[index], ancestors);
       }
       return;
     }
-    const prototype = Object.getPrototypeOf(value);
-    const keys = Object.keys(value);
+    const prototype = safeObjectGetPrototypeOf(value);
+    const keys = safeObjectKeys(value);
     if (
-      (prototype !== Object.prototype && prototype !== null) ||
-      Object.getOwnPropertyNames(value).length !== keys.length ||
-      Object.getOwnPropertySymbols(value).length !== 0
+      (prototype !== safeObjectPrototype && prototype !== null) ||
+      safeObjectGetOwnPropertyNames(value).length !== keys.length ||
+      safeObjectGetOwnPropertySymbols(value).length !== 0
     ) {
       throw new Error("invalid TenantScript plugin return value");
     }
     for (const key of keys) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      const descriptor = safeObjectGetOwnPropertyDescriptor(value, key);
       if (descriptor === undefined || !("value" in descriptor)) {
         throw new Error("invalid TenantScript plugin return value");
       }
@@ -725,7 +735,7 @@ function assertJsonValue(value, ancestors = new Set()) {
   }
 }
 
-function validateLegacyHookReturn(hookType, value) {
+function validateHookReturn(hookType, value) {
   if (hookType === "event") return undefined;
   if (hookType === "transform") {
     if (value === undefined) throw new Error("TenantScript legacy hook return contract failed");
@@ -741,23 +751,28 @@ function validateLegacyHookReturn(hookType, value) {
 
 export default {
   async fetch(request, env) {
-    if (
-      request.method !== "POST" ||
-      ((plugin === null || typeof plugin !== "object" || typeof plugin.dispatch !== "function") &&
-        (handlers === null || typeof handlers !== "object"))
-    ) {
+    if (request.method !== "POST") {
       throw new Error("invalid TenantScript runtime request");
     }
-    const input = await request.json();
+    const input = await safeRequestJson(request);
     if (
       input === null ||
       typeof input !== "object" ||
-      Array.isArray(input) ||
-      Object.keys(input).length !== 4 ||
+      safeArrayIsArray(input) ||
+      safeObjectKeys(input).length !== 4 ||
       typeof input.executionId !== "string" ||
       typeof input.hookName !== "string" ||
       (input.hookType !== "event" && input.hookType !== "transform" && input.hookType !== "policy") ||
       !("payload" in input)
+    ) {
+      throw new Error("invalid TenantScript runtime request");
+    }
+    const pluginModule = await import("./tenant-plugin.cjs");
+    const plugin = pluginModule.plugin ?? pluginModule.default;
+    const handlers = pluginModule.handlers;
+    if (
+      (plugin === null || typeof plugin !== "object" || typeof plugin.dispatch !== "function") &&
+      (handlers === null || typeof handlers !== "object")
     ) {
       throw new Error("invalid TenantScript runtime request");
     }
@@ -788,16 +803,16 @@ export default {
       ) {
         throw new Error("TenantScript plugin dispatch failed");
       }
-      value = result.value;
+      value = validateHookReturn(input.hookType, result.value);
     } else {
       const handler = handlers[input.hookName];
       if (typeof handler !== "function") {
         throw new Error("TenantScript handler is unavailable");
       }
-      value = validateLegacyHookReturn(input.hookType, await handler(input.payload, context));
+      value = validateHookReturn(input.hookType, await handler(input.payload, context));
     }
     if (value !== undefined) assertJsonValue(value);
-    return Response.json({ value: value === undefined ? null : value });
+    return safeResponseJson({ value: value === undefined ? null : value });
   }
 };
 `;
