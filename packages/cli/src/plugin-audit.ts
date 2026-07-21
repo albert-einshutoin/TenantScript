@@ -1541,6 +1541,11 @@ function parameterListDeclares(
 }
 
 function bindingPatternDeclares(pattern: readonly BundleToken[], name: string): boolean {
+  if (matchesTokenSequence(pattern, 0, [".", ".", "."])) {
+    // Rest syntax changes how a value is collected, not which identifier it binds. Normalize it
+    // before recursion so callable and nested array rest bindings still shadow trusted receivers.
+    return bindingPatternDeclares(pattern.slice(3), name);
+  }
   const first = pattern[0];
   if (first?.kind === "identifier") return first.value === name;
   if (first?.value !== "{" && first?.value !== "[") return false;

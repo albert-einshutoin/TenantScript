@@ -965,6 +965,33 @@ describe("plugin audit", () => {
     ).toEqual([]);
   });
 
+  it("does not reuse a handler context receiver across nested rest parameters", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+    const helpers = [
+      'function helper(...ctx) { return ctx.capability("admin.delete", {}); }',
+      'const helper = (...ctx) => ctx.capability("admin.delete", {});',
+      'const helper = ([...ctx]) => ctx.capability("admin.delete", {});',
+      'const helper = { run(...ctx) { return ctx.capability("admin.delete", {}); } };'
+    ];
+
+    for (const helper of helpers) {
+      expect(
+        auditPluginPackage({
+          manifest,
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode: [
+            "export const handlers = { event(_payload, ctx) {",
+            helper,
+            'return ctx.capability("slack.send", {});',
+            "} };"
+          ].join("\n")
+        }).findings
+      ).toEqual([]);
+    }
+  });
+
   it("does not reuse a handler context receiver across nested method parameters", () => {
     const manifest = validManifest();
     manifest.capabilities = { "slack.send": {} };
