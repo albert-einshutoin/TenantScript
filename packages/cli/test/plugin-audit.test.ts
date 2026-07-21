@@ -294,6 +294,27 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("decodes escaped broker and egress identifiers", () => {
+    const sources = [
+      String.raw`context.\u0063apability("admin.delete", {}); globalThis.\u0066etch("https://example.com");`,
+      String.raw`context.\u{63}apability("admin.delete", {}); globalThis.f\u0065tch("https://example.com");`
+    ];
+
+    for (const source of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode: handlerBundle(source)
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+        finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+      ]);
+    }
+  });
+
   it("detects capability and egress calls invoked through Function.prototype.call", () => {
     expect(
       auditPluginPackage({
@@ -549,6 +570,26 @@ describe("plugin audit", () => {
       'exports.plugin = { dispatch(request) { const { context } = request; return context.capability("slack.send", {}); } };',
       'exports.plugin = { dispatch(request) { const { context: broker } = request; return broker.capability("slack.send", {}); } };',
       'exports.plugin = { dispatch(request) { const broker = request.context; return broker.capability("slack.send", {}); } };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
+  it("detects computed destructured broker aliases", () => {
+    const sources = [
+      handlerBundle('const { ["capability"]: cap } = context; return cap("admin.delete", {});'),
+      'exports.plugin = { dispatch(request) { const { ["context"]: broker } = request; const { ["capability"]: cap } = broker; return cap("admin.delete", {}); } };'
     ];
 
     for (const bundleCode of sources) {

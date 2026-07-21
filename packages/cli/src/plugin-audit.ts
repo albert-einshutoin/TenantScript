@@ -1353,8 +1353,15 @@ function sortBindingRanges(bindings: Map<string, BindingRange[]>): void {
 function registerDestructuredCapability(tokens: readonly BundleToken[], direct: Set<string>): void {
   for (let index = 0; index < tokens.length; index += 1) {
     if (tokens[index]?.value !== "capability") continue;
-    const alias = tokens[index + 1]?.value === ":" ? tokens[index + 2] : undefined;
-    direct.add(alias?.kind === "identifier" ? alias.value : "capability");
+    const isComputed =
+      tokens[index]?.kind === "string" &&
+      tokens[index]?.literalValid === true &&
+      tokens[index - 1]?.value === "[" &&
+      tokens[index + 1]?.value === "]";
+    const separator = index + (isComputed ? 2 : 1);
+    const alias = tokens[separator]?.value === ":" ? tokens[separator + 1] : undefined;
+    if (alias?.kind === "identifier") direct.add(alias.value);
+    else if (!isComputed) direct.add("capability");
   }
 }
 
@@ -1375,15 +1382,31 @@ function collectDestructuredContext(tokens: readonly BundleToken[]): {
   const receivers = new Set<string>();
   const direct = new Set<string>();
   for (const property of splitTopLevel(tokens, ",")) {
-    if (property[0]?.value !== "context") continue;
-    if (property[1]?.value === ":" && property[2]?.value === "{") {
-      registerDestructuredCapability(property.slice(3, -1), direct);
+    const separator = staticDestructuredPropertySeparator(property, "context");
+    if (separator === -1) continue;
+    if (property[separator]?.value === ":" && property[separator + 1]?.value === "{") {
+      registerDestructuredCapability(property.slice(separator + 2, -1), direct);
       continue;
     }
-    const alias = property[1]?.value === ":" ? property[2] : undefined;
-    receivers.add(alias?.kind === "identifier" ? alias.value : "context");
+    const alias = property[separator]?.value === ":" ? property[separator + 1] : undefined;
+    if (alias?.kind === "identifier") receivers.add(alias.value);
+    else if (separator === 1) receivers.add("context");
   }
   return { receivers, direct };
+}
+
+function staticDestructuredPropertySeparator(
+  property: readonly BundleToken[],
+  name: string
+): number {
+  if (property[0]?.value === name && property[0].literalValid !== false) return 1;
+  return property[0]?.value === "[" &&
+    property[1]?.kind === "string" &&
+    property[1].literalValid === true &&
+    property[1].value === name &&
+    property[2]?.value === "]"
+    ? 3
+    : -1;
 }
 
 function splitTopLevel(tokens: readonly BundleToken[], delimiter: string): BundleToken[][] {
@@ -1469,11 +1492,16 @@ function tokenizeCode(
       const template = tokenizeTemplateExpressions(source, index);
       tokens.push(...template.tokens);
       index = template.nextIndex;
-    } else if (character !== undefined && /[A-Za-z_$]/u.test(character)) {
-      const start = index;
-      index += 1;
-      while (index < source.length && /[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
-      tokens.push({ kind: "identifier", value: source.slice(start, index) });
+    } else if (
+      (character !== undefined && /[A-Za-z_$]/u.test(character)) ||
+      (character === "\\" && next === "u")
+    ) {
+      const identifier = readIdentifierToken(source, index);
+      if (identifier === undefined) index += 1;
+      else {
+        tokens.push(identifier.token);
+        index = identifier.nextIndex;
+      }
     } else {
       if (character === "}" && stopAtTemplateExpressionEnd && braceDepth === 0) {
         return { tokens, nextIndex: index + 1 };
@@ -1487,6 +1515,33 @@ function tokenizeCode(
     }
   }
   return { tokens, nextIndex: source.length };
+}
+
+function readIdentifierToken(
+  source: string,
+  start: number
+): { token: BundleToken; nextIndex: number } | undefined {
+  let index = start;
+  let value = "";
+  while (index < source.length) {
+    const character = source[index];
+    let decoded = character ?? "";
+    let nextIndex = index + 1;
+    if (character === "\\" && source[index + 1] === "u") {
+      const escape = readStringEscape(source, index);
+      if (!escape.valid) break;
+      decoded = escape.value;
+      nextIndex = escape.nextIndex;
+    }
+    const allowed = value.length === 0 ? /^[A-Za-z_$]$/u : /^[A-Za-z0-9_$]$/u;
+    if (!allowed.test(decoded)) break;
+    value += decoded;
+    index = nextIndex;
+  }
+  if (value.length === 0) return undefined;
+  // Decode identifier escapes before matching security-sensitive names; retaining their source
+  // spelling would let valid JavaScript broker calls bypass the token-level audit.
+  return { token: { kind: "identifier", value }, nextIndex: index };
 }
 
 function tokenizeTemplateExpressions(
