@@ -16,3 +16,4 @@ Response JSON is constructed with captured primitives so tenant-mutated JSON hoo
 validated envelope.
 Generated CommonJS namespace shapes are unwrapped before dispatch, and policy decisions require
 own data properties.
+Legacy handler lookup accepts only own function-valued data properties.

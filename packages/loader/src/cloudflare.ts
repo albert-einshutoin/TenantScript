@@ -840,10 +840,15 @@ export default {
       }
       value = validateHookReturn(input.hookType, result.value);
     } else {
-      const handler = handlers[input.hookName];
-      if (typeof handler !== "function") {
+      const handlerDescriptor = safeObjectGetOwnPropertyDescriptor(handlers, input.hookName);
+      if (
+        handlerDescriptor === undefined ||
+        !("value" in handlerDescriptor) ||
+        typeof handlerDescriptor.value !== "function"
+      ) {
         throw new Error("TenantScript handler is unavailable");
       }
+      const handler = handlerDescriptor.value;
       value = validateHookReturn(input.hookType, await handler(input.payload, context));
     }
     if (value !== undefined) assertJsonValue(value);

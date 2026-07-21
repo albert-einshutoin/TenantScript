@@ -135,6 +135,21 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         {}
       )
     ).rejects.toThrow("TenantScript legacy hook return contract failed");
+    await expect(
+      legacyRuntimeNamespace.default.fetch(
+        new Request("https://runtime.tenantscript.internal/v1/executions/exec_inherited", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            executionId: "exec_inherited",
+            hookName: "toString",
+            hookType: "event",
+            payload: {}
+          })
+        }),
+        {}
+      )
+    ).rejects.toThrow("TenantScript handler is unavailable");
     expect(loader.entrypointLimits).toEqual([
       { cpuMs: 10, subRequests: 3 },
       { cpuMs: 10, subRequests: 3 }
