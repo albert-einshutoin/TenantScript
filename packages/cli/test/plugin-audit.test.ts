@@ -209,6 +209,37 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects referenced handlers declared after another variable declarator", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          'const noop = () => undefined, event = (_payload, ctx) => ctx.capability("slack.send", {});',
+          "exports.handlers = { event };"
+        ].join("\n")
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
+  it("does not treat a comma assignment inside an initializer as a declarator", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          "let event;",
+          'const noop = (undefined, event = (_payload, ctx) => ctx.capability("slack.send", {}));',
+          "exports.handlers = { event };"
+        ].join("\n")
+      }).findings
+    ).toEqual([]);
+  });
+
   it("detects optional member and destructured capability calls", () => {
     const sources = [
       'export const handlers = { event(_payload, ctx) { return ctx.capability?.("slack.send", {}); } };',

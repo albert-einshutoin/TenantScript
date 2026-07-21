@@ -334,7 +334,7 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     // unrelated call site with the same identifier from being interpreted as a handler.
     if (
       tokens[index]?.kind !== "identifier" ||
-      !["const", "let", "var"].includes(tokens[index - 1]?.value ?? "") ||
+      !isTopLevelVariableDeclarator(tokens, index) ||
       tokens[index + 1]?.value !== "="
     ) {
       continue;
@@ -389,7 +389,7 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     const isReferencedHandlersDeclaration =
       definePluginHandlerBindings.has(tokens[index]?.value ?? "") &&
       (braceDepths[index] ?? 0) === 0 &&
-      ["const", "let", "var"].includes(tokens[index - 1]?.value ?? "");
+      isTopLevelVariableDeclarator(tokens, index);
     if (!isDirectHandlersDeclaration && !isReferencedHandlersDeclaration) continue;
     const handlersClose = findMatchingToken(tokens, index + 2, "{", "}");
     if (handlersClose === -1) continue;
@@ -470,6 +470,34 @@ function collectBraceDepths(tokens: readonly BundleToken[]): number[] {
     if (tokens[index]?.value === "{") depth += 1;
   }
   return depths;
+}
+
+function isTopLevelVariableDeclarator(
+  tokens: readonly BundleToken[],
+  identifierIndex: number
+): boolean {
+  if (["const", "let", "var"].includes(tokens[identifierIndex - 1]?.value ?? "")) return true;
+  if (tokens[identifierIndex - 1]?.value !== ",") return false;
+
+  let delimiterDepth = 0;
+  for (let index = identifierIndex - 2; index >= 0; index -= 1) {
+    const value = tokens[index]?.value;
+    if ([")", "]", "}"].includes(value ?? "")) {
+      delimiterDepth += 1;
+      continue;
+    }
+    if (["(", "[", "{"].includes(value ?? "")) {
+      if (delimiterDepth === 0) return false;
+      delimiterDepth -= 1;
+      continue;
+    }
+    if (delimiterDepth !== 0) continue;
+    if (["const", "let", "var"].includes(value ?? "")) return true;
+    // Only a declaration keyword in the same statement can authorize a later declarator. This
+    // boundary prevents an arbitrary comma-separated assignment from becoming a trusted handler.
+    if (value === ";") return false;
+  }
+  return false;
 }
 
 function collectEnclosingObjectOpens(tokens: readonly BundleToken[]): Array<number | undefined> {
