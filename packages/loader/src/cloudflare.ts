@@ -1,0 +1,485 @@
+import type {
+  CapabilityCallRecord,
+  ControlPlaneExecutionRecord,
+  ExecutionUsageRecorder,
+  UsageHookType
+} from "@tenantscript/control-plane";
+
+const MAX_DYNAMIC_WORKER_RESPONSE_BYTES = 1_048_576;
+const MAX_DYNAMIC_WORKER_REQUEST_BYTES = 1_048_576;
+const MAX_DYNAMIC_WORKER_ARTIFACT_BYTES = 4_194_304;
+
+export interface DynamicWorkerCode {
+  compatibilityDate: string;
+  mainModule: string;
+  modules: Record<string, string>;
+  env: Record<string, unknown>;
+  globalOutbound: null;
+}
+
+export interface DynamicWorkerEntrypoint {
+  fetch: (request: Request) => Promise<Response>;
+}
+
+export interface DynamicWorkerStub {
+  getEntrypoint: (
+    name?: string | null,
+    options?: { limits?: { cpuMs: number; subRequests: number } }
+  ) => DynamicWorkerEntrypoint;
+}
+
+export interface DynamicWorkerLoaderBinding {
+  get: (
+    id: string,
+    getCode: () => DynamicWorkerCode | Promise<DynamicWorkerCode>
+  ) => DynamicWorkerStub;
+}
+
+export interface DynamicWorkerInvocationEvidence {
+  capabilityCalls: readonly CapabilityCallRecord[];
+  subrequests: number;
+  workflowRuns: number;
+}
+
+export interface CloudflareDynamicWorkerCallerFailure {
+  code: "runtime_evidence_unavailable";
+  executionId: string;
+  tenantId: string;
+  pluginId: string;
+}
+
+export interface CloudflareDynamicWorkerRunRequest {
+  executionId: string;
+  tenantId: string;
+  installationId: string;
+  pluginId: string;
+  hookName: string;
+  hookType: UsageHookType;
+  version: string;
+  artifactSha256: string;
+  grantRevision: string;
+  payload: unknown;
+  limits: {
+    cpuMs: number;
+    subrequests: number;
+  };
+}
+
+export interface CloudflareDynamicWorkerRunResult {
+  value: unknown;
+  execution: ControlPlaneExecutionRecord;
+}
+
+export interface CloudflareDynamicWorkerCaller {
+  run: (request: CloudflareDynamicWorkerRunRequest) => Promise<CloudflareDynamicWorkerRunResult>;
+}
+
+export type CloudflareDynamicWorkerCallerErrorCode =
+  | "artifact_integrity_failed"
+  | "artifact_unavailable"
+  | "execution_recording_failed"
+  | "invalid_configuration"
+  | "invalid_request"
+  | "runtime_invocation_failed";
+
+export class CloudflareDynamicWorkerCallerError extends Error {
+  override readonly name = "CloudflareDynamicWorkerCallerError";
+
+  constructor(readonly code: CloudflareDynamicWorkerCallerErrorCode) {
+    super(code);
+  }
+
+  toJSON(): { code: CloudflareDynamicWorkerCallerErrorCode } {
+    return { code: this.code };
+  }
+}
+
+export interface CloudflareDynamicWorkerCallerConfiguration {
+  loader: DynamicWorkerLoaderBinding;
+  compatibilityDate: string;
+  loadArtifact: (request: {
+    tenantId: string;
+    pluginId: string;
+    version: string;
+    sha256: string;
+  }) => Promise<string>;
+  createScopeBindings: (request: {
+    tenantId: string;
+    installationId: string;
+    pluginId: string;
+    grantRevision: string;
+  }) => Record<string, unknown>;
+  readInvocationEvidence: (request: {
+    executionId: string;
+    tenantId: string;
+    pluginId: string;
+  }) => Promise<DynamicWorkerInvocationEvidence>;
+  recorder: ExecutionUsageRecorder;
+  reportFailure?: (failure: CloudflareDynamicWorkerCallerFailure) => Promise<void> | void;
+  now?: () => Date;
+  monotonicNow?: () => number;
+}
+
+export function createCloudflareDynamicWorkerCaller(
+  configuration: CloudflareDynamicWorkerCallerConfiguration
+): CloudflareDynamicWorkerCaller {
+  validateConfiguration(configuration);
+  const now = configuration.now ?? (() => new Date());
+  const monotonicNow = configuration.monotonicNow ?? (() => performance.now());
+
+  return {
+    run: async (request) => {
+      const requestBody = validateRunRequest(request);
+      const workerId = await deriveWorkerId(request);
+      const worker = configuration.loader.get(workerId, async () => {
+        let artifact: string;
+        try {
+          artifact = await configuration.loadArtifact({
+            tenantId: request.tenantId,
+            pluginId: request.pluginId,
+            version: request.version,
+            sha256: request.artifactSha256
+          });
+        } catch {
+          throw new CloudflareDynamicWorkerCallerError("artifact_unavailable");
+        }
+        if (
+          typeof artifact !== "string" ||
+          new TextEncoder().encode(artifact).byteLength > MAX_DYNAMIC_WORKER_ARTIFACT_BYTES
+        ) {
+          throw new CloudflareDynamicWorkerCallerError("artifact_unavailable");
+        }
+        if ((await sha256(artifact)) !== request.artifactSha256) {
+          throw new CloudflareDynamicWorkerCallerError("artifact_integrity_failed");
+        }
+        let bindings: Record<string, unknown>;
+        try {
+          bindings = validateScopeBindings(
+            configuration.createScopeBindings({
+              tenantId: request.tenantId,
+              installationId: request.installationId,
+              pluginId: request.pluginId,
+              grantRevision: request.grantRevision
+            })
+          );
+        } catch (error) {
+          if (error instanceof CloudflareDynamicWorkerCallerError) throw error;
+          throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+        }
+        return {
+          compatibilityDate: configuration.compatibilityDate,
+          mainModule: "index.js",
+          modules: { "index.js": artifact },
+          env: bindings,
+          globalOutbound: null
+        };
+      });
+      const startedAt = now();
+      const started = monotonicNow();
+      let value: unknown;
+      let invocationFailed = false;
+      try {
+        const response = await worker
+          .getEntrypoint(null, {
+            limits: {
+              cpuMs: request.limits.cpuMs,
+              subRequests: request.limits.subrequests
+            }
+          })
+          .fetch(
+            new Request(
+              `https://runtime.tenantscript.internal/v1/executions/${request.executionId}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: requestBody
+              }
+            )
+          );
+        value = await readResponseValue(response);
+      } catch (error) {
+        if (
+          error instanceof CloudflareDynamicWorkerCallerError &&
+          (error.code === "artifact_integrity_failed" ||
+            error.code === "artifact_unavailable" ||
+            error.code === "invalid_configuration")
+        ) {
+          throw error;
+        }
+        invocationFailed = true;
+      }
+      const durationMs = Math.max(0, monotonicNow() - started);
+      let evidence: DynamicWorkerInvocationEvidence = {
+        capabilityCalls: [],
+        subrequests: 0,
+        workflowRuns: 0
+      };
+      try {
+        evidence = validateInvocationEvidence(
+          await configuration.readInvocationEvidence({
+            executionId: request.executionId,
+            tenantId: request.tenantId,
+            pluginId: request.pluginId
+          })
+        );
+      } catch {
+        if (configuration.reportFailure !== undefined) {
+          try {
+            await configuration.reportFailure({
+              code: "runtime_evidence_unavailable",
+              executionId: request.executionId,
+              tenantId: request.tenantId,
+              pluginId: request.pluginId
+            });
+          } catch {
+            // Diagnostics cannot become a second runtime or execution-recording authority.
+          }
+        }
+      }
+      let execution: ControlPlaneExecutionRecord;
+      try {
+        execution = await configuration.recorder.record({
+          execution: {
+            id: request.executionId,
+            tenantId: request.tenantId,
+            pluginId: request.pluginId,
+            hookName: request.hookName,
+            version: request.version,
+            status: invocationFailed ? "error" : "success",
+            durationMs,
+            ...(invocationFailed ? { error: "dynamic_worker_invocation_failed" } : {}),
+            capabilityCalls: evidence.capabilityCalls,
+            createdAt: startedAt
+          },
+          metrics: {
+            hookType: request.hookType,
+            // Cloudflare exposes exact CPUTimeMs asynchronously through Workers Trace Events
+            // Logpush, not to the synchronous Dynamic Worker caller. Wall time is not CPU time.
+            cpuMs: 0,
+            subrequests: evidence.subrequests,
+            workflowRuns: evidence.workflowRuns
+          }
+        });
+      } catch {
+        // Persistence is the execution authority, so it is never retried here. The stable error
+        // prevents a D1/provider message from crossing the host integration boundary.
+        throw new CloudflareDynamicWorkerCallerError("execution_recording_failed");
+      }
+      if (invocationFailed) {
+        throw new CloudflareDynamicWorkerCallerError("runtime_invocation_failed");
+      }
+      return { value, execution };
+    }
+  };
+}
+
+function validateConfiguration(
+  value: unknown
+): asserts value is CloudflareDynamicWorkerCallerConfiguration {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      "loader",
+      "compatibilityDate",
+      "loadArtifact",
+      "createScopeBindings",
+      "readInvocationEvidence",
+      "recorder",
+      "reportFailure",
+      "now",
+      "monotonicNow"
+    ]) ||
+    !isRecord(value.loader) ||
+    typeof value.loader.get !== "function" ||
+    !isCompatibilityDate(value.compatibilityDate) ||
+    typeof value.loadArtifact !== "function" ||
+    typeof value.createScopeBindings !== "function" ||
+    typeof value.readInvocationEvidence !== "function" ||
+    !isRecord(value.recorder) ||
+    typeof value.recorder.record !== "function" ||
+    (value.reportFailure !== undefined && typeof value.reportFailure !== "function") ||
+    (value.now !== undefined && typeof value.now !== "function") ||
+    (value.monotonicNow !== undefined && typeof value.monotonicNow !== "function")
+  ) {
+    throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+  }
+}
+
+function validateScopeBindings(value: unknown): Record<string, unknown> {
+  if (!isRecord(value) || Object.keys(value).length > 64) {
+    throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+  }
+  for (const [name, binding] of Object.entries(value)) {
+    if (
+      !/^[A-Z][A-Z0-9_]{0,63}$/u.test(name) ||
+      name === "LOADER" ||
+      /(?:SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE_KEY)/u.test(name) ||
+      ((typeof binding !== "object" || binding === null || Array.isArray(binding)) &&
+        typeof binding !== "function")
+    ) {
+      throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+    }
+  }
+  return value;
+}
+
+function validateInvocationEvidence(value: unknown): DynamicWorkerInvocationEvidence {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["capabilityCalls", "subrequests", "workflowRuns"]) ||
+    !Array.isArray(value.capabilityCalls) ||
+    value.capabilityCalls.length > 256 ||
+    !value.capabilityCalls.every(
+      (call) =>
+        isRecord(call) &&
+        hasExactKeys(call, ["name", "status"]) &&
+        isIdentifier(call.name) &&
+        (call.status === "success" || call.status === "denied" || call.status === "error")
+    ) ||
+    !Number.isSafeInteger(value.subrequests) ||
+    (value.subrequests as number) < 0 ||
+    !Number.isSafeInteger(value.workflowRuns) ||
+    (value.workflowRuns as number) < 0
+  ) {
+    throw new Error("invalid invocation evidence");
+  }
+  return value as unknown as DynamicWorkerInvocationEvidence;
+}
+
+function isCompatibilityDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function validateRunRequest(value: unknown): string {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "executionId",
+      "tenantId",
+      "installationId",
+      "pluginId",
+      "hookName",
+      "hookType",
+      "version",
+      "artifactSha256",
+      "grantRevision",
+      "payload",
+      "limits"
+    ]) ||
+    !isIdentifier(value.executionId) ||
+    !isIdentifier(value.tenantId) ||
+    !isIdentifier(value.installationId) ||
+    !isIdentifier(value.pluginId) ||
+    !isIdentifier(value.hookName) ||
+    !isIdentifier(value.version) ||
+    !isIdentifier(value.grantRevision) ||
+    !(
+      value.hookType === "event" ||
+      value.hookType === "transform" ||
+      value.hookType === "policy"
+    ) ||
+    typeof value.artifactSha256 !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(value.artifactSha256) ||
+    !isRecord(value.limits) ||
+    !hasExactKeys(value.limits, ["cpuMs", "subrequests"]) ||
+    !Number.isSafeInteger(value.limits.cpuMs) ||
+    (value.limits.cpuMs as number) < 1 ||
+    !Number.isSafeInteger(value.limits.subrequests) ||
+    (value.limits.subrequests as number) < 0 ||
+    value.payload === undefined
+  ) {
+    throw new CloudflareDynamicWorkerCallerError("invalid_request");
+  }
+  try {
+    const body = JSON.stringify({
+      executionId: value.executionId,
+      hookName: value.hookName,
+      payload: value.payload
+    });
+    if (new TextEncoder().encode(body).byteLength > MAX_DYNAMIC_WORKER_REQUEST_BYTES) {
+      throw new CloudflareDynamicWorkerCallerError("invalid_request");
+    }
+    return body;
+  } catch (error) {
+    if (error instanceof CloudflareDynamicWorkerCallerError) throw error;
+    throw new CloudflareDynamicWorkerCallerError("invalid_request");
+  }
+}
+
+async function deriveWorkerId(request: CloudflareDynamicWorkerRunRequest): Promise<string> {
+  // Loader.get() caches both code and env. Every authority that can change a scoped RPC binding
+  // therefore belongs in the opaque ID; code-only reuse could hand tenant A's stub to tenant B.
+  const scope = [
+    request.tenantId,
+    request.installationId,
+    request.pluginId,
+    request.artifactSha256,
+    request.grantRevision
+  ].join("\u0000");
+  return `tsdw_${(await sha256(scope)).slice(0, 32)}`;
+}
+
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function readResponseValue(response: Response): Promise<unknown> {
+  if (!response.ok || response.body === null) throw new Error("invalid dynamic worker response");
+  const declaredLength = response.headers.get("Content-Length");
+  if (
+    declaredLength !== null &&
+    (!/^\d+$/u.test(declaredLength) || Number(declaredLength) > MAX_DYNAMIC_WORKER_RESPONSE_BYTES)
+  ) {
+    throw new Error("invalid dynamic worker response");
+  }
+
+  // Node and Workers expose compatible streams through different ambient declarations. Keep the
+  // boundary explicit so the published caller remains type-safe without importing a Node runtime.
+  const body = (response as unknown as { body: ReadableStream<Uint8Array> | null }).body;
+  if (body === null) throw new Error("invalid dynamic worker response");
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.byteLength;
+    if (length > MAX_DYNAMIC_WORKER_RESPONSE_BYTES) {
+      await reader.cancel();
+      throw new Error("invalid dynamic worker response");
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  if (!isRecord(parsed) || Object.keys(parsed).length !== 1 || !Object.hasOwn(parsed, "value")) {
+    throw new Error("invalid dynamic worker response");
+  }
+  return parsed.value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return (
+    Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key))
+  );
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function isIdentifier(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value);
+}

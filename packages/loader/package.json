@@ -31,6 +31,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./cloudflare": {
+      "types": "./dist/cloudflare.d.ts",
+      "import": "./dist/cloudflare.js"
     }
   },
   "scripts": {
@@ -39,7 +43,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:chaos": "vitest run test/chaos-suite.test.ts",
-    "test:security": "vitest run test/security-suite.test.ts",
+    "test:security": "vitest run test/security-suite.test.ts test/cloudflare-runtime-caller.test.ts",
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {

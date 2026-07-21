@@ -29,7 +29,11 @@ test("discovers the eight public packages and their declared entrypoints", async
         ["dist/index.d.ts", "dist/index.js", "dist/rbac.d.ts", "dist/rbac.js"]
       ),
       packageContract("@tenantscript/host-sdk"),
-      packageContract("@tenantscript/loader"),
+      packageContract(
+        "@tenantscript/loader",
+        [],
+        ["dist/cloudflare.d.ts", "dist/cloudflare.js", "dist/index.d.ts", "dist/index.js"]
+      ),
       packageContract("@tenantscript/manifest"),
       packageContract("@tenantscript/plugin-sdk"),
       packageContract("@tenantscript/proxy")
