@@ -32,7 +32,7 @@
 - [ ] **P4-T04**(M)`ext audit`(自動検査)
   - RED: 過剰 capability 要求(未使用 grant)、egress 宣言漏れ、limits 過大、テスト不在を検知する
   - DoD: 既知の悪性/粗悪パターン fixture を全検知
-  - Progress: PR #291でversioned report、manifest、test script、exact SDK pin/一致、limits warningの決定論的baselineを実装済み。unused grant、egress、test品質はfalse confidenceを避けるため次段へ残す
+  - Progress: PR #291でmetadataの決定論的baselineを実装。Issue #296で任意bundleの静的capability call、dynamic name、unused grant候補、direct fetchをexact/heuristicを分けて追加。alias、template expression、dead code、test品質、runtime安全性は保証しない
 
 - [ ] **P4-T05**(S)plugin review ガイドライン
   - 内容: 人間レビューの観点表(security / 互換性 / 運用)。certification を主張しないreviewチェックリスト
