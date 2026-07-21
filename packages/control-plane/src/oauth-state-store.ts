@@ -328,9 +328,9 @@ function isPublicRecord(value: unknown): value is Omit<OAuthStateRecord, "browse
       "expiresAtMs"
     ]) &&
     value.provider === "slack" &&
-    isIdentifier(value.appId) &&
-    isIdentifier(value.tenantId) &&
-    isIdentifier(value.actorSubject) &&
+    isBoundedOpaqueIdentityField(value.appId) &&
+    isBoundedOpaqueIdentityField(value.tenantId) &&
+    isBoundedOpaqueIdentityField(value.actorSubject) &&
     isCanonicalHttpsRedirect(value.redirectUri) &&
     isTimestamp(value.issuedAtMs) &&
     isTimestamp(value.expiresAtMs) &&
@@ -385,9 +385,9 @@ function isIssueInput(value: unknown): value is {
       "redirectUri"
     ]) &&
     value.provider === "slack" &&
-    isIdentifier(value.appId) &&
-    isIdentifier(value.tenantId) &&
-    isIdentifier(value.actorSubject) &&
+    isBoundedOpaqueIdentityField(value.appId) &&
+    isBoundedOpaqueIdentityField(value.tenantId) &&
+    isBoundedOpaqueIdentityField(value.actorSubject) &&
     isBrowserBinding(value.browserBinding) &&
     isCanonicalHttpsRedirect(value.redirectUri)
   );
@@ -428,9 +428,9 @@ function isIssueProtocolInput(value: unknown): value is {
     isDigest(value.stateDigest) &&
     isDigest(value.browserBindingDigest) &&
     value.provider === "slack" &&
-    isIdentifier(value.appId) &&
-    isIdentifier(value.tenantId) &&
-    isIdentifier(value.actorSubject) &&
+    isBoundedOpaqueIdentityField(value.appId) &&
+    isBoundedOpaqueIdentityField(value.tenantId) &&
+    isBoundedOpaqueIdentityField(value.actorSubject) &&
     isCanonicalHttpsRedirect(value.redirectUri) &&
     isTimestamp(value.issuedAtMs) &&
     isTimestamp(value.expiresAtMs)
@@ -457,13 +457,10 @@ function isBrowserBinding(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_-]{32,512}$/u.test(value);
 }
 
-function isIdentifier(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= 256 &&
-    /^[A-Za-z0-9][A-Za-z0-9_.:@/-]*$/u.test(value)
-  );
+function isBoundedOpaqueIdentityField(value: unknown): value is string {
+  // The trusted identity layer owns these syntaxes. Keep them opaque across the adapter and DO
+  // boundary while bounding storage and response sizes.
+  return typeof value === "string" && value.length > 0 && value.length <= 256;
 }
 
 function isCanonicalHttpsRedirect(value: unknown): value is string {

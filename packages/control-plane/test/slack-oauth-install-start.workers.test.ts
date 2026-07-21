@@ -31,7 +31,7 @@ describe("production Slack OAuth install-start Worker composition", () => {
         ADMIN_MUTATION_RATE_LIMITER_DO: testEnv.ADMIN_MUTATION_RATE_LIMITER_DO,
         ADMIN_IDENTITIES_JSON: JSON.stringify({
           "manager-token": {
-            subject: "manager_worker",
+            subject: "auth0|abc+manager@example.com",
             role: "manager",
             appId: "app_worker",
             tenantId: "tenant_worker"
@@ -71,7 +71,7 @@ describe("production Slack OAuth install-start Worker composition", () => {
       provider: "slack",
       appId: "app_worker",
       tenantId: "tenant_worker",
-      actorSubject: "manager_worker",
+      actorSubject: "auth0|abc+manager@example.com",
       redirectUri: "https://control.example.test/v1/provider-callbacks/slack"
     });
     await expect(
