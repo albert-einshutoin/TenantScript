@@ -196,13 +196,23 @@ interface BundleToken {
 
 function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
   const tokens = tokenizeBundle(bundleCode);
+  const directCapabilityBindings = collectDirectCapabilityBindings(tokens);
   const staticCalls = new Set<string>();
   let hasDynamicCapabilityCall = false;
   let hasDirectEgressCall = false;
 
   for (let index = 0; index < tokens.length; index += 1) {
-    if (matchesTokenSequence(tokens, index, ["context", ".", "capability", "("])) {
-      const argument = tokens[index + 4];
+    const isMemberCapabilityCall =
+      tokens[index]?.value === "capability" &&
+      tokens[index - 1]?.value === "." &&
+      tokens[index + 1]?.value === "(";
+    const isDirectCapabilityCall =
+      tokens[index]?.kind === "identifier" &&
+      directCapabilityBindings.has(tokens[index]?.value ?? "") &&
+      tokens[index - 1]?.value !== "." &&
+      tokens[index + 1]?.value === "(";
+    if (isMemberCapabilityCall || isDirectCapabilityCall) {
+      const argument = tokens[index + 2];
       if (argument?.kind === "string" && argument.literalValid === true) {
         staticCalls.add(argument.value);
       } else {
@@ -243,6 +253,26 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
   return findings;
 }
 
+function collectDirectCapabilityBindings(tokens: readonly BundleToken[]): Set<string> {
+  // PluginContext is a structural SDK type, so neither bundlers nor authors must preserve the
+  // local name `context`. Member calls are handled separately; this set covers destructured calls.
+  const bindings = new Set(["capability"]);
+  let braceDepth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.value === "{") braceDepth += 1;
+    else if (tokens[index]?.value === "}") braceDepth = Math.max(0, braceDepth - 1);
+    else if (
+      braceDepth > 0 &&
+      tokens[index]?.value === "capability" &&
+      tokens[index + 1]?.value === ":" &&
+      tokens[index + 2]?.kind === "identifier"
+    ) {
+      bindings.add(tokens[index + 2]?.value ?? "");
+    }
+  }
+  return bindings;
+}
+
 function tokenizeBundle(source: string): BundleToken[] {
   const tokens: BundleToken[] = [];
   let index = 0;
@@ -269,7 +299,7 @@ function tokenizeBundle(source: string): BundleToken[] {
       while (index < source.length && /[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
       tokens.push({ kind: "identifier", value: source.slice(start, index) });
     } else {
-      if (character !== undefined && ".(),".includes(character)) {
+      if (character !== undefined && ".(),{}:".includes(character)) {
         tokens.push({ kind: "punctuation", value: character });
       }
       index += 1;

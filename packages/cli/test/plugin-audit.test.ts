@@ -37,6 +37,26 @@ describe("plugin audit", () => {
     ).toEqual({ version: 1, passed: true, findings: [] });
   });
 
+  it("detects capability calls through renamed and destructured context bindings", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          'async function run(_payload, ctx) { await ctx.capability("github.issue.create", {}); }',
+          'const { capability: invoke } = ctx; invoke("email.send", {});'
+        ].join("\n")
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+      finding("bundle_grant_potentially_unused", "warning", "manifest.capabilities.*", "heuristic")
+    ]);
+  });
+
   it("decodes escaped static capability names before comparing grants", () => {
     const manifest = validManifest();
     manifest.capabilities = { "slack.send": {} };
