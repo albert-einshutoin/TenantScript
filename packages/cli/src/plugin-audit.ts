@@ -923,7 +923,14 @@ function isPluginDispatchObject(
   ) {
     return true;
   }
-  const exportedProperty = tokens[objectOpen - 2]?.value;
+  const bracketedProperty =
+    tokens[objectOpen - 2]?.value === "]" &&
+    tokens[objectOpen - 3]?.kind === "string" &&
+    tokens[objectOpen - 3]?.literalValid === true &&
+    tokens[objectOpen - 4]?.value === "["
+      ? tokens[objectOpen - 3]?.value
+      : undefined;
+  const exportedProperty = bracketedProperty ?? tokens[objectOpen - 2]?.value;
   const outerObjectOpen = enclosingObjects[objectOpen];
   if (
     ["plugin", "default"].includes(exportedProperty ?? "") &&
@@ -941,6 +948,15 @@ function isPluginDispatchObject(
     return true;
   }
   if (!["plugin", "default"].includes(exportedProperty ?? "")) return false;
+  if (bracketedProperty !== undefined && tokens[objectOpen - 1]?.value === "=") {
+    const receiver = tokens[objectOpen - 5]?.value;
+    const isDirectCommonJsExport = receiver === "exports";
+    const isModuleCommonJsExport =
+      receiver === "exports" &&
+      tokens[objectOpen - 6]?.value === "." &&
+      tokens[objectOpen - 7]?.value === "module";
+    if (isDirectCommonJsExport || isModuleCommonJsExport) return true;
+  }
   return (
     matchesTokenSequence(tokens, objectOpen - 4, [
       "exports",
