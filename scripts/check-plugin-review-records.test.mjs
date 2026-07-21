@@ -197,6 +197,18 @@ test("rejects missing, unknown, or drifted evidence digests", () => {
     result = runChecker(repoRoot);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /evidence must be a regular file: evidence\/review\.txt/);
+
+    const outsideDirectory = mkdtempSync(join(tmpdir(), "plugin-review-evidence-"));
+    try {
+      rmSync(join(repoRoot, "evidence"), { recursive: true });
+      writeFileSync(join(outsideDirectory, "review.txt"), "sanitized evidence\n");
+      symlinkSync(outsideDirectory, join(repoRoot, "evidence"));
+      result = runChecker(repoRoot);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /evidence path must not contain symlinks: evidence\/review\.txt/);
+    } finally {
+      rmSync(outsideDirectory, { recursive: true, force: true });
+    }
   });
 });
 

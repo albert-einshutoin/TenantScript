@@ -260,6 +260,10 @@ function validateEvidenceDigests(value, evidencePaths, relativePath) {
       continue;
     }
     try {
+      if (hasSymlinkedParent(evidence)) {
+        errors.push(`${relativePath}: evidence path must not contain symlinks: ${evidence}`);
+        continue;
+      }
       // Evidence may be newer than the reviewed source baseline, so its content hash—not branch
       // reachability—binds the exact proof while remaining valid after a squash merge.
       if (!lstatSync(join(repoRoot, evidence)).isFile()) {
@@ -405,6 +409,18 @@ function isRepositoryPath(path) {
     path.split(/[\\/]/).includes("..") ||
     path.startsWith("file:")
   );
+}
+
+function hasSymlinkedParent(relativePath) {
+  const segments = relativePath.split(/[\\/]/).filter((segment) => segment !== "");
+  let current = repoRoot;
+  // Checking each parent with lstat prevents an apparently repository-local evidence path from
+  // following a directory symlink to generated or machine-local proof outside the checkout.
+  for (const segment of segments.slice(0, -1)) {
+    current = join(current, segment);
+    if (lstatSync(current).isSymbolicLink()) return true;
+  }
+  return false;
 }
 
 function runGit(args) {
