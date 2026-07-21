@@ -180,6 +180,37 @@ describe("plugin audit", () => {
     ).toEqual([]);
   });
 
+  it("does not treat unrelated objects named handlers as plugin dispatch surfaces", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          'const ui = { handlers: { click(_payload, ctx) { return ctx.capability("admin.delete", {}); } } };',
+          "export const handlers = { event(_payload, runtime) { return runtime; } };"
+        ].join("\n")
+      }).findings
+    ).toEqual([]);
+  });
+
+  it("keeps top-level callable bindings when nested declarations reuse the name", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          'function event(_payload, ctx) { return ctx.capability("slack.send", {}); }',
+          "function helper() { function event(_payload, ctx) { return ctx; } return event; }",
+          "export const handlers = { event };"
+        ].join("\n")
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("does not reuse a handler context receiver name outside its handler body", () => {
     expect(
       auditPluginPackage({

@@ -307,7 +307,9 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
 
 function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): CapabilityScope[] {
   const callableBindings = new Map<string, CallableBinding>();
+  const braceDepths = collectBraceDepths(tokens);
   for (let index = 0; index < tokens.length; index += 1) {
+    if (braceDepths[index] !== 0) continue;
     if (tokens[index]?.value === "function" && tokens[index + 1]?.kind === "identifier") {
       const open = index + 2;
       if (tokens[open]?.value !== "(") continue;
@@ -360,11 +362,13 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     }
   };
 
+  const enclosingObjects = collectEnclosingObjectOpens(tokens);
   for (let index = 0; index < tokens.length; index += 1) {
     if (
       tokens[index]?.value !== "handlers" ||
       ![":", "="].includes(tokens[index + 1]?.value ?? "") ||
-      tokens[index + 2]?.value !== "{"
+      tokens[index + 2]?.value !== "{" ||
+      !isPluginHandlersDeclaration(tokens, index, braceDepths[index] ?? 0, enclosingObjects[index])
     ) {
       continue;
     }
@@ -435,6 +439,49 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     index = handlersClose;
   }
   return [...scopes.values()];
+}
+
+function collectBraceDepths(tokens: readonly BundleToken[]): number[] {
+  const depths: number[] = [];
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.value === "}") depth = Math.max(0, depth - 1);
+    depths.push(depth);
+    if (tokens[index]?.value === "{") depth += 1;
+  }
+  return depths;
+}
+
+function collectEnclosingObjectOpens(tokens: readonly BundleToken[]): Array<number | undefined> {
+  const enclosing: Array<number | undefined> = [];
+  const stack: number[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.value === "}") stack.pop();
+    enclosing.push(stack.at(-1));
+    if (tokens[index]?.value === "{") stack.push(index);
+  }
+  return enclosing;
+}
+
+function isPluginHandlersDeclaration(
+  tokens: readonly BundleToken[],
+  handlersIndex: number,
+  handlersDepth: number,
+  enclosingObjectOpen: number | undefined
+): boolean {
+  if (tokens[handlersIndex + 1]?.value === "=") {
+    const isExportedBinding =
+      ["const", "let", "var"].includes(tokens[handlersIndex - 1]?.value ?? "") &&
+      tokens[handlersIndex - 2]?.value === "export";
+    const isCommonJsExport =
+      tokens[handlersIndex - 1]?.value === "." && tokens[handlersIndex - 2]?.value === "exports";
+    return handlersDepth === 0 && (isExportedBinding || isCommonJsExport);
+  }
+  return (
+    enclosingObjectOpen !== undefined &&
+    tokens[enclosingObjectOpen - 1]?.value === "(" &&
+    tokens[enclosingObjectOpen - 2]?.value === "definePlugin"
+  );
 }
 
 function createCapabilityScope(
