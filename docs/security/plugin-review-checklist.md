@@ -29,16 +29,18 @@ absolute workstation paths into the review record.
 Run the repository's documented gates and retain their exact outputs:
 
 ```sh
-ext audit --manifest ./manifest.json --package ./package.json
+ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/plugin.cjs
 pnpm test
 pnpm audit --audit-level=high
 ```
 
-[`ext audit`](../reference/cli.md) V1 checks only closed manifest validity, test-script presence, exact
-SDK pin/match, and scaffold limit warnings. It does not inspect source or bundle behavior and does not
-prove that grants are used, egress is necessary, tests are meaningful, dependencies are trustworthy,
-or a license is compatible. A warning is a request for human review, not evidence of safety. An
-accountless check cannot be recorded as live verification.
+[`ext audit`](../reference/cli.md) checks closed manifest validity, test-script presence, exact SDK
+pin/match, scaffold limit warnings, and—when `--bundle` is supplied—static capability calls, dynamic
+capability names, unused-grant candidates, and direct fetch calls. Bundle findings distinguish exact
+lexical evidence from heuristic review prompts. They do not prove that grants are used, egress is
+necessary, tests are meaningful, dependencies are trustworthy, runtime behavior is safe, or a license
+is compatible. A warning is a request for human review, not evidence of safety. An accountless check
+cannot be recorded as live verification.
 
 ## Security
 

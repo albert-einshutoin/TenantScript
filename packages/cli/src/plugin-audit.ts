@@ -1,6 +1,10 @@
 import { parseManifest } from "@tenantscript/manifest";
 
 export type PluginAuditFindingCode =
+  | "bundle_capability_undeclared"
+  | "bundle_capability_usage_dynamic"
+  | "bundle_direct_egress_detected"
+  | "bundle_grant_potentially_unused"
   | "manifest_invalid"
   | "plugin_sdk_declaration_ambiguous"
   | "plugin_sdk_missing"
@@ -13,7 +17,7 @@ export type PluginAuditFindingCode =
 export interface PluginAuditFinding {
   code: PluginAuditFindingCode;
   severity: "error" | "warning";
-  certainty: "exact";
+  certainty: "exact" | "heuristic";
   path: string;
   message: string;
 }
@@ -28,6 +32,7 @@ export interface PluginAuditRequest {
   manifest: unknown;
   packageJson: unknown;
   expectedSdkVersion: string;
+  bundleCode?: string;
 }
 
 const exactPackageVersionPattern =
@@ -54,6 +59,14 @@ const manifestPathSegments = new Set([
 ]);
 
 const messages: Record<PluginAuditFindingCode, string> = {
+  bundle_capability_undeclared:
+    "bundle contains a static capability call without a matching manifest grant",
+  bundle_capability_usage_dynamic:
+    "bundle uses a dynamic capability name that cannot be compared with manifest grants",
+  bundle_direct_egress_detected:
+    "bundle contains a direct fetch call that requires egress bypass review",
+  bundle_grant_potentially_unused:
+    "manifest grant has no matching static capability call in the bundle",
   manifest_invalid: "manifest does not satisfy the closed TenantScript schema",
   plugin_sdk_declaration_ambiguous: "plugin SDK must be declared in exactly one dependency section",
   plugin_sdk_missing: "plugin SDK dependency is required",
@@ -71,6 +84,9 @@ export function auditPluginPackage(request: PluginAuditRequest): PluginAuditRepo
   const packageJson = parsePackageJson(request.packageJson);
   const findings: PluginAuditFinding[] = [];
   const manifest = parseManifest(request.manifest);
+  if (request.bundleCode !== undefined && typeof request.bundleCode !== "string") {
+    throw new TypeError("plugin audit input is invalid");
+  }
 
   if (manifest.ok) {
     if (manifest.value.limits.cpuMs > 50) {
@@ -78,6 +94,9 @@ export function auditPluginPackage(request: PluginAuditRequest): PluginAuditRepo
     }
     if (manifest.value.limits.timeoutMs > 500) {
       findings.push(finding("runtime_timeout_limit_high", "warning", "manifest.limits.timeoutMs"));
+    }
+    if (request.bundleCode !== undefined) {
+      findings.push(...auditBundle(request.bundleCode, Object.keys(manifest.value.capabilities)));
     }
   } else {
     for (const issue of manifest.errors) {
@@ -163,9 +182,154 @@ function parseStringRecord(value: unknown): Record<string, string> {
 function finding(
   code: PluginAuditFindingCode,
   severity: PluginAuditFinding["severity"],
-  path: string
+  path: string,
+  certainty: PluginAuditFinding["certainty"] = "exact"
 ): PluginAuditFinding {
-  return { code, severity, certainty: "exact", path, message: messages[code] };
+  return { code, severity, certainty, path, message: messages[code] };
+}
+
+interface BundleToken {
+  kind: "identifier" | "punctuation" | "string";
+  value: string;
+}
+
+function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
+  const tokens = tokenizeBundle(bundleCode);
+  const staticCalls = new Set<string>();
+  let hasDynamicCapabilityCall = false;
+  let hasDirectEgressCall = false;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (matchesTokenSequence(tokens, index, ["context", ".", "capability", "("])) {
+      const argument = tokens[index + 4];
+      if (
+        argument?.kind === "string" &&
+        /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/u.test(argument.value)
+      ) {
+        staticCalls.add(argument.value);
+      } else {
+        hasDynamicCapabilityCall = true;
+      }
+    }
+    if (
+      matchesTokenSequence(tokens, index, ["globalThis", ".", "fetch", "("]) ||
+      (tokens[index]?.value === "fetch" &&
+        tokens[index + 1]?.value === "(" &&
+        tokens[index - 1]?.value !== ".")
+    ) {
+      hasDirectEgressCall = true;
+    }
+  }
+
+  const grantSet = new Set(grants);
+  const findings: PluginAuditFinding[] = [];
+  if ([...staticCalls].some((name) => !grantSet.has(name))) {
+    findings.push(
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    );
+  }
+  if (hasDynamicCapabilityCall) {
+    findings.push(
+      finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
+    );
+  } else if (grants.some((name) => !staticCalls.has(name))) {
+    findings.push(
+      finding("bundle_grant_potentially_unused", "warning", "manifest.capabilities.*", "heuristic")
+    );
+  }
+  if (hasDirectEgressCall) {
+    findings.push(
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    );
+  }
+  return findings;
+}
+
+function tokenizeBundle(source: string): BundleToken[] {
+  const tokens: BundleToken[] = [];
+  let index = 0;
+  while (index < source.length) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (character === "/" && next === "/") {
+      index = skipLineComment(source, index + 2);
+    } else if (character === "/" && next === "*") {
+      index = skipBlockComment(source, index + 2);
+    } else if (character === '"' || character === "'") {
+      const stringToken = readStringToken(source, index, character);
+      tokens.push(stringToken.token);
+      index = stringToken.nextIndex;
+    } else if (character === "`") {
+      // Template expressions can execute arbitrary code, so omitting their internals is why
+      // absence-based bundle findings remain explicitly heuristic rather than a safety proof.
+      index = skipQuoted(source, index + 1, "`");
+    } else if (character !== undefined && /[A-Za-z_$]/u.test(character)) {
+      const start = index;
+      index += 1;
+      while (index < source.length && /[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
+      tokens.push({ kind: "identifier", value: source.slice(start, index) });
+    } else {
+      if (character !== undefined && ".(),".includes(character)) {
+        tokens.push({ kind: "punctuation", value: character });
+      }
+      index += 1;
+    }
+  }
+  return tokens;
+}
+
+function readStringToken(
+  source: string,
+  start: number,
+  quote: '"' | "'"
+): { token: BundleToken; nextIndex: number } {
+  let index = start + 1;
+  let value = "";
+  let plain = true;
+  while (index < source.length) {
+    const character = source[index];
+    if (character === "\\") {
+      plain = false;
+      index += 2;
+    } else if (character === quote) {
+      return {
+        token: { kind: "string", value: plain ? value : "" },
+        nextIndex: index + 1
+      };
+    } else {
+      value += character ?? "";
+      index += 1;
+    }
+  }
+  return { token: { kind: "string", value: "" }, nextIndex: source.length };
+}
+
+function skipLineComment(source: string, start: number): number {
+  const newline = source.indexOf("\n", start);
+  return newline === -1 ? source.length : newline + 1;
+}
+
+function skipBlockComment(source: string, start: number): number {
+  const end = source.indexOf("*/", start);
+  return end === -1 ? source.length : end + 2;
+}
+
+function skipQuoted(source: string, start: number, quote: string): number {
+  let index = start;
+  while (index < source.length) {
+    if (source[index] === "\\") index += 2;
+    else if (source[index] === quote) return index + 1;
+    else index += 1;
+  }
+  return source.length;
+}
+
+function matchesTokenSequence(
+  tokens: readonly BundleToken[],
+  start: number,
+  values: readonly string[]
+): boolean {
+  return values.every((value, offset) => tokens[start + offset]?.value === value);
 }
 
 function severityRank(value: PluginAuditFinding["severity"]): number {

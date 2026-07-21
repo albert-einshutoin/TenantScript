@@ -648,7 +648,16 @@ async function runAudit(args: readonly string[], io: CliIo): Promise<number> {
       readBoundedAuditJson(parsed.request.packageJson),
       readCliPackageVersion()
     ]);
-    const report = auditPluginPackage({ manifest, packageJson, expectedSdkVersion });
+    const bundleCode =
+      parsed.request.bundle === undefined
+        ? undefined
+        : await readBoundedAuditBundle(parsed.request.bundle);
+    const report = auditPluginPackage({
+      manifest,
+      packageJson,
+      expectedSdkVersion,
+      ...(bundleCode === undefined ? {} : { bundleCode })
+    });
     io.stdout(JSON.stringify(report));
     return report.passed ? 0 : 1;
   } catch {
@@ -957,6 +966,7 @@ interface ManifestLintRequest {
 interface AuditRequest {
   manifest: string;
   packageJson: string;
+  bundle?: string;
 }
 
 interface DeployRequest {
@@ -1120,7 +1130,7 @@ function parseManifestLintArgs(
 function parseAuditArgs(
   args: readonly string[]
 ): { ok: true; request: AuditRequest } | { ok: false } {
-  if (args.length !== 4) return { ok: false };
+  if (args.length !== 4 && args.length !== 6) return { ok: false };
   const values = new Map<string, string>();
   for (let index = 0; index < args.length; index += 2) {
     const name = args[index];
@@ -1128,7 +1138,7 @@ function parseAuditArgs(
     if (
       name === undefined ||
       value === undefined ||
-      (name !== "--manifest" && name !== "--package") ||
+      (name !== "--manifest" && name !== "--package" && name !== "--bundle") ||
       values.has(name)
     ) {
       return { ok: false };
@@ -1138,7 +1148,15 @@ function parseAuditArgs(
   const manifest = values.get("--manifest");
   const packageJson = values.get("--package");
   if (manifest === undefined || packageJson === undefined) return { ok: false };
-  return { ok: true, request: { manifest: resolve(manifest), packageJson: resolve(packageJson) } };
+  const bundle = values.get("--bundle");
+  return {
+    ok: true,
+    request: {
+      manifest: resolve(manifest),
+      packageJson: resolve(packageJson),
+      ...(bundle === undefined ? {} : { bundle: resolve(bundle) })
+    }
+  };
 }
 
 async function readBoundedAuditJson(path: string): Promise<unknown> {
@@ -1159,6 +1177,33 @@ async function readBoundedAuditJson(path: string): Promise<unknown> {
     }
     if (bytesRead > maximumBytes) throw new Error("plugin audit input is invalid");
     return JSON.parse(content.subarray(0, bytesRead).toString("utf8")) as unknown;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function readBoundedAuditBundle(path: string): Promise<string> {
+  const maximumBytes = 512 * 1024;
+  const handle = await open(path, "r");
+  try {
+    const content = Buffer.alloc(maximumBytes + 1);
+    let bytesRead = 0;
+    while (bytesRead < content.byteLength) {
+      const result = await handle.read(
+        content,
+        bytesRead,
+        content.byteLength - bytesRead,
+        bytesRead
+      );
+      if (result.bytesRead === 0) break;
+      bytesRead += result.bytesRead;
+    }
+    if (bytesRead > maximumBytes) throw new Error("plugin audit input is invalid");
+    const source = content.subarray(0, bytesRead).toString("utf8");
+    if (source.includes("\0") || source.includes("\uFFFD")) {
+      throw new Error("plugin audit input is invalid");
+    }
+    return source;
   } finally {
     await handle.close();
   }

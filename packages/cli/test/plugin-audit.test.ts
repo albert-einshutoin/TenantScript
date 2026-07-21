@@ -23,6 +23,107 @@ describe("plugin audit", () => {
     ).toEqual({ version: 1, passed: true, findings: [] });
   });
 
+  it("accepts a statically declared capability used through the broker", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: 'async function run(context) { await context.capability("slack.send", {}); }'
+      })
+    ).toEqual({ version: 1, passed: true, findings: [] });
+  });
+
+  it("reports unused, undeclared, dynamic, and direct egress bundle risks", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {}, "email.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'context.capability("slack.send", {}); context.capability("github.issue.create", {}); fetch("https://example.invalid");'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic"),
+      finding("bundle_grant_potentially_unused", "warning", "manifest.capabilities.*", "heuristic")
+    ]);
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: "context.capability(capabilityName, {});"
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
+    ]);
+  });
+
+  it("keeps bundle finding order stable when call order changes", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "email.send": {} };
+    const request = {
+      manifest,
+      packageJson: validPackageJson(),
+      expectedSdkVersion: "1.2.3"
+    };
+    const first = auditPluginPackage({
+      ...request,
+      bundleCode: 'fetch("https://example.invalid"); context.capability("slack.send", {});'
+    });
+    const second = auditPluginPackage({
+      ...request,
+      bundleCode: 'context.capability("slack.send", {}); fetch("https://example.invalid");'
+    });
+
+    expect(first).toEqual(second);
+  });
+
+  it("ignores call-shaped text in comments and strings without reflecting capability names", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "secret.sentinel": {} };
+    const bundleCode = [
+      '// fetch("https://example.invalid")',
+      "const note = 'context.capability(\"secret.sentinel\", {})';",
+      'context.capability("secret.sentinel", {});'
+    ].join("\n");
+
+    const report = auditPluginPackage({
+      manifest,
+      packageJson: validPackageJson(),
+      expectedSdkVersion: "1.2.3",
+      bundleCode
+    });
+
+    expect(report.findings).toEqual([]);
+    expect(JSON.stringify(report)).not.toContain("secret.sentinel");
+  });
+
+  it("detects global fetch while ignoring unrelated fetch methods and block comments", () => {
+    const report = auditPluginPackage({
+      manifest: validManifest(),
+      packageJson: validPackageJson(),
+      expectedSdkVersion: "1.2.3",
+      bundleCode: [
+        '/* globalThis.fetch("https://comment.invalid") */',
+        'client.fetch("https://broker.invalid");',
+        'globalThis.fetch("https://direct.invalid");'
+      ].join("\n")
+    });
+
+    expect(report.findings).toEqual([
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    ]);
+  });
+
   it("reports deterministic exact findings without reflecting input values", () => {
     const secretSentinel = "secret_SENTINEL_do_not_reflect";
     const report = auditPluginPackage({
@@ -190,6 +291,56 @@ describe("plugin audit", () => {
     expect(JSON.parse(stdout[0] ?? "null")).toMatchObject({ version: 1, passed: false });
   });
 
+  it("accepts bounded bundle input and rejects undeclared static capability calls", async () => {
+    const root = await createTempDir();
+    const manifest = join(root, "manifest.json");
+    const packageJson = join(root, "package.json");
+    const bundle = join(root, "plugin.js");
+    const cliVersion = await readCliPackageVersion();
+    await writeFile(manifest, JSON.stringify(validManifest()));
+    await writeFile(packageJson, JSON.stringify(validPackageJson(cliVersion)));
+    await writeFile(bundle, 'context.capability("slack.send", {});');
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        ["audit", "--manifest", manifest, "--package", packageJson, "--bundle", bundle],
+        rollbackOnlyClient,
+        captureIo(stdout, stderr)
+      )
+    ).resolves.toBe(1);
+    expect(JSON.parse(stdout[0] ?? "null")).toMatchObject({
+      version: 1,
+      passed: false,
+      findings: [{ code: "bundle_capability_undeclared", certainty: "exact" }]
+    });
+    expect(stderr).toEqual([]);
+  });
+
+  it.each([
+    ["oversized", "x".repeat(512 * 1024 + 1)],
+    ["binary", Buffer.from([0, 1, 2, 3])]
+  ])("rejects %s bundle input without reflecting content", async (_name, bundleContent) => {
+    const root = await createTempDir();
+    const manifest = join(root, "manifest.json");
+    const packageJson = join(root, "package.json");
+    const bundle = join(root, "plugin.js");
+    await writeFile(manifest, JSON.stringify(validManifest()));
+    await writeFile(packageJson, JSON.stringify(validPackageJson("0.0.0")));
+    await writeFile(bundle, bundleContent);
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        ["audit", "--manifest", manifest, "--package", packageJson, "--bundle", bundle],
+        rollbackOnlyClient,
+        captureIo([], stderr)
+      )
+    ).resolves.toBe(2);
+    expect(stderr).toEqual(["plugin audit input is invalid"]);
+  });
+
   it.each([
     ["missing manifest", ["audit", "--package", "package.json"]],
     [
@@ -199,6 +350,20 @@ describe("plugin audit", () => {
     [
       "duplicate flag",
       ["audit", "--manifest", "a.json", "--manifest", "b.json", "--package", "package.json"]
+    ],
+    [
+      "duplicate optional bundle",
+      [
+        "audit",
+        "--manifest",
+        "manifest.json",
+        "--package",
+        "package.json",
+        "--bundle",
+        "a.js",
+        "--bundle",
+        "b.js"
+      ]
     ]
   ])("rejects %s as usage without reflecting values", async (_name, argv) => {
     const stderr: string[] = [];
@@ -263,8 +428,21 @@ function validPackageJson(version = "1.2.3"): Record<string, unknown> {
   };
 }
 
-function finding(code: string, severity: "error" | "warning", path: string) {
+function finding(
+  code: string,
+  severity: "error" | "warning",
+  path: string,
+  certainty: "exact" | "heuristic" = "exact"
+) {
   const messages: Record<string, string> = {
+    bundle_capability_undeclared:
+      "bundle contains a static capability call without a matching manifest grant",
+    bundle_capability_usage_dynamic:
+      "bundle uses a dynamic capability name that cannot be compared with manifest grants",
+    bundle_direct_egress_detected:
+      "bundle contains a direct fetch call that requires egress bypass review",
+    bundle_grant_potentially_unused:
+      "manifest grant has no matching static capability call in the bundle",
     manifest_invalid: "manifest does not satisfy the closed TenantScript schema",
     plugin_sdk_missing: "plugin SDK dependency is required",
     plugin_sdk_declaration_ambiguous:
@@ -277,7 +455,7 @@ function finding(code: string, severity: "error" | "warning", path: string) {
   };
   const message = messages[code];
   if (message === undefined) throw new Error(`missing test message for ${code}`);
-  return { code, severity, certainty: "exact", path, message };
+  return { code, severity, certainty, path, message };
 }
 
 const rollbackOnlyClient: RollbackClient = {

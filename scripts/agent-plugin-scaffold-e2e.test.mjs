@@ -80,6 +80,15 @@ test("ext init output builds and tests against packed public packages", async ()
     );
     const auditManifestPath = join(tempRoot, "audit-manifest.json");
     await writeFile(auditManifestPath, `${manifestJson}\n`);
+    const auditBundlePath = join(tempRoot, "audit-bundle.cjs");
+    run(process.execPath, [
+      join(repoRoot, "packages/cli/dist/bin.js"),
+      "build",
+      "--entry",
+      join(pluginDirectory, "src", "index.ts"),
+      "--out",
+      auditBundlePath
+    ]);
     const auditReport = JSON.parse(
       run(process.execPath, [
         join(repoRoot, "packages/cli/dist/bin.js"),
@@ -87,7 +96,9 @@ test("ext init output builds and tests against packed public packages", async ()
         "--manifest",
         auditManifestPath,
         "--package",
-        auditPackagePath
+        auditPackagePath,
+        "--bundle",
+        auditBundlePath
       ])
     );
     assert.deepEqual(auditReport, { version: 1, passed: true, findings: [] });
