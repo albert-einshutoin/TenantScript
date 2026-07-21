@@ -449,6 +449,26 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects bracketed context access in dispatch handlers", () => {
+    const sources = [
+      'exports.plugin = { dispatch(request) { return request["context"].capability("admin.delete", {}); } };',
+      'exports.plugin = { dispatch(request) { return request["context"]["capability"]("admin.delete", {}); } };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects context aliases introduced inside dispatch handlers", () => {
     const sources = [
       'exports.plugin = { dispatch(request) { const { context } = request; return context.capability("slack.send", {}); } };',
@@ -691,6 +711,49 @@ describe("plugin audit", () => {
     ).toEqual([]);
   });
 
+  it("does not reuse a handler context receiver across destructured callable parameters", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+    const helpers = [
+      'function helper({ ctx }) { return ctx.capability("admin.delete", {}); }',
+      'const helper = ({ ctx }) => ctx.capability("admin.delete", {});'
+    ];
+
+    for (const helper of helpers) {
+      expect(
+        auditPluginPackage({
+          manifest,
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode: [
+            "export const handlers = { event(_payload, ctx) {",
+            helper,
+            'return ctx.capability("slack.send", {});',
+            "} };"
+          ].join("\n")
+        }).findings
+      ).toEqual([]);
+    }
+  });
+
+  it("distinguishes destructured property names from callable bindings", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          "export const handlers = { event(_payload, ctx) {",
+          'function helper({ ctx: unrelated }) { return ctx.capability("admin.delete", {}); }',
+          "return helper({ ctx: undefined });",
+          "} };"
+        ].join("\n")
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("does not reuse a handler context receiver across block-scoped shadows", () => {
     const bodies = [
       '{ const ctx = fake; ctx.capability("slack.send", {}); }',
@@ -788,6 +851,20 @@ describe("plugin audit", () => {
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
         bundleCode: handlerBundle(String.raw`context.capability("slack\xZZsend", {});`)
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
+    ]);
+  });
+
+  it("keeps malformed braced Unicode escapes in tagged templates within the dynamic boundary", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          "export const handlers = { event(_payload, ctx) { return ctx.capability(tag`\\u{}`, {}); } };"
       }).findings
     ).toEqual([
       finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")

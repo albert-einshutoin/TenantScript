@@ -298,10 +298,9 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
 }
 
 function capabilityCallOpen(tokens: readonly BundleToken[], capabilityIndex: number): number {
-  const memberEnd =
-    bracketedPropertyReceiverIndex(tokens, capabilityIndex, "capability") === -1
-      ? capabilityIndex
-      : capabilityIndex + 1;
+  const memberEnd = isStaticBracketedProperty(tokens, capabilityIndex, "capability")
+    ? capabilityIndex + 1
+    : capabilityIndex;
   return callOpenAfterMember(tokens, memberEnd);
 }
 
@@ -319,15 +318,7 @@ function bracketedPropertyReceiverIndex(
   propertyIndex: number,
   propertyName: string
 ): number {
-  if (
-    tokens[propertyIndex]?.kind !== "string" ||
-    tokens[propertyIndex].literalValid !== true ||
-    tokens[propertyIndex].value !== propertyName ||
-    tokens[propertyIndex - 1]?.value !== "[" ||
-    tokens[propertyIndex + 1]?.value !== "]"
-  ) {
-    return -1;
-  }
+  if (!isStaticBracketedProperty(tokens, propertyIndex, propertyName)) return -1;
   // The tokenizer intentionally drops `?`, so optional bracket access is represented as `x . [`.
   // Accepting both shapes closes the bypass while still requiring a decoded static property name.
   if (tokens[propertyIndex - 2]?.kind === "identifier") return propertyIndex - 2;
@@ -337,16 +328,34 @@ function bracketedPropertyReceiverIndex(
     : -1;
 }
 
+function isStaticBracketedProperty(
+  tokens: readonly BundleToken[],
+  propertyIndex: number,
+  propertyName: string
+): boolean {
+  return (
+    tokens[propertyIndex]?.kind === "string" &&
+    tokens[propertyIndex].literalValid === true &&
+    tokens[propertyIndex].value === propertyName &&
+    tokens[propertyIndex - 1]?.value === "[" &&
+    tokens[propertyIndex + 1]?.value === "]"
+  );
+}
+
 function contextContainerReceiverIndex(
   tokens: readonly BundleToken[],
   capabilityIndex: number
 ): number {
-  const bracketReceiver = bracketedPropertyReceiverIndex(tokens, capabilityIndex, "capability");
-  const capabilityReceiver = bracketReceiver === -1 ? capabilityIndex - 2 : bracketReceiver;
-  return tokens[capabilityReceiver]?.value === "context" &&
+  const capabilityReceiver = capabilityIndex - 2;
+  if (
+    tokens[capabilityReceiver]?.value === "context" &&
     tokens[capabilityReceiver - 1]?.value === "." &&
     tokens[capabilityReceiver - 2]?.kind === "identifier"
-    ? capabilityReceiver - 2
+  ) {
+    return capabilityReceiver - 2;
+  }
+  return tokens[capabilityReceiver]?.value === "]"
+    ? bracketedPropertyReceiverIndex(tokens, capabilityReceiver - 1, "context")
     : -1;
 }
 
@@ -1228,9 +1237,46 @@ function parameterListDeclares(
   close: number,
   name: string
 ): boolean {
-  return splitTopLevel(tokens.slice(open + 1, close), ",").some(
-    (parameter) => parameter[0]?.kind === "identifier" && parameter[0].value === name
+  return splitTopLevel(tokens.slice(open + 1, close), ",").some((parameter) =>
+    bindingPatternDeclares(parameter, name)
   );
+}
+
+function bindingPatternDeclares(pattern: readonly BundleToken[], name: string): boolean {
+  const first = pattern[0];
+  if (first?.kind === "identifier") return first.value === name;
+  if (first?.value !== "{" && first?.value !== "[") return false;
+  const close = findMatchingToken(pattern, 0, first.value, first.value === "{" ? "}" : "]");
+  if (close === -1) return false;
+
+  for (const entry of splitTopLevel(pattern.slice(1, close), ",")) {
+    if (entry.length === 0) continue;
+    if (first.value === "[") {
+      if (bindingPatternDeclares(entry, name)) return true;
+      continue;
+    }
+    const colon = topLevelTokenIndex(entry, ":");
+    if (colon !== -1) {
+      if (bindingPatternDeclares(entry.slice(colon + 1), name)) return true;
+      continue;
+    }
+    // Without a property/value separator an object binding is shorthand, optionally followed by
+    // a default. Only its first identifier is introduced into the callable scope.
+    const binding = entry.find((token) => token.kind === "identifier");
+    if (binding?.value === name) return true;
+  }
+  return false;
+}
+
+function topLevelTokenIndex(tokens: readonly BundleToken[], value: string): number {
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]?.value;
+    if (["(", "[", "{"].includes(token ?? "")) depth += 1;
+    else if ([")", "]", "}"].includes(token ?? "")) depth -= 1;
+    else if (depth === 0 && token === value) return index;
+  }
+  return -1;
 }
 
 function subtractBindingRanges(
@@ -1528,7 +1574,7 @@ function readStringEscape(
       const end = source.indexOf("}", slashIndex + 3);
       const digits = end === -1 ? "" : source.slice(slashIndex + 3, end);
       const codePoint = /^[0-9a-fA-F]{1,6}$/u.test(digits) ? Number.parseInt(digits, 16) : -1;
-      if (end === -1 || codePoint > 0x10ffff) {
+      if (end === -1 || codePoint < 0 || codePoint > 0x10ffff) {
         return { value: "", nextIndex: end === -1 ? source.length : end + 1, valid: false };
       }
       return { value: String.fromCodePoint(codePoint), nextIndex: end + 1, valid: true };
