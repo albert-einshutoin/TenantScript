@@ -313,6 +313,12 @@ function capabilityCallOpen(tokens: readonly BundleToken[], capabilityIndex: num
 
 function callOpenAfterMember(tokens: readonly BundleToken[], memberEnd: number): number {
   if (tokens[memberEnd + 1]?.value === "(") return memberEnd + 1;
+  if (tokens[memberEnd + 1]?.value === ")" && tokens[memberEnd + 2]?.value === "(") {
+    const groupOpen = pairedTokenIndex(tokens, memberEnd + 1);
+    // Bundlers commonly detach a method with `(0, receiver.member)(...)`. Requiring the member to
+    // end its balanced group avoids treating a reference elsewhere in the group as the callee.
+    if (groupOpen !== undefined && tokens[groupOpen]?.value === "(") return memberEnd + 2;
+  }
   if (tokens[memberEnd + 1]?.value !== ".") return -1;
   if (tokens[memberEnd + 2]?.value === "(") return memberEnd + 2;
   return ["apply", "call"].includes(tokens[memberEnd + 2]?.value ?? "") &&

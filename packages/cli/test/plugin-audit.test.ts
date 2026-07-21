@@ -331,6 +331,39 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects parenthesized indirect capability calls", () => {
+    const sources = [
+      handlerBundle('(0, context.capability)("admin.delete", {});'),
+      'export const handlers = { event(_payload, { capability }) { return (0, capability)("admin.delete", {}); } };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
+  it("detects parenthesized indirect global fetch calls", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle('(0, globalThis.fetch)("https://example.com");')
+      }).findings
+    ).toEqual([
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    ]);
+  });
+
   it("detects capabilities in bracketed CommonJS handler exports", () => {
     const sources = [
       'exports["handlers"] = { event(_payload, ctx) { return ctx.capability("slack.send", {}); } };',
