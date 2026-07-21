@@ -399,7 +399,8 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
         } else if (
           startsObjectField &&
           tokens[field]?.value === "async" &&
-          tokens[field + 1]?.kind === "identifier" &&
+          ["identifier", "string"].includes(tokens[field + 1]?.kind ?? "") &&
+          tokens[field + 1]?.literalValid !== false &&
           tokens[field + 2]?.value === "("
         ) {
           methodOpen = field + 2;
@@ -488,11 +489,17 @@ function isPluginHandlersDeclaration(
       ["const", "let", "var"].includes(tokens[handlersIndex - 1]?.value ?? "");
     return handlersDepth === 0 && (isExportedBinding || isCommonJsExport || isLoweredExport);
   }
-  return (
+  const isDefinePluginInput =
     enclosingObjectOpen !== undefined &&
     tokens[enclosingObjectOpen - 1]?.value === "(" &&
-    tokens[enclosingObjectOpen - 2]?.value === "definePlugin"
-  );
+    tokens[enclosingObjectOpen - 2]?.value === "definePlugin";
+  const isDirectCommonJsModule =
+    enclosingObjectOpen !== undefined &&
+    tokens[enclosingObjectOpen - 1]?.value === "=" &&
+    tokens[enclosingObjectOpen - 2]?.value === "exports" &&
+    tokens[enclosingObjectOpen - 3]?.value === "." &&
+    tokens[enclosingObjectOpen - 4]?.value === "module";
+  return isDefinePluginInput || isDirectCommonJsModule;
 }
 
 function hasEsbuildCommonJsHandlerExport(tokens: readonly BundleToken[]): boolean {

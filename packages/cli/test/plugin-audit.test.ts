@@ -139,6 +139,34 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects renamed context bindings in async quoted object-method handlers", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'exports.handlers = { async "invoice.created"(_payload, ctx) { return ctx.capability("slack.send", {}); } };'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
+  it("detects handlers inside a direct CommonJS module export", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'module.exports = { handlers: { event(_payload, ctx) { return ctx.capability("slack.send", {}); } } };'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("detects renamed context bindings in referenced arrow handlers", () => {
     expect(
       auditPluginPackage({
