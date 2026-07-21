@@ -72,7 +72,7 @@ issuing state or a cookie.
 Do not place the Slack client secret in these variables. Code exchange and encrypted token storage
 use separate server-only boundaries.
 
-## Failure and remaining boundary
+## Failure and callback handoff
 
 Endpoint-specific errors are limited to `slack_oauth_install_start_invalid_request`,
 `slack_oauth_install_start_forbidden`, and `slack_oauth_install_start_unavailable`. State, cookie,
@@ -80,10 +80,10 @@ Bearer token, tenant data, configuration values, and Durable Object errors are n
 Shared authentication, origin, and Admin mutation rate-limit errors retain their documented Control
 Plane codes.
 
-This slice does not expose the callback route. A following reviewed change must parse the bounded GET
-callback, read and clear this exact cookie, invoke `createSlackOAuthCallbackService`, and redirect to
-fixed success/failure destinations. Slack client-secret and provider-KEK provisioning, refresh-token
-lifecycle, and credentialed Slack/Cloudflare evidence also remain incomplete.
+The repository-verified [callback route](slack-oauth-callback.md) parses the bounded `GET`, reads and
+clears this exact cookie, invokes `createSlackOAuthCallbackService`, and redirects only to fixed
+success/failure destinations. Slack client-secret and provider-KEK provisioning remain operator-owned
+secret steps. Refresh-token lifecycle and credentialed Slack/Cloudflare evidence remain incomplete.
 
 ## Repository verification
 
