@@ -40,19 +40,22 @@ Every start rotates a fresh 256-bit browser binding. The value is sent only in t
 `__Host-tenantscript-slack-oauth-binding` cookie:
 
 ```text
-Path=/; Max-Age=<state lifetime>; Expires=<state expiry>; Secure; HttpOnly; SameSite=Lax
+Path=/; Max-Age=<state lifetime>; Expires=<state expiry>; Secure; HttpOnly; SameSite=None
 ```
 
 There is no `Domain` attribute, and neither the JSON body nor authorization URL contains the
-binding. `SameSite=Lax` is deliberate: Slack returns through a top-level cross-site GET navigation,
-while `Strict` would suppress the callback cookie. The `__Host-` prefix requires `Secure`, root
-path, and no domain, limiting sibling-host confusion. These attributes follow the cookie security
-model in [RFC 6265](https://datatracker.ietf.org/doc/html/rfc6265).
+binding. `SameSite=None` is required because an allowlisted Admin UI may start the flow through a
+cross-site CORS subresource request; `Lax` cookies are not reliably created by that response. The
+`__Host-` prefix requires `Secure`, root path, and no domain, limiting sibling-host confusion. The
+one-time state and browser-binding digest remain the CSRF boundary. These attributes follow the
+cookie security model in [RFC 6265](https://datatracker.ietf.org/doc/html/rfc6265).
 
 For a cross-origin Admin UI, call the endpoint with browser credentials enabled so the browser may
 accept `Set-Cookie`. The Worker returns `Access-Control-Allow-Credentials: true` only after matching
-the exact configured origin; wildcard origins remain forbidden. Starting another flow in the same
-browser intentionally rotates the single binding, so an older outstanding callback becomes invalid.
+the exact configured origin; wildcard origins remain forbidden. Browser policies that block all
+cross-site cookies can still prevent this flow, so operators should prefer same-site Admin UI and
+Control Plane hosts when possible. Starting another flow in the same browser intentionally rotates
+the single binding, so an older outstanding callback becomes invalid.
 
 ## Worker configuration
 

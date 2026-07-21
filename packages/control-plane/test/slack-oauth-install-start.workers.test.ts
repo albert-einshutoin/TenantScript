@@ -61,7 +61,7 @@ describe("production Slack OAuth install-start Worker composition", () => {
     );
     expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/u);
     expect(browserBinding).toMatch(/^[A-Za-z0-9_-]{43}$/u);
-    expect(cookie).toContain("; Secure; HttpOnly; SameSite=Lax");
+    expect(cookie).toContain("; Secure; HttpOnly; SameSite=None");
     expect(JSON.stringify(body)).not.toContain(browserBinding);
 
     const store = createDurableObjectNamespaceOAuthStateStore(testEnv.OAUTH_STATE_STORE_DO);

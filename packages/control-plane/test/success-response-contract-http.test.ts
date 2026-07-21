@@ -265,7 +265,7 @@ function successOptions(): ControlPlaneHttpHandlerOptions {
         authorizationUrl: `https://slack.com/oauth/v2/authorize?state=${"s".repeat(43)}`,
         expiresAt: new Date("2026-07-20T00:05:00.000Z"),
         browserBindingCookie:
-          "__Host-tenantscript-slack-oauth-binding=binding; Path=/; Secure; HttpOnly; SameSite=Lax"
+          "__Host-tenantscript-slack-oauth-binding=binding; Path=/; Secure; HttpOnly; SameSite=None"
       })
     },
     cursorCodec: {

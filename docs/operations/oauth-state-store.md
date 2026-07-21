@@ -70,7 +70,7 @@ add all of the following in a separate reviewed slice:
 
 1. an HTTP callback that invokes `createSlackOAuthCallbackService` and compares returned authority to the
    authenticated session;
-2. explicit callback deletion of the `Secure`, `HttpOnly`, `SameSite=Lax` binding cookie;
+2. explicit callback deletion of the `Secure`, `HttpOnly`, `SameSite=None` binding cookie;
 3. Worker composition of the fixed-origin Slack exchange client and encrypted provider secret store;
 4. stable user-facing callback responses without code, state, token, or provider-error reflection;
 5. live credential-bearing Tier 2 evidence.

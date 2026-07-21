@@ -48,7 +48,7 @@ describe("Slack OAuth install-start service", () => {
     ]);
     expect(result.expiresAt).toEqual(expiresAt);
     expect(result.browserBindingCookie).toBe(
-      `__Host-tenantscript-slack-oauth-binding=${"A".repeat(43)}; Path=/; Max-Age=300; Expires=Tue, 21 Jul 2026 01:05:00 GMT; Secure; HttpOnly; SameSite=Lax`
+      `__Host-tenantscript-slack-oauth-binding=${"A".repeat(43)}; Path=/; Max-Age=300; Expires=Tue, 21 Jul 2026 01:05:00 GMT; Secure; HttpOnly; SameSite=None`
     );
     expect(result.browserBindingCookie).not.toContain("Domain=");
     expect(JSON.stringify(result)).not.toContain('browserBinding":');

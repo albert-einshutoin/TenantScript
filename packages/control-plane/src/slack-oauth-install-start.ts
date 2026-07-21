@@ -85,8 +85,9 @@ export function createSlackOAuthInstallStartService(options: {
         return {
           authorizationUrl: authorizationUrl.toString(),
           expiresAt: new Date(issued.expiresAt),
-          // SameSite=Lax is intentional: the callback is a top-level cross-site navigation from
-          // Slack, while Secure/HttpOnly/__Host- keep script and sibling-domain access closed.
+          // SameSite=None is required when an allowlisted Admin UI starts OAuth through a
+          // cross-site CORS request. Secure/HttpOnly/__Host- and one-time state still bind the
+          // cookie to this HTTPS host and keep it unavailable to scripts and sibling domains.
           browserBindingCookie: serializeBrowserBindingCookie(
             browserBinding,
             issued.expiresAt,
@@ -202,7 +203,7 @@ function serializeBrowserBindingCookie(
   lifetimeMs: number
 ): string {
   const maxAge = String(Math.floor(lifetimeMs / 1_000));
-  return `${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${browserBinding}; Path=/; Max-Age=${maxAge}; Expires=${expiresAt.toUTCString()}; Secure; HttpOnly; SameSite=Lax`;
+  return `${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${browserBinding}; Path=/; Max-Age=${maxAge}; Expires=${expiresAt.toUTCString()}; Secure; HttpOnly; SameSite=None`;
 }
 
 function encodeBase64Url(value: Uint8Array): string {

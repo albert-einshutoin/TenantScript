@@ -9,7 +9,7 @@ import {
 const allowedOrigin = "https://admin.example.com";
 const endpoint = "https://control.example.com/v1/admin/provider-connections/slack/oauth/start";
 const cookie =
-  "__Host-tenantscript-slack-oauth-binding=browser-secret; Path=/; Max-Age=300; Expires=Tue, 21 Jul 2026 01:05:00 GMT; Secure; HttpOnly; SameSite=Lax";
+  "__Host-tenantscript-slack-oauth-binding=browser-secret; Path=/; Max-Age=300; Expires=Tue, 21 Jul 2026 01:05:00 GMT; Secure; HttpOnly; SameSite=None";
 
 describe("Slack OAuth install-start HTTP endpoint", () => {
   it("derives OAuth scope from the authenticated identity and sets the browser cookie", async () => {
