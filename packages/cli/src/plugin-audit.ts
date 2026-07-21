@@ -437,6 +437,12 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   const addDispatchScope = (open: number, close: number, body: BindingRange): void => {
     storeScope(createDispatchCapabilityScope(tokens, open, close, body));
   };
+  const addSingleParameterDispatchScope = (parameterIndex: number, body: BindingRange): void => {
+    const parameter = tokens[parameterIndex];
+    if (parameter !== undefined) {
+      storeScope(createDispatchCapabilityScopeFromParameter([parameter], body));
+    }
+  };
 
   const enclosingObjects = collectEnclosingObjectOpens(tokens);
   // Production prefers plugin.dispatch over legacy handlers. Restricting discovery to exported
@@ -467,6 +473,13 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
       const close = findMatchingToken(tokens, value, "(", ")");
       const body = close === -1 ? undefined : arrowBodyRange(tokens, close, tokens.length - 1);
       if (body !== undefined) addDispatchScope(value, close, body);
+    } else if (
+      tokens[value]?.kind === "identifier" &&
+      tokens[value + 1]?.value === "=" &&
+      tokens[value + 2]?.value === ">"
+    ) {
+      const body = arrowBodyRange(tokens, value, tokens.length - 1);
+      if (body !== undefined) addSingleParameterDispatchScope(value, body);
     } else if (tokens[value]?.kind === "identifier") {
       const named = callableBindings.get(tokens[value]?.value ?? "");
       if (named !== undefined) addDispatchScope(named.open, named.close, named);
@@ -764,16 +777,23 @@ function createDispatchCapabilityScope(
   close: number,
   body: BindingRange
 ): CapabilityScope | undefined {
+  const requestParameter = splitTopLevel(tokens.slice(open + 1, close), ",")[0] ?? [];
+  return createDispatchCapabilityScopeFromParameter(requestParameter, body);
+}
+
+function createDispatchCapabilityScopeFromParameter(
+  requestParameter: readonly BundleToken[],
+  body: BindingRange
+): CapabilityScope | undefined {
   const receivers = new Set<string>();
   const direct = new Set<string>();
   const containers = new Set<string>();
-  const requestParameter = splitTopLevel(tokens.slice(open + 1, close), ",")[0];
-  if (requestParameter?.[0]?.kind === "identifier") {
+  if (requestParameter[0]?.kind === "identifier") {
     containers.add(requestParameter[0].value);
-  } else if (requestParameter?.[0]?.value === "{") {
-    registerDestructuredContext(requestParameter.slice(1, -1), receivers);
+  } else if (requestParameter[0]?.value === "{") {
+    registerDestructuredContext(requestParameter.slice(1, -1), receivers, direct);
   }
-  return receivers.size === 0 && containers.size === 0
+  return receivers.size === 0 && direct.size === 0 && containers.size === 0
     ? undefined
     : { ...body, receivers, direct, containers };
 }
@@ -943,9 +963,17 @@ function registerDestructuredCapability(tokens: readonly BundleToken[], direct: 
   }
 }
 
-function registerDestructuredContext(tokens: readonly BundleToken[], receivers: Set<string>): void {
+function registerDestructuredContext(
+  tokens: readonly BundleToken[],
+  receivers: Set<string>,
+  direct: Set<string>
+): void {
   for (const property of splitTopLevel(tokens, ",")) {
     if (property[0]?.value !== "context") continue;
+    if (property[1]?.value === ":" && property[2]?.value === "{") {
+      registerDestructuredCapability(property.slice(3, -1), direct);
+      continue;
+    }
     const alias = property[1]?.value === ":" ? property[2] : undefined;
     receivers.add(alias?.kind === "identifier" ? alias.value : "context");
   }

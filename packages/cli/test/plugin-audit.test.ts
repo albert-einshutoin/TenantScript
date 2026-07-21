@@ -313,6 +313,34 @@ describe("plugin audit", () => {
     }
   });
 
+  it("detects single-parameter dispatch arrows", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'exports.plugin = { dispatch: request => request.context.capability("slack.send", {}) };'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
+  it("detects nested-destructured dispatch arrows", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'exports.plugin = { dispatch: ({ context: { capability } }) => capability("slack.send", {}) };'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("tokenizes executable template expressions inside handlers", () => {
     expect(
       auditPluginPackage({
