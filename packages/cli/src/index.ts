@@ -23,7 +23,9 @@ import {
 } from "./doctor.js";
 import type { CliRuntime } from "./cli-runtime.js";
 import {
+  pluginTemplateNames,
   readCliPackageVersion,
+  resolvePluginTemplate,
   writePluginScaffold,
   type PluginScaffoldRequest
 } from "./plugin-scaffold.js";
@@ -995,7 +997,23 @@ function parseInitArgs(
   args: readonly string[]
 ): { ok: true; request: InitRequest } | { ok: false; error: string } {
   const flags = readFlags(args);
-  const name = flags.name;
+  const requestedTemplate = flags.template;
+  const template =
+    requestedTemplate === undefined ? undefined : resolvePluginTemplate(requestedTemplate);
+  if (requestedTemplate !== undefined && template === undefined) {
+    return {
+      ok: false,
+      error: `invalid init option: unknown --template; available: ${pluginTemplateNames.join(", ")}`
+    };
+  }
+  if (template !== undefined && flags.hook !== undefined) {
+    return { ok: false, error: "invalid init option: --hook cannot be used with --template" };
+  }
+  if (template !== undefined && flags.type !== undefined) {
+    return { ok: false, error: "invalid init option: --type cannot be used with --template" };
+  }
+
+  const name = flags.name ?? template?.defaultPluginName;
   if (name === undefined) {
     return { ok: false, error: "missing required init option: --name" };
   }
@@ -1006,14 +1024,14 @@ function parseInitArgs(
   if (directory === undefined) {
     return { ok: false, error: "missing required init option: --dir" };
   }
-  const hookName = flags.hook ?? "invoice.created";
+  const hookName = template?.hookName ?? flags.hook ?? "invoice.created";
   if (!/^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/.test(hookName)) {
     return {
       ok: false,
       error: "invalid init option: --hook must be dot-separated lowercase segments"
     };
   }
-  const hookType = parseHookType(flags.type ?? "event");
+  const hookType = template?.hookType ?? parseHookType(flags.type ?? "event");
   if (hookType === undefined) {
     return { ok: false, error: "invalid init option: --type must be event, transform, or policy" };
   }
@@ -1024,7 +1042,8 @@ function parseInitArgs(
       name,
       directory: resolve(directory),
       hookName,
-      hookType
+      hookType,
+      ...(template === undefined ? {} : { template: template.name })
     }
   };
 }

@@ -10,7 +10,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 test("ext init output builds and tests against packed public packages", async () => {
   await mkdir(join(repoRoot, ".tmp"), { recursive: true });
   const tempRoot = await mkdtemp(join(repoRoot, ".tmp", "agent-plugin-scaffold-"));
-  const pluginDirectory = join(tempRoot, "large-invoice-notify");
+  const pluginDirectory = join(tempRoot, "webhook-transformer");
 
   try {
     const manifestTarball = packPublicPackage("packages/manifest", tempRoot);
@@ -18,11 +18,15 @@ test("ext init output builds and tests against packed public packages", async ()
     run(process.execPath, [
       join(repoRoot, "packages/cli/dist/bin.js"),
       "init",
-      "--name",
-      "large-invoice-notify",
+      "--template",
+      "webhook-transformer",
       "--dir",
       pluginDirectory
     ]);
+
+    const securityNote = await readFile(join(pluginDirectory, "SECURITY.md"), "utf8");
+    assert.match(securityNote, /untrusted/);
+    assert.match(securityNote, /production certification/);
 
     const packageJsonPath = join(pluginDirectory, "package.json");
     const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));

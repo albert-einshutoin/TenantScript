@@ -6,12 +6,50 @@ export interface PluginScaffoldRequest {
   directory: string;
   hookName: string;
   hookType: "event" | "transform" | "policy";
+  template?: PluginTemplateName;
 }
 
 export interface PluginScaffoldResult {
   name: string;
   directory: string;
   files: readonly string[];
+}
+
+export const pluginTemplateNames = ["webhook-transformer"] as const;
+export type PluginTemplateName = (typeof pluginTemplateNames)[number];
+
+export interface PluginTemplateDefinition {
+  name: PluginTemplateName;
+  defaultPluginName: string;
+  hookName: string;
+  hookType: PluginScaffoldRequest["hookType"];
+}
+
+const pluginTemplateDefinitions: Record<PluginTemplateName, PluginTemplateDefinition> = {
+  "webhook-transformer": {
+    name: "webhook-transformer",
+    defaultPluginName: "webhook-transformer",
+    hookName: "webhook.received",
+    hookType: "transform"
+  }
+};
+
+const pluginTemplateSecurityNotes: Record<PluginTemplateName, string> = {
+  "webhook-transformer": `# Security boundaries
+
+- Treat every inbound webhook payload as untrusted input. Validate fields before using them in business logic.
+- This template declares no capabilities and denies egress by default. Add access only after documenting and testing the minimum required grant.
+- The built-in template and its review record are development guidance, not production certification or live Cloudflare deployment proof.
+`
+};
+
+export function resolvePluginTemplate(name: string): PluginTemplateDefinition | undefined {
+  if (!isPluginTemplateName(name)) return undefined;
+  return pluginTemplateDefinitions[name];
+}
+
+function isPluginTemplateName(name: string): name is PluginTemplateName {
+  return pluginTemplateNames.some((candidate) => candidate === name);
 }
 
 const exactPackageVersionPattern =
@@ -23,9 +61,10 @@ export async function writePluginScaffold(
   // Resolve trusted package metadata before creating directories so a damaged installation cannot
   // leave a partial scaffold or silently point a new plugin at a different SDK release.
   const cliVersion = await readCliPackageVersion();
-  const files = [
+  const commonFiles = [
     "package.json",
     "tsconfig.json",
+    ...(request.template === undefined ? [] : ["SECURITY.md"]),
     "src/manifest.ts",
     "src/index.ts",
     "test/plugin.test.ts"
@@ -34,7 +73,7 @@ export async function writePluginScaffold(
   await assertTargetDirectoryIsEmpty(request.directory);
   await mkdir(resolve(request.directory, "src"), { recursive: true });
   await mkdir(resolve(request.directory, "test"), { recursive: true });
-  await Promise.all([
+  const writes = [
     writeScaffoldFile(
       request.directory,
       "package.json",
@@ -44,9 +83,15 @@ export async function writePluginScaffold(
     writeScaffoldFile(request.directory, "src/manifest.ts", manifestTemplate(request)),
     writeScaffoldFile(request.directory, "src/index.ts", pluginTemplate(request)),
     writeScaffoldFile(request.directory, "test/plugin.test.ts", pluginTestTemplate(request))
-  ]);
+  ];
+  if (request.template !== undefined) {
+    writes.push(
+      writeScaffoldFile(request.directory, "SECURITY.md", templateSecurityNote(request.template))
+    );
+  }
+  await Promise.all(writes);
 
-  return { name: request.name, directory: request.directory, files };
+  return { name: request.name, directory: request.directory, files: commonFiles };
 }
 
 export function renderPluginPackageJson(
@@ -193,6 +238,7 @@ describe("${request.name}", () => {
     });
 
     expect(result.ok).toBe(true);
+${transformResultAssertion(request.hookType)}
     expect(capability).not.toHaveBeenCalled();
   });
 
@@ -210,4 +256,15 @@ describe("${request.name}", () => {
   });
 });
 `;
+}
+
+function transformResultAssertion(hookType: PluginScaffoldRequest["hookType"]): string {
+  if (hookType !== "transform") return "";
+  return '    expect(result).toEqual({ ok: true, value: { id: "evt_1" } });';
+}
+
+function templateSecurityNote(template: PluginTemplateName): string {
+  // Keep security guidance coupled to the reviewed built-in template. A future template must make
+  // its own trust and privilege boundaries explicit instead of inheriting accidental assumptions.
+  return pluginTemplateSecurityNotes[template];
 }

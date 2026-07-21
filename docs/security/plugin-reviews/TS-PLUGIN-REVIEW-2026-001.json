@@ -3,7 +3,7 @@
   "id": "TS-PLUGIN-REVIEW-2026-001",
   "baselineCommit": "5a23ffa5bdb49c1bbde19205cf62dc450d57c2dc",
   "target": {
-    "name": "Built-in ext init plugin scaffold",
+    "name": "Built-in ext init plugin scaffold and webhook transformer template",
     "scope": [
       "packages/cli/src/index.ts",
       "packages/cli/src/plugin-audit.ts",
@@ -11,17 +11,17 @@
       "packages/cli/test/init.test.ts"
     ],
     "sourceDigests": {
-      "packages/cli/src/index.ts": "9c23e9123faea11cb2904f9f54c86a2f02f9982dc68e543eaa00ce061b9f3b31",
+      "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
       "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-      "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
-      "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc"
+      "packages/cli/src/plugin-scaffold.ts": "3285cfc89678ed3b7cb05cdfffbe8b13a63e1f421d3eac0593afa2637bfadf4e",
+      "packages/cli/test/init.test.ts": "8e743b5389bedd958613ee93a9415dcb15fd34895ecebc832aa8b41bde1fa45b"
     }
   },
   "reviewer": {
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-07-21T22:47:04.000Z",
+  "reviewedAt": "2026-07-21T23:10:21.000Z",
   "domains": [
     {
       "name": "security",
@@ -33,7 +33,7 @@
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "The CLI bounds names and hooks before interpolation; the scaffold requests no capabilities, denies egress, uses bounded limits, rejects undeclared hooks, and its generated bundle is audited before its generated tests run."
+      "notes": "The CLI validates template identity and rejects unknown or conflicting options before filesystem mutation without reflecting attacker-controlled option values. Both scaffold modes bound interpolated names and hooks; the webhook template requests no capabilities, denies egress, has no side effects, rejects undeclared hooks, and its generated bundle is audited before its generated tests run."
     },
     {
       "name": "compatibility",
@@ -43,7 +43,7 @@
         "scripts/agent-plugin-scaffold-e2e.test.mjs",
         "docs/quickstarts/agent-plugin-authoring.md"
       ],
-      "notes": "Generated manifest and package metadata use the CLI version exactly, then build and test against packed public package contents."
+      "notes": "The generic init contract remains covered, while the typed webhook template fixes its reviewed hook and type. Generated manifest and package metadata use the CLI version exactly, then build and test against packed public package contents."
     },
     {
       "name": "operations",
@@ -53,17 +53,18 @@
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "Generated CPU and timeout limits are bounded, network access is denied, and the accountless E2E exercises install, audit, build, and test failure boundaries."
+      "notes": "Generated CPU and timeout limits are bounded, network access is denied, template resolution is local and deterministic, and the accountless E2E exercises install, audit, build, and test boundaries."
     },
     {
       "name": "documentation",
       "status": "pass",
       "evidence": [
         "docs/quickstarts/agent-plugin-authoring.md",
+        "docs/reference/cli.md",
         "docs/security/plugin-review-checklist.md",
         "scripts/agent-plugin-authoring-doc-contract.test.mjs"
       ],
-      "notes": "The authoring quickstart states the generated files, verification commands, registry blocker, and security boundary; the human checklist states all non-guarantees."
+      "notes": "The authoring quickstart and CLI reference document template generation, option conflicts, verification commands, registry blocker, and security boundary. Every template scaffold emits a SECURITY.md, and the human checklist states all non-guarantees."
     },
     {
       "name": "license",
@@ -73,12 +74,13 @@
     }
   ],
   "evidenceDigests": {
-    "packages/cli/src/index.ts": "9c23e9123faea11cb2904f9f54c86a2f02f9982dc68e543eaa00ce061b9f3b31",
+    "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
     "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-    "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
-    "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc",
-    "scripts/agent-plugin-scaffold-e2e.test.mjs": "35d5a53f8a5aa897ae8b5974c943ba201406b37ac65d3d53b126999cbf9a8ceb",
-    "docs/quickstarts/agent-plugin-authoring.md": "5589704355739244597f38af74ab484c4969bf89854aca9b00014c88319b1644",
+    "packages/cli/src/plugin-scaffold.ts": "3285cfc89678ed3b7cb05cdfffbe8b13a63e1f421d3eac0593afa2637bfadf4e",
+    "packages/cli/test/init.test.ts": "8e743b5389bedd958613ee93a9415dcb15fd34895ecebc832aa8b41bde1fa45b",
+    "scripts/agent-plugin-scaffold-e2e.test.mjs": "7bb7a6004d95969b21942643a3eb24617acd81e815bae17658e69a9513191a21",
+    "docs/quickstarts/agent-plugin-authoring.md": "a60d8064a33d6922bfcd8e86a31e25fba386714fd09923060b2c9bcd9e86c0d8",
+    "docs/reference/cli.md": "f01767aa4b4d2dfe37ea658e87626f7e39ee6458e70406935fcbf6578a959cd7",
     "docs/security/plugin-review-checklist.md": "1bee7b0bebadfd44b9cf86e288af48d3a8f9f42c0883d39823809dd1857f54f5",
     "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
@@ -100,8 +102,9 @@
     }
   ],
   "limitations": [
-    "The decision covers only the listed scaffold source at the pinned baseline commit.",
+    "The decision covers only the listed scaffold source digests and their reachable baseline context.",
     "The scaffold is intentionally minimal and does not prove the safety of code added by a plugin author.",
+    "The webhook transformer demonstrates a side-effect-free payload pass-through; adopters must add schema validation and output bounds for their concrete business contract.",
     "A finding-free bundle audit does not prove the absence of aliased, dynamic, templated, dead-code, or runtime-only behavior."
   ],
   "nonGuarantees": [

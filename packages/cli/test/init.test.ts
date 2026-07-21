@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,6 +12,132 @@ describe("ext init", () => {
     await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
     tempDirs.length = 0;
   });
+
+  it("creates the built-in webhook transformer template with least privilege defaults", async () => {
+    const root = await createTempDir();
+    const target = join(root, "webhook-transformer");
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        ["init", "--template", "webhook-transformer", "--dir", target],
+        rollbackOnlyClient,
+        captureIo(stdout, stderr)
+      )
+    ).resolves.toBe(0);
+
+    await expect(readJsonFile(join(target, "package.json"))).resolves.toMatchObject({
+      name: "@tenantscript-plugin/webhook-transformer"
+    });
+    await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
+      'hooks: [{ name: "webhook.received", type: "transform"'
+    );
+    await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
+      "capabilities: {}"
+    );
+    await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
+      'egress: { mode: "deny" }'
+    );
+    await expect(readFile(join(target, "src", "index.ts"), "utf8")).resolves.toContain(
+      '"webhook.received": async (payload, _context) => payload'
+    );
+    await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
+      'expect(result).toEqual({ ok: true, value: { id: "evt_1" } })'
+    );
+    const securityNote = await readFile(join(target, "SECURITY.md"), "utf8");
+    expect(securityNote).toContain("untrusted");
+    expect(securityNote).toContain("egress");
+    expect(securityNote).toContain("production certification");
+    expect(stdout).toEqual([
+      JSON.stringify({
+        name: "webhook-transformer",
+        directory: target,
+        files: [
+          "package.json",
+          "tsconfig.json",
+          "SECURITY.md",
+          "src/manifest.ts",
+          "src/index.ts",
+          "test/plugin.test.ts"
+        ]
+      })
+    ]);
+    expect(stderr).toEqual([]);
+  });
+
+  it("applies a safe name override to the webhook transformer template", async () => {
+    const root = await createTempDir();
+    const target = join(root, "custom-webhook-transformer");
+
+    await expect(
+      runExtCli(
+        [
+          "init",
+          "--template",
+          "webhook-transformer",
+          "--name",
+          "custom-webhook-transformer",
+          "--dir",
+          target
+        ],
+        rollbackOnlyClient,
+        captureIo([], [])
+      )
+    ).resolves.toBe(0);
+
+    await expect(readJsonFile(join(target, "package.json"))).resolves.toMatchObject({
+      name: "@tenantscript-plugin/custom-webhook-transformer"
+    });
+    await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
+      'name: "custom-webhook-transformer"'
+    );
+    await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
+      'describe("custom-webhook-transformer"'
+    );
+  });
+
+  it("rejects an unknown template before creating the target directory", async () => {
+    const root = await createTempDir();
+    const target = join(root, "unknown-template");
+    const stderr: string[] = [];
+
+    await expect(
+      runExtCli(
+        ["init", "--template", "unknown-template\nforged-log-line", "--dir", target],
+        rollbackOnlyClient,
+        captureIo([], stderr)
+      )
+    ).resolves.toBe(2);
+
+    expect(stderr).toEqual([
+      "invalid init option: unknown --template; available: webhook-transformer"
+    ]);
+    await expect(access(target)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each([
+    ["--hook", "webhook.custom"],
+    ["--type", "event"]
+  ])(
+    "rejects template customization via %s before creating the target directory",
+    async (flag, value) => {
+      const root = await createTempDir();
+      const target = join(root, `conflicting-${flag.slice(2)}`);
+      const stderr: string[] = [];
+
+      await expect(
+        runExtCli(
+          ["init", "--template", "webhook-transformer", "--dir", target, flag, value],
+          rollbackOnlyClient,
+          captureIo([], stderr)
+        )
+      ).resolves.toBe(2);
+
+      expect(stderr).toEqual([`invalid init option: ${flag} cannot be used with --template`]);
+      await expect(access(target)).rejects.toMatchObject({ code: "ENOENT" });
+    }
+  );
 
   it("creates a plugin scaffold with manifest, handler, test, build script, and test script", async () => {
     const root = await createTempDir();
