@@ -73,6 +73,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(loader.loadedCode?.modules["tenant-plugin.cjs"]).toEqual({ cjs: artifact });
     const runtimeModule = loader.loadedCode?.modules["tenantscript-runtime.js"];
     expect(runtimeModule).toBeTypeOf("string");
+    if (typeof runtimeModule !== "string") throw new Error("runtime module was not generated");
     expect(runtimeModule).toContain('import pluginModule from "./tenant-plugin.cjs"');
     expect(runtimeModule).toContain("pluginModule.plugin ?? pluginModule.default");
     expect(runtimeModule).toContain("plugin.dispatch");
@@ -80,6 +81,31 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(runtimeModule).toContain(
       "env.CAPABILITIES.call(input.executionId, name, capabilityInput)"
     );
+    expect(runtimeModule).toContain("assertJsonValue(value);");
+    expect(runtimeModule).toContain("invalid TenantScript plugin return value");
+    const lossyRuntimeSource = runtimeModule.replace(
+      'import pluginModule from "./tenant-plugin.cjs";',
+      'const pluginModule = { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } };'
+    );
+    const runtimeNamespace = (await import(
+      `data:text/javascript;base64,${Buffer.from(lossyRuntimeSource).toString("base64")}`
+    )) as unknown as {
+      default: { fetch: (request: Request, env: Record<string, unknown>) => Promise<Response> };
+    };
+    await expect(
+      runtimeNamespace.default.fetch(
+        new Request("https://runtime.tenantscript.internal/v1/executions/exec_lossy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            executionId: "exec_lossy",
+            hookName: "invoice.created",
+            payload: {}
+          })
+        }),
+        {}
+      )
+    ).rejects.toThrow("invalid TenantScript plugin return value");
     expect(loader.entrypointLimits).toEqual([
       { cpuMs: 10, subRequests: 3 },
       { cpuMs: 10, subRequests: 3 }
@@ -653,6 +679,9 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       { ...base, limits: { cpuMs: 10, timeoutMs: 0, subrequests: 2 } },
       { ...base, limits: { cpuMs: 10, timeoutMs: 250, subrequests: -1 } },
       { ...base, payload: circular },
+      { ...base, payload: new Map([["invoiceId", "inv_1"]]) },
+      { ...base, payload: { invoiceId: undefined } },
+      { ...base, payload: { amount: Number.NaN } },
       { ...base, payload: { value: "x".repeat(1_048_577) } }
     ];
     const codes: unknown[] = [];

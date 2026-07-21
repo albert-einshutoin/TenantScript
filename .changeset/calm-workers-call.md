@@ -7,3 +7,4 @@ artifact integrity verification, a CommonJS handler adapter, bounded wire contra
 subrequest and wall-clock limits, and authoritative execution usage recording.
 Verified platform limit exceptions can be classified as `budget_exceeded` without relying on
 unstable provider error text.
+Lossy JSON payloads and plugin return values are rejected instead of being silently coerced.

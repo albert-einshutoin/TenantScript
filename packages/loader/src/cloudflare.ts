@@ -470,6 +470,7 @@ function validateRunRequest(value: unknown): string {
     throw new CloudflareDynamicWorkerCallerError("invalid_request");
   }
   try {
+    assertLosslessJsonValue(value.payload);
     const body = JSON.stringify({
       executionId: value.executionId,
       hookName: value.hookName,
@@ -593,6 +594,58 @@ function isIdentifier(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value);
 }
 
+// JSON.stringify silently rewrites several JavaScript values. Validate the exact JSON data model
+// first so the tenant receives the same payload that the trusted host authorized.
+function assertLosslessJsonValue(value: unknown, ancestors = new Set<object>()): void {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value) && !Object.is(value, -0))
+  ) {
+    return;
+  }
+  if (typeof value !== "object" || ancestors.has(value)) {
+    throw new Error("value is not lossless JSON");
+  }
+
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (
+        Object.keys(value).length !== value.length ||
+        Object.getOwnPropertySymbols(value).length !== 0
+      ) {
+        throw new Error("value is not lossless JSON");
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(value, index)) throw new Error("value is not lossless JSON");
+        assertLosslessJsonValue(value[index], ancestors);
+      }
+      return;
+    }
+
+    const prototype: unknown = Object.getPrototypeOf(value);
+    const keys = Object.keys(value);
+    if (
+      (prototype !== Object.prototype && prototype !== null) ||
+      Object.getOwnPropertyNames(value).length !== keys.length ||
+      Object.getOwnPropertySymbols(value).length !== 0
+    ) {
+      throw new Error("value is not lossless JSON");
+    }
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !("value" in descriptor)) {
+        throw new Error("value is not lossless JSON");
+      }
+      assertLosslessJsonValue(descriptor.value, ancestors);
+    }
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
 // ext deploy emits a CommonJS bundle whose scaffold exports `plugin.dispatch` (older entries may
 // export `handlers`). A fixed trusted wrapper adapts either verified CJS shape to Worker fetch.
 const DYNAMIC_WORKER_RUNTIME_SOURCE = String.raw`
@@ -600,6 +653,58 @@ import pluginModule from "./tenant-plugin.cjs";
 
 const plugin = pluginModule.plugin ?? pluginModule.default;
 const handlers = pluginModule.handlers;
+
+// Response.json is a serializer, not a lossless validator. Reject unsupported plugin values before
+// a successful execution can be recorded with output that differs from the plugin result.
+function assertJsonValue(value, ancestors = new Set()) {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value) && !Object.is(value, -0))
+  ) {
+    return;
+  }
+  if (typeof value !== "object" || ancestors.has(value)) {
+    throw new Error("invalid TenantScript plugin return value");
+  }
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (
+        Object.keys(value).length !== value.length ||
+        Object.getOwnPropertySymbols(value).length !== 0
+      ) {
+        throw new Error("invalid TenantScript plugin return value");
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(value, index)) {
+          throw new Error("invalid TenantScript plugin return value");
+        }
+        assertJsonValue(value[index], ancestors);
+      }
+      return;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    const keys = Object.keys(value);
+    if (
+      (prototype !== Object.prototype && prototype !== null) ||
+      Object.getOwnPropertyNames(value).length !== keys.length ||
+      Object.getOwnPropertySymbols(value).length !== 0
+    ) {
+      throw new Error("invalid TenantScript plugin return value");
+    }
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !("value" in descriptor)) {
+        throw new Error("invalid TenantScript plugin return value");
+      }
+      assertJsonValue(descriptor.value, ancestors);
+    }
+  } finally {
+    ancestors.delete(value);
+  }
+}
 
 export default {
   async fetch(request, env) {
@@ -657,6 +762,7 @@ export default {
       }
       value = await handler(input.payload, context);
     }
+    if (value !== undefined) assertJsonValue(value);
     return Response.json({ value: value === undefined ? null : value });
   }
 };

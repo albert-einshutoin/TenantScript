@@ -22,6 +22,8 @@ bindings; disables ambient outbound access; and applies CPU/subrequest plus wall
 every entrypoint call. Requests, responses, artifacts, configuration, and runtime evidence are
 closed and byte-bounded before they cross a trust boundary. Plugin versions longer than the
 execution recorder's 128-character limit are rejected before tenant code can run.
+Payloads and plugin return values must use the lossless JSON data model; values that JSON would
+silently drop or coerce are rejected before invocation or before a success response is emitted.
 Hook names preserve the manifest's exact dispatch key, including Unicode, spaces, and slashes, up
 to the execution recorder's 256-character persistence limit.
 
