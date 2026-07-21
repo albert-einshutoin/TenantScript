@@ -57,17 +57,19 @@ interface DurableObjectTransactionLike {
   put: (key: string, value: unknown) => Promise<void>;
   delete: (key: string) => Promise<boolean>;
   list: <T>() => Promise<Map<string, T>>;
+}
+
+interface DurableObjectStorageLike extends DurableObjectTransactionLike {
   getAlarm: () => Promise<number | null>;
   setAlarm: (scheduledTime: number) => Promise<void>;
   deleteAlarm: () => Promise<void>;
+  transaction: <T>(
+    closure: (transaction: DurableObjectTransactionLike) => Promise<T>
+  ) => Promise<T>;
 }
 
 interface DurableObjectStateLike {
-  storage: DurableObjectTransactionLike & {
-    transaction: <T>(
-      closure: (transaction: DurableObjectTransactionLike) => Promise<T>
-    ) => Promise<T>;
-  };
+  storage: DurableObjectStorageLike;
   blockConcurrencyWhile: <T>(closure: () => Promise<T>) => Promise<T>;
 }
 
@@ -123,8 +125,8 @@ export class OAuthStateStoreDurableObject {
   }
 
   async alarm(): Promise<void> {
-    await this.state.blockConcurrencyWhile(() =>
-      this.state.storage.transaction(async (transaction) => {
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.state.storage.transaction(async (transaction) => {
         const nowMs = this.nowMs();
         const records = await transaction.list<unknown>();
         for (const [key, value] of records) {
@@ -132,9 +134,9 @@ export class OAuthStateStoreDurableObject {
             await transaction.delete(key);
           }
         }
-        await scheduleNextAlarm(transaction);
-      })
-    );
+      });
+      await scheduleNextAlarm(this.state.storage);
+    });
   }
 
   private async issue(input: unknown): Promise<Response> {
@@ -157,15 +159,17 @@ export class OAuthStateStoreDurableObject {
       issuedAtMs: input.issuedAtMs,
       expiresAtMs: input.expiresAtMs
     };
-    const created = await this.state.blockConcurrencyWhile(() =>
-      this.state.storage.transaction(async (transaction) => {
+    const created = await this.state.blockConcurrencyWhile(async () => {
+      // Alarm APIs belong to DurableObjectStorage, not its transaction view. Scheduling before
+      // the write prevents an alarm failure from committing a record that can never be swept.
+      await scheduleEarlierAlarm(this.state.storage, record.expiresAtMs);
+      return this.state.storage.transaction(async (transaction) => {
         const key = stateKey(input.stateDigest);
         if ((await transaction.get(key)) !== undefined) return false;
         await transaction.put(key, record);
-        await scheduleEarlierAlarm(transaction, record.expiresAtMs);
         return true;
-      })
-    );
+      });
+    });
     if (!created) return errorResponse("oauth_state_store_unavailable", 503);
     return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   }
@@ -202,22 +206,22 @@ export class OAuthStateStoreDurableObject {
 }
 
 async function scheduleEarlierAlarm(
-  transaction: DurableObjectTransactionLike,
+  storage: DurableObjectStorageLike,
   expiresAtMs: number
 ): Promise<void> {
-  const scheduled = await transaction.getAlarm();
-  if (scheduled === null || expiresAtMs < scheduled) await transaction.setAlarm(expiresAtMs);
+  const scheduled = await storage.getAlarm();
+  if (scheduled === null || expiresAtMs < scheduled) await storage.setAlarm(expiresAtMs);
 }
 
-async function scheduleNextAlarm(transaction: DurableObjectTransactionLike): Promise<void> {
-  const records = await transaction.list<unknown>();
+async function scheduleNextAlarm(storage: DurableObjectStorageLike): Promise<void> {
+  const records = await storage.list<unknown>();
   let earliest: number | undefined;
   for (const [key, value] of records) {
     if (!key.startsWith("state:") || !isOAuthStateRecord(value)) continue;
     earliest = earliest === undefined ? value.expiresAtMs : Math.min(earliest, value.expiresAtMs);
   }
-  if (earliest === undefined) await transaction.deleteAlarm();
-  else await transaction.setAlarm(earliest);
+  if (earliest === undefined) await storage.deleteAlarm();
+  else await storage.setAlarm(earliest);
 }
 
 export function createDurableObjectNamespaceOAuthStateStore<TId>(

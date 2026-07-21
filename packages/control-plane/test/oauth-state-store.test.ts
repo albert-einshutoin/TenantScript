@@ -375,7 +375,29 @@ class InMemoryDurableObjectStorage {
     return Promise.resolve();
   }
 
-  transaction<T>(closure: (transaction: InMemoryDurableObjectStorage) => Promise<T>): Promise<T> {
-    return closure(this);
+  transaction<T>(
+    closure: (transaction: InMemoryDurableObjectTransaction) => Promise<T>
+  ): Promise<T> {
+    return closure(new InMemoryDurableObjectTransaction(this));
+  }
+}
+
+class InMemoryDurableObjectTransaction {
+  constructor(private readonly storage: InMemoryDurableObjectStorage) {}
+
+  get<T>(key: string): Promise<T | undefined> {
+    return this.storage.get<T>(key);
+  }
+
+  put(key: string, value: unknown): Promise<void> {
+    return this.storage.put(key, value);
+  }
+
+  delete(key: string): Promise<boolean> {
+    return this.storage.delete(key);
+  }
+
+  list<T>(): Promise<Map<string, T>> {
+    return this.storage.list<T>();
   }
 }
