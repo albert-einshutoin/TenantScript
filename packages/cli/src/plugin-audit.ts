@@ -194,6 +194,21 @@ interface BundleToken {
   literalValid?: boolean;
 }
 
+interface BindingRange {
+  start: number;
+  end: number;
+}
+
+interface CapabilityScope extends BindingRange {
+  receivers: Set<string>;
+  direct: Set<string>;
+}
+
+interface CallableBinding extends BindingRange {
+  open: number;
+  close: number;
+}
+
 const tokenPairCache = new WeakMap<readonly BundleToken[], ReadonlyMap<number, number>>();
 
 function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
@@ -208,11 +223,11 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
       tokens[index]?.value === "capability" &&
       tokens[index - 1]?.value === "." &&
       tokens[index - 2]?.kind === "identifier" &&
-      capabilityBindings.receivers.has(tokens[index - 2]?.value ?? "") &&
+      bindingAppliesAt(capabilityBindings.receivers, tokens[index - 2]?.value ?? "", index) &&
       tokens[index + 1]?.value === "(";
     const isDirectCapabilityCall =
       tokens[index]?.kind === "identifier" &&
-      capabilityBindings.direct.has(tokens[index]?.value ?? "") &&
+      bindingAppliesAt(capabilityBindings.direct, tokens[index]?.value ?? "", index) &&
       tokens[index - 1]?.value !== "." &&
       tokens[index + 1]?.value === "(";
     if (isMemberCapabilityCall || isDirectCapabilityCall) {
@@ -258,43 +273,49 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
 }
 
 function collectCapabilityBindings(tokens: readonly BundleToken[]): {
-  receivers: Set<string>;
-  direct: Set<string>;
+  receivers: Map<string, BindingRange[]>;
+  direct: Map<string, BindingRange[]>;
 } {
   // PluginContext is a structural SDK type, so neither bundlers nor authors must preserve the
-  // local name `context`. Deriving bindings from handler parameters avoids classifying unrelated
-  // dependency methods named `capability` as exact SDK broker calls.
-  const receivers = new Set<string>();
-  const direct = new Set<string>();
-  registerHandlerContextParameters(tokens, receivers, direct);
+  // local name `context`. Binding names alone are insufficient because helpers can shadow them,
+  // so every receiver and destructured alias remains bounded to its handler body.
+  const receivers = new Map<string, BindingRange[]>();
+  const direct = new Map<string, BindingRange[]>();
+  const scopes = collectHandlerCapabilityScopes(tokens);
 
-  for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index]?.value !== "{") continue;
-    const close = findMatchingToken(tokens, index, "{", "}");
-    if (
-      close !== -1 &&
-      tokens[close + 1]?.value === "=" &&
-      tokens[close + 2]?.kind === "identifier" &&
-      receivers.has(tokens[close + 2]?.value ?? "")
-    ) {
-      registerDestructuredCapability(tokens.slice(index + 1, close), direct);
+  for (const scope of scopes) {
+    for (let index = scope.start; index <= scope.end; index += 1) {
+      if (tokens[index]?.value !== "{") continue;
+      const close = findMatchingToken(tokens, index, "{", "}");
+      if (
+        close !== -1 &&
+        close <= scope.end &&
+        tokens[close + 1]?.value === "=" &&
+        tokens[close + 2]?.kind === "identifier" &&
+        scope.receivers.has(tokens[close + 2]?.value ?? "")
+      ) {
+        registerDestructuredCapability(tokens.slice(index + 1, close), scope.direct);
+      }
     }
+    registerBindingRanges(receivers, scope.receivers, scope);
+    registerBindingRanges(direct, scope.direct, scope);
   }
+  sortBindingRanges(receivers);
+  sortBindingRanges(direct);
   return { receivers, direct };
 }
 
-function registerHandlerContextParameters(
-  tokens: readonly BundleToken[],
-  receivers: Set<string>,
-  direct: Set<string>
-): void {
-  const callableBindings = new Map<string, { open: number; close: number }>();
+function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): CapabilityScope[] {
+  const callableBindings = new Map<string, CallableBinding>();
   for (let index = 0; index < tokens.length; index += 1) {
     if (tokens[index]?.value === "function" && tokens[index + 1]?.kind === "identifier") {
       const open = index + 2;
       if (tokens[open]?.value !== "(") continue;
       const close = findMatchingToken(tokens, open, "(", ")");
-      if (close !== -1) callableBindings.set(tokens[index + 1]?.value ?? "", { open, close });
+      const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
+      if (body !== undefined) {
+        callableBindings.set(tokens[index + 1]?.value ?? "", { open, close, ...body });
+      }
       continue;
     }
 
@@ -315,8 +336,9 @@ function registerHandlerContextParameters(
       if (tokens[open]?.kind === "identifier") open += 1;
       if (tokens[open]?.value !== "(") continue;
       const close = findMatchingToken(tokens, open, "(", ")");
-      if (close !== -1 && tokens[close + 1]?.value === "{") {
-        callableBindings.set(tokens[index]?.value ?? "", { open, close });
+      const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
+      if (body !== undefined) {
+        callableBindings.set(tokens[index]?.value ?? "", { open, close, ...body });
       }
       continue;
     }
@@ -324,10 +346,19 @@ function registerHandlerContextParameters(
     const open = callable;
     if (tokens[open]?.value !== "(") continue;
     const close = findMatchingToken(tokens, open, "(", ")");
-    if (close !== -1 && tokens[close + 1]?.value === "=" && tokens[close + 2]?.value === ">") {
-      callableBindings.set(tokens[index]?.value ?? "", { open, close });
+    const body = close === -1 ? undefined : arrowBodyRange(tokens, close, tokens.length - 1);
+    if (body !== undefined) {
+      callableBindings.set(tokens[index]?.value ?? "", { open, close, ...body });
     }
   }
+
+  const scopes = new Map<string, CapabilityScope>();
+  const addScope = (open: number, close: number, body: BindingRange): void => {
+    const scope = createCapabilityScope(tokens, open, close, body);
+    if (scope !== undefined) {
+      scopes.set(`${String(scope.start)}:${String(scope.end)}`, scope);
+    }
+  };
 
   for (let index = 0; index < tokens.length; index += 1) {
     if (
@@ -364,8 +395,9 @@ function registerHandlerContextParameters(
         }
         if (methodOpen !== -1) {
           const methodClose = findMatchingToken(tokens, methodOpen, "(", ")");
-          if (methodClose !== -1 && tokens[methodClose + 1]?.value === "{") {
-            registerSecondContextParameter(tokens, methodOpen, methodClose, receivers, direct);
+          const body = methodClose === -1 ? undefined : blockBodyRange(tokens, methodClose + 1);
+          if (body !== undefined) {
+            addScope(methodOpen, methodClose, body);
           }
         }
       }
@@ -379,36 +411,112 @@ function registerHandlerContextParameters(
         if (tokens[value + 1]?.kind === "identifier") value += 1;
         const open = value + 1;
         const close = tokens[open]?.value === "(" ? findMatchingToken(tokens, open, "(", ")") : -1;
-        if (close !== -1) registerSecondContextParameter(tokens, open, close, receivers, direct);
+        const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
+        if (body !== undefined) addScope(open, close, body);
       } else if (tokens[value]?.value === "(") {
         const close = findMatchingToken(tokens, value, "(", ")");
-        if (close !== -1 && tokens[close + 1]?.value === "=" && tokens[close + 2]?.value === ">") {
-          registerSecondContextParameter(tokens, value, close, receivers, direct);
-        }
+        const body = close === -1 ? undefined : arrowBodyRange(tokens, close, handlersClose - 1);
+        if (body !== undefined) addScope(value, close, body);
       } else if (tokens[value]?.kind === "identifier") {
         const named = callableBindings.get(tokens[value]?.value ?? "");
         if (named !== undefined) {
-          registerSecondContextParameter(tokens, named.open, named.close, receivers, direct);
+          addScope(named.open, named.close, named);
         }
       }
     }
     index = handlersClose;
   }
+  return [...scopes.values()];
 }
 
-function registerSecondContextParameter(
+function createCapabilityScope(
   tokens: readonly BundleToken[],
   open: number,
   close: number,
-  receivers: Set<string>,
-  direct: Set<string>
-): void {
+  body: BindingRange
+): CapabilityScope | undefined {
+  const receivers = new Set<string>();
+  const direct = new Set<string>();
   const parameters = splitTopLevel(tokens.slice(open + 1, close), ",");
   const contextParameter = parameters[1];
   if (contextParameter?.[0]?.kind === "identifier") {
     receivers.add(contextParameter[0].value);
   } else if (contextParameter?.[0]?.value === "{") {
     registerDestructuredCapability(contextParameter.slice(1, -1), direct);
+  }
+  return receivers.size === 0 && direct.size === 0 ? undefined : { ...body, receivers, direct };
+}
+
+function blockBodyRange(
+  tokens: readonly BundleToken[],
+  bodyOpen: number
+): BindingRange | undefined {
+  if (tokens[bodyOpen]?.value !== "{") return undefined;
+  const bodyClose = findMatchingToken(tokens, bodyOpen, "{", "}");
+  return bodyClose === -1 ? undefined : { start: bodyOpen + 1, end: bodyClose - 1 };
+}
+
+function arrowBodyRange(
+  tokens: readonly BundleToken[],
+  parametersClose: number,
+  limit: number
+): BindingRange | undefined {
+  if (tokens[parametersClose + 1]?.value !== "=" || tokens[parametersClose + 2]?.value !== ">") {
+    return undefined;
+  }
+  const start = parametersClose + 3;
+  const block = blockBodyRange(tokens, start);
+  if (block !== undefined) return block;
+
+  let depth = 0;
+  for (let index = start; index <= limit; index += 1) {
+    const value = tokens[index]?.value ?? "";
+    if (["(", "{", "["].includes(value)) depth += 1;
+    else if ([")", "}", "]"].includes(value)) depth = Math.max(0, depth - 1);
+    if (depth === 0 && [",", ";"].includes(value)) {
+      return { start, end: index - 1 };
+    }
+  }
+  return start <= limit ? { start, end: limit } : undefined;
+}
+
+function registerBindingRanges(
+  output: Map<string, BindingRange[]>,
+  names: ReadonlySet<string>,
+  range: BindingRange
+): void {
+  for (const name of names) {
+    const ranges = output.get(name) ?? [];
+    ranges.push({ start: range.start, end: range.end });
+    output.set(name, ranges);
+  }
+}
+
+function bindingAppliesAt(
+  bindings: ReadonlyMap<string, readonly BindingRange[]>,
+  name: string,
+  index: number
+): boolean {
+  const ranges = bindings.get(name);
+  if (ranges === undefined) return false;
+  // A hostile bundle can repeat the same receiver across many handlers. Binary search keeps each
+  // capability probe logarithmic instead of multiplying call count by handler count.
+  let low = 0;
+  let high = ranges.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const range = ranges[middle];
+    if (range === undefined) return false;
+    if (index < range.start) high = middle - 1;
+    else if (index > range.end) low = middle + 1;
+    else return true;
+  }
+  return false;
+}
+
+function sortBindingRanges(bindings: Map<string, BindingRange[]>): void {
+  for (const ranges of bindings.values()) {
+    ranges.sort((left, right) => left.start - right.start || left.end - right.end);
   }
 }
 
@@ -493,7 +601,7 @@ function tokenizeBundle(source: string): BundleToken[] {
       while (index < source.length && /[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
       tokens.push({ kind: "identifier", value: source.slice(start, index) });
     } else {
-      if (character !== undefined && ".(),{}:[]=>".includes(character)) {
+      if (character !== undefined && ".(),{}:[]=>;".includes(character)) {
         tokens.push({ kind: "punctuation", value: character });
       }
       index += 1;

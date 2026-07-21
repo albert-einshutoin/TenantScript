@@ -164,6 +164,20 @@ describe("plugin audit", () => {
     ).toEqual([]);
   });
 
+  it("does not reuse a handler context receiver name outside its handler body", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          "export const handlers = { event(_payload, ctx) { return ctx; } };",
+          'function helper(ctx) { return ctx.capability("slack.send", {}); }'
+        ].join("\n")
+      }).findings
+    ).toEqual([]);
+  });
+
   it("keeps malformed delimiter analysis within a bounded CPU budget", () => {
     const startedAt = performance.now();
     const report = auditPluginPackage({
@@ -171,6 +185,24 @@ describe("plugin audit", () => {
       packageJson: validPackageJson(),
       expectedSdkVersion: "1.2.3",
       bundleCode: "{".repeat(20_000)
+    });
+
+    expect(report).toEqual({ version: 1, passed: true, findings: [] });
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  it("keeps repeated receiver scope lookups within a bounded CPU budget", () => {
+    const handlers = Array.from(
+      { length: 2_000 },
+      (_, index) => `hook${String(index)}(_payload, ctx) { return ctx; }`
+    ).join(",");
+    const unrelatedCalls = 'ctx.capability("slack.send", {});'.repeat(2_000);
+    const startedAt = performance.now();
+    const report = auditPluginPackage({
+      manifest: validManifest(),
+      packageJson: validPackageJson(),
+      expectedSdkVersion: "1.2.3",
+      bundleCode: `export const handlers = { ${handlers} }; ${unrelatedCalls}`
     });
 
     expect(report).toEqual({ version: 1, passed: true, findings: [] });
