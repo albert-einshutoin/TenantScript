@@ -531,6 +531,8 @@ describe("plugin audit", () => {
     const sources = [
       'exports.plugin = {}; exports.plugin.dispatch = ({ context }) => context.capability("admin.delete", {});',
       'module.exports.plugin = {}; module.exports.plugin.dispatch = function(request) { return request.context.capability("admin.delete", {}); };',
+      'exports.default = {}; exports.default.dispatch = request => request.context.capability("admin.delete", {});',
+      'module.exports["default"] = {}; module.exports["default"]["dispatch"] = request => request.context.capability("admin.delete", {});',
       'const plugin = {}; exports.plugin = plugin; plugin["dispatch"] = request => request.context.capability("admin.delete", {});',
       'module.exports = {}; module.exports["dispatch"] = request => request.context.capability("admin.delete", {});'
     ];

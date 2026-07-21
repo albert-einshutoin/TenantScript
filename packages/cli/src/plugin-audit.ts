@@ -829,14 +829,20 @@ function isExportedPluginDispatchMutation(
     if (exportedPluginBindings.has(receiver.value)) return true;
     if (isCommonJsExportsIdentifier(tokens, receiverEnd)) return true;
     return (
-      receiver.value === "plugin" &&
+      ["plugin", "default"].includes(receiver.value) &&
       tokens[receiverEnd - 1]?.value === "." &&
       isCommonJsExportsIdentifier(tokens, receiverEnd - 2)
     );
   }
   if (receiver?.value !== "]") return false;
-  const pluginReceiver = bracketedPropertyReceiverIndex(tokens, receiverEnd - 1, "plugin");
-  return isCommonJsExportsIdentifier(tokens, pluginReceiver);
+  // The production loader accepts both CommonJS `plugin` and `default` export wrappers. Mutation
+  // discovery must mirror that choice so an executable dispatch cannot escape bundle auditing.
+  return ["plugin", "default"].some((property) =>
+    isCommonJsExportsIdentifier(
+      tokens,
+      bracketedPropertyReceiverIndex(tokens, receiverEnd - 1, property)
+    )
+  );
 }
 
 function isExportedHandlerMutation(
