@@ -258,6 +258,21 @@ export {
   type SlackOAuthClientConfiguration
 } from "./slack-oauth-client.js";
 export {
+  createSlackTokenRefreshClient,
+  SlackTokenRefreshError,
+  type SlackTokenRefreshClient,
+  type SlackTokenRefreshErrorCode,
+  type SlackTokenRefreshResult
+} from "./slack-token-refresh-client.js";
+export {
+  createSlackCredentialLifecycleManager,
+  SlackCredentialLifecycleError,
+  type SlackCredentialLifecycleErrorCode,
+  type SlackCredentialLifecycleManager,
+  type SlackCredentialLifecycleMetadata,
+  type SlackCredentialRefreshResult
+} from "./slack-credential-lifecycle.js";
+export {
   createSlackOAuthCallbackService,
   SlackOAuthCallbackError,
   type SlackOAuthCallbackErrorCode,

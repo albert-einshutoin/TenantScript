@@ -58,7 +58,7 @@ describe("Slack token refresh client", () => {
       fetcher
     });
 
-    const failure = await client.refresh("xoxe-1-synthetic-refresh").catch((error) => error);
+    const failure = await captureFailure(client.refresh("xoxe-1-synthetic-refresh"));
 
     expect(failure).toBeInstanceOf(SlackTokenRefreshError);
     expect((failure as SlackTokenRefreshError).toJSON()).toEqual({
@@ -83,3 +83,12 @@ describe("Slack token refresh client", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+async function captureFailure(value: Promise<unknown>): Promise<unknown> {
+  try {
+    await value;
+  } catch (error: unknown) {
+    return error;
+  }
+  throw new Error("expected failure");
+}

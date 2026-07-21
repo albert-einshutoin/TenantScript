@@ -44,7 +44,9 @@ export function createSlackTokenRefreshClient(configuration: {
         throw new SlackTokenRefreshError("slack_token_refresh_invalid_request");
       }
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const timeout = setTimeout(() => {
+        controller.abort();
+      }, timeoutMs);
       try {
         // A refresh token is single-use. Keep every transport choice server-owned and make only
         // one request; any ambiguous outcome is handed to an operator instead of being replayed.
@@ -112,7 +114,7 @@ async function readBoundedJson(response: Response): Promise<unknown> {
   ) {
     throw interventionRequired();
   }
-  const body = response.body;
+  const body = (response as unknown as { body: ReadableStream<Uint8Array> | null }).body;
   if (body === null) throw interventionRequired();
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
@@ -134,7 +136,9 @@ async function readBoundedJson(response: Response): Promise<unknown> {
     offset += chunk.byteLength;
   }
   try {
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+    return JSON.parse(
+      new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)
+    ) as unknown;
   } catch {
     throw interventionRequired();
   }

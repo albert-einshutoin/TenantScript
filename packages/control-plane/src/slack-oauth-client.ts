@@ -204,23 +204,17 @@ function isEnterprise(value: unknown): boolean {
 function isAuthedUser(value: unknown): boolean {
   return (
     isRecord(value) &&
-    hasOnlyKeys(value, [
-      "id",
-      "scope",
-      "access_token",
-      "token_type",
-      "expires_in",
-      "refresh_token"
-    ]) &&
+    hasOnlyKeys(value, ["id", "scope", "access_token", "token_type"]) &&
     isBoundedText(value.id, 128) &&
     isBoundedText(value.scope, 4_096, true) &&
     (value.access_token === undefined || isBoundedText(value.access_token, 16_384)) &&
-    (value.token_type === undefined || value.token_type === "user") &&
-    isRotationCredentialPair(value)
+    (value.token_type === undefined || value.token_type === "user")
   );
 }
 
-function isRotationCredentialPair(value: Record<string, unknown>): boolean {
+function isRotationCredentialPair(
+  value: Record<string, unknown>
+): value is Record<string, unknown> & { refresh_token?: string; expires_in?: number } {
   if (value.refresh_token === undefined && value.expires_in === undefined) return true;
   return (
     isBoundedText(value.refresh_token, 16_384) &&

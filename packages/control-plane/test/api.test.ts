@@ -350,10 +350,13 @@ describe("createControlPlaneApi Slack OAuth connection", () => {
 
     const serialized = await secretStore.getSecret(connection.secretRef);
     expect(serialized).not.toBeNull();
-    expect(JSON.parse(serialized as string)).toEqual({
+    const persisted = JSON.parse(serialized as string) as { tokenId: unknown };
+    expect(persisted.tokenId).toMatch(/^slack_[A-Za-z0-9_-]{16}$/u);
+    expect(persisted).toEqual({
       version: 1,
       status: "ready",
       generation: 1,
+      tokenId: persisted.tokenId,
       accessToken,
       refreshToken,
       expiresAt: "2026-07-21T12:00:00.000Z"

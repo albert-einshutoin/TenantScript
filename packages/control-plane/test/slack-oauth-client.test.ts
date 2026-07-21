@@ -75,11 +75,7 @@ describe("Slack OAuth v2 exchange client", () => {
           enterprise: { id: "E12345678", name: "Synthetic Enterprise" },
           authed_user: {
             id: "U12345678",
-            scope: "chat:write",
-            access_token: "xoxe.xoxp-1-synthetic-user-token",
-            token_type: "user",
-            expires_in: 43_200,
-            refresh_token: "xoxe-1-synthetic-user-refresh-token"
+            scope: "chat:write"
           }
         })
       )
@@ -247,6 +243,35 @@ describe("Slack OAuth v2 exchange client", () => {
         })
     ],
     [
+      "refresh token without expiry",
+      () => Response.json(rotationResponse({ expires_in: undefined }))
+    ],
+    [
+      "expiry without refresh token",
+      () => Response.json(rotationResponse({ refresh_token: undefined }))
+    ],
+    ["invalid rotation expiry", () => Response.json(rotationResponse({ expires_in: 0 }))],
+    [
+      "oversized rotation token",
+      () => Response.json(rotationResponse({ refresh_token: "x".repeat(16_385) }))
+    ],
+    [
+      "rotating user credential mixed into bot response",
+      () =>
+        Response.json(
+          rotationResponse({
+            authed_user: {
+              id: "U123",
+              scope: "chat:write",
+              access_token: "xoxe.xoxp-1-user-access",
+              token_type: "user",
+              expires_in: 43_200,
+              refresh_token: "xoxe-1-user-refresh"
+            }
+          })
+        )
+    ],
+    [
       "oversized body",
       () =>
         new Response(`{"ok":true,"padding":"${"x".repeat(65_536)}secret-sentinel"}`, {
@@ -304,6 +329,22 @@ describe("Slack OAuth v2 exchange client", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
+
+function rotationResponse(overrides: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ok: true,
+    access_token: "xoxe.xoxb-1-synthetic-access",
+    token_type: "bot",
+    scope: "chat:write",
+    app_id: "A123",
+    expires_in: 43_200,
+    refresh_token: "xoxe-1-synthetic-refresh",
+    team: { id: "T123", name: "Synthetic" },
+    enterprise: null,
+    authed_user: { id: "U123", scope: "" },
+    ...overrides
+  };
+}
 
 function oauthClient(
   fetcher: typeof fetch,
