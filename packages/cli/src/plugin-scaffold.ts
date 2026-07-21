@@ -15,7 +15,7 @@ export interface PluginScaffoldResult {
   files: readonly string[];
 }
 
-export const pluginTemplateNames = ["webhook-transformer"] as const;
+export const pluginTemplateNames = ["webhook-transformer", "invoice-approval"] as const;
 export type PluginTemplateName = (typeof pluginTemplateNames)[number];
 
 export interface PluginTemplateDefinition {
@@ -31,6 +31,12 @@ const pluginTemplateDefinitions: Record<PluginTemplateName, PluginTemplateDefini
     defaultPluginName: "webhook-transformer",
     hookName: "webhook.received",
     hookType: "transform"
+  },
+  "invoice-approval": {
+    name: "invoice-approval",
+    defaultPluginName: "invoice-approval",
+    hookName: "invoice.approve",
+    hookType: "policy"
   }
 };
 
@@ -40,6 +46,13 @@ const pluginTemplateSecurityNotes: Record<PluginTemplateName, string> = {
 - Treat every inbound webhook payload as untrusted input. Validate fields before using them in business logic.
 - This template declares no capabilities and denies egress by default. Add access only after documenting and testing the minimum required grant.
 - The built-in template and its review record are development guidance, not production certification or live Cloudflare deployment proof.
+`,
+  "invoice-approval": `# Security boundaries
+
+- Treat every invoice payload as untrusted input. Invalid, negative, fractional, and unsafe integer amounts are denied without reflecting payload data.
+- Amounts use integer cents so approval decisions do not depend on floating-point currency rounding.
+- The 100,000-cent auto-approval limit is a conservative example threshold, not a production business, accounting, or legal rule.
+- This template declares no capabilities and denies egress by default. Its review record is development guidance, not production certification or live Cloudflare deployment proof.
 `
 };
 
@@ -202,10 +215,11 @@ function pluginTemplate(request: PluginScaffoldRequest): string {
   return `import { definePlugin } from "@tenantscript/plugin-sdk";
 import { manifest } from "./manifest.js";
 
+${templateHandlerSupport(request.template)}
 export const plugin = definePlugin({
   manifest,
   handlers: {
-    "${request.hookName}": ${handlerTemplate(request.hookType)}
+    "${request.hookName}": ${handlerTemplate(request)}
   }
 });
 
@@ -213,9 +227,43 @@ export default plugin;
 `;
 }
 
-function handlerTemplate(hookType: PluginScaffoldRequest["hookType"]): string {
-  if (hookType === "transform") return "async (payload, _context) => payload";
-  if (hookType === "policy") {
+function templateHandlerSupport(template: PluginTemplateName | undefined): string {
+  if (template !== "invoice-approval") return "";
+  return `// Integer cents keep the example threshold deterministic and avoid floating-point currency rounding.
+const AUTO_APPROVAL_LIMIT_CENTS = 100_000;
+
+interface InvoiceApprovalPayload {
+  amountCents: number;
+}
+
+function isInvoiceApprovalPayload(payload: unknown): payload is InvoiceApprovalPayload {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    "amountCents" in payload &&
+    typeof payload.amountCents === "number" &&
+    Number.isSafeInteger(payload.amountCents) &&
+    payload.amountCents >= 0
+  );
+}
+`;
+}
+
+function handlerTemplate(request: PluginScaffoldRequest): string {
+  if (request.template === "invoice-approval") {
+    return `async (payload, _context) => {
+      if (!isInvoiceApprovalPayload(payload)) {
+        return { decision: "deny", reason: "invalid invoice amount" };
+      }
+      if (payload.amountCents > AUTO_APPROVAL_LIMIT_CENTS) {
+        return { decision: "deny", reason: "manual approval required" };
+      }
+      return { decision: "allow" };
+    }`;
+  }
+  if (request.hookType === "transform") return "async (payload, _context) => payload";
+  if (request.hookType === "policy") {
     return 'async (_payload, _context) => ({ decision: "allow" })';
   }
   return "async (_payload, _context) => undefined";
@@ -225,6 +273,9 @@ function pluginTestTemplate(request: PluginScaffoldRequest): string {
   // Accepted hook names contain only lowercase alphanumeric dot-separated segments, so this
   // sentinel can never collide with the hook selected by an author or coding agent.
   const undeclaredHookName = "tenantscript.scaffold-undeclared";
+  if (request.template === "invoice-approval") {
+    return invoiceApprovalTestTemplate(request, undeclaredHookName);
+  }
   return `import { describe, expect, it, vi } from "vitest";
 import { plugin } from "../src/index.js";
 
@@ -246,6 +297,53 @@ ${transformResultAssertion(request.hookType)}
     const result = await plugin.dispatch({
       hookName: "${undeclaredHookName}",
       payload: { id: "evt_1" },
+      context: { capability: vi.fn() }
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: { name: "UnknownHookError", hookName: "${undeclaredHookName}" }
+    });
+  });
+});
+`;
+}
+
+function invoiceApprovalTestTemplate(
+  request: PluginScaffoldRequest,
+  undeclaredHookName: string
+): string {
+  return `import { describe, expect, it, vi } from "vitest";
+import { plugin } from "../src/index.js";
+
+describe("${request.name}", () => {
+  it.each([
+    [{ amountCents: 100_000 }, { decision: "allow" }],
+    [{ amountCents: 100_001 }, { decision: "deny", reason: "manual approval required" }],
+    [{}, { decision: "deny", reason: "invalid invoice amount" }],
+    [[], { decision: "deny", reason: "invalid invoice amount" }],
+    [{ amountCents: -1 }, { decision: "deny", reason: "invalid invoice amount" }],
+    [{ amountCents: 1.5 }, { decision: "deny", reason: "invalid invoice amount" }],
+    [
+      { amountCents: Number.MAX_SAFE_INTEGER + 1 },
+      { decision: "deny", reason: "invalid invoice amount" }
+    ]
+  ])("decides invoice approval without capabilities for %#", async (payload, decision) => {
+    const capability = vi.fn();
+    const result = await plugin.dispatch({
+      hookName: "${request.hookName}",
+      payload,
+      context: { capability }
+    });
+
+    expect(result).toEqual({ ok: true, value: decision });
+    expect(capability).not.toHaveBeenCalled();
+  });
+
+  it("rejects hooks that are not declared in the manifest", async () => {
+    const result = await plugin.dispatch({
+      hookName: "${undeclaredHookName}",
+      payload: { amountCents: 100_000 },
       context: { capability: vi.fn() }
     });
 

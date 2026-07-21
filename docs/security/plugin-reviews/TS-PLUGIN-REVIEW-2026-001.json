@@ -3,7 +3,7 @@
   "id": "TS-PLUGIN-REVIEW-2026-001",
   "baselineCommit": "5a23ffa5bdb49c1bbde19205cf62dc450d57c2dc",
   "target": {
-    "name": "Built-in ext init plugin scaffold and webhook transformer template",
+    "name": "Built-in ext init plugin scaffold and first-party templates",
     "scope": [
       "packages/cli/src/index.ts",
       "packages/cli/src/plugin-audit.ts",
@@ -13,15 +13,15 @@
     "sourceDigests": {
       "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
       "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-      "packages/cli/src/plugin-scaffold.ts": "3285cfc89678ed3b7cb05cdfffbe8b13a63e1f421d3eac0593afa2637bfadf4e",
-      "packages/cli/test/init.test.ts": "8e743b5389bedd958613ee93a9415dcb15fd34895ecebc832aa8b41bde1fa45b"
+      "packages/cli/src/plugin-scaffold.ts": "10e9bf811d93abc210340377c6d711abc4e87f218d1eb095e234f128c094c9b9",
+      "packages/cli/test/init.test.ts": "476e9a13d3ff3aa5b265e430c1356607e858456c3fd879243f977b93518bcaa6"
     }
   },
   "reviewer": {
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-07-21T23:10:21.000Z",
+  "reviewedAt": "2026-07-21T23:33:09.000Z",
   "domains": [
     {
       "name": "security",
@@ -33,7 +33,7 @@
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "The CLI validates template identity and rejects unknown or conflicting options before filesystem mutation without reflecting attacker-controlled option values. Both scaffold modes bound interpolated names and hooks; the webhook template requests no capabilities, denies egress, has no side effects, rejects undeclared hooks, and its generated bundle is audited before its generated tests run."
+      "notes": "The CLI validates template identity and rejects unknown or conflicting options before filesystem mutation without reflecting attacker-controlled option values. Both templates request no capabilities, deny egress, have no side effects, and reject undeclared hooks. Invoice amounts must be non-negative safe integers; invalid or above-threshold inputs deny without payload reflection. Both generated bundles are audited before their generated tests run."
     },
     {
       "name": "compatibility",
@@ -43,7 +43,7 @@
         "scripts/agent-plugin-scaffold-e2e.test.mjs",
         "docs/quickstarts/agent-plugin-authoring.md"
       ],
-      "notes": "The generic init contract remains covered, while the typed webhook template fixes its reviewed hook and type. Generated manifest and package metadata use the CLI version exactly, then build and test against packed public package contents."
+      "notes": "The generic init contract remains covered, while typed webhook and invoice templates fix their reviewed hooks and types. Generated manifest and package metadata use the CLI version exactly, then both templates build and test against packed public package contents."
     },
     {
       "name": "operations",
@@ -53,7 +53,7 @@
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "Generated CPU and timeout limits are bounded, network access is denied, template resolution is local and deterministic, and the accountless E2E exercises install, audit, build, and test boundaries."
+      "notes": "Generated CPU and timeout limits are bounded, network access is denied, and template resolution is local and deterministic. The invoice policy is a pure bounded comparison with fail-closed input handling; the accountless E2E exercises install, audit, build, and test boundaries for both templates."
     },
     {
       "name": "documentation",
@@ -76,11 +76,11 @@
   "evidenceDigests": {
     "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
     "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-    "packages/cli/src/plugin-scaffold.ts": "3285cfc89678ed3b7cb05cdfffbe8b13a63e1f421d3eac0593afa2637bfadf4e",
-    "packages/cli/test/init.test.ts": "8e743b5389bedd958613ee93a9415dcb15fd34895ecebc832aa8b41bde1fa45b",
-    "scripts/agent-plugin-scaffold-e2e.test.mjs": "7bb7a6004d95969b21942643a3eb24617acd81e815bae17658e69a9513191a21",
-    "docs/quickstarts/agent-plugin-authoring.md": "a60d8064a33d6922bfcd8e86a31e25fba386714fd09923060b2c9bcd9e86c0d8",
-    "docs/reference/cli.md": "f01767aa4b4d2dfe37ea658e87626f7e39ee6458e70406935fcbf6578a959cd7",
+    "packages/cli/src/plugin-scaffold.ts": "10e9bf811d93abc210340377c6d711abc4e87f218d1eb095e234f128c094c9b9",
+    "packages/cli/test/init.test.ts": "476e9a13d3ff3aa5b265e430c1356607e858456c3fd879243f977b93518bcaa6",
+    "scripts/agent-plugin-scaffold-e2e.test.mjs": "308f82e764ada351a3f00960a9c4f89c915b11ddca6e8da0a5993535228834d4",
+    "docs/quickstarts/agent-plugin-authoring.md": "bf739d045c48d672a28d4dfa29947b572cf939eca379a7099c4cb17f1617189a",
+    "docs/reference/cli.md": "4adbff6d95af0363081894cf836aa6c2c8c4c5ff061dc92ac3c55ce440f677aa",
     "docs/security/plugin-review-checklist.md": "1bee7b0bebadfd44b9cf86e288af48d3a8f9f42c0883d39823809dd1857f54f5",
     "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
@@ -105,6 +105,7 @@
     "The decision covers only the listed scaffold source digests and their reachable baseline context.",
     "The scaffold is intentionally minimal and does not prove the safety of code added by a plugin author.",
     "The webhook transformer demonstrates a side-effect-free payload pass-through; adopters must add schema validation and output bounds for their concrete business contract.",
+    "The invoice auto-approval threshold is an example, not evidence of trusted actor identity or a production accounting, legal, or customer-specific approval rule.",
     "A finding-free bundle audit does not prove the absence of aliased, dynamic, templated, dead-code, or runtime-only behavior."
   ],
   "nonGuarantees": [
