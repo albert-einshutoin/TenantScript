@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { applyD1Migrations, reset } from "cloudflare:test";
+import { applyD1Migrations, reset, runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createD1ControlPlaneStore,
@@ -23,6 +23,7 @@ const callbackUri = `${controlOrigin}${callbackPath}`;
 const successRedirectUri = "https://admin.example.test/settings/providers/slack/success";
 const failureRedirectUri = "https://admin.example.test/settings/providers/slack/failure";
 const rawToken = "xoxb-secret-worker-token";
+const rawRefreshToken = "xoxe-secret-worker-refresh-token";
 const keyring = JSON.stringify({
   currentKeyId: "test-key-v1",
   keys: [{ id: "test-key-v1", material: "A".repeat(43) }]
@@ -50,6 +51,8 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
         scope: "chat:write,commands",
         bot_user_id: "B_WORKER",
         app_id: "A_WORKER",
+        expires_in: 43_200,
+        refresh_token: rawRefreshToken,
         team: { id: "T_WORKER", name: "Worker Workspace" },
         enterprise: null,
         authed_user: { id: "U_WORKER", scope: "" },
@@ -90,6 +93,10 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
     expect(callback.status).toBe(303);
     expect(callback.headers.get("Location")).toBe(successRedirectUri);
     expect(callback.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(JSON.stringify([...callback.headers])).not.toContain(rawToken);
+    expect(JSON.stringify([...callback.headers])).not.toContain(rawRefreshToken);
+    expect(await callback.clone().text()).not.toContain(rawToken);
+    expect(await callback.clone().text()).not.toContain(rawRefreshToken);
     expect(replay.status).toBe(303);
     expect(replay.headers.get("Location")).toBe(failureRedirectUri);
     expect(slackFetch).toHaveBeenCalledTimes(1);
@@ -110,6 +117,7 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
       bot_user_id: "B_WORKER"
     });
     expect(JSON.stringify(connection)).not.toContain(rawToken);
+    expect(JSON.stringify(connection)).not.toContain(rawRefreshToken);
     const secretRef = JSON.parse(connection?.secret_ref_json as string) as {
       provider: "slack";
       appId: string;
@@ -117,9 +125,24 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
       secretId: string;
     };
     expect(secretRef.appId).toBe("app_worker");
-    await expect(
-      createDurableObjectNamespaceSecretStore(testEnv.PROVIDER_SECRET_STORE_DO).getSecret(secretRef)
-    ).resolves.toBe(rawToken);
+    const credential = await createDurableObjectNamespaceSecretStore(
+      testEnv.PROVIDER_SECRET_STORE_DO
+    ).getSecret(secretRef);
+    expect(JSON.parse(credential as string)).toMatchObject({
+      version: 1,
+      status: "ready",
+      generation: 1,
+      accessToken: rawToken,
+      refreshToken: rawRefreshToken
+    });
+    const stub = testEnv.PROVIDER_SECRET_STORE_DO.get(
+      testEnv.PROVIDER_SECRET_STORE_DO.idFromName(
+        await tenantObjectName(secretRef.appId, secretRef.tenantId)
+      )
+    );
+    const persisted = await runInDurableObject(stub, (_instance, state) => state.storage.list());
+    expect(JSON.stringify([...persisted.values()])).not.toContain(rawToken);
+    expect(JSON.stringify([...persisted.values()])).not.toContain(rawRefreshToken);
   });
 
   it("fails closed without reflecting partial callback configuration", async () => {
@@ -264,6 +287,16 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
     ).resolves.toEqual({ workspace_id: "T_SHARDED" });
   });
 });
+
+async function tenantObjectName(appId: string, tenantId: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify([appId, tenantId]))
+  );
+  return `provider-secrets-v1-${[...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
 
 function callbackEnvironment() {
   return {

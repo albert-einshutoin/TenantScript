@@ -3,6 +3,7 @@ import type { SlackOAuthClient, SlackOAuthTokenResponse } from "./api.js";
 const SLACK_OAUTH_ACCESS_URL = "https://slack.com/api/oauth.v2.access";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 65_536;
+const MAX_ROTATING_CREDENTIAL_BYTES = 7_500;
 const TRANSIENT_PROVIDER_ERRORS = new Set([
   "service_unavailable",
   "internal_error",
@@ -145,6 +146,8 @@ function parseSuccess(value: unknown): SlackOAuthTokenResponse {
       "scope",
       "bot_user_id",
       "app_id",
+      "expires_in",
+      "refresh_token",
       "team",
       "enterprise",
       "authed_user",
@@ -152,9 +155,10 @@ function parseSuccess(value: unknown): SlackOAuthTokenResponse {
     ]) ||
     value.ok !== true ||
     value.token_type !== "bot" ||
-    !isBoundedText(value.access_token, 16_384) ||
+    !isBoundedText(value.access_token, MAX_ROTATING_CREDENTIAL_BYTES) ||
     !isBoundedText(value.scope, 4_096, true) ||
     !isBoundedText(value.app_id, 128) ||
+    !isRotationCredentialPair(value) ||
     !isTeam(value.team) ||
     !isAuthedUser(value.authed_user) ||
     (value.bot_user_id !== undefined && !isBoundedText(value.bot_user_id, 128)) ||
@@ -171,6 +175,9 @@ function parseSuccess(value: unknown): SlackOAuthTokenResponse {
   }
   return {
     accessToken: value.access_token,
+    ...(value.refresh_token === undefined
+      ? {}
+      : { refreshToken: value.refresh_token, expiresIn: value.expires_in }),
     workspaceId: value.team.id,
     ...(value.team.name === undefined ? {} : { workspaceName: value.team.name }),
     ...(value.bot_user_id === undefined ? {} : { botUserId: value.bot_user_id })
@@ -203,6 +210,16 @@ function isAuthedUser(value: unknown): boolean {
     isBoundedText(value.scope, 4_096, true) &&
     (value.access_token === undefined || isBoundedText(value.access_token, 16_384)) &&
     (value.token_type === undefined || value.token_type === "user")
+  );
+}
+
+function isRotationCredentialPair(
+  value: Record<string, unknown>
+): value is Record<string, unknown> & { refresh_token?: string; expires_in?: number } {
+  if (value.refresh_token === undefined && value.expires_in === undefined) return true;
+  return (
+    isBoundedText(value.refresh_token, MAX_ROTATING_CREDENTIAL_BYTES) &&
+    isBoundedInteger(value.expires_in, 1, 604_800)
   );
 }
 
