@@ -451,7 +451,7 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
 
       if (
         tokens[index]?.kind === "identifier" &&
-        ["const", "let"].includes(variableDeclarationKeyword(tokens, index) ?? "") &&
+        ["const", "let", "var"].includes(variableDeclarationKeyword(tokens, index) ?? "") &&
         tokens[index + 1]?.value === "=" &&
         tokens[index + 2]?.kind === "identifier" &&
         tokens[index + 3]?.value === "." &&

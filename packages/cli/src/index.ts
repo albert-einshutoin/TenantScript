@@ -1201,8 +1201,10 @@ async function readBoundedAuditBundle(path: string): Promise<string> {
       bytesRead += result.bytesRead;
     }
     if (bytesRead > maximumBytes) throw new Error("plugin audit input is invalid");
-    const source = content.subarray(0, bytesRead).toString("utf8");
-    if (source.includes("\0") || source.includes("\uFFFD")) {
+    // Fatal decoding distinguishes malformed bytes from a legitimate U+FFFD in valid JavaScript
+    // source; replacement-based decoding cannot preserve that production-loadable distinction.
+    const source = new TextDecoder("utf-8", { fatal: true }).decode(content.subarray(0, bytesRead));
+    if (source.includes("\0")) {
       throw new Error("plugin audit input is invalid");
     }
     return source;

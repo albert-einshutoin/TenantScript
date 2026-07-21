@@ -647,7 +647,8 @@ describe("plugin audit", () => {
     const sources = [
       'exports.plugin = { dispatch(request) { const { context } = request; return context.capability("slack.send", {}); } };',
       'exports.plugin = { dispatch(request) { const { context: broker } = request; return broker.capability("slack.send", {}); } };',
-      'exports.plugin = { dispatch(request) { const broker = request.context; return broker.capability("slack.send", {}); } };'
+      'exports.plugin = { dispatch(request) { const broker = request.context; return broker.capability("slack.send", {}); } };',
+      'exports.plugin = { dispatch(request) { var broker = request.context; return broker.capability("slack.send", {}); } };'
     ];
 
     for (const bundleCode of sources) {
@@ -1530,9 +1531,31 @@ describe("plugin audit", () => {
     expect(stderr).toEqual([]);
   });
 
+  it("accepts a valid UTF-8 replacement character in bundle source", async () => {
+    const root = await createTempDir();
+    const manifest = join(root, "manifest.json");
+    const packageJson = join(root, "package.json");
+    const bundle = join(root, "plugin.js");
+    const cliVersion = await readCliPackageVersion();
+    await writeFile(manifest, JSON.stringify(validManifest()));
+    await writeFile(packageJson, JSON.stringify(validPackageJson(cliVersion)));
+    await writeFile(bundle, 'const note = "valid � text";');
+    const stdout: string[] = [];
+
+    await expect(
+      runExtCli(
+        ["audit", "--manifest", manifest, "--package", packageJson, "--bundle", bundle],
+        rollbackOnlyClient,
+        captureIo(stdout, [])
+      )
+    ).resolves.toBe(0);
+    expect(JSON.parse(stdout[0] ?? "null")).toEqual({ version: 1, passed: true, findings: [] });
+  });
+
   it.each([
     ["oversized", "x".repeat(4_194_304 + 1)],
-    ["binary", Buffer.from([0, 1, 2, 3])]
+    ["binary", Buffer.from([0, 1, 2, 3])],
+    ["invalid UTF-8", Buffer.from([0xc3, 0x28])]
   ])("rejects %s bundle input without reflecting content", async (_name, bundleContent) => {
     const root = await createTempDir();
     const manifest = join(root, "manifest.json");
