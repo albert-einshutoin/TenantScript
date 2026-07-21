@@ -298,7 +298,7 @@ function registerHandlerContextParameters(
       continue;
     }
 
-    // Bundlers commonly hoist a handler into a const-bound arrow and reference that binding from
+    // Bundlers commonly hoist a handler into a const-bound callable and reference that binding from
     // the handlers map. Recording only the parameter span keeps resolution lexical and prevents an
     // unrelated call site with the same identifier from being interpreted as a handler.
     if (
@@ -308,8 +308,20 @@ function registerHandlerContextParameters(
     ) {
       continue;
     }
-    let open = index + 2;
-    if (tokens[open]?.value === "async") open += 1;
+    let callable = index + 2;
+    if (tokens[callable]?.value === "async") callable += 1;
+    if (tokens[callable]?.value === "function") {
+      let open = callable + 1;
+      if (tokens[open]?.kind === "identifier") open += 1;
+      if (tokens[open]?.value !== "(") continue;
+      const close = findMatchingToken(tokens, open, "(", ")");
+      if (close !== -1 && tokens[close + 1]?.value === "{") {
+        callableBindings.set(tokens[index]?.value ?? "", { open, close });
+      }
+      continue;
+    }
+
+    const open = callable;
     if (tokens[open]?.value !== "(") continue;
     const close = findMatchingToken(tokens, open, "(", ")");
     if (close !== -1 && tokens[close + 1]?.value === "=" && tokens[close + 2]?.value === ">") {

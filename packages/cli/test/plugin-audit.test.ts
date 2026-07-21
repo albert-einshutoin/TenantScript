@@ -133,6 +133,22 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects renamed context bindings in referenced function-expression handlers", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          'const handler = async function (_payload, ctx) { return ctx.capability("slack.send", {}); };',
+          "export const handlers = { event: handler };"
+        ].join("\n")
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("does not treat an unrelated binding named context as the SDK broker", () => {
     expect(
       auditPluginPackage({
