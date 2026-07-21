@@ -257,6 +257,12 @@ export {
   type SlackOAuthClientConfiguration
 } from "./slack-oauth-client.js";
 export {
+  createSlackOAuthCallbackService,
+  SlackOAuthCallbackError,
+  type SlackOAuthCallbackErrorCode,
+  type SlackOAuthCallbackService
+} from "./slack-oauth-callback.js";
+export {
   createDurableObjectNamespaceOAuthStateStore,
   OAuthStateStoreDurableObject,
   OAuthStateStoreError,
