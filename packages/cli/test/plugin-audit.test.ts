@@ -447,6 +447,27 @@ describe("plugin audit", () => {
     }
   });
 
+  it("detects capabilities in computed plugin dispatch fields", () => {
+    const sources = [
+      'exports.plugin = { ["dispatch"](request) { return request.context.capability("admin.delete", {}); } };',
+      'module.exports = { plugin: { async ["dispatch"](request) { return request.context.capability("admin.delete", {}); } } };',
+      'exports.plugin = { ["dispatch"]: request => request.context.capability("admin.delete", {}) };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects capabilities in CommonJS-exported plugin bindings", () => {
     const sources = [
       'const plugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; exports.plugin = plugin;',

@@ -568,7 +568,17 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   // Production prefers plugin.dispatch over legacy handlers. Restricting discovery to exported
   // plugin objects covers the runtime surface without trusting unrelated application dispatchers.
   for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index]?.value !== "dispatch") continue;
+    const candidate = tokens[index];
+    if (candidate?.value !== "dispatch") continue;
+    const isComputedDispatch =
+      candidate.kind === "string" &&
+      candidate.literalValid === true &&
+      tokens[index - 1]?.value === "[" &&
+      tokens[index + 1]?.value === "]";
+    const propertyStart = isComputedDispatch ? index - 1 : index;
+    const propertyEnd = isComputedDispatch ? index + 1 : index;
+    const fieldStart =
+      tokens[propertyStart - 1]?.value === "async" ? propertyStart - 1 : propertyStart;
     const objectOpen = enclosingObjects[index];
     if (
       objectOpen === undefined ||
@@ -576,22 +586,22 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     ) {
       continue;
     }
-    const startsObjectField = ["{", ","].includes(tokens[index - 1]?.value ?? "");
+    const startsObjectField = ["{", ","].includes(tokens[fieldStart - 1]?.value ?? "");
     if (!startsObjectField) continue;
 
-    if (tokens[index + 1]?.value === "(") {
-      const close = findMatchingToken(tokens, index + 1, "(", ")");
+    if (tokens[propertyEnd + 1]?.value === "(") {
+      const close = findMatchingToken(tokens, propertyEnd + 1, "(", ")");
       const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
-      if (body !== undefined) addDispatchScope(index + 1, close, body);
+      if (body !== undefined) addDispatchScope(propertyEnd + 1, close, body);
       continue;
     }
-    if ([",", "}"].includes(tokens[index + 1]?.value ?? "")) {
+    if (!isComputedDispatch && [",", "}"].includes(tokens[propertyEnd + 1]?.value ?? "")) {
       const named = callableBindings.get("dispatch");
       if (named !== undefined) addNamedDispatchScope(named);
       continue;
     }
-    if (tokens[index + 1]?.value !== ":") continue;
-    let value = index + 2;
+    if (tokens[propertyEnd + 1]?.value !== ":") continue;
+    let value = propertyEnd + 2;
     if (tokens[value]?.value === "async") value += 1;
     if (tokens[value]?.value === "function") {
       if (tokens[value + 1]?.kind === "identifier") value += 1;
