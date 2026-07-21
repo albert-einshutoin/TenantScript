@@ -18,6 +18,8 @@ export type CapabilityProvider = (input: unknown) => unknown;
 
 export {
   createSlackSendProvider,
+  SlackSendProviderError,
+  type SlackSendProviderErrorCode,
   type SlackSendProviderOptions
 } from "./slack-send-provider.js";
 
