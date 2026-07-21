@@ -534,7 +534,10 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   };
 
   const enclosingObjects = collectEnclosingObjectOpens(tokens);
-  const loweredPluginBindings = collectEsbuildCommonJsPluginBindings(tokens);
+  const exportedPluginBindings = new Set([
+    ...collectEsbuildCommonJsPluginBindings(tokens),
+    ...collectCommonJsObjectExportBindings(tokens, new Set(["plugin", "default"]), true)
+  ]);
   // Production prefers plugin.dispatch over legacy handlers. Restricting discovery to exported
   // plugin objects covers the runtime surface without trusting unrelated application dispatchers.
   for (let index = 0; index < tokens.length; index += 1) {
@@ -542,7 +545,7 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     const objectOpen = enclosingObjects[index];
     if (
       objectOpen === undefined ||
-      !isPluginDispatchObject(tokens, objectOpen, loweredPluginBindings, enclosingObjects)
+      !isPluginDispatchObject(tokens, objectOpen, exportedPluginBindings, enclosingObjects)
     ) {
       continue;
     }
@@ -587,7 +590,10 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   }
 
   const hasLoweredHandlerExport = hasEsbuildCommonJsHandlerExport(tokens);
-  const definePluginHandlerBindings = collectDefinePluginHandlerBindings(tokens, enclosingObjects);
+  const referencedHandlerBindings = new Set([
+    ...collectDefinePluginHandlerBindings(tokens, enclosingObjects),
+    ...collectCommonJsObjectExportBindings(tokens, new Set(["handlers"]), false)
+  ]);
   for (let index = 0; index < tokens.length; index += 1) {
     const candidate = tokens[index];
     const isBracketedHandlersProperty =
@@ -614,7 +620,7 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
         hasLoweredHandlerExport
       );
     const isReferencedHandlersDeclaration =
-      definePluginHandlerBindings.has(tokens[index]?.value ?? "") &&
+      referencedHandlerBindings.has(tokens[index]?.value ?? "") &&
       (braceDepths[index] ?? 0) === 0 &&
       isTopLevelVariableDeclarator(tokens, index);
     if (!isDirectHandlersDeclaration && !isReferencedHandlersDeclaration) continue;
@@ -700,6 +706,78 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     index = handlersClose;
   }
   return [...scopes.values()];
+}
+
+function collectCommonJsObjectExportBindings(
+  tokens: readonly BundleToken[],
+  properties: ReadonlySet<string>,
+  includeModuleExports: boolean
+): Set<string> {
+  const bindings = new Set<string>();
+  const braceDepths = collectBraceDepths(tokens);
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (
+      braceDepths[index] !== 0 ||
+      tokens[index]?.value !== "=" ||
+      tokens[index + 1]?.kind !== "identifier"
+    ) {
+      continue;
+    }
+
+    const directDotProperty = matchesTokenSequence(tokens, index - 3, [
+      "exports",
+      ".",
+      tokens[index - 1]?.value ?? "",
+      "="
+    ])
+      ? tokens[index - 1]?.value
+      : undefined;
+    const moduleDotProperty = matchesTokenSequence(tokens, index - 5, [
+      "module",
+      ".",
+      "exports",
+      ".",
+      tokens[index - 1]?.value ?? "",
+      "="
+    ])
+      ? tokens[index - 1]?.value
+      : undefined;
+    const directBracketProperty =
+      matchesTokenSequence(tokens, index - 4, [
+        "exports",
+        "[",
+        tokens[index - 2]?.value ?? "",
+        "]",
+        "="
+      ]) &&
+      tokens[index - 2]?.kind === "string" &&
+      tokens[index - 2]?.literalValid === true
+        ? tokens[index - 2]?.value
+        : undefined;
+    const moduleBracketProperty =
+      matchesTokenSequence(tokens, index - 6, [
+        "module",
+        ".",
+        "exports",
+        "[",
+        tokens[index - 2]?.value ?? "",
+        "]",
+        "="
+      ]) &&
+      tokens[index - 2]?.kind === "string" &&
+      tokens[index - 2]?.literalValid === true
+        ? tokens[index - 2]?.value
+        : undefined;
+    const property =
+      directDotProperty ?? moduleDotProperty ?? directBracketProperty ?? moduleBracketProperty;
+    const assignsModule = matchesTokenSequence(tokens, index - 3, ["module", ".", "exports", "="]);
+    if (properties.has(property ?? "") || (includeModuleExports && assignsModule)) {
+      // Only a top-level identifier can be tied back to a bounded object declaration. Refusing
+      // arbitrary expressions avoids treating an unrelated factory result as trusted plugin code.
+      bindings.add(tokens[index + 1]?.value ?? "");
+    }
+  }
+  return bindings;
 }
 
 function collectBraceDepths(tokens: readonly BundleToken[]): number[] {

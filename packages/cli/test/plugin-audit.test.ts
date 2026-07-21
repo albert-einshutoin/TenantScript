@@ -334,6 +334,26 @@ describe("plugin audit", () => {
     }
   });
 
+  it("detects capabilities in CommonJS-exported handler bindings", () => {
+    const sources = [
+      'const legacyHandlers = { event(_payload, ctx) { return ctx.capability("admin.delete", {}); } }; exports.handlers = legacyHandlers;',
+      'const handlers = { event(_payload, ctx) { return ctx.capability("admin.delete", {}); } }; module.exports.handlers = handlers;'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects capabilities in runtime-supported plugin dispatch exports", () => {
     const sources = [
       'module.exports = { dispatch(request) { return request.context.capability("slack.send", {}); } };',
@@ -341,6 +361,27 @@ describe("plugin audit", () => {
       'module.exports = { plugin: { dispatch(request) { return request.context.capability("slack.send", {}); } } };',
       'function dispatch(request) { return request.context.capability("slack.send", {}); } exports.plugin = { dispatch };',
       'const dispatch = request => request.context.capability("slack.send", {}); exports.plugin = { dispatch };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
+  it("detects capabilities in CommonJS-exported plugin bindings", () => {
+    const sources = [
+      'const plugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; exports.plugin = plugin;',
+      'const defaultPlugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; module.exports.default = defaultPlugin;',
+      'const rootPlugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; module.exports = rootPlugin;'
     ];
 
     for (const bundleCode of sources) {
