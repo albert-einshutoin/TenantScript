@@ -49,10 +49,24 @@ new version.
 2. Disable or remove the legacy connection metadata through the deployment's reviewed administrative
    procedure without printing its token or `secret_ref_json` to public logs.
 3. Deploy the new Worker and complete the Slack installation flow for that same app and tenant. The
-   callback writes a new app-scoped encrypted record and matching D1 metadata atomically within the
-   documented callback boundary.
+   callback first writes a new app-scoped encrypted record and then writes its matching D1 metadata.
 4. Verify the connection metadata belongs to the expected app database and that a capability using the
    new ref succeeds. Revoke the superseded Slack credential if reconnecting issued a replacement.
+
+The Durable Object secret write and D1 metadata write are not one distributed transaction. If the
+callback fails after the secret write, D1 may have no matching connection row while the encrypted
+credential remains:
+
+1. Check the authoritative app database for the expected app, tenant, and workspace connection. Treat
+   an absent row as a possible orphaned credential; a failure response alone cannot prove that no
+   secret was written.
+2. To continue the migration, repeat the Slack installation for the same app, tenant, and workspace.
+   The successful callback replaces the deterministic app-scoped secret ref and then records its D1
+   metadata; verify both through the production interfaces.
+3. To abandon the migration, revoke the newly issued credential at Slack. If the exact workspace ID is
+   known, remove its exact app-scoped ref through a reviewed deployment-local cleanup inside the
+   trusted Worker boundary. Never delete by tenant ID alone. TenantScript does not currently ship an
+   accountless orphan-list or cleanup command.
 
 ### Controlled decrypt-and-reencrypt
 
