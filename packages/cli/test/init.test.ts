@@ -104,14 +104,14 @@ describe("ext init", () => {
 
     await expect(
       runExtCli(
-        ["init", "--template", "unknown-template", "--dir", target],
+        ["init", "--template", "unknown-template\nforged-log-line", "--dir", target],
         rollbackOnlyClient,
         captureIo([], stderr)
       )
     ).resolves.toBe(2);
 
     expect(stderr).toEqual([
-      "invalid init option: unknown --template unknown-template; available: webhook-transformer"
+      "invalid init option: unknown --template; available: webhook-transformer"
     ]);
     await expect(access(target)).rejects.toMatchObject({ code: "ENOENT" });
   });

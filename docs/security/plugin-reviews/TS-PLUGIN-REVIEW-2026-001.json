@@ -11,10 +11,10 @@
       "packages/cli/test/init.test.ts"
     ],
     "sourceDigests": {
-      "packages/cli/src/index.ts": "f6d7c060e36b1087080b358b3d169bbed6be85241256f90c466ab2ef963c9a8c",
+      "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
       "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-      "packages/cli/src/plugin-scaffold.ts": "f378f4956bc6ae2d51c5912d639292a3473e8eba927d2ef5b0a49a2c6ed02b28",
-      "packages/cli/test/init.test.ts": "c895fe18621efb7607bb03a7d29c9869960069223d33e1e0a15d25266d915417"
+      "packages/cli/src/plugin-scaffold.ts": "3285cfc89678ed3b7cb05cdfffbe8b13a63e1f421d3eac0593afa2637bfadf4e",
+      "packages/cli/test/init.test.ts": "8e743b5389bedd958613ee93a9415dcb15fd34895ecebc832aa8b41bde1fa45b"
     }
   },
   "reviewer": {
@@ -33,7 +33,7 @@
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "The CLI validates template identity and rejects hook or type overrides before filesystem mutation. Both scaffold modes bound interpolated names and hooks; the webhook template requests no capabilities, denies egress, has no side effects, rejects undeclared hooks, and its generated bundle is audited before its generated tests run."
+      "notes": "The CLI validates template identity and rejects unknown or conflicting options before filesystem mutation without reflecting attacker-controlled option values. Both scaffold modes bound interpolated names and hooks; the webhook template requests no capabilities, denies egress, has no side effects, rejects undeclared hooks, and its generated bundle is audited before its generated tests run."
     },
     {
       "name": "compatibility",
@@ -74,10 +74,10 @@
     }
   ],
   "evidenceDigests": {
-    "packages/cli/src/index.ts": "f6d7c060e36b1087080b358b3d169bbed6be85241256f90c466ab2ef963c9a8c",
+    "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
     "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-    "packages/cli/src/plugin-scaffold.ts": "f378f4956bc6ae2d51c5912d639292a3473e8eba927d2ef5b0a49a2c6ed02b28",
-    "packages/cli/test/init.test.ts": "c895fe18621efb7607bb03a7d29c9869960069223d33e1e0a15d25266d915417",
+    "packages/cli/src/plugin-scaffold.ts": "3285cfc89678ed3b7cb05cdfffbe8b13a63e1f421d3eac0593afa2637bfadf4e",
+    "packages/cli/test/init.test.ts": "8e743b5389bedd958613ee93a9415dcb15fd34895ecebc832aa8b41bde1fa45b",
     "scripts/agent-plugin-scaffold-e2e.test.mjs": "7bb7a6004d95969b21942643a3eb24617acd81e815bae17658e69a9513191a21",
     "docs/quickstarts/agent-plugin-authoring.md": "a60d8064a33d6922bfcd8e86a31e25fba386714fd09923060b2c9bcd9e86c0d8",
     "docs/reference/cli.md": "f01767aa4b4d2dfe37ea658e87626f7e39ee6458e70406935fcbf6578a959cd7",

@@ -44,8 +44,12 @@ const pluginTemplateSecurityNotes: Record<PluginTemplateName, string> = {
 };
 
 export function resolvePluginTemplate(name: string): PluginTemplateDefinition | undefined {
-  if (!pluginTemplateNames.some((candidate) => candidate === name)) return undefined;
-  return pluginTemplateDefinitions[name as PluginTemplateName];
+  if (!isPluginTemplateName(name)) return undefined;
+  return pluginTemplateDefinitions[name];
+}
+
+function isPluginTemplateName(name: string): name is PluginTemplateName {
+  return pluginTemplateNames.some((candidate) => candidate === name);
 }
 
 const exactPackageVersionPattern =

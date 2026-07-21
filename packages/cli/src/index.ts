@@ -1003,7 +1003,7 @@ function parseInitArgs(
   if (requestedTemplate !== undefined && template === undefined) {
     return {
       ok: false,
-      error: `invalid init option: unknown --template ${requestedTemplate}; available: ${pluginTemplateNames.join(", ")}`
+      error: `invalid init option: unknown --template; available: ${pluginTemplateNames.join(", ")}`
     };
   }
   if (template !== undefined && flags.hook !== undefined) {
