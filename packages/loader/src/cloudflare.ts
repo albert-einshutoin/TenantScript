@@ -142,7 +142,7 @@ export function createCloudflareDynamicWorkerCaller(
   return {
     run: async (request) => {
       const requestBody = validateRunRequest(request);
-      const workerId = await deriveWorkerId(request);
+      const workerId = await deriveWorkerId(request, configuration.compatibilityDate);
       const worker = configuration.loader.get(workerId, async () => {
         let artifact: string;
         try {
@@ -444,11 +444,16 @@ function validateRunRequest(value: unknown): string {
   }
 }
 
-async function deriveWorkerId(request: CloudflareDynamicWorkerRunRequest): Promise<string> {
-  // Loader.get() caches both code and env. Every authority that can change a scoped RPC binding
-  // therefore belongs in the opaque ID; code-only reuse could hand tenant A's stub to tenant B.
+async function deriveWorkerId(
+  request: CloudflareDynamicWorkerRunRequest,
+  compatibilityDate: string
+): Promise<string> {
+  // Loader.get() caches both code and env. Every value that can change WorkerCode or scoped RPC
+  // authority therefore belongs in the opaque ID; otherwise warm isolates can retain stale code,
+  // compatibility behavior, or another tenant's binding.
   const scope = [
     DYNAMIC_WORKER_RUNTIME_VERSION,
+    compatibilityDate,
     request.tenantId,
     request.installationId,
     request.pluginId,

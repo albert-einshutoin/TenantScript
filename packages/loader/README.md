@@ -13,8 +13,9 @@ and security suite before changing isolation, timeout, capability, or continuati
 - `@tenantscript/loader/cloudflare` provides `createCloudflareDynamicWorkerCaller` for a trusted
   Cloudflare Worker host using a Dynamic Worker Loader binding.
 
-The Cloudflare caller derives an opaque cache ID from the complete tenant, installation, plugin,
-artifact, and grant scope; verifies the artifact SHA-256 before loading it; adapts the deployed
+The Cloudflare caller derives an opaque cache ID from the runtime wrapper version, compatibility
+date, and complete tenant, installation, plugin, artifact, and grant scope; verifies the artifact
+SHA-256 before loading it; adapts the deployed
 CommonJS plugin bundle through a fixed Worker fetch wrapper that dispatches the scaffolded
 `plugin` export; exposes only trusted scoped
 bindings; disables ambient outbound access; and applies CPU/subrequest plus wall-clock limits on

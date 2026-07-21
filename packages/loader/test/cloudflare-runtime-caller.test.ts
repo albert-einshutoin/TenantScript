@@ -158,6 +158,39 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(new Set(loader.ids).size).toBe(variants.length);
   });
 
+  it("invalidates cached worker code when the compatibility date changes", async () => {
+    const artifact = "exports.handlers = { event: async () => true };";
+    const loader = createCachingLoader(() => Response.json({ value: true }));
+    const createCaller = (compatibilityDate: string) =>
+      createCloudflareDynamicWorkerCaller({
+        loader,
+        compatibilityDate,
+        loadArtifact: () => Promise.resolve(artifact),
+        createScopeBindings: () => ({}),
+        readInvocationEvidence: () =>
+          Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
+        recorder: { record: ({ execution }) => Promise.resolve(execution) }
+      });
+    const request = {
+      executionId: "exec_compatibility",
+      tenantId: "tenant_1",
+      installationId: "installation_1",
+      pluginId: "plugin_1",
+      hookName: "event",
+      hookType: "event" as const,
+      version: "1.0.0",
+      artifactSha256: sha256(artifact),
+      grantRevision: "grant_1",
+      payload: {},
+      limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
+    };
+
+    await createCaller("2026-07-20").run(request);
+    await createCaller("2026-07-21").run({ ...request, executionId: "exec_compatibility_2" });
+
+    expect(new Set(loader.ids).size).toBe(2);
+  });
+
   it("rejects an artifact hash mismatch before invoking tenant code", async () => {
     const loader = createCachingLoader(() => Response.json({ value: "must-not-run" }));
     const caller = createCloudflareDynamicWorkerCaller({

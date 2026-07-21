@@ -66,7 +66,7 @@ timeoutは`ScopedRuntimeTimeoutError`（`executionStatus: "timeout"`）、subreq
 `@tenantscript/loader/cloudflare`の`createCloudflareDynamicWorkerCaller`は、信頼されたhost Workerから
 Cloudflare Dynamic Worker Loaderを呼ぶproduction composition境界である。
 
-- worker IDはtenant、installation、plugin、artifact SHA-256、grant revisionの全scopeからopaqueに導出し、同じauthorityだけを再利用する。
+- worker IDはruntime wrapper version、compatibility date、tenant、installation、plugin、artifact SHA-256、grant revisionの全scopeからopaqueに導出し、同じWorkerCodeとauthorityだけを再利用する。
 - artifactは4 MiB以内かつ宣言SHA-256との完全一致を確認し、`ext deploy`が生成するCommonJS bundleのscaffold標準`plugin.dispatch`を固定ES module fetch wrapperから呼び出す。top-level `handlers`は既存bundle向けfallbackである。
 - `globalOutbound: null`と信頼済みscoped bindingだけを渡し、呼び出しごとにCPU/subrequest limitとwall-clock timeoutを適用する。timeout時はrequestをabortし、`timeout` executionを永続化する。
 - request/responseはclosed shapeかつ1 MiB以内とし、tenant codeの返値からusageやcapability evidenceを採用しない。
