@@ -737,6 +737,29 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("audits tagged-template capability invocations", () => {
+    const exact = auditPluginPackage({
+      manifest: validManifest(),
+      packageJson: validPackageJson(),
+      expectedSdkVersion: "1.2.3",
+      bundleCode: handlerBundle("context.capability`slack.send`;")
+    });
+    const dynamic = auditPluginPackage({
+      manifest: validManifest(),
+      packageJson: validPackageJson(),
+      expectedSdkVersion: "1.2.3",
+      bundleCode:
+        "export const handlers = { event(_payload, { capability }) { capability`send.${kind}`; } };"
+    });
+
+    expect(exact.findings).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+    expect(dynamic.findings).toEqual([
+      finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
+    ]);
+  });
+
   it("treats an interpolated template capability name as dynamic", () => {
     const manifest = validManifest();
     manifest.capabilities = { "send.message": {} };

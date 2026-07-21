@@ -225,6 +225,8 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
 
   for (let index = 0; index < tokens.length; index += 1) {
     const callOpen = capabilityCallOpen(tokens, index);
+    const taggedArgument = capabilityTaggedTemplateArgument(tokens, index);
+    const isCapabilityInvocation = callOpen !== -1 || taggedArgument !== undefined;
     const bracketReceiver = bracketedPropertyReceiverIndex(tokens, index, "capability");
     const contextContainer = contextContainerReceiverIndex(tokens, index);
     const isMemberCapabilityCall =
@@ -242,21 +244,28 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
             tokens[contextContainer]?.value ?? "",
             index
           ))) &&
-      callOpen !== -1;
+      isCapabilityInvocation;
     const isDirectCapabilityCall =
       tokens[index]?.kind === "identifier" &&
       bindingAppliesAt(capabilityBindings.direct, tokens[index]?.value ?? "", index) &&
       tokens[index - 1]?.value !== "." &&
-      callOpen !== -1;
+      isCapabilityInvocation;
     if (isMemberCapabilityCall || isDirectCapabilityCall) {
-      const callClose = findMatchingToken(tokens, callOpen, "(", ")");
+      const callClose = callOpen === -1 ? -1 : findMatchingToken(tokens, callOpen, "(", ")");
       const argumentsList =
         callClose === -1 ? [] : splitTopLevel(tokens.slice(callOpen + 1, callClose), ",");
       const usesFunctionCall =
-        tokens[callOpen - 1]?.value === "call" && tokens[callOpen - 2]?.value === ".";
+        callOpen !== -1 &&
+        tokens[callOpen - 1]?.value === "call" &&
+        tokens[callOpen - 2]?.value === ".";
       const usesFunctionApply =
-        tokens[callOpen - 1]?.value === "apply" && tokens[callOpen - 2]?.value === ".";
-      const argument = argumentsList[usesFunctionCall ? 1 : 0] ?? [];
+        callOpen !== -1 &&
+        tokens[callOpen - 1]?.value === "apply" &&
+        tokens[callOpen - 2]?.value === ".";
+      const argument =
+        taggedArgument === undefined
+          ? (argumentsList[usesFunctionCall ? 1 : 0] ?? [])
+          : [taggedArgument];
       if (
         !usesFunctionApply &&
         argument.length === 1 &&
@@ -312,6 +321,17 @@ function capabilityCallOpen(tokens: readonly BundleToken[], capabilityIndex: num
     ? capabilityIndex + 1
     : capabilityIndex;
   return callOpenAfterMember(tokens, memberEnd);
+}
+
+function capabilityTaggedTemplateArgument(
+  tokens: readonly BundleToken[],
+  capabilityIndex: number
+): BundleToken | undefined {
+  const memberEnd = isStaticBracketedProperty(tokens, capabilityIndex, "capability")
+    ? capabilityIndex + 1
+    : capabilityIndex;
+  const argument = tokens[memberEnd + 1];
+  return argument?.kind === "string" ? argument : undefined;
 }
 
 function callOpenAfterMember(tokens: readonly BundleToken[], memberEnd: number): number {
