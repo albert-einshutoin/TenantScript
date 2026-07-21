@@ -647,7 +647,10 @@ describe("plugin audit", () => {
     const sources = [
       'exports.plugin = { dispatch(request) { const { context } = request; return context.capability("slack.send", {}); } };',
       'exports.plugin = { dispatch(request) { const { context: broker } = request; return broker.capability("slack.send", {}); } };',
+      'exports.plugin = { dispatch(request) { const { capability } = request.context; return capability("slack.send", {}); } };',
+      'exports.plugin = { dispatch(request) { const { ["capability"]: invoke } = request["context"]; return invoke("slack.send", {}); } };',
       'exports.plugin = { dispatch(request) { const broker = request.context; return broker.capability("slack.send", {}); } };',
+      'exports.plugin = { dispatch(request) { const broker = request["context"]; return broker.capability("slack.send", {}); } };',
       'exports.plugin = { dispatch(request) { var broker = request.context; return broker.capability("slack.send", {}); } };'
     ];
 

@@ -403,6 +403,20 @@ function contextContainerReceiverIndex(
     : -1;
 }
 
+function staticContextAccessEnd(tokens: readonly BundleToken[], receiverIndex: number): number {
+  if (tokens[receiverIndex]?.kind !== "identifier") return -1;
+  if (tokens[receiverIndex + 1]?.value === "." && tokens[receiverIndex + 2]?.value === "context") {
+    return receiverIndex + 2;
+  }
+  return tokens[receiverIndex + 1]?.value === "[" &&
+    tokens[receiverIndex + 2]?.kind === "string" &&
+    tokens[receiverIndex + 2]?.literalValid === true &&
+    tokens[receiverIndex + 2]?.value === "context" &&
+    tokens[receiverIndex + 3]?.value === "]"
+    ? receiverIndex + 3
+    : -1;
+}
+
 function collectCapabilityBindings(tokens: readonly BundleToken[]): {
   receivers: Map<string, BindingRange[]>;
   direct: Map<string, BindingRange[]>;
@@ -431,16 +445,32 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
           source?.kind === "identifier"
         ) {
           if (bindingAppliesAt(containers, source.value, close + 2)) {
-            const aliases = collectDestructuredContext(tokens.slice(index + 1, close));
-            registerDerivedBindings(
-              tokens,
-              receivers,
-              aliases.receivers,
-              close + 3,
-              close + 2,
-              scope
-            );
-            registerDerivedBindings(tokens, direct, aliases.direct, close + 3, close + 2, scope);
+            const contextAccessEnd = staticContextAccessEnd(tokens, close + 2);
+            if (contextAccessEnd !== -1) {
+              // Destructuring from request.context binds broker members directly; treating this as
+              // request destructuring would incorrectly search for another nested context field.
+              const aliases = new Set<string>();
+              registerDestructuredCapability(tokens.slice(index + 1, close), aliases);
+              registerDerivedBindings(
+                tokens,
+                direct,
+                aliases,
+                contextAccessEnd + 1,
+                close + 2,
+                scope
+              );
+            } else {
+              const aliases = collectDestructuredContext(tokens.slice(index + 1, close));
+              registerDerivedBindings(
+                tokens,
+                receivers,
+                aliases.receivers,
+                close + 3,
+                close + 2,
+                scope
+              );
+              registerDerivedBindings(tokens, direct, aliases.direct, close + 3, close + 2, scope);
+            }
           } else if (bindingAppliesAt(receivers, source.value, close + 2)) {
             const aliases = new Set<string>();
             registerDestructuredCapability(tokens.slice(index + 1, close), aliases);
@@ -454,15 +484,15 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
         ["const", "let", "var"].includes(variableDeclarationKeyword(tokens, index) ?? "") &&
         tokens[index + 1]?.value === "=" &&
         tokens[index + 2]?.kind === "identifier" &&
-        tokens[index + 3]?.value === "." &&
-        tokens[index + 4]?.value === "context" &&
         bindingAppliesAt(containers, tokens[index + 2]?.value ?? "", index + 2)
       ) {
+        const contextAccessEnd = staticContextAccessEnd(tokens, index + 2);
+        if (contextAccessEnd === -1) continue;
         registerDerivedBindings(
           tokens,
           receivers,
           new Set([tokens[index]?.value ?? ""]),
-          index + 5,
+          contextAccessEnd + 1,
           index,
           scope
         );
