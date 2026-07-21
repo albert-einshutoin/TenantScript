@@ -87,6 +87,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(runtimeModule).toContain("serializeJsonValue(value === undefined ? null : value)");
     expect(runtimeModule).toContain("commonJsExports?.plugin");
     expect(runtimeModule).toContain('safeObjectGetOwnPropertyDescriptor(value, "decision")');
+    expect(runtimeModule).toContain("await inFlightCapabilityCalls[index]");
     const lossyRuntimeSource = runtimeModule.replace(
       'const pluginModule = await import("./tenant-plugin.cjs");',
       'const pluginModule = { default: { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } } };'
@@ -150,6 +151,40 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         {}
       )
     ).rejects.toThrow("TenantScript handler is unavailable");
+    const capabilityRuntimeSource = runtimeModule.replace(
+      'const pluginModule = await import("./tenant-plugin.cjs");',
+      'const pluginModule = { plugin: { dispatch: async ({ context }) => { void context.capability("slack.send", {}); return { ok: true, value: undefined }; } } };'
+    );
+    const capabilityRuntimeNamespace = (await import(
+      `data:text/javascript;base64,${Buffer.from(capabilityRuntimeSource).toString("base64")}`
+    )) as unknown as {
+      default: { fetch: (request: Request, env: Record<string, unknown>) => Promise<Response> };
+    };
+    let resolveCapability: (() => void) | undefined;
+    const capability = new Promise<void>((resolve) => {
+      resolveCapability = resolve;
+    });
+    const capabilityFetch = capabilityRuntimeNamespace.default.fetch(
+      new Request("https://runtime.tenantscript.internal/v1/executions/exec_capability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          executionId: "exec_capability",
+          hookName: "invoice.created",
+          hookType: "event",
+          payload: {}
+        })
+      }),
+      { CAPABILITIES: { call: () => capability } }
+    );
+    let capabilityFetchSettled = false;
+    void capabilityFetch.then(() => {
+      capabilityFetchSettled = true;
+    });
+    await Promise.resolve();
+    expect(capabilityFetchSettled).toBe(false);
+    resolveCapability?.();
+    await expect(capabilityFetch).resolves.toBeInstanceOf(Response);
     expect(loader.entrypointLimits).toEqual([
       { cpuMs: 10, subRequests: 3 },
       { cpuMs: 10, subRequests: 3 }

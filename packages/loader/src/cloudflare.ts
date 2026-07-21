@@ -671,6 +671,7 @@ function assertLosslessJsonValue(value: unknown, ancestors = new Set<object>()):
 const DYNAMIC_WORKER_RUNTIME_SOURCE = String.raw`
 const SafeSet = Set;
 const safeArrayIsArray = Array.isArray;
+const safeArrayPush = Function.call.bind(Array.prototype.push);
 const safeNumberIsFinite = Number.isFinite;
 const safeObjectHasOwn = Object.hasOwn;
 const safeObjectIs = Object.is;
@@ -684,6 +685,7 @@ const safeRequestJson = Function.call.bind(Request.prototype.json);
 const SafeResponse = Response;
 const SafeString = String;
 const safeJsonStringify = JSON.stringify.bind(JSON);
+const safePromiseResolve = Promise.resolve.bind(Promise);
 
 // Response.json is a serializer, not a lossless validator. Reject unsupported plugin values before
 // a successful execution can be recorded with output that differs from the plugin result.
@@ -811,6 +813,7 @@ export default {
     ) {
       throw new Error("invalid TenantScript runtime request");
     }
+    const inFlightCapabilityCalls = [];
     const context = {
       capability(name, capabilityInput) {
         if (
@@ -820,7 +823,11 @@ export default {
         ) {
           throw new Error("TenantScript capability binding is unavailable");
         }
-        return env.CAPABILITIES.call(input.executionId, name, capabilityInput);
+        const call = safePromiseResolve(
+          env.CAPABILITIES.call(input.executionId, name, capabilityInput)
+        );
+        safeArrayPush(inFlightCapabilityCalls, call);
+        return call;
       }
     };
     let value;
@@ -850,6 +857,9 @@ export default {
       }
       const handler = handlerDescriptor.value;
       value = validateHookReturn(input.hookType, await handler(input.payload, context));
+    }
+    for (let index = 0; index < inFlightCapabilityCalls.length; index += 1) {
+      await inFlightCapabilityCalls[index];
     }
     if (value !== undefined) assertJsonValue(value);
     return new SafeResponse('{"value":' + serializeJsonValue(value === undefined ? null : value) + "}", {

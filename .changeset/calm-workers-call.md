@@ -17,3 +17,4 @@ validated envelope.
 Generated CommonJS namespace shapes are unwrapped before dispatch, and policy decisions require
 own data properties.
 Legacy handler lookup accepts only own function-valued data properties.
+Unawaited capability RPCs are drained before the wrapper can emit a successful response.
