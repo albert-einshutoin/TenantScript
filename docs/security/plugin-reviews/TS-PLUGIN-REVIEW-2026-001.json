@@ -1,11 +1,12 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-001",
-  "baselineCommit": "92a9951a97bd787c3e6c42553470d0d56b3af8f1",
+  "baselineCommit": "a8d4a6e9449f3dee190b1d46bc23a3cd07053a8b",
   "target": {
     "name": "Built-in ext init plugin scaffold",
     "scope": [
       "packages/cli/src/index.ts",
+      "packages/cli/src/plugin-audit.ts",
       "packages/cli/src/plugin-scaffold.ts",
       "packages/cli/test/init.test.ts"
     ]
@@ -14,13 +15,14 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-07-21T12:22:30.000Z",
+  "reviewedAt": "2026-07-21T12:28:30.000Z",
   "domains": [
     {
       "name": "security",
       "status": "pass",
       "evidence": [
         "packages/cli/src/index.ts",
+        "packages/cli/src/plugin-audit.ts",
         "packages/cli/src/plugin-scaffold.ts",
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
@@ -66,6 +68,7 @@
   ],
   "evidenceDigests": {
     "packages/cli/src/index.ts": "2008fe809a824757aaeb64abf4349e8dc4584f26e9c0882ba070c177c250f45d",
+    "packages/cli/src/plugin-audit.ts": "869280221e61c28b44c9983734317ea1bf0c404f8dbe68da0e05930b63facc9d",
     "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
     "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc",
     "scripts/agent-plugin-scaffold-e2e.test.mjs": "35d5a53f8a5aa897ae8b5974c943ba201406b37ac65d3d53b126999cbf9a8ceb",
