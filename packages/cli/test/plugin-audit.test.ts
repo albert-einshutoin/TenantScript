@@ -93,6 +93,7 @@ describe("plugin audit", () => {
     const bundleCode = [
       '// fetch("https://example.invalid")',
       "const note = 'context.capability(\"secret.sentinel\", {})';",
+      "const pattern = /fetch\\(/u;",
       'context.capability("secret.sentinel", {});'
     ].join("\n");
 

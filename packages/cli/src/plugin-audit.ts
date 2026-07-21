@@ -255,6 +255,8 @@ function tokenizeBundle(source: string): BundleToken[] {
       index = skipLineComment(source, index + 2);
     } else if (character === "/" && next === "*") {
       index = skipBlockComment(source, index + 2);
+    } else if (character === "/" && isRegexLiteralStart(source, index, tokens)) {
+      index = skipRegexLiteral(source, index + 1);
     } else if (character === '"' || character === "'") {
       const stringToken = readStringToken(source, index, character);
       tokens.push(stringToken.token);
@@ -312,6 +314,38 @@ function skipLineComment(source: string, start: number): number {
 function skipBlockComment(source: string, start: number): number {
   const end = source.indexOf("*/", start);
   return end === -1 ? source.length : end + 2;
+}
+
+function isRegexLiteralStart(
+  source: string,
+  slashIndex: number,
+  tokens: readonly BundleToken[]
+): boolean {
+  let index = slashIndex - 1;
+  while (index >= 0 && /\s/u.test(source[index] ?? "")) index -= 1;
+  if (index < 0 || "=(:,[!&|?;{}".includes(source[index] ?? "")) return true;
+  return ["return", "throw", "case"].includes(tokens.at(-1)?.value ?? "");
+}
+
+function skipRegexLiteral(source: string, start: number): number {
+  let index = start;
+  let insideCharacterClass = false;
+  while (index < source.length) {
+    const character = source[index];
+    if (character === "\\") index += 2;
+    else if (character === "[") {
+      insideCharacterClass = true;
+      index += 1;
+    } else if (character === "]") {
+      insideCharacterClass = false;
+      index += 1;
+    } else if (character === "/" && !insideCharacterClass) {
+      index += 1;
+      while (index < source.length && /[A-Za-z]/u.test(source[index] ?? "")) index += 1;
+      return index;
+    } else index += 1;
+  }
+  return source.length;
 }
 
 function skipQuoted(source: string, start: number, quote: string): number {
