@@ -477,6 +477,7 @@ function validateRunRequest(value: unknown): string {
     const body = JSON.stringify({
       executionId: value.executionId,
       hookName: value.hookName,
+      hookType: value.hookType,
       payload: value.payload
     });
     if (new TextEncoder().encode(body).byteLength > MAX_DYNAMIC_WORKER_REQUEST_BYTES) {
@@ -724,6 +725,20 @@ function assertJsonValue(value, ancestors = new Set()) {
   }
 }
 
+function validateLegacyHookReturn(hookType, value) {
+  if (hookType === "event") return undefined;
+  if (hookType === "transform") {
+    if (value === undefined) throw new Error("TenantScript legacy hook return contract failed");
+    return value;
+  }
+  if (value === null || typeof value !== "object") {
+    throw new Error("TenantScript legacy hook return contract failed");
+  }
+  if (value.decision === "allow" || value.decision === "deny") return value;
+  if (value.decision === "modify" && "payload" in value) return value;
+  throw new Error("TenantScript legacy hook return contract failed");
+}
+
 export default {
   async fetch(request, env) {
     if (
@@ -738,9 +753,10 @@ export default {
       input === null ||
       typeof input !== "object" ||
       Array.isArray(input) ||
-      Object.keys(input).length !== 3 ||
+      Object.keys(input).length !== 4 ||
       typeof input.executionId !== "string" ||
       typeof input.hookName !== "string" ||
+      (input.hookType !== "event" && input.hookType !== "transform" && input.hookType !== "policy") ||
       !("payload" in input)
     ) {
       throw new Error("invalid TenantScript runtime request");
@@ -778,7 +794,7 @@ export default {
       if (typeof handler !== "function") {
         throw new Error("TenantScript handler is unavailable");
       }
-      value = await handler(input.payload, context);
+      value = validateLegacyHookReturn(input.hookType, await handler(input.payload, context));
     }
     if (value !== undefined) assertJsonValue(value);
     return Response.json({ value: value === undefined ? null : value });

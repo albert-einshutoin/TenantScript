@@ -83,6 +83,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     );
     expect(runtimeModule).toContain("assertJsonValue(value);");
     expect(runtimeModule).toContain("invalid TenantScript plugin return value");
+    expect(runtimeModule).toContain("validateLegacyHookReturn(input.hookType");
     const lossyRuntimeSource = runtimeModule.replace(
       'import pluginModule from "./tenant-plugin.cjs";',
       'const pluginModule = { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } };'
@@ -100,12 +101,37 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
           body: JSON.stringify({
             executionId: "exec_lossy",
             hookName: "invoice.created",
+            hookType: "transform",
             payload: {}
           })
         }),
         {}
       )
     ).rejects.toThrow("invalid TenantScript plugin return value");
+    const legacyRuntimeSource = runtimeModule.replace(
+      'import pluginModule from "./tenant-plugin.cjs";',
+      'const pluginModule = { handlers: { "invoice.policy": async () => ({ arbitrary: true }) } };'
+    );
+    const legacyRuntimeNamespace = (await import(
+      `data:text/javascript;base64,${Buffer.from(legacyRuntimeSource).toString("base64")}`
+    )) as unknown as {
+      default: { fetch: (request: Request, env: Record<string, unknown>) => Promise<Response> };
+    };
+    await expect(
+      legacyRuntimeNamespace.default.fetch(
+        new Request("https://runtime.tenantscript.internal/v1/executions/exec_policy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            executionId: "exec_policy",
+            hookName: "invoice.policy",
+            hookType: "policy",
+            payload: {}
+          })
+        }),
+        {}
+      )
+    ).rejects.toThrow("TenantScript legacy hook return contract failed");
     expect(loader.entrypointLimits).toEqual([
       { cpuMs: 10, subRequests: 3 },
       { cpuMs: 10, subRequests: 3 }
@@ -115,8 +141,18 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       "https://runtime.tenantscript.internal/v1/executions/exec_2"
     ]);
     await expect(Promise.all(loader.requests.map((request) => request.json()))).resolves.toEqual([
-      { executionId: "exec_1", hookName: "invoice.created", payload: { invoiceId: "inv_1" } },
-      { executionId: "exec_2", hookName: "invoice.created", payload: { invoiceId: "inv_1" } }
+      {
+        executionId: "exec_1",
+        hookName: "invoice.created",
+        hookType: "event",
+        payload: { invoiceId: "inv_1" }
+      },
+      {
+        executionId: "exec_2",
+        hookName: "invoice.created",
+        hookType: "event",
+        payload: { invoiceId: "inv_1" }
+      }
     ]);
     expect(record).toHaveBeenCalledTimes(2);
     const firstRecording = record.mock.calls[0]?.[0];
