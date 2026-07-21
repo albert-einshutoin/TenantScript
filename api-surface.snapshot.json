@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "packages": [
     {
       "name": "@tenantscript/capabilities",
@@ -361,9 +361,11 @@
             { "name": "createServiceTokenAwareIdentityResolver", "kind": "value" },
             { "name": "createServiceTokenIdentityResolver", "kind": "value" },
             { "name": "createServiceTokenManager", "kind": "value" },
+            { "name": "createSlackOAuthCallbackHttpHandler", "kind": "value" },
             { "name": "createSlackOAuthCallbackService", "kind": "value" },
             { "name": "createSlackOAuthClient", "kind": "value" },
             { "name": "createSlackOAuthInstallStartService", "kind": "value" },
+            { "name": "createSlackWorkspaceConnector", "kind": "value" },
             { "name": "createStaticAppDatabaseRouter", "kind": "value" },
             { "name": "createStaticTokenIdentityResolver", "kind": "value" },
             { "name": "CreateTenantRequest", "kind": "type" },
@@ -417,6 +419,7 @@
             { "name": "parseTelemetryConfiguration", "kind": "value" },
             { "name": "PluginRecord", "kind": "type" },
             { "name": "PluginVersionRecord", "kind": "type" },
+            { "name": "PROVIDER_CALLBACK_HTTP_ENDPOINT_CONTRACTS", "kind": "value" },
             { "name": "ProviderSecretStoreDurableObject", "kind": "type+value" },
             { "name": "ProviderTokenResolutionSnapshot", "kind": "type" },
             { "name": "ProviderTokenRotationManager", "kind": "type" },
@@ -473,11 +476,15 @@
             { "name": "ServiceTokenStore", "kind": "type" },
             { "name": "SetInstallationEnabledRequest", "kind": "type" },
             { "name": "SLACK_OAUTH_BROWSER_BINDING_COOKIE", "kind": "value" },
+            { "name": "SLACK_OAUTH_CALLBACK_PATH", "kind": "value" },
             { "name": "SlackConnectionRecord", "kind": "type" },
             { "name": "SlackConnectionStore", "kind": "type" },
             { "name": "SlackOAuthCallbackError", "kind": "type+value" },
             { "name": "SlackOAuthCallbackErrorCode", "kind": "type" },
+            { "name": "SlackOAuthCallbackHttpConfiguration", "kind": "type" },
+            { "name": "SlackOAuthCallbackHttpHandler", "kind": "type" },
             { "name": "SlackOAuthCallbackService", "kind": "type" },
+            { "name": "slackOAuthCallbackUnavailableResponse", "kind": "value" },
             { "name": "SlackOAuthClient", "kind": "type" },
             { "name": "SlackOAuthClientConfiguration", "kind": "type" },
             { "name": "SlackOAuthExchangeError", "kind": "type+value" },
@@ -814,6 +821,14 @@
       "methods": ["GET"],
       "isolation": "tenant-collection",
       "success": [{ "method": "GET", "status": 200, "body": "json", "schema": "usage" }]
+    }
+  ],
+  "controlPlaneCallbacks": [
+    {
+      "id": "slackOAuthCallback",
+      "path": "/v1/provider-callbacks/slack",
+      "methods": ["GET"],
+      "isolation": "oauth-state-browser-binding"
     }
   ],
   "controlPlaneSuccessResponses": {

@@ -28,7 +28,7 @@ export async function collectPublicApiSurface(rootDirectory) {
   const checker = program.getTypeChecker();
 
   return {
-    version: 1,
+    version: 2,
     packages: packages.map(({ name, subpaths }) => ({
       name,
       subpaths: subpaths.map(({ subpath, source }) => ({
@@ -37,6 +37,7 @@ export async function collectPublicApiSurface(rootDirectory) {
       }))
     })),
     controlPlaneRest: await collectRestSurface(root),
+    controlPlaneCallbacks: await collectCallbackSurface(root),
     controlPlaneSuccessResponses: await collectControlPlaneSuccessResponses(root)
   };
 }
@@ -172,6 +173,59 @@ async function collectRestSurface(root) {
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
+async function collectCallbackSurface(root) {
+  const path = join(root, "packages/control-plane/src/slack-oauth-callback-http.ts");
+  const source = ts.createSourceFile(
+    path,
+    await readFile(path, "utf8"),
+    ts.ScriptTarget.ES2022,
+    true,
+    ts.ScriptKind.TS
+  );
+  let contracts;
+  const visit = (node) => {
+    if (
+      contracts === undefined &&
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "PROVIDER_CALLBACK_HTTP_ENDPOINT_CONTRACTS" &&
+      node.initializer !== undefined
+    ) {
+      contracts = unwrapExpression(node.initializer);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  if (contracts === undefined || !ts.isArrayLiteralExpression(contracts)) {
+    throw new Error("Control Plane callback contract could not be resolved");
+  }
+  return contracts.elements
+    .map((element) => parseCallbackContract(unwrapExpression(element)))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function parseCallbackContract(node) {
+  if (!ts.isObjectLiteralExpression(node)) {
+    throw new Error("Control Plane callback contract is invalid");
+  }
+  const properties = new Map();
+  for (const property of node.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = propertyName(property.name);
+    if (name !== undefined) properties.set(name, unwrapExpression(property.initializer));
+  }
+  const methodsNode = properties.get("methods");
+  if (!ts.isArrayLiteralExpression(methodsNode)) {
+    throw new Error("Control Plane callback contract is invalid");
+  }
+  return {
+    id: stringLiteral(properties.get("id")),
+    path: stringLiteral(properties.get("path")),
+    methods: methodsNode.elements.map((method) => stringLiteral(unwrapExpression(method))).sort(),
+    isolation: stringLiteral(properties.get("isolation"))
+  };
+}
+
 function parseRestContract(node) {
   if (!ts.isObjectLiteralExpression(node)) {
     throw new Error("Control Plane REST contract is invalid");
@@ -280,15 +334,17 @@ function isPublicApiSurface(value) {
       "version",
       "packages",
       "controlPlaneRest",
+      "controlPlaneCallbacks",
       "controlPlaneSuccessResponses"
     ]) ||
-    value.version !== 1
+    value.version !== 2
   ) {
     return false;
   }
   if (
     !Array.isArray(value.packages) ||
     !Array.isArray(value.controlPlaneRest) ||
+    !Array.isArray(value.controlPlaneCallbacks) ||
     !isRecord(value.controlPlaneSuccessResponses)
   )
     return false;
@@ -328,6 +384,15 @@ function isPublicApiSurface(value) {
             typeof success.body === "string" &&
             (success.schema === undefined || typeof success.schema === "string")
         ) &&
+        typeof endpoint.isolation === "string"
+    ) &&
+    value.controlPlaneCallbacks.every(
+      (endpoint) =>
+        hasExactKeys(endpoint, ["id", "path", "methods", "isolation"]) &&
+        typeof endpoint.id === "string" &&
+        typeof endpoint.path === "string" &&
+        Array.isArray(endpoint.methods) &&
+        endpoint.methods.every((method) => typeof method === "string") &&
         typeof endpoint.isolation === "string"
     )
   );

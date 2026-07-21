@@ -21,7 +21,7 @@ test("collects public package exports and REST contracts deterministically", asy
   const root = await createFixtureRepository();
 
   assert.deepEqual(await collectPublicApiSurface(root), {
-    version: 1,
+    version: 2,
     packages: [
       {
         name: "@fixture/control-plane",
@@ -43,6 +43,14 @@ test("collects public package exports and REST contracts deterministically", asy
         methods: ["GET"],
         isolation: "identity",
         success: [{ method: "GET", status: 200, body: "json", schema: "session" }]
+      }
+    ],
+    controlPlaneCallbacks: [
+      {
+        id: "slackOAuthCallback",
+        path: "/v1/provider-callbacks/slack",
+        methods: ["GET"],
+        isolation: "oauth-state-browser-binding"
       }
     ],
     controlPlaneSuccessResponses: {
@@ -73,6 +81,17 @@ test("fails when a REST method changes", async () => {
   await assert.rejects(
     checkPublicApiSurface(root),
     /Public API surface drift.*\/v1\/session.*GET.*POST/su
+  );
+});
+
+test("fails when a provider callback method changes", async () => {
+  const root = await createFixtureRepository();
+  await writeSnapshot(root);
+  await writeCallbackContract(root, "POST");
+
+  await assert.rejects(
+    checkPublicApiSurface(root),
+    /Public API surface drift.*provider-callbacks\/slack.*GET.*POST/su
   );
 });
 
@@ -127,6 +146,7 @@ async function createFixtureRepository() {
     'export interface PublicType { readonly id: string }\nexport const publicValue = "stable";\n'
   );
   await writeHttpContract(root, "GET");
+  await writeCallbackContract(root, "GET");
   await writeFile(
     join(root, "docs/reference/control-plane-success-responses.schema.json"),
     JSON.stringify({
@@ -135,6 +155,13 @@ async function createFixtureRepository() {
     })
   );
   return root;
+}
+
+async function writeCallbackContract(root, method) {
+  await writeFile(
+    join(root, "packages/control-plane/src/slack-oauth-callback-http.ts"),
+    `export const PROVIDER_CALLBACK_HTTP_ENDPOINT_CONTRACTS = [\n  { id: "slackOAuthCallback", path: "/v1/provider-callbacks/slack", methods: ["${method}"], isolation: "oauth-state-browser-binding" }\n] as const;\n`
+  );
 }
 
 async function writeHttpContract(root, method) {

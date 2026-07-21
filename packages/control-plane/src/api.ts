@@ -374,6 +374,15 @@ export function createControlPlaneApi(params: {
   };
 }
 
+export function createSlackWorkspaceConnector(params: {
+  store: ControlPlaneStore;
+  secretStore: SecretStore;
+  slackConnections: SlackConnectionStore;
+  slackOAuth: SlackOAuthClient;
+}): (request: ConnectSlackWorkspaceRequest) => Promise<SlackConnectionRecord> {
+  return (request) => connectSlackWorkspace(params.store, request, params);
+}
+
 export function createStaticTokenIdentityResolver<TIdentity extends AuthenticatedIdentity>(
   identitiesByToken: Record<string, TIdentity>
 ): IdentityResolver {

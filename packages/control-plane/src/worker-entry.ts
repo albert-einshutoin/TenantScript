@@ -1,4 +1,5 @@
 import {
+  createSlackWorkspaceConnector,
   createStaticTokenIdentityResolver,
   type AuthenticatedIdentity,
   type IdentityResolver
@@ -39,7 +40,12 @@ import {
 } from "./service-tokens.js";
 import { createD1R2ExecutionArchiveStore } from "./execution-archive.js";
 import type { ArchiveExpiredExecutionsRequest } from "./execution-archive.js";
-import type { D1DatabaseLike, R2BucketLike } from "./storage.js";
+import {
+  createD1ControlPlaneStore,
+  createD1SlackConnectionStore,
+  type D1DatabaseLike,
+  type R2BucketLike
+} from "./storage.js";
 import {
   createAnalyticsEngineUsageSink,
   createD1DailyUsageSummaryStore,
@@ -47,6 +53,14 @@ import {
   type AnalyticsEngineDatasetLike
 } from "./usage-meter.js";
 import { createDurableObjectNamespaceOAuthStateStore } from "./oauth-state-store.js";
+import { createDurableObjectNamespaceSecretStore } from "./provider-secret-store-do.js";
+import { createSlackOAuthCallbackService } from "./slack-oauth-callback.js";
+import {
+  SLACK_OAUTH_CALLBACK_PATH,
+  slackOAuthCallbackUnavailableResponse,
+  type SlackOAuthCallbackHttpConfiguration
+} from "./slack-oauth-callback-http.js";
+import { createSlackOAuthClient } from "./slack-oauth-client.js";
 import { createSlackOAuthInstallStartService } from "./slack-oauth-install-start.js";
 export { ProviderSecretStoreDurableObject } from "./provider-secret-store-do.js";
 export { OAuthStateStoreDurableObject } from "./oauth-state-store.js";
@@ -68,8 +82,11 @@ interface ControlPlaneWorkerEnv {
   PROVIDER_SECRET_STORE_DO?: DurableObjectNamespace;
   OAUTH_STATE_STORE_DO?: DurableObjectNamespace;
   SLACK_OAUTH_CLIENT_ID?: string;
+  SLACK_OAUTH_CLIENT_SECRET?: string;
+  SLACK_OAUTH_FAILURE_REDIRECT_URI?: string;
   SLACK_OAUTH_REDIRECT_URI?: string;
   SLACK_OAUTH_SCOPES?: string;
+  SLACK_OAUTH_SUCCESS_REDIRECT_URI?: string;
   TENANTSCRIPT_TELEMETRY_ENABLED?: string;
   TENANTSCRIPT_TELEMETRY_ENDPOINT?: string;
   TENANTSCRIPT_PRODUCT_VERSION?: string;
@@ -139,12 +156,14 @@ export default {
               : { bootstrap: bootstrapIdentityResolver })
           });
     let requestDatabase = env.DB;
+    let resolveAppDatabase: (appId: string) => D1DatabaseLike | null = () => env.DB ?? null;
     try {
       if (env.APP_DATABASE_ROUTES_JSON !== undefined) {
         const router = createAppDatabaseRouterFromBindings({
           serializedRoutes: env.APP_DATABASE_ROUTES_JSON,
           bindings: env
         });
+        resolveAppDatabase = router.resolve;
         const routed = await resolveRequestDatabase({
           request,
           identityResolver,
@@ -221,6 +240,10 @@ export default {
                 : { sink: createAnalyticsEngineUsageSink(env.USAGE_ANALYTICS) })
             });
       const slackOAuthInstallStartService = createWorkerSlackOAuthInstallStartService(env);
+      const slackOAuthCallback = createWorkerSlackOAuthCallbackConfiguration(
+        env,
+        resolveAppDatabase
+      );
       handler = createControlPlaneHttpHandler({
         ...(identityResolver === undefined ? {} : { identityResolver }),
         ...(dashboardStore === undefined ? {} : { dashboardStore }),
@@ -237,6 +260,7 @@ export default {
           : { serviceTokenManager: createServiceTokenManager({ store: serviceTokenStore }) }),
         ...(rateLimiter === undefined ? {} : { adminMutationRateLimiter: rateLimiter }),
         ...(usageMeter === undefined ? {} : { usageMeter }),
+        ...(slackOAuthCallback === undefined ? {} : { slackOAuthCallback }),
         ...(slackOAuthInstallStartService === undefined ? {} : { slackOAuthInstallStartService }),
         ...(cursorCodec === undefined ? {} : { cursorCodec }),
         telemetryStatus: publicTelemetryStatus(telemetryConfiguration),
@@ -245,7 +269,9 @@ export default {
     } catch {
       // Binding errors can contain deployment values. Return a stable response without
       // reflecting invalid origin or secret configuration into the public Worker response.
-      return configurationUnavailableResponse();
+      return new URL(request.url).pathname === SLACK_OAUTH_CALLBACK_PATH
+        ? slackOAuthCallbackUnavailableResponse()
+        : configurationUnavailableResponse();
     }
     return handler(request);
   },
@@ -283,6 +309,55 @@ function createWorkerSlackOAuthInstallStartService(env: ControlPlaneWorkerEnv) {
     redirectUri: env.SLACK_OAUTH_REDIRECT_URI as string,
     scopes
   });
+}
+
+function createWorkerSlackOAuthCallbackConfiguration(
+  env: ControlPlaneWorkerEnv,
+  resolveAppDatabase: (appId: string) => D1DatabaseLike | null
+): SlackOAuthCallbackHttpConfiguration | undefined {
+  const callbackValues = [
+    env.SLACK_OAUTH_CLIENT_SECRET,
+    env.SLACK_OAUTH_SUCCESS_REDIRECT_URI,
+    env.SLACK_OAUTH_FAILURE_REDIRECT_URI
+  ];
+  if (callbackValues.every((value) => value === undefined)) return undefined;
+  if (
+    env.OAUTH_STATE_STORE_DO === undefined ||
+    env.PROVIDER_SECRET_STORE_DO === undefined ||
+    env.PROVIDER_SECRET_KEYRING_JSON === undefined ||
+    env.SLACK_OAUTH_CLIENT_ID === undefined ||
+    env.SLACK_OAUTH_REDIRECT_URI === undefined ||
+    callbackValues.some((value) => value === undefined) ||
+    (env.DB === undefined && env.APP_DATABASE_ROUTES_JSON === undefined)
+  ) {
+    throw new Error("Slack OAuth callback configuration is incomplete");
+  }
+  const slackOAuth = createSlackOAuthClient({
+    clientId: env.SLACK_OAUTH_CLIENT_ID,
+    clientSecret: env.SLACK_OAUTH_CLIENT_SECRET as string,
+    allowedRedirectUris: [env.SLACK_OAUTH_REDIRECT_URI]
+  });
+  const secretStore = createDurableObjectNamespaceSecretStore(env.PROVIDER_SECRET_STORE_DO);
+  const service = createSlackOAuthCallbackService({
+    stateStore: createDurableObjectNamespaceOAuthStateStore(env.OAUTH_STATE_STORE_DO),
+    connectSlackWorkspace: (request) => {
+      const database = resolveAppDatabase(request.appId);
+      if (database === null) throw new Error("Slack OAuth callback app database unavailable");
+      // State is consumed before this resolver runs, so the server-restored app ID—not callback
+      // input—selects the tenant database used for connection metadata and tenant validation.
+      return createSlackWorkspaceConnector({
+        store: createD1ControlPlaneStore(database),
+        secretStore,
+        slackConnections: createD1SlackConnectionStore(database),
+        slackOAuth
+      })(request);
+    }
+  });
+  return {
+    service,
+    successRedirectUri: env.SLACK_OAUTH_SUCCESS_REDIRECT_URI as string,
+    failureRedirectUri: env.SLACK_OAUTH_FAILURE_REDIRECT_URI as string
+  };
 }
 
 async function resolveRequestDatabase(params: {

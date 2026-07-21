@@ -26,6 +26,12 @@ import {
   type SupportedRbacRole
 } from "./rbac.js";
 import { ServiceTokenError, type ServiceTokenManager } from "./service-tokens.js";
+import {
+  createSlackOAuthCallbackHttpHandler,
+  SLACK_OAUTH_CALLBACK_PATH,
+  slackOAuthCallbackUnavailableResponse,
+  type SlackOAuthCallbackHttpConfiguration
+} from "./slack-oauth-callback-http.js";
 import type { SlackOAuthInstallStartService } from "./slack-oauth-install-start.js";
 import { UsageMeterQueryError, type UsageMeter } from "./usage-meter.js";
 import type { TelemetryStatus } from "./telemetry.js";
@@ -58,6 +64,7 @@ export interface ControlPlaneHttpHandlerOptions {
   executionDetailStore?: AdminExecutionDetailStore;
   approvalDecisionStore?: AdminApprovalDecisionStore;
   serviceTokenManager?: ServiceTokenManager;
+  slackOAuthCallback?: SlackOAuthCallbackHttpConfiguration;
   slackOAuthInstallStartService?: SlackOAuthInstallStartService;
   adminMutationRateLimiter?: AdminMutationRateLimiter;
   usageMeter?: UsageMeter;
@@ -79,15 +86,24 @@ export function createControlPlaneHttpHandler(
   options: ControlPlaneHttpHandlerOptions
 ): ControlPlaneHttpHandler {
   const allowedOrigins = createAllowedOriginSet(options.allowedOrigins ?? []);
+  const slackOAuthCallbackHandler =
+    options.slackOAuthCallback === undefined
+      ? undefined
+      : createSlackOAuthCallbackHttpHandler(options.slackOAuthCallback);
 
   return async (request) => {
+    const url = new URL(request.url);
+    if (url.pathname === SLACK_OAUTH_CALLBACK_PATH) {
+      return slackOAuthCallbackHandler === undefined
+        ? slackOAuthCallbackUnavailableResponse()
+        : slackOAuthCallbackHandler(request, url);
+    }
     const origin = request.headers.get("Origin");
     if (origin !== null && !allowedOrigins.has(origin)) {
       return errorResponse(403, "origin_forbidden", "request origin is not allowed");
     }
 
     const corsHeaders = origin === null ? undefined : corsResponseHeaders(origin);
-    const url = new URL(request.url);
     const endpoint = matchAdminHttpEndpoint(url);
     if (endpoint === null) {
       return errorResponse(404, "route_not_found", "route not found", corsHeaders);
