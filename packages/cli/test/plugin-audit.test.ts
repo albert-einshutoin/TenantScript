@@ -149,6 +149,22 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects renamed context bindings in shorthand handler exports", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          'async function event(_payload, ctx) { return ctx.capability("slack.send", {}); }',
+          "export const handlers = { event };"
+        ].join("\n")
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("does not treat an unrelated binding named context as the SDK broker", () => {
     expect(
       auditPluginPackage({
@@ -173,6 +189,22 @@ describe("plugin audit", () => {
         bundleCode: [
           "export const handlers = { event(_payload, ctx) { return ctx; } };",
           'function helper(ctx) { return ctx.capability("slack.send", {}); }'
+        ].join("\n")
+      }).findings
+    ).toEqual([]);
+  });
+
+  it("does not reuse a handler context receiver name in a shadowing nested function", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          "export const handlers = { event(_payload, ctx) {",
+          'function helper(ctx) { return ctx.capability("slack.send", {}); }',
+          "return helper({ capability: () => undefined });",
+          "} };"
         ].join("\n")
       }).findings
     ).toEqual([]);

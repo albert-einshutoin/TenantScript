@@ -297,8 +297,8 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
         registerDestructuredCapability(tokens.slice(index + 1, close), scope.direct);
       }
     }
-    registerBindingRanges(receivers, scope.receivers, scope);
-    registerBindingRanges(direct, scope.direct, scope);
+    registerBindingRanges(tokens, receivers, scope.receivers, scope);
+    registerBindingRanges(tokens, direct, scope.direct, scope);
   }
   sortBindingRanges(receivers);
   sortBindingRanges(direct);
@@ -400,6 +400,14 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
             addScope(methodOpen, methodClose, body);
           }
         }
+        if (
+          startsObjectField &&
+          tokens[field]?.kind === "identifier" &&
+          [",", "}"].includes(tokens[field + 1]?.value ?? "")
+        ) {
+          const shorthand = callableBindings.get(tokens[field]?.value ?? "");
+          if (shorthand !== undefined) addScope(shorthand.open, shorthand.close, shorthand);
+        }
       }
       if (tokens[field]?.value === "{") depth += 1;
       else if (tokens[field]?.value === "}") depth = Math.max(0, depth - 1);
@@ -468,28 +476,112 @@ function arrowBodyRange(
   const block = blockBodyRange(tokens, start);
   if (block !== undefined) return block;
 
+  const end = findExpressionBoundary(tokens, start, limit);
+  return start <= end ? { start, end } : undefined;
+}
+
+function findExpressionBoundary(
+  tokens: readonly BundleToken[],
+  start: number,
+  limit: number
+): number {
   let depth = 0;
   for (let index = start; index <= limit; index += 1) {
     const value = tokens[index]?.value ?? "";
     if (["(", "{", "["].includes(value)) depth += 1;
     else if ([")", "}", "]"].includes(value)) depth = Math.max(0, depth - 1);
-    if (depth === 0 && [",", ";"].includes(value)) {
-      return { start, end: index - 1 };
-    }
+    if (depth === 0 && [",", ";"].includes(value)) return index - 1;
   }
-  return start <= limit ? { start, end: limit } : undefined;
+  return limit;
 }
 
 function registerBindingRanges(
+  tokens: readonly BundleToken[],
   output: Map<string, BindingRange[]>,
   names: ReadonlySet<string>,
   range: BindingRange
 ): void {
   for (const name of names) {
     const ranges = output.get(name) ?? [];
-    ranges.push({ start: range.start, end: range.end });
+    ranges.push(...subtractBindingRanges(range, collectNestedShadowRanges(tokens, range, name)));
     output.set(name, ranges);
   }
+}
+
+function collectNestedShadowRanges(
+  tokens: readonly BundleToken[],
+  outer: BindingRange,
+  name: string
+): BindingRange[] {
+  const shadows: BindingRange[] = [];
+  for (let index = outer.start; index <= outer.end; index += 1) {
+    if (tokens[index]?.value === "function") {
+      let open = index + 1;
+      if (tokens[open]?.kind === "identifier") open += 1;
+      if (tokens[open]?.value !== "(") continue;
+      const close = findMatchingToken(tokens, open, "(", ")");
+      const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
+      if (body !== undefined && parameterListDeclares(tokens, open, close, name)) {
+        shadows.push(body);
+      }
+      continue;
+    }
+
+    if (tokens[index]?.value === "(") {
+      const close = findMatchingToken(tokens, index, "(", ")");
+      const body = close === -1 ? undefined : arrowBodyRange(tokens, close, outer.end);
+      if (body !== undefined && parameterListDeclares(tokens, index, close, name)) {
+        shadows.push(body);
+      }
+      continue;
+    }
+
+    if (
+      tokens[index]?.kind === "identifier" &&
+      tokens[index]?.value === name &&
+      tokens[index + 1]?.value === "=" &&
+      tokens[index + 2]?.value === ">"
+    ) {
+      const start = index + 3;
+      const block = blockBodyRange(tokens, start);
+      if (block !== undefined) shadows.push(block);
+      else {
+        const end = findExpressionBoundary(tokens, start, outer.end);
+        if (start <= end) shadows.push({ start, end });
+      }
+    }
+  }
+  return shadows;
+}
+
+function parameterListDeclares(
+  tokens: readonly BundleToken[],
+  open: number,
+  close: number,
+  name: string
+): boolean {
+  return splitTopLevel(tokens.slice(open + 1, close), ",").some(
+    (parameter) => parameter[0]?.kind === "identifier" && parameter[0].value === name
+  );
+}
+
+function subtractBindingRanges(
+  base: BindingRange,
+  exclusions: readonly BindingRange[]
+): BindingRange[] {
+  const sorted = exclusions
+    .filter((range) => range.end >= base.start && range.start <= base.end)
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  const output: BindingRange[] = [];
+  let cursor = base.start;
+  for (const exclusion of sorted) {
+    const start = Math.max(base.start, exclusion.start);
+    const end = Math.min(base.end, exclusion.end);
+    if (start > cursor) output.push({ start: cursor, end: start - 1 });
+    cursor = Math.max(cursor, end + 1);
+  }
+  if (cursor <= base.end) output.push({ start: cursor, end: base.end });
+  return output;
 }
 
 function bindingAppliesAt(
