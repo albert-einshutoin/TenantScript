@@ -49,7 +49,7 @@ export function createSlackOAuthInstallStartService(options: {
     start: async (input) => {
       if (!isStartInput(input)) throw invalidRequest();
       try {
-        const issuedAt = readNow(now);
+        const issueStartedAt = readNow(now);
         const browserBinding = createBrowserBinding(randomBytes);
         // Scope is issued only after trusted identity validation, and none of these authority
         // fields can come from the HTTP query or body. This prevents cross-tenant OAuth grants.
@@ -61,12 +61,18 @@ export function createSlackOAuthInstallStartService(options: {
           browserBinding,
           redirectUri: configuration.redirectUri
         });
-        const lifetimeMs = issued.expiresAt.getTime() - issuedAt.getTime();
+        const issueCompletedAt = readNow(now);
+        const expiresAtMs = issued.expiresAt.getTime();
+        const remainingLifetimeMs = expiresAtMs - issueCompletedAt.getTime();
+        // The store chooses its expiry during the awaited issue call. Bracketing that call avoids
+        // treating normal adapter/DO latency as TTL while still enforcing the 1-10 minute policy.
         if (
           !isState(issued.state) ||
-          !Number.isSafeInteger(issued.expiresAt.getTime()) ||
-          lifetimeMs < MIN_STATE_LIFETIME_MS ||
-          lifetimeMs > MAX_STATE_LIFETIME_MS
+          !Number.isSafeInteger(expiresAtMs) ||
+          issueCompletedAt.getTime() < issueStartedAt.getTime() ||
+          expiresAtMs < issueStartedAt.getTime() + MIN_STATE_LIFETIME_MS ||
+          expiresAtMs > issueCompletedAt.getTime() + MAX_STATE_LIFETIME_MS ||
+          remainingLifetimeMs < 1_000
         ) {
           throw unavailable();
         }
@@ -84,7 +90,7 @@ export function createSlackOAuthInstallStartService(options: {
           browserBindingCookie: serializeBrowserBindingCookie(
             browserBinding,
             issued.expiresAt,
-            lifetimeMs
+            remainingLifetimeMs
           )
         };
       } catch (error) {

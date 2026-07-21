@@ -67,6 +67,28 @@ describe("Slack OAuth install-start service", () => {
     expect(calls[0]?.actorSubject).toBe("auth0|abc+operator@example.com");
   });
 
+  it("accepts the maximum state TTL when issuance advances the clock", async () => {
+    const afterIssue = new Date(issuedAt.getTime() + 1);
+    const maximumExpiry = new Date(afterIssue.getTime() + 10 * 60 * 1_000);
+    const clock = [issuedAt, afterIssue];
+    const service = createService(
+      {
+        issue: () => Promise.resolve({ state, expiresAt: maximumExpiry }),
+        consume: () => Promise.reject(new Error("unused"))
+      },
+      { now: () => clock.shift() as Date }
+    );
+
+    const result = await service.start({
+      appId: "app",
+      tenantId: "tenant",
+      actorSubject: "actor"
+    });
+
+    expect(result.expiresAt).toEqual(maximumExpiry);
+    expect(result.browserBindingCookie).toContain("Max-Age=600");
+  });
+
   it.each([
     [{ appId: "", tenantId: "tenant", actorSubject: "actor" }],
     [{ appId: "app", tenantId: "tenant", actorSubject: "actor", redirectUri: "https://evil" }],
