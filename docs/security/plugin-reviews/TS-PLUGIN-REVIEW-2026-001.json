@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-001",
-  "baselineCommit": "5a23ffa5bdb49c1bbde19205cf62dc450d57c2dc",
+  "baselineCommit": "5c08252f3eb53d0bbdcf5b3b2cff84c038b06831",
   "target": {
     "name": "Built-in ext init plugin scaffold and first-party templates",
     "scope": [
@@ -13,15 +13,15 @@
     "sourceDigests": {
       "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
       "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-      "packages/cli/src/plugin-scaffold.ts": "10e9bf811d93abc210340377c6d711abc4e87f218d1eb095e234f128c094c9b9",
-      "packages/cli/test/init.test.ts": "476e9a13d3ff3aa5b265e430c1356607e858456c3fd879243f977b93518bcaa6"
+      "packages/cli/src/plugin-scaffold.ts": "9183bdf835debce150c128fa1c6d354a7cb5fc1fb12653b65de72f3d487279a2",
+      "packages/cli/test/init.test.ts": "0966f68c4483bb38b7e3478b4147995508ca6ea7668a8af18a7688a01c04e7a3"
     }
   },
   "reviewer": {
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-07-21T23:33:09.000Z",
+  "reviewedAt": "2026-07-21T23:49:08.000Z",
   "domains": [
     {
       "name": "security",
@@ -33,7 +33,7 @@
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "The CLI validates template identity and rejects unknown or conflicting options before filesystem mutation without reflecting attacker-controlled option values. Both templates request no capabilities, deny egress, have no side effects, and reject undeclared hooks. Invoice amounts must be non-negative safe integers; invalid or above-threshold inputs deny without payload reflection. Both generated bundles are audited before their generated tests run."
+      "notes": "The CLI validates template identity and rejects unknown or conflicting options before filesystem mutation without reflecting attacker-controlled option values. All three templates request no capabilities, deny egress, have no side effects, and reject undeclared hooks. Invoice amounts must be non-negative safe integers. The API policy rejects malformed methods and ambiguous paths, enforces a path-segment boundary, and returns fixed deny reasons without payload reflection. Every generated bundle is audited before its generated tests run."
     },
     {
       "name": "compatibility",
@@ -43,7 +43,7 @@
         "scripts/agent-plugin-scaffold-e2e.test.mjs",
         "docs/quickstarts/agent-plugin-authoring.md"
       ],
-      "notes": "The generic init contract remains covered, while typed webhook and invoice templates fix their reviewed hooks and types. Generated manifest and package metadata use the CLI version exactly, then both templates build and test against packed public package contents."
+      "notes": "The generic init contract remains covered, while typed webhook, invoice, and API policy templates fix their reviewed hooks and types. Generated manifest and package metadata use the CLI version exactly, then all three templates build and test against packed public package contents."
     },
     {
       "name": "operations",
@@ -53,7 +53,7 @@
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "Generated CPU and timeout limits are bounded, network access is denied, and template resolution is local and deterministic. The invoice policy is a pure bounded comparison with fail-closed input handling; the accountless E2E exercises install, audit, build, and test boundaries for both templates."
+      "notes": "Generated CPU and timeout limits are bounded, network access is denied, and template resolution is local and deterministic. Invoice and API policies use pure bounded checks with fail-closed input handling; the accountless E2E exercises install, audit, build, and test boundaries for all three templates."
     },
     {
       "name": "documentation",
@@ -76,11 +76,11 @@
   "evidenceDigests": {
     "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
     "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-    "packages/cli/src/plugin-scaffold.ts": "10e9bf811d93abc210340377c6d711abc4e87f218d1eb095e234f128c094c9b9",
-    "packages/cli/test/init.test.ts": "476e9a13d3ff3aa5b265e430c1356607e858456c3fd879243f977b93518bcaa6",
-    "scripts/agent-plugin-scaffold-e2e.test.mjs": "308f82e764ada351a3f00960a9c4f89c915b11ddca6e8da0a5993535228834d4",
-    "docs/quickstarts/agent-plugin-authoring.md": "bf739d045c48d672a28d4dfa29947b572cf939eca379a7099c4cb17f1617189a",
-    "docs/reference/cli.md": "4adbff6d95af0363081894cf836aa6c2c8c4c5ff061dc92ac3c55ce440f677aa",
+    "packages/cli/src/plugin-scaffold.ts": "9183bdf835debce150c128fa1c6d354a7cb5fc1fb12653b65de72f3d487279a2",
+    "packages/cli/test/init.test.ts": "0966f68c4483bb38b7e3478b4147995508ca6ea7668a8af18a7688a01c04e7a3",
+    "scripts/agent-plugin-scaffold-e2e.test.mjs": "ab3a8261b460ed4409a3af1ea5885ab69d6c54bfddadeda3da52c2d213bd6a22",
+    "docs/quickstarts/agent-plugin-authoring.md": "8edf488739b7dd9cf1e9f3d1585603c014b2e84c491c3fb6c0416624e95259dc",
+    "docs/reference/cli.md": "8b15ef505ae8a3c9087689badd26cc4fd5d066a72f08afa3c4db99723b81e534",
     "docs/security/plugin-review-checklist.md": "1bee7b0bebadfd44b9cf86e288af48d3a8f9f42c0883d39823809dd1857f54f5",
     "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
@@ -106,6 +106,7 @@
     "The scaffold is intentionally minimal and does not prove the safety of code added by a plugin author.",
     "The webhook transformer demonstrates a side-effect-free payload pass-through; adopters must add schema validation and output bounds for their concrete business contract.",
     "The invoice auto-approval threshold is an example, not evidence of trusted actor identity or a production accounting, legal, or customer-specific approval rule.",
+    "The API policy expects a host-authenticated caller and a decoded, normalized pathname; it is not an authentication, tenant RBAC, URL canonicalization, or complete authorization policy.",
     "A finding-free bundle audit does not prove the absence of aliased, dynamic, templated, dead-code, or runtime-only behavior."
   ],
   "nonGuarantees": [
