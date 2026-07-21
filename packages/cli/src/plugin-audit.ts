@@ -269,11 +269,11 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
     }
     if (
       (matchesTokenSequence(tokens, index, ["globalThis", ".", "fetch"]) &&
-        callOpenAfterMember(tokens, index + 2) !== -1) ||
+        hasInvocationAfterMember(tokens, index + 2)) ||
       (tokens[bracketedPropertyReceiverIndex(tokens, index, "fetch")]?.value === "globalThis" &&
-        callOpenAfterMember(tokens, index + 1) !== -1) ||
+        hasInvocationAfterMember(tokens, index + 1)) ||
       (tokens[index]?.value === "fetch" &&
-        callOpenAfterMember(tokens, index) !== -1 &&
+        hasInvocationAfterMember(tokens, index) &&
         tokens[index - 1]?.value !== ".")
     ) {
       hasDirectEgressCall = true;
@@ -325,6 +325,13 @@ function callOpenAfterMember(tokens: readonly BundleToken[], memberEnd: number):
     tokens[memberEnd + 3]?.value === "("
     ? memberEnd + 3
     : -1;
+}
+
+function hasInvocationAfterMember(tokens: readonly BundleToken[], memberEnd: number): boolean {
+  // A tagged template invokes its tag without parentheses. Template raw text is represented by a
+  // string token, so checking the adjacent token closes this egress-review bypass without treating
+  // a later standalone template as a fetch call.
+  return callOpenAfterMember(tokens, memberEnd) !== -1 || tokens[memberEnd + 1]?.kind === "string";
 }
 
 function bracketedPropertyReceiverIndex(

@@ -1149,6 +1149,27 @@ describe("plugin audit", () => {
     }
   });
 
+  it("detects tagged-template global fetch calls", () => {
+    const sources = [
+      "fetch`https://direct.invalid`;",
+      "globalThis.fetch`https://direct.invalid`;",
+      'globalThis["fetch"]`https://direct.invalid`;'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+      ]);
+    }
+  });
+
   it("reports deterministic exact findings without reflecting input values", () => {
     const secretSentinel = "secret_SENTINEL_do_not_reflect";
     const report = auditPluginPackage({
