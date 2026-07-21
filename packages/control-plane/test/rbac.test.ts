@@ -22,6 +22,7 @@ const expectedPermissions = {
     "approval:decide",
     "execution:read",
     "usage:read",
+    "provider-connection:manage",
     "service-token:issue",
     "service-token:revoke"
   ],
@@ -43,7 +44,8 @@ const expectedPermissions = {
     "rollback:execute",
     "approval:decide",
     "execution:read",
-    "usage:read"
+    "usage:read",
+    "provider-connection:manage"
   ]
 } as const satisfies Record<RbacRole, readonly RbacOperation[]>;
 
@@ -62,6 +64,15 @@ describe("RBAC role x operation matrix", () => {
     expect(normalizeRbacRole("super-admin")).toBeNull();
     expect(canRolePerform("manager", "approval:decide")).toBe(true);
     expect(canRolePerform("super-admin", "dashboard:read")).toBe(false);
+  });
+
+  it("reserves provider connection mutation for privileged tenant roles", () => {
+    expect(RBAC_OPERATIONS).toContain("provider-connection:manage");
+    expect(canRolePerform("owner", "provider-connection:manage")).toBe(true);
+    expect(canRolePerform("admin", "provider-connection:manage")).toBe(true);
+    expect(canRolePerform("tenant-admin", "provider-connection:manage")).toBe(true);
+    expect(canRolePerform("operator", "provider-connection:manage")).toBe(false);
+    expect(canRolePerform("viewer", "provider-connection:manage")).toBe(false);
   });
 
   it("keeps the published matrix generated from the runtime fixture", () => {

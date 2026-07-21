@@ -363,6 +363,7 @@
             { "name": "createServiceTokenManager", "kind": "value" },
             { "name": "createSlackOAuthCallbackService", "kind": "value" },
             { "name": "createSlackOAuthClient", "kind": "value" },
+            { "name": "createSlackOAuthInstallStartService", "kind": "value" },
             { "name": "createStaticAppDatabaseRouter", "kind": "value" },
             { "name": "createStaticTokenIdentityResolver", "kind": "value" },
             { "name": "CreateTenantRequest", "kind": "type" },
@@ -471,6 +472,7 @@
             { "name": "ServiceTokenRecord", "kind": "type" },
             { "name": "ServiceTokenStore", "kind": "type" },
             { "name": "SetInstallationEnabledRequest", "kind": "type" },
+            { "name": "SLACK_OAUTH_BROWSER_BINDING_COOKIE", "kind": "value" },
             { "name": "SlackConnectionRecord", "kind": "type" },
             { "name": "SlackConnectionStore", "kind": "type" },
             { "name": "SlackOAuthCallbackError", "kind": "type+value" },
@@ -480,6 +482,9 @@
             { "name": "SlackOAuthClientConfiguration", "kind": "type" },
             { "name": "SlackOAuthExchangeError", "kind": "type+value" },
             { "name": "SlackOAuthExchangeErrorCode", "kind": "type" },
+            { "name": "SlackOAuthInstallStartError", "kind": "type+value" },
+            { "name": "SlackOAuthInstallStartErrorCode", "kind": "type" },
+            { "name": "SlackOAuthInstallStartService", "kind": "type" },
             { "name": "SlackOAuthTokenResponse", "kind": "type" },
             { "name": "SupportedRbacRole", "kind": "type" },
             { "name": "TELEMETRY_SCHEMA_VERSION", "kind": "value" },
@@ -793,6 +798,15 @@
       "methods": ["GET"],
       "isolation": "identity",
       "success": [{ "method": "GET", "status": 200, "body": "json", "schema": "session" }]
+    },
+    {
+      "id": "slackOAuthInstallStart",
+      "path": "/v1/admin/provider-connections/slack/oauth/start",
+      "methods": ["POST"],
+      "isolation": "tenant-mutation",
+      "success": [
+        { "method": "POST", "status": 201, "body": "json", "schema": "slackOAuthInstallStart" }
+      ]
     },
     {
       "id": "usage",
@@ -1247,6 +1261,12 @@
         }
       },
       "required": ["items"],
+      "additionalProperties": false
+    },
+    "slackOAuthInstallStart": {
+      "type": "object",
+      "properties": { "authorizationUrl": { "type": "string" }, "expiresAt": { "type": "string" } },
+      "required": ["authorizationUrl", "expiresAt"],
       "additionalProperties": false
     },
     "installationReview": {

@@ -20,6 +20,7 @@ const expectedEndpointIds = [
   "dashboardExecutions",
   "dashboardAuditEvents",
   "providerConnections",
+  "slackOAuthInstallStart",
   "installationReview",
   "installationCommand",
   "installPreview",
@@ -110,6 +111,19 @@ describe("Admin HTTP tenant-isolation matrix registration", () => {
         });
         return;
       }
+      if (contract.id === "slackOAuthInstallStart") {
+        expect(response.status).toBe(503);
+        expect(calls).toEqual([
+          { appId: "app_scope", tenantId: "tenant_scope", actorSubject: "owner_scope" }
+        ]);
+        await expect(response.json()).resolves.toEqual({
+          error: {
+            code: "slack_oauth_install_start_unavailable",
+            message: "Slack OAuth install-start unavailable"
+          }
+        });
+        return;
+      }
       expect(response.status).toBe(500);
       expect(calls.length).toBeGreaterThan(0);
       for (const call of calls) {
@@ -126,7 +140,8 @@ describe("Admin HTTP tenant-isolation matrix registration", () => {
   it.each(
     ADMIN_HTTP_ENDPOINT_CONTRACTS.filter(
       (contract) =>
-        contract.isolation === "tenant-resource" || contract.isolation === "tenant-mutation"
+        (contract.isolation === "tenant-resource" || contract.isolation === "tenant-mutation") &&
+        contract.id !== "slackOAuthInstallStart"
     ).map((contract) => ({
       contract,
       method: contract.id === "serviceTokenCollection" ? "DELETE" : contract.methods[0]
@@ -185,6 +200,11 @@ function scopeProbeOptions(
       };
     case "providerConnections":
       return { providerConnectionStore: { readConnections: (request) => fail(request) } };
+    case "slackOAuthInstallStart":
+      return {
+        slackOAuthInstallStartService: { start: (request) => fail(request) },
+        adminMutationRateLimiter: rateLimiter
+      };
     case "installationReview":
       return { installationDetailStore: { readInstallation: (request) => fail(request) } };
     case "installationCommand":
@@ -251,7 +271,7 @@ function scopeProbeRequest(contract: AdminHttpEndpointContract, method: string):
   if (contract.id === "serviceTokenCollection" && method === "DELETE") {
     url.searchParams.set("id", "tenant_forged_token");
   }
-  if (method !== "GET" && method !== "DELETE") {
+  if (method !== "GET" && method !== "DELETE" && contract.id !== "slackOAuthInstallStart") {
     headers.set("Content-Type", "application/json");
     if (contract.id !== "serviceTokenCollection") {
       headers.set("Idempotency-Key", "scope-matrix-key-0001");

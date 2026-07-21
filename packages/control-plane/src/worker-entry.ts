@@ -46,6 +46,8 @@ import {
   createUsageMeter,
   type AnalyticsEngineDatasetLike
 } from "./usage-meter.js";
+import { createDurableObjectNamespaceOAuthStateStore } from "./oauth-state-store.js";
+import { createSlackOAuthInstallStartService } from "./slack-oauth-install-start.js";
 export { ProviderSecretStoreDurableObject } from "./provider-secret-store-do.js";
 export { OAuthStateStoreDurableObject } from "./oauth-state-store.js";
 
@@ -65,6 +67,9 @@ interface ControlPlaneWorkerEnv {
   PROVIDER_SECRET_KEYRING_JSON?: string;
   PROVIDER_SECRET_STORE_DO?: DurableObjectNamespace;
   OAUTH_STATE_STORE_DO?: DurableObjectNamespace;
+  SLACK_OAUTH_CLIENT_ID?: string;
+  SLACK_OAUTH_REDIRECT_URI?: string;
+  SLACK_OAUTH_SCOPES?: string;
   TENANTSCRIPT_TELEMETRY_ENABLED?: string;
   TENANTSCRIPT_TELEMETRY_ENDPOINT?: string;
   TENANTSCRIPT_PRODUCT_VERSION?: string;
@@ -215,6 +220,7 @@ export default {
                 ? {}
                 : { sink: createAnalyticsEngineUsageSink(env.USAGE_ANALYTICS) })
             });
+      const slackOAuthInstallStartService = createWorkerSlackOAuthInstallStartService(env);
       handler = createControlPlaneHttpHandler({
         ...(identityResolver === undefined ? {} : { identityResolver }),
         ...(dashboardStore === undefined ? {} : { dashboardStore }),
@@ -231,6 +237,7 @@ export default {
           : { serviceTokenManager: createServiceTokenManager({ store: serviceTokenStore }) }),
         ...(rateLimiter === undefined ? {} : { adminMutationRateLimiter: rateLimiter }),
         ...(usageMeter === undefined ? {} : { usageMeter }),
+        ...(slackOAuthInstallStartService === undefined ? {} : { slackOAuthInstallStartService }),
         ...(cursorCodec === undefined ? {} : { cursorCodec }),
         telemetryStatus: publicTelemetryStatus(telemetryConfiguration),
         allowedOrigins
@@ -253,6 +260,30 @@ export default {
     });
   }
 };
+
+function createWorkerSlackOAuthInstallStartService(env: ControlPlaneWorkerEnv) {
+  const providerValues = [
+    env.SLACK_OAUTH_CLIENT_ID,
+    env.SLACK_OAUTH_REDIRECT_URI,
+    env.SLACK_OAUTH_SCOPES
+  ];
+  // The state namespace is shared platform infrastructure and may be deployed before any provider.
+  // Only provider-specific intent activates Slack's all-or-nothing configuration requirement.
+  if (providerValues.every((value) => value === undefined)) return undefined;
+  if (
+    env.OAUTH_STATE_STORE_DO === undefined ||
+    providerValues.some((value) => value === undefined)
+  ) {
+    throw new Error("Slack OAuth install-start configuration is incomplete");
+  }
+  const scopes = (env.SLACK_OAUTH_SCOPES as string).split(",");
+  return createSlackOAuthInstallStartService({
+    stateStore: createDurableObjectNamespaceOAuthStateStore(env.OAUTH_STATE_STORE_DO),
+    clientId: env.SLACK_OAUTH_CLIENT_ID as string,
+    redirectUri: env.SLACK_OAUTH_REDIRECT_URI as string,
+    scopes
+  });
+}
 
 async function resolveRequestDatabase(params: {
   request: Request;

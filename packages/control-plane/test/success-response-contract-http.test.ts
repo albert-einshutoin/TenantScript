@@ -78,6 +78,7 @@ function successRequests(): Request[] {
     get("/v1/admin/dashboard/executions"),
     get("/v1/admin/dashboard/auditEvents"),
     get("/v1/admin/provider-connections"),
+    command("/v1/admin/provider-connections/slack/oauth/start", "POST"),
     get("/v1/admin/installation-review?id=inst_1"),
     command("/v1/admin/installation-command", "PATCH", {
       id: "inst_1",
@@ -258,6 +259,14 @@ function successOptions(): ControlPlaneHttpHandlerOptions {
           connectedAt: "2026-07-20T00:00:00.000Z"
         }
       ]
+    },
+    slackOAuthInstallStartService: {
+      start: async () => ({
+        authorizationUrl: `https://slack.com/oauth/v2/authorize?state=${"s".repeat(43)}`,
+        expiresAt: new Date("2026-07-20T00:05:00.000Z"),
+        browserBindingCookie:
+          "__Host-tenantscript-slack-oauth-binding=binding; Path=/; Secure; HttpOnly; SameSite=Lax"
+      })
     },
     cursorCodec: {
       encode: async () => "cursor_1",
