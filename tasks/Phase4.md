@@ -18,6 +18,7 @@
 - [ ] **P4-T01**(M)template リポジトリ + 基準
   - 内容: 初期デモ3種(webhook transformer / invoice approval / API policy)を template 化。**全 template にテストと manifest を同梱することを基準化**
   - DoD: `ext init --template <name>` で取得 → build → test が green
+  - Progress: Issue #298で最初の組み込みwebhook transformer、型付きregistry、最小権限security note、packed public packageに対するbuild/test/audit E2Eを追加。invoice approval / API policyとcommunity template基準は未完
 
 - [ ] **P4-T02**(M)gallery サイト
   - 内容: template 一覧の静的サイト(Workers Assets)。検索・タグ・再利用数の表示
