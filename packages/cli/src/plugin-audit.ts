@@ -214,6 +214,7 @@ interface CallableBinding extends BindingRange {
 const tokenPairCache = new WeakMap<readonly BundleToken[], ReadonlyMap<number, number>>();
 const enclosingObjectCache = new WeakMap<readonly BundleToken[], Array<number | undefined>>();
 const nonCallablePrefixes = new Set(["if", "for", "while", "switch", "catch", "with"]);
+const globalScopeReceivers = new Set(["globalThis", "self"]);
 
 function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
   const tokens = tokenizeBundle(bundleCode);
@@ -267,10 +268,12 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
         hasDynamicCapabilityCall = true;
       }
     }
+    const egressBracketReceiver = bracketedPropertyReceiverIndex(tokens, index, "fetch");
     if (
-      (matchesTokenSequence(tokens, index, ["globalThis", ".", "fetch"]) &&
+      (globalScopeReceivers.has(tokens[index]?.value ?? "") &&
+        matchesTokenSequence(tokens, index + 1, [".", "fetch"]) &&
         hasInvocationAfterMember(tokens, index + 2)) ||
-      (tokens[bracketedPropertyReceiverIndex(tokens, index, "fetch")]?.value === "globalThis" &&
+      (globalScopeReceivers.has(tokens[egressBracketReceiver]?.value ?? "") &&
         hasInvocationAfterMember(tokens, index + 1)) ||
       (tokens[index]?.value === "fetch" &&
         hasInvocationAfterMember(tokens, index) &&

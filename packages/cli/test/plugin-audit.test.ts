@@ -1154,6 +1154,27 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects worker-global self fetch calls", () => {
+    const sources = [
+      'self.fetch("https://direct.invalid");',
+      'self["fetch"]("https://direct.invalid");',
+      "self.fetch`https://direct.invalid`;"
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+      ]);
+    }
+  });
+
   it("detects optional global fetch calls", () => {
     const sources = [
       'fetch?.("https://direct.invalid");',
