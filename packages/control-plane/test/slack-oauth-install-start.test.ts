@@ -54,6 +54,19 @@ describe("Slack OAuth install-start service", () => {
     expect(JSON.stringify(result)).not.toContain('browserBinding":');
   });
 
+  it("preserves a bounded opaque identity-provider subject", async () => {
+    const calls: Parameters<OAuthStateStore["issue"]>[0][] = [];
+    const service = createService(stateStore(calls));
+
+    await service.start({
+      appId: "app_acme",
+      tenantId: "tenant_acme",
+      actorSubject: "auth0|abc+operator@example.com"
+    });
+
+    expect(calls[0]?.actorSubject).toBe("auth0|abc+operator@example.com");
+  });
+
   it.each([
     [{ appId: "", tenantId: "tenant", actorSubject: "actor" }],
     [{ appId: "app", tenantId: "tenant", actorSubject: "actor", redirectUri: "https://evil" }],

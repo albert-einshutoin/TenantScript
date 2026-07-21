@@ -130,19 +130,16 @@ function isStartInput(value: unknown): value is {
 } {
   return (
     isExactRecord(value, ["appId", "tenantId", "actorSubject"]) &&
-    isIdentifier(value.appId) &&
-    isIdentifier(value.tenantId) &&
-    isIdentifier(value.actorSubject)
+    isBoundedOpaqueIdentityField(value.appId) &&
+    isBoundedOpaqueIdentityField(value.tenantId) &&
+    isBoundedOpaqueIdentityField(value.actorSubject)
   );
 }
 
-function isIdentifier(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    value.length > 0 &&
-    value.length <= 256 &&
-    /^[A-Za-z0-9][A-Za-z0-9_.:@/-]*$/u.test(value)
-  );
+function isBoundedOpaqueIdentityField(value: unknown): value is string {
+  // Identity providers own the subject syntax, so punctuation must remain opaque here. The
+  // bounded length protects the state store without silently rewriting a trusted identifier.
+  return typeof value === "string" && value.length > 0 && value.length <= 256;
 }
 
 function isClientId(value: unknown): value is string {
