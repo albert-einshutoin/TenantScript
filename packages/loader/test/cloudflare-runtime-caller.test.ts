@@ -12,13 +12,14 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
   });
 
   it("reuses one scoped worker while recording trusted execution evidence per invocation", async () => {
-    const artifact = "export default { fetch: () => Response.json({ ok: true }) };";
+    const artifact = "exports.handlers = { 'invoice.created': async () => undefined };";
     const artifactSha256 = sha256(artifact);
     const loader = createCachingLoader(() =>
       Response.json({ value: { accepted: true, subrequests: 999, workflowRuns: 999 } })
     );
     const loadArtifact = vi.fn(() => Promise.resolve(artifact));
-    const createScopeBindings = vi.fn(() => ({ CAPABILITIES: { kind: "trusted-stub" } }));
+    const capabilityBinding = { call: vi.fn(() => Promise.resolve(undefined)) };
+    const createScopeBindings = vi.fn(() => ({ CAPABILITIES: capabilityBinding }));
     const readInvocationEvidence = vi.fn(() =>
       Promise.resolve({
         capabilityCalls: [{ name: "slack.send", status: "success" as const }],
@@ -49,7 +50,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       artifactSha256,
       grantRevision: "grant_7",
       payload: { invoiceId: "inv_1" },
-      limits: { cpuMs: 10, subrequests: 3 }
+      limits: { cpuMs: 10, timeoutMs: 250, subrequests: 3 }
     };
 
     const first = await caller.run({ ...base, executionId: "exec_1" });
@@ -62,13 +63,17 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(loader.ids[0]).toMatch(/^tsdw_[a-f0-9]{32}$/u);
     expect(loadArtifact).toHaveBeenCalledTimes(1);
     expect(createScopeBindings).toHaveBeenCalledTimes(1);
-    expect(loader.loadedCode).toEqual({
+    expect(loader.loadedCode).toMatchObject({
       compatibilityDate: "2026-07-21",
-      mainModule: "index.js",
-      modules: { "index.js": artifact },
-      env: { CAPABILITIES: { kind: "trusted-stub" } },
+      mainModule: "tenantscript-runtime.js",
+      env: { CAPABILITIES: capabilityBinding },
       globalOutbound: null
     });
+    expect(loader.loadedCode?.modules["tenant-plugin.cjs"]).toEqual({ cjs: artifact });
+    const runtimeModule = loader.loadedCode?.modules["tenantscript-runtime.js"];
+    expect(runtimeModule).toBeTypeOf("string");
+    expect(runtimeModule).toContain('import pluginModule from "./tenant-plugin.cjs"');
+    expect(runtimeModule).toContain("pluginModule.handlers");
     expect(loader.entrypointLimits).toEqual([
       { cpuMs: 10, subRequests: 3 },
       { cpuMs: 10, subRequests: 3 }
@@ -127,7 +132,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       artifactSha256: sha256(firstArtifact),
       grantRevision: "grant_1",
       payload: {},
-      limits: { cpuMs: 10, subrequests: 2 }
+      limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
     };
     const variants = [
       base,
@@ -171,7 +176,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         artifactSha256: "a".repeat(64),
         grantRevision: "grant_1",
         payload: {},
-        limits: { cpuMs: 10, subrequests: 2 }
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
       })
     ).rejects.toMatchObject({
       name: "CloudflareDynamicWorkerCallerError",
@@ -211,7 +216,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         artifactSha256: "a".repeat(64),
         grantRevision: "grant_1",
         payload: {},
-        limits: { cpuMs: 10, subrequests: 2 }
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
       })
       .catch((error: unknown) => error);
 
@@ -260,7 +265,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         artifactSha256: sha256("runtime-code"),
         grantRevision: "grant_1",
         payload: {},
-        limits: { cpuMs: 10, subrequests: 2 }
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
       })
       .catch((error: unknown) => error);
 
@@ -290,6 +295,58 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         subrequests: 1,
         workflowRuns: 0
       }
+    });
+  });
+
+  it("aborts a wall-clock timeout and records a stable timeout execution", async () => {
+    let invokedRequest: Request | undefined;
+    const loader = createCachingLoader(
+      (request) =>
+        new Promise<Response>(() => {
+          invokedRequest = request;
+        })
+    );
+    const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
+      Promise.resolve(request.execution)
+    );
+    const caller = createCloudflareDynamicWorkerCaller({
+      loader,
+      compatibilityDate: "2026-07-21",
+      loadArtifact: () => Promise.resolve("runtime-code"),
+      createScopeBindings: () => ({}),
+      readInvocationEvidence: () =>
+        Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
+      recorder: { record },
+      now: () => new Date("2026-07-21T01:00:00.000Z"),
+      monotonicNow: monotonicClock([100, 107])
+    });
+
+    const thrown = await caller
+      .run({
+        executionId: "exec_timeout",
+        tenantId: "tenant_1",
+        installationId: "installation_1",
+        pluginId: "plugin_1",
+        hookName: "invoice.created",
+        hookType: "event",
+        version: "1.0.0",
+        artifactSha256: sha256("runtime-code"),
+        grantRevision: "grant_1",
+        payload: {},
+        limits: { cpuMs: 10, timeoutMs: 5, subrequests: 2 }
+      })
+      .catch((error: unknown) => error);
+
+    expect(thrown).toMatchObject({
+      code: "runtime_invocation_timed_out",
+      message: "runtime_invocation_timed_out"
+    });
+    expect(invokedRequest?.signal.aborted).toBe(true);
+    expect(record).toHaveBeenCalledOnce();
+    expect(record.mock.calls[0]?.[0].execution).toMatchObject({
+      status: "timeout",
+      durationMs: 7,
+      error: "dynamic_worker_timeout"
     });
   });
 
@@ -328,7 +385,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         artifactSha256: sha256("runtime-code"),
         grantRevision: "grant_1",
         payload: {},
-        limits: { cpuMs: 10, subrequests: 2 }
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
       })
       .catch((error: unknown) => error);
 
@@ -369,7 +426,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         artifactSha256: sha256("runtime-code"),
         grantRevision: "grant_1",
         payload: {},
-        limits: { cpuMs: 10, subrequests: 2 }
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
       })
     ).resolves.toMatchObject({ value: "completed", execution: { status: "success" } });
     expect(reportFailure).toHaveBeenCalledWith({
@@ -417,7 +474,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       artifactSha256: sha256("runtime-code"),
       grantRevision: "grant_1",
       payload: {},
-      limits: { cpuMs: 10, subrequests: 2 }
+      limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
     };
     const circular: { self?: unknown } = {};
     circular.self = circular;
@@ -426,8 +483,9 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       { ...base, executionId: "exec\ninvalid" },
       { ...base, artifactSha256: "A".repeat(64) },
       { ...base, hookType: "unknown" },
-      { ...base, limits: { cpuMs: 0, subrequests: 2 } },
-      { ...base, limits: { cpuMs: 10, subrequests: -1 } },
+      { ...base, limits: { cpuMs: 0, timeoutMs: 250, subrequests: 2 } },
+      { ...base, limits: { cpuMs: 10, timeoutMs: 0, subrequests: 2 } },
+      { ...base, limits: { cpuMs: 10, timeoutMs: 250, subrequests: -1 } },
       { ...base, payload: circular },
       { ...base, payload: { value: "x".repeat(1_048_577) } }
     ];
@@ -493,7 +551,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
           artifactSha256: sha256("runtime-code"),
           grantRevision: "grant_1",
           payload: {},
-          limits: { cpuMs: 10, subrequests: 2 }
+          limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
         })
       ).rejects.toMatchObject({ code: "invalid_configuration" });
       expect(loader.requests).toEqual([]);
@@ -535,7 +593,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         artifactSha256: sha256("runtime-code"),
         grantRevision: "grant_1",
         payload: {},
-        limits: { cpuMs: 10, subrequests: 2 }
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
       })
     ).resolves.toMatchObject({ value: "completed" });
     expect(reportFailure).toHaveBeenCalledWith(
@@ -572,7 +630,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         artifactSha256: sha256("runtime-code"),
         grantRevision: "grant_1",
         payload: {},
-        limits: { cpuMs: 10, subrequests: 2 }
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
       })
       .catch((error: unknown) => error);
 
@@ -595,7 +653,7 @@ function monotonicClock(values: readonly number[]): () => number {
   return () => values[index++] ?? values.at(-1) ?? 0;
 }
 
-function createCachingLoader(respond: (request: Request) => Response) {
+function createCachingLoader(respond: (request: Request) => Response | Promise<Response>) {
   const codeById = new Map<string, Promise<DynamicWorkerCode>>();
   const ids: string[] = [];
   const requests: Request[] = [];

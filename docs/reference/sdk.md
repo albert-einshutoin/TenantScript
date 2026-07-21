@@ -67,8 +67,8 @@ timeoutは`ScopedRuntimeTimeoutError`（`executionStatus: "timeout"`）、subreq
 Cloudflare Dynamic Worker Loaderを呼ぶproduction composition境界である。
 
 - worker IDはtenant、installation、plugin、artifact SHA-256、grant revisionの全scopeからopaqueに導出し、同じauthorityだけを再利用する。
-- artifactは4 MiB以内かつ宣言SHA-256との完全一致を確認してからLoaderへ渡す。
-- `globalOutbound: null`と信頼済みscoped bindingだけを渡し、呼び出しごとにCPU/subrequest limitを適用する。
+- artifactは4 MiB以内かつ宣言SHA-256との完全一致を確認し、`ext deploy`が生成するCommonJS `handlers` bundleを固定ES module fetch wrapperから呼び出す。
+- `globalOutbound: null`と信頼済みscoped bindingだけを渡し、呼び出しごとにCPU/subrequest limitとwall-clock timeoutを適用する。timeout時はrequestをabortし、`timeout` executionを永続化する。
 - request/responseはclosed shapeかつ1 MiB以内とし、tenant codeの返値からusageやcapability evidenceを採用しない。
 - runtime失敗は固定errorへ正規化してexecutionを1回だけ永続化する。永続化失敗もretryせず、provider error本文を反射しない。
 - `readInvocationEvidence`失敗時はcapability callsとusageを0へfail-safeし、固定診断をreportする。

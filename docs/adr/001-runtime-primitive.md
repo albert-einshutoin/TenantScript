@@ -61,8 +61,10 @@ In order to use Dynamic Workers, you must switch to a paid plan
 On 2026-07-21, Issue #288 added an accountless production-caller contract for the preferred
 Dynamic Workers candidate. It verifies artifact integrity, derives cached worker IDs from the full
 tenant capability scope, disables global outbound access, applies per-invocation limits, bounds the
-wire contract, and records trusted execution evidence through the control-plane recorder. Its Tier
-1 security tests do not substitute for the blocked live latency or isolation comparison.
+wire contract, adapts deployed CommonJS handler bundles through a fixed ES module wrapper, enforces
+a host-side wall-clock abort in addition to Cloudflare CPU/subrequest limits, and records trusted
+execution evidence through the control-plane recorder. Its Tier 1 security tests do not substitute
+for the blocked live latency or isolation comparison.
 
 The caller intentionally records zero CPU milliseconds synchronously. Cloudflare documents exact
 `CPUTimeMs` on the asynchronous Workers Trace Events Logpush dataset, while the Tail handler event

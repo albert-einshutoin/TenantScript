@@ -8,11 +8,17 @@ import type {
 const MAX_DYNAMIC_WORKER_RESPONSE_BYTES = 1_048_576;
 const MAX_DYNAMIC_WORKER_REQUEST_BYTES = 1_048_576;
 const MAX_DYNAMIC_WORKER_ARTIFACT_BYTES = 4_194_304;
+const MAX_DYNAMIC_WORKER_TIMEOUT_MS = 2_147_483_647;
+const DYNAMIC_WORKER_RUNTIME_VERSION = "v1";
+const DYNAMIC_WORKER_MAIN_MODULE = "tenantscript-runtime.js";
+const DYNAMIC_WORKER_PLUGIN_MODULE = "tenant-plugin.cjs";
+
+export type DynamicWorkerModule = string | { cjs: string };
 
 export interface DynamicWorkerCode {
   compatibilityDate: string;
   mainModule: string;
-  modules: Record<string, string>;
+  modules: Record<string, DynamicWorkerModule>;
   env: Record<string, unknown>;
   globalOutbound: null;
 }
@@ -61,6 +67,7 @@ export interface CloudflareDynamicWorkerRunRequest {
   payload: unknown;
   limits: {
     cpuMs: number;
+    timeoutMs: number;
     subrequests: number;
   };
 }
@@ -80,7 +87,8 @@ export type CloudflareDynamicWorkerCallerErrorCode =
   | "execution_recording_failed"
   | "invalid_configuration"
   | "invalid_request"
-  | "runtime_invocation_failed";
+  | "runtime_invocation_failed"
+  | "runtime_invocation_timed_out";
 
 export class CloudflareDynamicWorkerCallerError extends Error {
   override readonly name = "CloudflareDynamicWorkerCallerError";
@@ -168,8 +176,11 @@ export function createCloudflareDynamicWorkerCaller(
         }
         return {
           compatibilityDate: configuration.compatibilityDate,
-          mainModule: "index.js",
-          modules: { "index.js": artifact },
+          mainModule: DYNAMIC_WORKER_MAIN_MODULE,
+          modules: {
+            [DYNAMIC_WORKER_MAIN_MODULE]: DYNAMIC_WORKER_RUNTIME_SOURCE,
+            [DYNAMIC_WORKER_PLUGIN_MODULE]: { cjs: artifact }
+          },
           env: bindings,
           globalOutbound: null
         };
@@ -178,8 +189,10 @@ export function createCloudflareDynamicWorkerCaller(
       const started = monotonicNow();
       let value: unknown;
       let invocationFailed = false;
+      let invocationTimedOut = false;
       try {
-        const response = await worker
+        const abortController = new AbortController();
+        const invocation = worker
           .getEntrypoint(null, {
             limits: {
               cpuMs: request.limits.cpuMs,
@@ -192,11 +205,13 @@ export function createCloudflareDynamicWorkerCaller(
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: requestBody
+                body: requestBody,
+                signal: abortController.signal
               }
             )
-          );
-        value = await readResponseValue(response);
+          )
+          .then(readResponseValue);
+        value = await withWallClockTimeout(invocation, request.limits.timeoutMs, abortController);
       } catch (error) {
         if (
           error instanceof CloudflareDynamicWorkerCallerError &&
@@ -206,7 +221,11 @@ export function createCloudflareDynamicWorkerCaller(
         ) {
           throw error;
         }
-        invocationFailed = true;
+        if (error instanceof DynamicWorkerInvocationTimeoutError) {
+          invocationTimedOut = true;
+        } else {
+          invocationFailed = true;
+        }
       }
       const durationMs = Math.max(0, monotonicNow() - started);
       let evidence: DynamicWorkerInvocationEvidence = {
@@ -245,9 +264,13 @@ export function createCloudflareDynamicWorkerCaller(
             pluginId: request.pluginId,
             hookName: request.hookName,
             version: request.version,
-            status: invocationFailed ? "error" : "success",
+            status: invocationTimedOut ? "timeout" : invocationFailed ? "error" : "success",
             durationMs,
-            ...(invocationFailed ? { error: "dynamic_worker_invocation_failed" } : {}),
+            ...(invocationTimedOut
+              ? { error: "dynamic_worker_timeout" }
+              : invocationFailed
+                ? { error: "dynamic_worker_invocation_failed" }
+                : {}),
             capabilityCalls: evidence.capabilityCalls,
             createdAt: startedAt
           },
@@ -264,6 +287,9 @@ export function createCloudflareDynamicWorkerCaller(
         // Persistence is the execution authority, so it is never retried here. The stable error
         // prevents a D1/provider message from crossing the host integration boundary.
         throw new CloudflareDynamicWorkerCallerError("execution_recording_failed");
+      }
+      if (invocationTimedOut) {
+        throw new CloudflareDynamicWorkerCallerError("runtime_invocation_timed_out");
       }
       if (invocationFailed) {
         throw new CloudflareDynamicWorkerCallerError("runtime_invocation_failed");
@@ -383,9 +409,12 @@ function validateRunRequest(value: unknown): string {
     typeof value.artifactSha256 !== "string" ||
     !/^[a-f0-9]{64}$/u.test(value.artifactSha256) ||
     !isRecord(value.limits) ||
-    !hasExactKeys(value.limits, ["cpuMs", "subrequests"]) ||
+    !hasExactKeys(value.limits, ["cpuMs", "timeoutMs", "subrequests"]) ||
     !Number.isSafeInteger(value.limits.cpuMs) ||
     (value.limits.cpuMs as number) < 1 ||
+    !Number.isSafeInteger(value.limits.timeoutMs) ||
+    (value.limits.timeoutMs as number) < 1 ||
+    (value.limits.timeoutMs as number) > MAX_DYNAMIC_WORKER_TIMEOUT_MS ||
     !Number.isSafeInteger(value.limits.subrequests) ||
     (value.limits.subrequests as number) < 0 ||
     value.payload === undefined
@@ -412,6 +441,7 @@ async function deriveWorkerId(request: CloudflareDynamicWorkerRunRequest): Promi
   // Loader.get() caches both code and env. Every authority that can change a scoped RPC binding
   // therefore belongs in the opaque ID; code-only reuse could hand tenant A's stub to tenant B.
   const scope = [
+    DYNAMIC_WORKER_RUNTIME_VERSION,
     request.tenantId,
     request.installationId,
     request.pluginId,
@@ -419,6 +449,31 @@ async function deriveWorkerId(request: CloudflareDynamicWorkerRunRequest): Promi
     request.grantRevision
   ].join("\u0000");
   return `tsdw_${(await sha256(scope)).slice(0, 32)}`;
+}
+
+class DynamicWorkerInvocationTimeoutError extends Error {
+  override readonly name = "DynamicWorkerInvocationTimeoutError";
+}
+
+async function withWallClockTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  abortController: AbortController
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      // CPU budgets do not stop an isolate awaiting a never-settling promise. Abort the request and
+      // settle the trusted host independently so a timeout execution is always persisted.
+      abortController.abort();
+      reject(new DynamicWorkerInvocationTimeoutError());
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 }
 
 async function sha256(value: string): Promise<string> {
@@ -483,3 +538,48 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): b
 function isIdentifier(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value);
 }
+
+// ext deploy emits a CommonJS bundle exporting `handlers`. Dynamic Worker string modules are ESM,
+// so a fixed trusted wrapper must adapt the verified CJS artifact to the Worker's fetch contract.
+const DYNAMIC_WORKER_RUNTIME_SOURCE = String.raw`
+import pluginModule from "./tenant-plugin.cjs";
+
+const handlers = pluginModule.handlers;
+
+export default {
+  async fetch(request, env) {
+    if (request.method !== "POST" || handlers === null || typeof handlers !== "object") {
+      throw new Error("invalid TenantScript runtime request");
+    }
+    const input = await request.json();
+    if (
+      input === null ||
+      typeof input !== "object" ||
+      Array.isArray(input) ||
+      Object.keys(input).length !== 3 ||
+      typeof input.executionId !== "string" ||
+      typeof input.hookName !== "string" ||
+      !("payload" in input)
+    ) {
+      throw new Error("invalid TenantScript runtime request");
+    }
+    const handler = handlers[input.hookName];
+    if (typeof handler !== "function") {
+      throw new Error("TenantScript handler is unavailable");
+    }
+    const value = await handler(input.payload, {
+      capability(name, capabilityInput) {
+        if (
+          env.CAPABILITIES === null ||
+          typeof env.CAPABILITIES !== "object" ||
+          typeof env.CAPABILITIES.call !== "function"
+        ) {
+          throw new Error("TenantScript capability binding is unavailable");
+        }
+        return env.CAPABILITIES.call(name, capabilityInput);
+      }
+    });
+    return Response.json({ value: value === undefined ? null : value });
+  }
+};
+`;

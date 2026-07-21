@@ -628,6 +628,7 @@
             { "name": "DynamicWorkerEntrypoint", "kind": "type" },
             { "name": "DynamicWorkerInvocationEvidence", "kind": "type" },
             { "name": "DynamicWorkerLoaderBinding", "kind": "type" },
+            { "name": "DynamicWorkerModule", "kind": "type" },
             { "name": "DynamicWorkerStub", "kind": "type" }
           ]
         }

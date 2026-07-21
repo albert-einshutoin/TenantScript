@@ -14,10 +14,11 @@ and security suite before changing isolation, timeout, capability, or continuati
   Cloudflare Worker host using a Dynamic Worker Loader binding.
 
 The Cloudflare caller derives an opaque cache ID from the complete tenant, installation, plugin,
-artifact, and grant scope; verifies the artifact SHA-256 before loading it; exposes only trusted
-scoped bindings; disables ambient outbound access; and applies CPU/subrequest limits on every
-entrypoint call. Requests, responses, artifacts, configuration, and runtime evidence are closed and
-byte-bounded before they cross a trust boundary.
+artifact, and grant scope; verifies the artifact SHA-256 before loading it; adapts the deployed
+CommonJS `handlers` bundle through a fixed Worker fetch wrapper; exposes only trusted scoped
+bindings; disables ambient outbound access; and applies CPU/subrequest plus wall-clock limits on
+every entrypoint call. Requests, responses, artifacts, configuration, and runtime evidence are
+closed and byte-bounded before they cross a trust boundary.
 
 Execution persistence is authoritative. Supply an `ExecutionUsageRecorder` and a trusted evidence
 reader; never derive usage or capability calls from tenant-code output. The synchronous caller
