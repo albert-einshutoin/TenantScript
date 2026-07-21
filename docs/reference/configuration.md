@@ -45,8 +45,9 @@ cannot be reused by two apps. Binding names are not additional fixed environment
 Enabling any of the three callback-specific values (`SLACK_OAUTH_CLIENT_SECRET` and the success/failure
 destinations) requires all three, plus `OAUTH_STATE_STORE_DO`, `PROVIDER_SECRET_STORE_DO`,
 `PROVIDER_SECRET_KEYRING_JSON`, `SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_REDIRECT_URI`, and either `DB` or
-`APP_DATABASE_ROUTES_JSON`. Partial callback configuration fails closed. A complete browser flow also
-requires the install-start `SLACK_OAUTH_SCOPES` value.
+`APP_DATABASE_ROUTES_JSON`. The shipped Worker composes install-start and callback together, so
+`SLACK_OAUTH_SCOPES` is also required when callback configuration is enabled. Partial callback
+configuration fails closed.
 
 The generated production template installs a daily Cron Trigger for explicit execution retention;
 opted-in telemetry shares that scheduled event while retaining independent failure visibility. The

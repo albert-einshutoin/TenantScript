@@ -65,9 +65,11 @@ For sharded deployments, callback query input cannot choose the database.
 
 Enabling any callback-specific value requires all three plus `OAUTH_STATE_STORE_DO`,
 `PROVIDER_SECRET_STORE_DO`, `PROVIDER_SECRET_KEYRING_JSON`, `SLACK_OAUTH_CLIENT_ID`, the exact
-`SLACK_OAUTH_REDIRECT_URI`, and either `DB` or `APP_DATABASE_ROUTES_JSON`. Partial configuration fails
-closed. The setup renderer does not yet emit provider-specific values, so operators must review and
-provision them explicitly.
+`SLACK_OAUTH_REDIRECT_URI`, `SLACK_OAUTH_SCOPES`, and either `DB` or `APP_DATABASE_ROUTES_JSON`. The
+shipped Worker evaluates install-start and callback composition together, so callback activation also
+requires the configured scope set even though the callback does not accept or modify it. Partial
+configuration fails closed. The setup renderer does not yet emit provider-specific values, so operators
+must review and provision them explicitly.
 
 ## Remaining production evidence
 
