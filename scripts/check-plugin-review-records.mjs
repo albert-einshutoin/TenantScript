@@ -370,6 +370,14 @@ function findSensitiveContent(value, path) {
   if (isRecord(value)) {
     for (const [field, item] of Object.entries(value)) {
       const fieldPath = path.endsWith(".json") ? field : `${path}.${field}`;
+      if (path.endsWith(".json") && field === "evidenceDigests" && isRecord(item)) {
+        // Digest keys are validated repository paths, not schema field names. Security-related
+        // evidence may legitimately include words such as secret, token, or credential.
+        for (const [evidence, digest] of Object.entries(item)) {
+          findSensitiveContent(digest, `${fieldPath}.${evidence}`);
+        }
+        continue;
+      }
       if (sensitiveFieldPattern.test(field)) {
         errors.push(`${path}: sensitive field ${fieldPath} is forbidden`);
       }

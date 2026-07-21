@@ -152,6 +152,23 @@ test("rejects Linux home and container workspace paths", () => {
   });
 });
 
+test("allows sensitive vocabulary in repository evidence paths", () => {
+  withRepo((repoRoot, baselineCommit) => {
+    const evidencePath = "evidence/secret-store-review.txt";
+    writeFileSync(join(repoRoot, evidencePath), "sanitized secret-store review\n");
+    const record = validRecord(baselineCommit, repoRoot);
+    record.domains[0].evidence.push(evidencePath);
+    record.evidenceDigests[evidencePath] = createHash("sha256")
+      .update(readFileSync(join(repoRoot, evidencePath)))
+      .digest("hex");
+    writeRecord(repoRoot, record);
+
+    const result = runChecker(repoRoot);
+
+    assert.equal(result.status, 0, result.stderr);
+  });
+});
+
 test("rejects missing, unknown, or drifted evidence digests", () => {
   withRepo((repoRoot, baselineCommit) => {
     const record = validRecord(baselineCommit, repoRoot);
