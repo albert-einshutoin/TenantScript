@@ -1250,6 +1250,13 @@ function collectNestedShadowRanges(
       const body = close === -1 ? undefined : arrowBodyRange(tokens, close, outer.end);
       if (body !== undefined && parameterListDeclares(tokens, index, close, name)) {
         shadows.push(body);
+      } else if (close !== -1 && parameterListDeclares(tokens, index, close, name)) {
+        const methodBody = blockBodyRange(tokens, close + 1);
+        // Object and class methods introduce their own parameter bindings just like functions.
+        // Confirm the following block is callable so control-flow parentheses cannot hide scope.
+        if (methodBody !== undefined && isCallableBodyOpen(tokens, close + 1)) {
+          shadows.push(methodBody);
+        }
       }
       continue;
     }
