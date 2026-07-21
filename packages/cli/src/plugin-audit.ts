@@ -211,6 +211,7 @@ interface CallableBinding extends BindingRange {
 }
 
 const tokenPairCache = new WeakMap<readonly BundleToken[], ReadonlyMap<number, number>>();
+const enclosingObjectCache = new WeakMap<readonly BundleToken[], Array<number | undefined>>();
 
 function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
   const tokens = tokenizeBundle(bundleCode);
@@ -453,7 +454,7 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     const objectOpen = enclosingObjects[index];
     if (
       objectOpen === undefined ||
-      !isPluginDispatchObject(tokens, objectOpen, loweredPluginBindings)
+      !isPluginDispatchObject(tokens, objectOpen, loweredPluginBindings, enclosingObjects)
     ) {
       continue;
     }
@@ -609,8 +610,16 @@ function isTopLevelVariableDeclarator(
   tokens: readonly BundleToken[],
   identifierIndex: number
 ): boolean {
-  if (["const", "let", "var"].includes(tokens[identifierIndex - 1]?.value ?? "")) return true;
-  if (tokens[identifierIndex - 1]?.value !== ",") return false;
+  return variableDeclarationKeyword(tokens, identifierIndex) !== undefined;
+}
+
+function variableDeclarationKeyword(
+  tokens: readonly BundleToken[],
+  identifierIndex: number
+): "const" | "let" | "var" | undefined {
+  const previous = tokens[identifierIndex - 1]?.value;
+  if (previous === "const" || previous === "let" || previous === "var") return previous;
+  if (previous !== ",") return undefined;
 
   let delimiterDepth = 0;
   for (let index = identifierIndex - 2; index >= 0; index -= 1) {
@@ -620,20 +629,22 @@ function isTopLevelVariableDeclarator(
       continue;
     }
     if (["(", "[", "{"].includes(value ?? "")) {
-      if (delimiterDepth === 0) return false;
+      if (delimiterDepth === 0) return undefined;
       delimiterDepth -= 1;
       continue;
     }
     if (delimiterDepth !== 0) continue;
-    if (["const", "let", "var"].includes(value ?? "")) return true;
+    if (value === "const" || value === "let" || value === "var") return value;
     // Only a declaration keyword in the same statement can authorize a later declarator. This
     // boundary prevents an arbitrary comma-separated assignment from becoming a trusted handler.
-    if (value === ";") return false;
+    if (value === ";") return undefined;
   }
-  return false;
+  return undefined;
 }
 
 function collectEnclosingObjectOpens(tokens: readonly BundleToken[]): Array<number | undefined> {
+  const cached = enclosingObjectCache.get(tokens);
+  if (cached !== undefined) return cached;
   const enclosing: Array<number | undefined> = [];
   const stack: number[] = [];
   for (let index = 0; index < tokens.length; index += 1) {
@@ -641,6 +652,7 @@ function collectEnclosingObjectOpens(tokens: readonly BundleToken[]): Array<numb
     enclosing.push(stack.at(-1));
     if (tokens[index]?.value === "{") stack.push(index);
   }
+  enclosingObjectCache.set(tokens, enclosing);
   return enclosing;
 }
 
@@ -713,7 +725,8 @@ function isPluginHandlersDeclaration(
 function isPluginDispatchObject(
   tokens: readonly BundleToken[],
   objectOpen: number,
-  loweredPluginBindings: ReadonlySet<string>
+  loweredPluginBindings: ReadonlySet<string>,
+  enclosingObjects: readonly (number | undefined)[]
 ): boolean {
   if (
     matchesTokenSequence(tokens, objectOpen - 4, ["module", ".", "exports", "=", "{"]) ||
@@ -722,6 +735,15 @@ function isPluginDispatchObject(
     return true;
   }
   const exportedProperty = tokens[objectOpen - 2]?.value;
+  const outerObjectOpen = enclosingObjects[objectOpen];
+  if (
+    ["plugin", "default"].includes(exportedProperty ?? "") &&
+    tokens[objectOpen - 1]?.value === ":" &&
+    outerObjectOpen !== undefined &&
+    matchesTokenSequence(tokens, outerObjectOpen - 4, ["module", ".", "exports", "=", "{"])
+  ) {
+    return true;
+  }
   if (
     loweredPluginBindings.has(exportedProperty ?? "") &&
     tokens[objectOpen - 1]?.value === "=" &&
@@ -892,7 +914,22 @@ function collectNestedShadowRanges(
   name: string
 ): BindingRange[] {
   const shadows: BindingRange[] = [];
+  const enclosingBlocks = collectEnclosingObjectOpens(tokens);
+  const registerEnclosingBlock = (index: number): void => {
+    const open = enclosingBlocks[index];
+    if (open === undefined || open < outer.start) return;
+    const close = findMatchingToken(tokens, open, "{", "}");
+    if (close !== -1 && close <= outer.end) shadows.push({ start: open + 1, end: close - 1 });
+  };
   for (let index = outer.start; index <= outer.end; index += 1) {
+    if (tokens[index]?.value === "catch" && tokens[index + 1]?.value === "(") {
+      const close = findMatchingToken(tokens, index + 1, "(", ")");
+      const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
+      if (body !== undefined && parameterListDeclares(tokens, index + 1, close, name)) {
+        shadows.push(body);
+      }
+    }
+
     if (tokens[index]?.value === "function") {
       let open = index + 1;
       if (tokens[open]?.kind === "identifier") open += 1;
@@ -903,6 +940,20 @@ function collectNestedShadowRanges(
         shadows.push(body);
       }
       continue;
+    }
+
+    if (tokens[index]?.kind === "identifier" && tokens[index]?.value === name) {
+      const declaration = variableDeclarationKeyword(tokens, index);
+      if (
+        declaration === "const" ||
+        declaration === "let" ||
+        tokens[index - 1]?.value === "class" ||
+        tokens[index - 1]?.value === "function"
+      ) {
+        // Lexical declarations shadow for the entire containing block, including the temporal dead
+        // zone before the declaration. Excluding only the post-declaration range would be unsound.
+        registerEnclosingBlock(index);
+      }
     }
 
     if (tokens[index]?.value === "(") {

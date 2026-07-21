@@ -317,7 +317,8 @@ describe("plugin audit", () => {
   it("detects capabilities in runtime-supported plugin dispatch exports", () => {
     const sources = [
       'module.exports = { dispatch(request) { return request.context.capability("slack.send", {}); } };',
-      'exports.plugin = { dispatch: async ({ context }) => context.capability("slack.send", {}) };'
+      'exports.plugin = { dispatch: async ({ context }) => context.capability("slack.send", {}) };',
+      'module.exports = { plugin: { dispatch(request) { return request.context.capability("slack.send", {}); } } };'
     ];
 
     for (const bundleCode of sources) {
@@ -510,6 +511,26 @@ describe("plugin audit", () => {
         ].join("\n")
       }).findings
     ).toEqual([]);
+  });
+
+  it("does not reuse a handler context receiver across block-scoped shadows", () => {
+    const bodies = [
+      '{ const ctx = fake; ctx.capability("slack.send", {}); }',
+      '{ let ctx = fake; ctx.capability("slack.send", {}); }',
+      '{ class ctx { static capability() {} } ctx.capability("slack.send", {}); }',
+      'try { throw fake; } catch (ctx) { ctx.capability("slack.send", {}); }'
+    ];
+
+    for (const body of bodies) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode: `export const handlers = { event(_payload, ctx) { ${body} } };`
+        }).findings
+      ).toEqual([]);
+    }
   });
 
   it("keeps malformed delimiter analysis within a bounded CPU budget", () => {
