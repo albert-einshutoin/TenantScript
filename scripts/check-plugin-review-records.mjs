@@ -402,7 +402,7 @@ function findSensitiveContent(value, path) {
       const fieldPath = path.endsWith(".json") ? field : `${path}.${field}`;
       if (
         ((path.endsWith(".json") && field === "evidenceDigests") ||
-          (path.endsWith(".target") && field === "sourceDigests")) &&
+          ((path === "target" || path.endsWith(".target")) && field === "sourceDigests")) &&
         isRecord(item)
       ) {
         // Digest keys are validated repository paths, not schema field names. Security-related

@@ -287,15 +287,17 @@ function readStringToken(
 ): { token: BundleToken; nextIndex: number } {
   let index = start + 1;
   let value = "";
-  let plain = true;
+  let valid = true;
   while (index < source.length) {
     const character = source[index];
     if (character === "\\") {
-      plain = false;
-      index += 2;
+      const escape = readStringEscape(source, index);
+      value += escape.value;
+      valid &&= escape.valid;
+      index = escape.nextIndex;
     } else if (character === quote) {
       return {
-        token: { kind: "string", value: plain ? value : "" },
+        token: { kind: "string", value: valid ? value : "" },
         nextIndex: index + 1
       };
     } else {
@@ -304,6 +306,74 @@ function readStringToken(
     }
   }
   return { token: { kind: "string", value: "" }, nextIndex: source.length };
+}
+
+function readStringEscape(
+  source: string,
+  slashIndex: number
+): { value: string; nextIndex: number; valid: boolean } {
+  // Decode only JavaScript's deterministic literal escapes here. Treat malformed and legacy
+  // octal forms as dynamic so the audit never upgrades uncertain source into an exact finding.
+  const escaped = source[slashIndex + 1];
+  if (escaped === undefined) return { value: "", nextIndex: source.length, valid: false };
+
+  const simpleEscapes: Record<string, string> = {
+    b: "\b",
+    f: "\f",
+    n: "\n",
+    r: "\r",
+    t: "\t",
+    v: "\v"
+  };
+  if (escaped in simpleEscapes) {
+    return { value: simpleEscapes[escaped] ?? "", nextIndex: slashIndex + 2, valid: true };
+  }
+  if (escaped === "\n") return { value: "", nextIndex: slashIndex + 2, valid: true };
+  if (escaped === "\r") {
+    return {
+      value: "",
+      nextIndex: source[slashIndex + 2] === "\n" ? slashIndex + 3 : slashIndex + 2,
+      valid: true
+    };
+  }
+  if (escaped === "x") {
+    return readHexEscape(source, 2, slashIndex + 2);
+  }
+  if (escaped === "u") {
+    if (source[slashIndex + 2] === "{") {
+      const end = source.indexOf("}", slashIndex + 3);
+      const digits = end === -1 ? "" : source.slice(slashIndex + 3, end);
+      const codePoint = /^[0-9a-fA-F]{1,6}$/u.test(digits) ? Number.parseInt(digits, 16) : -1;
+      if (end === -1 || codePoint > 0x10ffff) {
+        return { value: "", nextIndex: end === -1 ? source.length : end + 1, valid: false };
+      }
+      return { value: String.fromCodePoint(codePoint), nextIndex: end + 1, valid: true };
+    }
+    return readHexEscape(source, 4, slashIndex + 2);
+  }
+  if (escaped === "0" && /[0-9]/u.test(source[slashIndex + 2] ?? "")) {
+    return { value: "", nextIndex: slashIndex + 2, valid: false };
+  }
+  if (/[1-9]/u.test(escaped)) {
+    return { value: "", nextIndex: slashIndex + 2, valid: false };
+  }
+  return { value: escaped === "0" ? "\0" : escaped, nextIndex: slashIndex + 2, valid: true };
+}
+
+function readHexEscape(
+  source: string,
+  length: number,
+  digitsStart: number
+): { value: string; nextIndex: number; valid: boolean } {
+  const digits = source.slice(digitsStart, digitsStart + length);
+  if (digits.length !== length || !/^[0-9a-fA-F]+$/u.test(digits)) {
+    return { value: "", nextIndex: digitsStart + digits.length, valid: false };
+  }
+  return {
+    value: String.fromCodePoint(Number.parseInt(digits, 16)),
+    nextIndex: digitsStart + length,
+    valid: true
+  };
 }
 
 function skipLineComment(source: string, start: number): number {

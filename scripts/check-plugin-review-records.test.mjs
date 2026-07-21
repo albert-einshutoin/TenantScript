@@ -178,6 +178,23 @@ test("allows sensitive vocabulary in repository evidence paths", () => {
   });
 });
 
+test("allows sensitive vocabulary in reviewed source paths", () => {
+  withRepo((repoRoot, baselineCommit) => {
+    const sourcePath = "packages/cli/src/secret-store.ts";
+    writeFileSync(join(repoRoot, sourcePath), "export {};\n");
+    const record = validRecord(baselineCommit, repoRoot);
+    record.target.scope.push(sourcePath);
+    record.target.sourceDigests[sourcePath] = createHash("sha256")
+      .update(readFileSync(join(repoRoot, sourcePath)))
+      .digest("hex");
+    writeRecord(repoRoot, record);
+
+    const result = runChecker(repoRoot);
+
+    assert.equal(result.status, 0, result.stderr);
+  });
+});
+
 test("rejects missing, unknown, or drifted evidence digests", () => {
   withRepo((repoRoot, baselineCommit) => {
     const record = validRecord(baselineCommit, repoRoot);

@@ -37,6 +37,23 @@ describe("plugin audit", () => {
     ).toEqual({ version: 1, passed: true, findings: [] });
   });
 
+  it("decodes escaped static capability names before comparing grants", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: String.raw`context.capability("\u0067ithub\x2eissue\u{2e}create", {});`
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+      finding("bundle_grant_potentially_unused", "warning", "manifest.capabilities.*", "heuristic")
+    ]);
+  });
+
   it("reports unused, undeclared, dynamic, and direct egress bundle risks", () => {
     const manifest = validManifest();
     manifest.capabilities = { "slack.send": {}, "email.send": {} };
