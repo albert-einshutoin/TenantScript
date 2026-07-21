@@ -158,6 +158,36 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(new Set(loader.ids).size).toBe(variants.length);
   });
 
+  it("accepts manifest-valid hook names without narrowing dispatch keys", async () => {
+    const artifact = "exports.handlers = { hook: async () => true };";
+    const loader = createCachingLoader(() => Response.json({ value: true }));
+    const caller = createCloudflareDynamicWorkerCaller({
+      loader,
+      compatibilityDate: "2026-07-21",
+      loadArtifact: () => Promise.resolve(artifact),
+      createScopeBindings: () => ({}),
+      readInvocationEvidence: () =>
+        Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
+      recorder: { record: ({ execution }) => Promise.resolve(execution) }
+    });
+
+    await caller.run({
+      executionId: "exec_hook_name",
+      tenantId: "tenant_1",
+      installationId: "installation_1",
+      pluginId: "plugin_1",
+      hookName: "請求書/ 作成",
+      hookType: "event",
+      version: "1.0.0",
+      artifactSha256: sha256(artifact),
+      grantRevision: "grant_1",
+      payload: {},
+      limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
+    });
+
+    await expect(loader.requests[0]?.json()).resolves.toMatchObject({ hookName: "請求書/ 作成" });
+  });
+
   it("invalidates cached worker code when the compatibility date changes", async () => {
     const artifact = "exports.handlers = { event: async () => true };";
     const loader = createCachingLoader(() => Response.json({ value: true }));
@@ -533,6 +563,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     const invalid = [
       { ...base, token: "credential-secret-sentinel" },
       { ...base, executionId: "exec\ninvalid" },
+      { ...base, hookName: "x".repeat(257) },
       { ...base, version: `v${"1".repeat(128)}` },
       { ...base, artifactSha256: "A".repeat(64) },
       { ...base, hookType: "unknown" },
