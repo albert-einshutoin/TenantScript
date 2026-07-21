@@ -202,6 +202,7 @@ interface BindingRange {
 interface CapabilityScope extends BindingRange {
   receivers: Set<string>;
   direct: Set<string>;
+  containers: Set<string>;
 }
 
 interface CallableBinding extends BindingRange {
@@ -221,15 +222,22 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
   for (let index = 0; index < tokens.length; index += 1) {
     const callOpen = capabilityCallOpen(tokens, index);
     const bracketReceiver = bracketedPropertyReceiverIndex(tokens, index, "capability");
+    const contextContainer = contextContainerReceiverIndex(tokens, index);
     const isMemberCapabilityCall =
       tokens[index]?.value === "capability" &&
-      ((tokens[index - 1]?.value === "." && tokens[index - 2]?.kind === "identifier") ||
+      ((((tokens[index - 1]?.value === "." && tokens[index - 2]?.kind === "identifier") ||
         bracketReceiver !== -1) &&
-      bindingAppliesAt(
-        capabilityBindings.receivers,
-        tokens[bracketReceiver === -1 ? index - 2 : bracketReceiver]?.value ?? "",
-        index
-      ) &&
+        bindingAppliesAt(
+          capabilityBindings.receivers,
+          tokens[bracketReceiver === -1 ? index - 2 : bracketReceiver]?.value ?? "",
+          index
+        )) ||
+        (contextContainer !== -1 &&
+          bindingAppliesAt(
+            capabilityBindings.containers,
+            tokens[contextContainer]?.value ?? "",
+            index
+          ))) &&
       callOpen !== -1;
     const isDirectCapabilityCall =
       tokens[index]?.kind === "identifier" &&
@@ -319,15 +327,30 @@ function bracketedPropertyReceiverIndex(
     : -1;
 }
 
+function contextContainerReceiverIndex(
+  tokens: readonly BundleToken[],
+  capabilityIndex: number
+): number {
+  const bracketReceiver = bracketedPropertyReceiverIndex(tokens, capabilityIndex, "capability");
+  const capabilityReceiver = bracketReceiver === -1 ? capabilityIndex - 2 : bracketReceiver;
+  return tokens[capabilityReceiver]?.value === "context" &&
+    tokens[capabilityReceiver - 1]?.value === "." &&
+    tokens[capabilityReceiver - 2]?.kind === "identifier"
+    ? capabilityReceiver - 2
+    : -1;
+}
+
 function collectCapabilityBindings(tokens: readonly BundleToken[]): {
   receivers: Map<string, BindingRange[]>;
   direct: Map<string, BindingRange[]>;
+  containers: Map<string, BindingRange[]>;
 } {
   // PluginContext is a structural SDK type, so neither bundlers nor authors must preserve the
   // local name `context`. Binding names alone are insufficient because helpers can shadow them,
   // so every receiver and destructured alias remains bounded to its handler body.
   const receivers = new Map<string, BindingRange[]>();
   const direct = new Map<string, BindingRange[]>();
+  const containers = new Map<string, BindingRange[]>();
   const scopes = collectHandlerCapabilityScopes(tokens);
 
   for (const scope of scopes) {
@@ -346,10 +369,12 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
     }
     registerBindingRanges(tokens, receivers, scope.receivers, scope);
     registerBindingRanges(tokens, direct, scope.direct, scope);
+    registerBindingRanges(tokens, containers, scope.containers, scope);
   }
   sortBindingRanges(receivers);
   sortBindingRanges(direct);
-  return { receivers, direct };
+  sortBindingRanges(containers);
+  return { receivers, direct, containers };
 }
 
 function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): CapabilityScope[] {
@@ -402,14 +427,52 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   }
 
   const scopes = new Map<string, CapabilityScope>();
+  const storeScope = (scope: CapabilityScope | undefined): void => {
+    if (scope !== undefined) scopes.set(`${String(scope.start)}:${String(scope.end)}`, scope);
+  };
   const addScope = (open: number, close: number, body: BindingRange): void => {
     const scope = createCapabilityScope(tokens, open, close, body);
-    if (scope !== undefined) {
-      scopes.set(`${String(scope.start)}:${String(scope.end)}`, scope);
-    }
+    storeScope(scope);
+  };
+  const addDispatchScope = (open: number, close: number, body: BindingRange): void => {
+    storeScope(createDispatchCapabilityScope(tokens, open, close, body));
   };
 
   const enclosingObjects = collectEnclosingObjectOpens(tokens);
+  // Production prefers plugin.dispatch over legacy handlers. Restricting discovery to exported
+  // plugin objects covers the runtime surface without trusting unrelated application dispatchers.
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.value !== "dispatch") continue;
+    const objectOpen = enclosingObjects[index];
+    if (objectOpen === undefined || !isPluginDispatchObject(tokens, objectOpen)) continue;
+    const startsObjectField = ["{", ","].includes(tokens[index - 1]?.value ?? "");
+    if (!startsObjectField) continue;
+
+    if (tokens[index + 1]?.value === "(") {
+      const close = findMatchingToken(tokens, index + 1, "(", ")");
+      const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
+      if (body !== undefined) addDispatchScope(index + 1, close, body);
+      continue;
+    }
+    if (tokens[index + 1]?.value !== ":") continue;
+    let value = index + 2;
+    if (tokens[value]?.value === "async") value += 1;
+    if (tokens[value]?.value === "function") {
+      if (tokens[value + 1]?.kind === "identifier") value += 1;
+      const open = value + 1;
+      const close = tokens[open]?.value === "(" ? findMatchingToken(tokens, open, "(", ")") : -1;
+      const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
+      if (body !== undefined) addDispatchScope(open, close, body);
+    } else if (tokens[value]?.value === "(") {
+      const close = findMatchingToken(tokens, value, "(", ")");
+      const body = close === -1 ? undefined : arrowBodyRange(tokens, close, tokens.length - 1);
+      if (body !== undefined) addDispatchScope(value, close, body);
+    } else if (tokens[value]?.kind === "identifier") {
+      const named = callableBindings.get(tokens[value]?.value ?? "");
+      if (named !== undefined) addDispatchScope(named.open, named.close, named);
+    }
+  }
+
   const hasLoweredHandlerExport = hasEsbuildCommonJsHandlerExport(tokens);
   const definePluginHandlerBindings = collectDefinePluginHandlerBindings(tokens, enclosingObjects);
   for (let index = 0; index < tokens.length; index += 1) {
@@ -628,6 +691,38 @@ function isPluginHandlersDeclaration(
   return isDefinePluginInput || isDirectCommonJsModule;
 }
 
+function isPluginDispatchObject(tokens: readonly BundleToken[], objectOpen: number): boolean {
+  if (
+    matchesTokenSequence(tokens, objectOpen - 4, ["module", ".", "exports", "=", "{"]) ||
+    matchesTokenSequence(tokens, objectOpen - 2, ["export", "default", "{"])
+  ) {
+    return true;
+  }
+  const exportedProperty = tokens[objectOpen - 2]?.value;
+  if (!["plugin", "default"].includes(exportedProperty ?? "")) return false;
+  return (
+    matchesTokenSequence(tokens, objectOpen - 4, [
+      "exports",
+      ".",
+      exportedProperty ?? "",
+      "=",
+      "{"
+    ]) ||
+    matchesTokenSequence(tokens, objectOpen - 6, [
+      "module",
+      ".",
+      "exports",
+      ".",
+      exportedProperty ?? "",
+      "=",
+      "{"
+    ]) ||
+    (tokens[objectOpen - 1]?.value === "=" &&
+      ["const", "let", "var"].includes(tokens[objectOpen - 3]?.value ?? "") &&
+      tokens[objectOpen - 4]?.value === "export")
+  );
+}
+
 function hasEsbuildCommonJsHandlerExport(tokens: readonly BundleToken[]): boolean {
   let mapsHandlersBinding = false;
   let assignsCommonJsModule = false;
@@ -650,6 +745,7 @@ function createCapabilityScope(
 ): CapabilityScope | undefined {
   const receivers = new Set<string>();
   const direct = new Set<string>();
+  const containers = new Set<string>();
   const parameters = splitTopLevel(tokens.slice(open + 1, close), ",");
   const contextParameter = parameters[1];
   if (contextParameter?.[0]?.kind === "identifier") {
@@ -657,7 +753,29 @@ function createCapabilityScope(
   } else if (contextParameter?.[0]?.value === "{") {
     registerDestructuredCapability(contextParameter.slice(1, -1), direct);
   }
-  return receivers.size === 0 && direct.size === 0 ? undefined : { ...body, receivers, direct };
+  return receivers.size === 0 && direct.size === 0
+    ? undefined
+    : { ...body, receivers, direct, containers };
+}
+
+function createDispatchCapabilityScope(
+  tokens: readonly BundleToken[],
+  open: number,
+  close: number,
+  body: BindingRange
+): CapabilityScope | undefined {
+  const receivers = new Set<string>();
+  const direct = new Set<string>();
+  const containers = new Set<string>();
+  const requestParameter = splitTopLevel(tokens.slice(open + 1, close), ",")[0];
+  if (requestParameter?.[0]?.kind === "identifier") {
+    containers.add(requestParameter[0].value);
+  } else if (requestParameter?.[0]?.value === "{") {
+    registerDestructuredContext(requestParameter.slice(1, -1), receivers);
+  }
+  return receivers.size === 0 && containers.size === 0
+    ? undefined
+    : { ...body, receivers, direct, containers };
 }
 
 function blockBodyRange(
@@ -825,6 +943,14 @@ function registerDestructuredCapability(tokens: readonly BundleToken[], direct: 
   }
 }
 
+function registerDestructuredContext(tokens: readonly BundleToken[], receivers: Set<string>): void {
+  for (const property of splitTopLevel(tokens, ",")) {
+    if (property[0]?.value !== "context") continue;
+    const alias = property[1]?.value === ":" ? property[2] : undefined;
+    receivers.add(alias?.kind === "identifier" ? alias.value : "context");
+  }
+}
+
 function splitTopLevel(tokens: readonly BundleToken[], delimiter: string): BundleToken[][] {
   const output: BundleToken[][] = [[]];
   let depth = 0;
@@ -873,8 +999,17 @@ function buildTokenPairs(tokens: readonly BundleToken[]): ReadonlyMap<number, nu
 }
 
 function tokenizeBundle(source: string): BundleToken[] {
+  return tokenizeCode(source, 0, false).tokens;
+}
+
+function tokenizeCode(
+  source: string,
+  start: number,
+  stopAtTemplateExpressionEnd: boolean
+): { tokens: BundleToken[]; nextIndex: number } {
   const tokens: BundleToken[] = [];
-  let index = 0;
+  let index = start;
+  let braceDepth = 0;
   while (index < source.length) {
     const character = source[index];
     const next = source[index + 1];
@@ -889,22 +1024,52 @@ function tokenizeBundle(source: string): BundleToken[] {
       tokens.push(stringToken.token);
       index = stringToken.nextIndex;
     } else if (character === "`") {
-      // Template expressions can execute arbitrary code, so omitting their internals is why
-      // absence-based bundle findings remain explicitly heuristic rather than a safety proof.
-      index = skipQuoted(source, index + 1, "`");
+      const template = tokenizeTemplateExpressions(source, index);
+      tokens.push(...template.tokens);
+      index = template.nextIndex;
     } else if (character !== undefined && /[A-Za-z_$]/u.test(character)) {
       const start = index;
       index += 1;
       while (index < source.length && /[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
       tokens.push({ kind: "identifier", value: source.slice(start, index) });
     } else {
+      if (character === "}" && stopAtTemplateExpressionEnd && braceDepth === 0) {
+        return { tokens, nextIndex: index + 1 };
+      }
       if (character !== undefined && ".(),{}:[]=>;".includes(character)) {
         tokens.push({ kind: "punctuation", value: character });
       }
+      if (character === "{") braceDepth += 1;
+      else if (character === "}") braceDepth = Math.max(0, braceDepth - 1);
       index += 1;
     }
   }
-  return tokens;
+  return { tokens, nextIndex: source.length };
+}
+
+function tokenizeTemplateExpressions(
+  source: string,
+  templateStart: number
+): { tokens: BundleToken[]; nextIndex: number } {
+  // Raw template text is inert, but every `${...}` segment is executable code. Tokenize only those
+  // segments recursively so nested templates cannot hide broker or egress calls in static text.
+  const tokens: BundleToken[] = [];
+  let index = templateStart + 1;
+  while (index < source.length) {
+    const character = source[index];
+    if (character === "\\") {
+      index = Math.min(source.length, index + 2);
+    } else if (character === "`") {
+      return { tokens, nextIndex: index + 1 };
+    } else if (character === "$" && source[index + 1] === "{") {
+      const expression = tokenizeCode(source, index + 2, true);
+      tokens.push(...expression.tokens);
+      index = expression.nextIndex;
+    } else {
+      index += 1;
+    }
+  }
+  return { tokens, nextIndex: source.length };
 }
 
 function readStringToken(
@@ -1060,16 +1225,6 @@ function skipRegexLiteral(source: string, start: number): number {
       while (index < source.length && /[A-Za-z]/u.test(source[index] ?? "")) index += 1;
       return index;
     } else index += 1;
-  }
-  return source.length;
-}
-
-function skipQuoted(source: string, start: number, quote: string): number {
-  let index = start;
-  while (index < source.length) {
-    if (source[index] === "\\") index += 2;
-    else if (source[index] === quote) return index + 1;
-    else index += 1;
   }
   return source.length;
 }

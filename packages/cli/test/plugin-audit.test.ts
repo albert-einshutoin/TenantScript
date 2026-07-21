@@ -293,6 +293,39 @@ describe("plugin audit", () => {
     }
   });
 
+  it("detects capabilities in runtime-supported plugin dispatch exports", () => {
+    const sources = [
+      'module.exports = { dispatch(request) { return request.context.capability("slack.send", {}); } };',
+      'exports.plugin = { dispatch: async ({ context }) => context.capability("slack.send", {}) };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
+  it("tokenizes executable template expressions inside handlers", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle('`${context.capability("slack.send", {})}`;')
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("detects renamed context bindings in referenced function-expression handlers", () => {
     expect(
       auditPluginPackage({
