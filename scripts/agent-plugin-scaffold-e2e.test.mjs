@@ -34,6 +34,11 @@ test("ext init output builds and tests against packed public packages", async ()
       "@tenantscript/plugin-sdk": cliPackageJson.version
     });
 
+    // Preserve the public dependency contract before replacing install locations with local
+    // tarballs. Auditing the rewritten file would incorrectly reject the intentional file: URLs.
+    const auditPackagePath = join(tempRoot, "audit-package.json");
+    await writeFile(auditPackagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
     // The checkout is intentionally unpublished. Swap only the install locations to fresh tarballs
     // after proving emitted versions, so this exercises public package contents rather than sources.
     packageJson.dependencies = {
@@ -62,6 +67,31 @@ test("ext init output builds and tests against packed public packages", async ()
       "--prefer-offline",
       "--ignore-scripts"
     ]);
+
+    const manifestJson = run(
+      process.execPath,
+      [
+        "--experimental-strip-types",
+        "--input-type=module",
+        "--eval",
+        'import { manifest } from "./src/manifest.ts"; process.stdout.write(JSON.stringify(manifest));'
+      ],
+      { cwd: pluginDirectory }
+    );
+    const auditManifestPath = join(tempRoot, "audit-manifest.json");
+    await writeFile(auditManifestPath, `${manifestJson}\n`);
+    const auditReport = JSON.parse(
+      run(process.execPath, [
+        join(repoRoot, "packages/cli/dist/bin.js"),
+        "audit",
+        "--manifest",
+        auditManifestPath,
+        "--package",
+        auditPackagePath
+      ])
+    );
+    assert.deepEqual(auditReport, { version: 1, passed: true, findings: [] });
+
     run("pnpm", ["--dir", pluginDirectory, "build"]);
     run("pnpm", ["--dir", pluginDirectory, "test"]);
   } finally {
@@ -83,9 +113,9 @@ function packPublicPackage(packageDirectory, destination) {
   return result.filename;
 }
 
-function run(command, args) {
+function run(command, args, options = {}) {
   return execFileSync(command, args, {
-    cwd: repoRoot,
+    cwd: options.cwd ?? repoRoot,
     encoding: "utf8",
     env: { ...process.env, CI: "1" },
     stdio: ["ignore", "pipe", "pipe"]
