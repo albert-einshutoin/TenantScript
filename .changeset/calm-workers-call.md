@@ -14,3 +14,5 @@ The v2 wrapper captures trusted intrinsics before lazily evaluating tenant code 
 dispatch results against the host-owned hook type.
 Response JSON is constructed with captured primitives so tenant-mutated JSON hooks cannot alter the
 validated envelope.
+Generated CommonJS namespace shapes are unwrapped before dispatch, and policy decisions require
+own data properties.

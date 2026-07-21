@@ -769,8 +769,13 @@ function validateHookReturn(hookType, value) {
   if (value === null || typeof value !== "object") {
     throw new Error("TenantScript legacy hook return contract failed");
   }
-  if (value.decision === "allow" || value.decision === "deny") return value;
-  if (value.decision === "modify" && "payload" in value) return value;
+  const decisionDescriptor = safeObjectGetOwnPropertyDescriptor(value, "decision");
+  if (decisionDescriptor === undefined || !("value" in decisionDescriptor)) {
+    throw new Error("TenantScript legacy hook return contract failed");
+  }
+  const decision = decisionDescriptor.value;
+  if (decision === "allow" || decision === "deny") return value;
+  if (decision === "modify" && safeObjectHasOwn(value, "payload")) return value;
   throw new Error("TenantScript legacy hook return contract failed");
 }
 
@@ -793,8 +798,13 @@ export default {
       throw new Error("invalid TenantScript runtime request");
     }
     const pluginModule = await import("./tenant-plugin.cjs");
-    const plugin = pluginModule.plugin ?? pluginModule.default;
-    const handlers = pluginModule.handlers;
+    const commonJsExports = pluginModule.default;
+    const plugin =
+      pluginModule.plugin ??
+      commonJsExports?.plugin ??
+      commonJsExports?.default ??
+      commonJsExports;
+    const handlers = pluginModule.handlers ?? commonJsExports?.handlers;
     if (
       (plugin === null || typeof plugin !== "object" || typeof plugin.dispatch !== "function") &&
       (handlers === null || typeof handlers !== "object")

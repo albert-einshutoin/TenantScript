@@ -75,9 +75,9 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(runtimeModule).toBeTypeOf("string");
     if (typeof runtimeModule !== "string") throw new Error("runtime module was not generated");
     expect(runtimeModule).toContain('await import("./tenant-plugin.cjs")');
-    expect(runtimeModule).toContain("pluginModule.plugin ?? pluginModule.default");
+    expect(runtimeModule).toContain("pluginModule.plugin ??");
     expect(runtimeModule).toContain("plugin.dispatch");
-    expect(runtimeModule).toContain("pluginModule.handlers");
+    expect(runtimeModule).toContain("pluginModule.handlers ?? commonJsExports?.handlers");
     expect(runtimeModule).toContain(
       "env.CAPABILITIES.call(input.executionId, name, capabilityInput)"
     );
@@ -85,9 +85,11 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(runtimeModule).toContain("invalid TenantScript plugin return value");
     expect(runtimeModule).toContain("validateHookReturn(input.hookType, result.value)");
     expect(runtimeModule).toContain("serializeJsonValue(value === undefined ? null : value)");
+    expect(runtimeModule).toContain("commonJsExports?.plugin");
+    expect(runtimeModule).toContain('safeObjectGetOwnPropertyDescriptor(value, "decision")');
     const lossyRuntimeSource = runtimeModule.replace(
       'const pluginModule = await import("./tenant-plugin.cjs");',
-      'const pluginModule = { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } };'
+      'const pluginModule = { default: { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } } };'
     );
     const runtimeNamespace = (await import(
       `data:text/javascript;base64,${Buffer.from(lossyRuntimeSource).toString("base64")}`
