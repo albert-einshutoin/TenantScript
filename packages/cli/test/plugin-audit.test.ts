@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { bundlePlugin } from "@tenantscript/loader";
 import { afterEach, describe, expect, it } from "vitest";
 import { auditPluginPackage, runExtCli, type CliIo, type RollbackClient } from "../src/index.js";
 import { readCliPackageVersion } from "../src/plugin-scaffold.js";
@@ -35,6 +36,27 @@ describe("plugin audit", () => {
         bundleCode: handlerBundle('await context.capability("slack.send", {});')
       })
     ).toEqual({ version: 1, passed: true, findings: [] });
+  });
+
+  it("audits handler exports lowered by the production bundle pipeline", async () => {
+    const root = await createTempDir();
+    const entry = join(root, "plugin.ts");
+    await writeFile(
+      entry,
+      'export const handlers = { event(_payload, ctx) { return ctx.capability("slack.send", {}); } };'
+    );
+    const bundle = await bundlePlugin(entry);
+
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: bundle.code
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
   });
 
   it("detects capability calls through renamed and destructured context bindings", () => {

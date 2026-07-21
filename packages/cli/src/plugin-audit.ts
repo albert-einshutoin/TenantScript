@@ -363,12 +363,19 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   };
 
   const enclosingObjects = collectEnclosingObjectOpens(tokens);
+  const hasLoweredHandlerExport = hasEsbuildCommonJsHandlerExport(tokens);
   for (let index = 0; index < tokens.length; index += 1) {
     if (
       tokens[index]?.value !== "handlers" ||
       ![":", "="].includes(tokens[index + 1]?.value ?? "") ||
       tokens[index + 2]?.value !== "{" ||
-      !isPluginHandlersDeclaration(tokens, index, braceDepths[index] ?? 0, enclosingObjects[index])
+      !isPluginHandlersDeclaration(
+        tokens,
+        index,
+        braceDepths[index] ?? 0,
+        enclosingObjects[index],
+        hasLoweredHandlerExport
+      )
     ) {
       continue;
     }
@@ -467,7 +474,8 @@ function isPluginHandlersDeclaration(
   tokens: readonly BundleToken[],
   handlersIndex: number,
   handlersDepth: number,
-  enclosingObjectOpen: number | undefined
+  enclosingObjectOpen: number | undefined,
+  hasLoweredHandlerExport: boolean
 ): boolean {
   if (tokens[handlersIndex + 1]?.value === "=") {
     const isExportedBinding =
@@ -475,13 +483,30 @@ function isPluginHandlersDeclaration(
       tokens[handlersIndex - 2]?.value === "export";
     const isCommonJsExport =
       tokens[handlersIndex - 1]?.value === "." && tokens[handlersIndex - 2]?.value === "exports";
-    return handlersDepth === 0 && (isExportedBinding || isCommonJsExport);
+    const isLoweredExport =
+      hasLoweredHandlerExport &&
+      ["const", "let", "var"].includes(tokens[handlersIndex - 1]?.value ?? "");
+    return handlersDepth === 0 && (isExportedBinding || isCommonJsExport || isLoweredExport);
   }
   return (
     enclosingObjectOpen !== undefined &&
     tokens[enclosingObjectOpen - 1]?.value === "(" &&
     tokens[enclosingObjectOpen - 2]?.value === "definePlugin"
   );
+}
+
+function hasEsbuildCommonJsHandlerExport(tokens: readonly BundleToken[]): boolean {
+  let mapsHandlersBinding = false;
+  let assignsCommonJsModule = false;
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (matchesTokenSequence(tokens, index, ["handlers", ":", "(", ")", "=", ">", "handlers"])) {
+      mapsHandlersBinding = true;
+    }
+    if (matchesTokenSequence(tokens, index, ["module", ".", "exports", "=", "__toCommonJS", "("])) {
+      assignsCommonJsModule = true;
+    }
+  }
+  return mapsHandlersBinding && assignsCommonJsModule;
 }
 
 function createCapabilityScope(
