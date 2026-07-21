@@ -136,6 +136,22 @@ test("rejects sensitive fields, secret-like values, and machine-local paths", ()
   });
 });
 
+test("rejects Linux home and container workspace paths", () => {
+  withRepo((repoRoot, baselineCommit) => {
+    const record = validRecord(baselineCommit, repoRoot);
+    record.limitations = [
+      ["Linux checkout /ho", "me/alice/private-checkout"].join(""),
+      ["Container checkout /work", "space/plugin-review"].join("")
+    ];
+    writeRecord(repoRoot, record);
+
+    const result = runChecker(repoRoot);
+
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stderr.match(/machine-local path is forbidden/g)?.length, 2);
+  });
+});
+
 test("rejects missing, unknown, or drifted evidence digests", () => {
   withRepo((repoRoot, baselineCommit) => {
     const record = validRecord(baselineCommit, repoRoot);

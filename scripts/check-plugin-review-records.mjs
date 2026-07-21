@@ -17,7 +17,8 @@ const secretLikePatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/
 ];
 const accountIdentifierPatterns = [/dash\.cloudflare\.com\/[0-9a-f]{16,}/i];
-const machinePathPattern = /(?:\/Users\/|\/Volumes\/|[A-Za-z]:\\Users\\)/;
+const machinePathPattern =
+  /(?:\/Users\/|\/Volumes\/|(?:^|\s)\/(?:home|workspace|root|tmp)\/|[A-Za-z]:\\Users\\)/;
 const errors = [];
 
 if (!existsSync(recordsDirectory)) {
