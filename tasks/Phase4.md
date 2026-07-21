@@ -32,11 +32,12 @@
 - [ ] **P4-T04**(M)`ext audit`(自動検査)
   - RED: 過剰 capability 要求(未使用 grant)、egress 宣言漏れ、limits 過大、テスト不在を検知する
   - DoD: 既知の悪性/粗悪パターン fixture を全検知
-  - Progress: Issue #290でversioned report、manifest、test script、exact SDK pin/一致、limits warningの決定論的baselineを実装中。unused grant、egress、test品質はfalse confidenceを避けるため次段へ残す
+  - Progress: PR #291でversioned report、manifest、test script、exact SDK pin/一致、limits warningの決定論的baselineを実装済み。unused grant、egress、test品質はfalse confidenceを避けるため次段へ残す
 
 - [ ] **P4-T05**(S)plugin review ガイドライン
-  - 内容: 人間レビューの観点表(security / 互換性 / 運用)。certification チェックリスト
+  - 内容: 人間レビューの観点表(security / 互換性 / 運用)。certification を主張しないreviewチェックリスト
   - DoD: 公開済み、template レビューに適用
+  - Progress: Issue #292で固定commitの証跡、5領域のblocking条件、判定、非保証を含むhuman review正本を追加。実templateへの適用証跡は未完
 
 - [ ] **P4-T06**(S)バージョン互換ダッシュボード
   - 内容: template/plugin の SDK バージョン互換状況の可視化
