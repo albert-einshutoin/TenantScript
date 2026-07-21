@@ -264,23 +264,7 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
   // dependency methods named `capability` as exact SDK broker calls.
   const receivers = new Set(["context"]);
   const direct = new Set<string>();
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index]?.value === "function") {
-      let open = index + 1;
-      while (open < tokens.length && open <= index + 3 && tokens[open]?.value !== "(") open += 1;
-      if (tokens[open]?.value === "(") {
-        const close = findMatchingToken(tokens, open, "(", ")");
-        if (close !== -1) registerSecondContextParameter(tokens, open, close, receivers, direct);
-      }
-    }
-    if (tokens[index]?.value === "(") {
-      const close = findMatchingToken(tokens, index, "(", ")");
-      if (close !== -1 && tokens[close + 1]?.value === "=" && tokens[close + 2]?.value === ">") {
-        registerSecondContextParameter(tokens, index, close, receivers, direct);
-      }
-    }
-  }
+  registerHandlerContextParameters(tokens, receivers, direct);
 
   for (let index = 0; index < tokens.length; index += 1) {
     if (tokens[index]?.value !== "{") continue;
@@ -295,6 +279,53 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
     }
   }
   return { receivers, direct };
+}
+
+function registerHandlerContextParameters(
+  tokens: readonly BundleToken[],
+  receivers: Set<string>,
+  direct: Set<string>
+): void {
+  const namedFunctions = new Map<string, { open: number; close: number }>();
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.value !== "function" || tokens[index + 1]?.kind !== "identifier") continue;
+    const open = index + 2;
+    if (tokens[open]?.value !== "(") continue;
+    const close = findMatchingToken(tokens, open, "(", ")");
+    if (close !== -1) namedFunctions.set(tokens[index + 1]?.value ?? "", { open, close });
+  }
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (!matchesTokenSequence(tokens, index, ["handlers", ":", "{"])) continue;
+    const handlersClose = findMatchingToken(tokens, index + 2, "{", "}");
+    if (handlersClose === -1) continue;
+    let depth = 0;
+    for (let field = index + 3; field < handlersClose; field += 1) {
+      if (tokens[field]?.value === "{") depth += 1;
+      else if (tokens[field]?.value === "}") depth = Math.max(0, depth - 1);
+      if (depth !== 0 || tokens[field]?.value !== ":") continue;
+
+      let value = field + 1;
+      if (tokens[value]?.value === "async") value += 1;
+      if (tokens[value]?.value === "function") {
+        if (tokens[value + 1]?.kind === "identifier") value += 1;
+        const open = value + 1;
+        const close = tokens[open]?.value === "(" ? findMatchingToken(tokens, open, "(", ")") : -1;
+        if (close !== -1) registerSecondContextParameter(tokens, open, close, receivers, direct);
+      } else if (tokens[value]?.value === "(") {
+        const close = findMatchingToken(tokens, value, "(", ")");
+        if (close !== -1 && tokens[close + 1]?.value === "=" && tokens[close + 2]?.value === ">") {
+          registerSecondContextParameter(tokens, value, close, receivers, direct);
+        }
+      } else if (tokens[value]?.kind === "identifier") {
+        const named = namedFunctions.get(tokens[value]?.value ?? "");
+        if (named !== undefined) {
+          registerSecondContextParameter(tokens, named.open, named.close, receivers, direct);
+        }
+      }
+    }
+    index = handlersClose;
+  }
 }
 
 function registerSecondContextParameter(

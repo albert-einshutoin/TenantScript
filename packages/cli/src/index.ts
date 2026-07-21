@@ -1183,7 +1183,9 @@ async function readBoundedAuditJson(path: string): Promise<unknown> {
 }
 
 async function readBoundedAuditBundle(path: string): Promise<string> {
-  const maximumBytes = 512 * 1024;
+  // Keep audit evidence available for every artifact the production loader accepts. This mirrors
+  // MAX_DYNAMIC_WORKER_ARTIFACT_BYTES without widening the loader package's public API surface.
+  const maximumBytes = 4_194_304;
   const handle = await open(path, "r");
   try {
     const content = Buffer.alloc(maximumBytes + 1);

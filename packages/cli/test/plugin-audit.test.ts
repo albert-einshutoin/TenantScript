@@ -47,9 +47,10 @@ describe("plugin audit", () => {
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
         bundleCode: [
-          'async function run(_payload, ctx) { await ctx.capability("github.issue.create", {}); }',
-          'const { capability: invoke } = ctx; invoke("email.send", {});',
-          'const handler = async (_payload, { capability }) => capability("storage.read", {});'
+          "definePlugin({ handlers: {",
+          'event: async (_payload, ctx) => { await ctx.capability("github.issue.create", {}); const { capability: invoke } = ctx; invoke("email.send", {}); },',
+          'policy: async (_payload, { capability }) => capability("storage.read", {})',
+          "} });"
         ].join("\n")
       }).findings
     ).toEqual([
@@ -67,7 +68,7 @@ describe("plugin audit", () => {
         manifest,
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
-        bundleCode: 'client.capability("slack.send", {});'
+        bundleCode: 'function helper(_payload, client) { client.capability("slack.send", {}); }'
       }).findings
     ).toEqual([
       finding("bundle_grant_potentially_unused", "warning", "manifest.capabilities.*", "heuristic")
@@ -408,7 +409,7 @@ describe("plugin audit", () => {
   });
 
   it.each([
-    ["oversized", "x".repeat(512 * 1024 + 1)],
+    ["oversized", "x".repeat(4_194_304 + 1)],
     ["binary", Buffer.from([0, 1, 2, 3])]
   ])("rejects %s bundle input without reflecting content", async (_name, bundleContent) => {
     const root = await createTempDir();
@@ -428,6 +429,26 @@ describe("plugin audit", () => {
       )
     ).resolves.toBe(2);
     expect(stderr).toEqual(["plugin audit input is invalid"]);
+  });
+
+  it("accepts a bundle above the former audit cap but within the runtime artifact limit", async () => {
+    const root = await createTempDir();
+    const manifest = join(root, "manifest.json");
+    const packageJson = join(root, "package.json");
+    const bundle = join(root, "plugin.js");
+    await writeFile(manifest, JSON.stringify(validManifest()));
+    await writeFile(packageJson, JSON.stringify(validPackageJson("0.0.0")));
+    await writeFile(bundle, " ".repeat(512 * 1024 + 1));
+    const stdout: string[] = [];
+
+    await expect(
+      runExtCli(
+        ["audit", "--manifest", manifest, "--package", packageJson, "--bundle", bundle],
+        rollbackOnlyClient,
+        captureIo(stdout, [])
+      )
+    ).resolves.toBe(0);
+    expect(JSON.parse(stdout[0] ?? "null")).toEqual({ version: 1, passed: true, findings: [] });
   });
 
   it.each([
