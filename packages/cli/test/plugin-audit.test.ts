@@ -146,6 +146,20 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects capability calls in handler parameter defaults", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'exports.handlers = { event(_payload, ctx, unused = ctx.capability("admin.delete", {})) {} };'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("detects renamed context bindings in quoted object-method handlers", () => {
     expect(
       auditPluginPackage({
@@ -561,6 +575,20 @@ describe("plugin audit", () => {
         expectedSdkVersion: "1.2.3",
         bundleCode:
           'exports.plugin = { dispatch: request => request.context.capability("slack.send", {}) };'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
+  it("detects capability calls in dispatch parameter defaults", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'exports.plugin = { dispatch(request, unused = request.context.capability("admin.delete", {})) {} };'
       }).findings
     ).toEqual([
       finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")

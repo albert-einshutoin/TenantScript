@@ -1112,9 +1112,10 @@ function createCapabilityScope(
   } else if (contextParameter?.[0]?.value === "{") {
     registerDestructuredCapability(contextParameter.slice(1, -1), direct);
   }
+  const start = parameterFollowingRangeStart(tokens, open, close, 1, body.start);
   return receivers.size === 0 && direct.size === 0
     ? undefined
-    : { ...body, receivers, direct, containers };
+    : { ...body, start, receivers, direct, containers };
 }
 
 function createDispatchCapabilityScope(
@@ -1124,7 +1125,33 @@ function createDispatchCapabilityScope(
   body: BindingRange
 ): CapabilityScope | undefined {
   const requestParameter = splitTopLevel(tokens.slice(open + 1, close), ",")[0] ?? [];
-  return createDispatchCapabilityScopeFromParameter(requestParameter, body);
+  return createDispatchCapabilityScopeFromParameter(requestParameter, {
+    ...body,
+    start: parameterFollowingRangeStart(tokens, open, close, 0, body.start)
+  });
+}
+
+function parameterFollowingRangeStart(
+  tokens: readonly BundleToken[],
+  open: number,
+  close: number,
+  parameterIndex: number,
+  fallback: number
+): number {
+  let depth = 0;
+  let completedParameter = 0;
+  for (let index = open + 1; index < close; index += 1) {
+    const value = tokens[index]?.value ?? "";
+    if (["(", "[", "{"].includes(value)) depth += 1;
+    else if ([")", "]", "}"].includes(value)) depth = Math.max(0, depth - 1);
+    else if (value === "," && depth === 0) {
+      // Parameter bindings are initialized left-to-right. A broker parameter is available to
+      // defaults that follow its separating comma, but not to its own initializer.
+      if (completedParameter === parameterIndex) return index + 1;
+      completedParameter += 1;
+    }
+  }
+  return fallback;
 }
 
 function createDispatchCapabilityScopeFromParameter(
