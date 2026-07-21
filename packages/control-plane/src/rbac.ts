@@ -12,6 +12,7 @@ export const RBAC_OPERATIONS = [
   "approval:decide",
   "execution:read",
   "usage:read",
+  "provider-connection:manage",
   "service-token:issue",
   "service-token:revoke",
   "rbac:manage"
@@ -32,6 +33,7 @@ const permissions = {
     "approval:decide",
     "execution:read",
     "usage:read",
+    "provider-connection:manage",
     "service-token:issue",
     "service-token:revoke"
   ]),
@@ -59,7 +61,8 @@ const permissions = {
     "rollback:execute",
     "approval:decide",
     "execution:read",
-    "usage:read"
+    "usage:read",
+    "provider-connection:manage"
   ])
 } satisfies Record<RbacRole, ReadonlySet<RbacOperation>>;
 

@@ -4,9 +4,9 @@
 one-time OAuth state store and the existing Slack connection flow. Its untrusted input is limited to
 `state`, the server-managed browser binding, and Slack's temporary authorization `code`.
 
-This service is not an HTTP route and does not issue a browser session or cookie. It is the safe core
-that a future management callback must call after reading those values from the request and its
-authenticated session.
+This service is not an HTTP route. The [authenticated install-start](slack-oauth-install-start.md)
+now issues the browser binding cookie and one-time state; a future management callback must read and
+clear that cookie before calling this safe core.
 
 ## Trusted sequencing
 
@@ -43,11 +43,10 @@ the code. A new authenticated install-start flow must issue fresh state and obta
 
 ## Remaining production boundary
 
-Before exposing this service to a browser, implement a reviewed management HTTP flow that provides:
+Before exposing this callback service to a browser, implement a reviewed management HTTP flow that provides:
 
-- an authenticated install-start endpoint deriving app, tenant, actor, and redirect server-side;
-- a high-entropy `Secure`, `HttpOnly`, `SameSite=Lax` or stricter browser-session binding;
 - a bounded callback parser and stable success/failure redirect without query reflection;
+- explicit deletion of the install-start browser binding cookie after callback handling;
 - Worker composition of the state, Slack client, encrypted provider-secret DO, and D1 connection store;
 - credential-bearing Slack and Cloudflare Tier 2 evidence.
 

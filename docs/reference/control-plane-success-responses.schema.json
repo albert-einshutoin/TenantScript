@@ -447,6 +447,12 @@
       "required": ["items"],
       "additionalProperties": false
     },
+    "slackOAuthInstallStart": {
+      "type": "object",
+      "properties": { "authorizationUrl": { "type": "string" }, "expiresAt": { "type": "string" } },
+      "required": ["authorizationUrl", "expiresAt"],
+      "additionalProperties": false
+    },
     "installationReview": {
       "type": "object",
       "properties": {

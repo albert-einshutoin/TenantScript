@@ -1,26 +1,27 @@
 # RBAC Matrix
 
 - Status: implemented role model and installation grant separation for P2-T05/P2-T06
-- Last reviewed: 2026-07-20
+- Last reviewed: 2026-07-21
 
 TenantScript authorizes named operations through one runtime matrix. Route handlers derive app and tenant scope from the authenticated identity before applying this role decision; a role never expands the identity's tenant boundary.
 
 `manager` is the Phase 1 compatibility claim and is normalized to `admin`. New identity providers must issue one of the five Phase 2 roles. The alias remains documented so operators can migrate existing tokens deliberately instead of silently changing their authority.
 
-| Operation              | owner | admin | operator | viewer | tenant-admin |
-| ---------------------- | ----- | ----- | -------- | ------ | ------------ |
-| `session:read`         | allow | allow | allow    | allow  | allow        |
-| `dashboard:read`       | allow | allow | allow    | allow  | allow        |
-| `installation:read`    | allow | allow | allow    | allow  | allow        |
-| `installation:request` | allow | allow | allow    | deny   | allow        |
-| `installation:manage`  | allow | allow | deny     | deny   | allow        |
-| `rollback:execute`     | allow | allow | deny     | deny   | allow        |
-| `approval:decide`      | allow | allow | deny     | deny   | allow        |
-| `execution:read`       | allow | allow | allow    | allow  | allow        |
-| `usage:read`           | allow | allow | allow    | allow  | allow        |
-| `service-token:issue`  | allow | allow | deny     | deny   | deny         |
-| `service-token:revoke` | allow | allow | deny     | deny   | deny         |
-| `rbac:manage`          | allow | deny  | deny     | deny   | deny         |
+| Operation                    | owner | admin | operator | viewer | tenant-admin |
+| ---------------------------- | ----- | ----- | -------- | ------ | ------------ |
+| `session:read`               | allow | allow | allow    | allow  | allow        |
+| `dashboard:read`             | allow | allow | allow    | allow  | allow        |
+| `installation:read`          | allow | allow | allow    | allow  | allow        |
+| `installation:request`       | allow | allow | allow    | deny   | allow        |
+| `installation:manage`        | allow | allow | deny     | deny   | allow        |
+| `rollback:execute`           | allow | allow | deny     | deny   | allow        |
+| `approval:decide`            | allow | allow | deny     | deny   | allow        |
+| `execution:read`             | allow | allow | allow    | allow  | allow        |
+| `usage:read`                 | allow | allow | allow    | allow  | allow        |
+| `provider-connection:manage` | allow | allow | deny     | deny   | allow        |
+| `service-token:issue`        | allow | allow | deny     | deny   | deny         |
+| `service-token:revoke`       | allow | allow | deny     | deny   | deny         |
+| `rbac:manage`                | allow | deny  | deny     | deny   | deny         |
 
 ## Boundary notes
 

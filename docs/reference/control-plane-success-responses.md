@@ -12,7 +12,7 @@ JSON Schema側では各契約を`#/$defs/<schema ID>`で参照できます。
 
 ## 保証範囲
 
-全19 endpoint・20 methodを対象にします。JSONを返す19 methodはbodyをschemaで検証し、
+全20 endpoint・21 methodを対象にします。JSONを返す20 methodはbodyをschemaで検証し、
 `DELETE /v1/admin/service-tokens`は`204`かつbodyなしとして固定します。同じpathでもPOSTとDELETEは
 別契約です。
 

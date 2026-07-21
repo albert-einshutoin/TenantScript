@@ -65,8 +65,9 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Cloudflare Worker setup adapter](docs/operations/cloudflare-worker-setup-adapter.md) — deterministic target、atomic ownership marker、resume-safe reconcile、ownership-verified cleanup
 - [Setup provider router](docs/operations/setup-provider-router.md) — exact operation ownership、mutation前の全route coverage検証、shared cleanup routing
 - [OAuth state store](docs/operations/oauth-state-store.md) — tenant-bound state、browser binding、digest-only永続化、一回限りconsume
+- [Slack OAuth install-start](docs/operations/slack-oauth-install-start.md) — 認証済みtenant scope、固定Slack認可URL、`__Host-` browser cookie
 - [Slack OAuth callback composition](docs/operations/slack-oauth-callback.md) — state-first sequencing、server-owned scope、secret-free失敗契約
-- [Slack OAuth v2 exchange](docs/operations/slack-oauth-exchange.md) — fixed-origin code交換、exact redirect、bounded response、HTTP/session未実装境界
+- [Slack OAuth v2 exchange](docs/operations/slack-oauth-exchange.md) — fixed-origin code交換、exact redirect、bounded response、callback/live composition境界
 
 ## ローカル検証とCI
 

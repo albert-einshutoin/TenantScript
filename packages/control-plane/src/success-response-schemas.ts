@@ -288,6 +288,7 @@ export const CONTROL_PLANE_SUCCESS_RESPONSE_SCHEMAS = deepFreeze({
   dashboardExecutions: executionPage,
   dashboardAuditEvents: auditEventPage,
   providerConnections: object({ items: array(providerConnectionSummary) }),
+  slackOAuthInstallStart: object({ authorizationUrl: text, expiresAt: text }),
   installationReview: installationDetail,
   installationCommand: object({
     id: text,

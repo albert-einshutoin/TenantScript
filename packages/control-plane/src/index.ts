@@ -263,6 +263,13 @@ export {
   type SlackOAuthCallbackService
 } from "./slack-oauth-callback.js";
 export {
+  createSlackOAuthInstallStartService,
+  SLACK_OAUTH_BROWSER_BINDING_COOKIE,
+  SlackOAuthInstallStartError,
+  type SlackOAuthInstallStartErrorCode,
+  type SlackOAuthInstallStartService
+} from "./slack-oauth-install-start.js";
+export {
   createDurableObjectNamespaceOAuthStateStore,
   OAuthStateStoreDurableObject,
   OAuthStateStoreError,

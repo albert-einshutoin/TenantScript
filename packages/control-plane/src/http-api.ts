@@ -26,6 +26,7 @@ import {
   type SupportedRbacRole
 } from "./rbac.js";
 import { ServiceTokenError, type ServiceTokenManager } from "./service-tokens.js";
+import type { SlackOAuthInstallStartService } from "./slack-oauth-install-start.js";
 import { UsageMeterQueryError, type UsageMeter } from "./usage-meter.js";
 import type { TelemetryStatus } from "./telemetry.js";
 import type { ControlPlaneSuccessResponseSchemaId } from "./success-response-schemas.js";
@@ -57,6 +58,7 @@ export interface ControlPlaneHttpHandlerOptions {
   executionDetailStore?: AdminExecutionDetailStore;
   approvalDecisionStore?: AdminApprovalDecisionStore;
   serviceTokenManager?: ServiceTokenManager;
+  slackOAuthInstallStartService?: SlackOAuthInstallStartService;
   adminMutationRateLimiter?: AdminMutationRateLimiter;
   usageMeter?: UsageMeter;
   telemetryStatus?: TelemetryStatus;
@@ -162,6 +164,15 @@ export function createControlPlaneHttpHandler(
         Allow: "POST, DELETE, OPTIONS"
       });
     }
+    if (route === "slackOAuthInstallStart") {
+      if (request.method !== "POST") {
+        return errorResponse(405, "method_not_allowed", "method not allowed", {
+          ...corsHeaders,
+          Allow: "POST, OPTIONS"
+        });
+      }
+      return runSlackOAuthInstallStart(request, url, options, corsHeaders);
+    }
     if (request.method !== "GET") {
       return errorResponse(405, "method_not_allowed", "method not allowed", {
         ...corsHeaders,
@@ -205,6 +216,7 @@ export type AdminRoute =
   | "usage"
   | "approvalDecisionCreate"
   | "serviceTokenCollection"
+  | "slackOAuthInstallStart"
   | AdminDashboardSection
   | { id: string };
 
@@ -227,7 +239,8 @@ export type AdminHttpEndpointId =
   | "executionDetail"
   | "usage"
   | "approvalDecisionCreate"
-  | "serviceTokenCollection";
+  | "serviceTokenCollection"
+  | "slackOAuthInstallStart";
 
 export type AdminHttpIsolation =
   | "identity"
@@ -326,6 +339,14 @@ export const ADMIN_HTTP_ENDPOINT_CONTRACTS = [
     isolation: "tenant-collection",
     route: "providerConnections",
     success: { GET: { status: 200, body: "json", schema: "providerConnections" } }
+  },
+  {
+    id: "slackOAuthInstallStart",
+    path: "/v1/admin/provider-connections/slack/oauth/start",
+    methods: ["POST"],
+    isolation: "tenant-mutation",
+    route: "slackOAuthInstallStart",
+    success: { POST: { status: 201, body: "json", schema: "slackOAuthInstallStart" } }
   },
   {
     id: "installationReview",
@@ -1464,6 +1485,74 @@ async function resolveSession(
   }
 }
 
+async function runSlackOAuthInstallStart(
+  request: Request,
+  url: URL,
+  options: ControlPlaneHttpHandlerOptions,
+  corsHeaders: Record<string, string> | undefined
+): Promise<Response> {
+  const identity = await resolveAdminIdentity(request, options.identityResolver, corsHeaders);
+  if (identity instanceof Response) return identity;
+  const forbidden = requireRbac(
+    identity,
+    "provider-connection:manage",
+    "slack_oauth_install_start_forbidden",
+    corsHeaders
+  );
+  if (forbidden !== null) return forbidden;
+  if (
+    url.search !== "" ||
+    request.body !== null ||
+    ![null, "0"].includes(request.headers.get("Content-Length"))
+  ) {
+    return errorResponse(
+      400,
+      "slack_oauth_install_start_invalid_request",
+      "invalid Slack OAuth install-start request",
+      corsHeaders
+    );
+  }
+  if (options.slackOAuthInstallStartService === undefined) {
+    return errorResponse(
+      503,
+      "slack_oauth_install_start_unavailable",
+      "Slack OAuth install-start unavailable",
+      corsHeaders
+    );
+  }
+  const reservation = await reserveAdminMutation(
+    options.adminMutationRateLimiter,
+    identity,
+    "provider-oauth-start",
+    corsHeaders
+  );
+  if (reservation !== null) return reservation;
+  try {
+    // Authentication and RBAC must complete before state issuance. Otherwise an unauthenticated
+    // caller could allocate state or choose the tenant authority later restored by the callback.
+    const result = await options.slackOAuthInstallStartService.start({
+      appId: identity.appId,
+      tenantId: identity.tenantId,
+      actorSubject: identity.subject
+    });
+    return jsonResponse(
+      201,
+      {
+        authorizationUrl: result.authorizationUrl,
+        expiresAt: result.expiresAt.toISOString()
+      },
+      { ...corsHeaders, "Set-Cookie": result.browserBindingCookie }
+    );
+  } catch {
+    return errorResponse(
+      503,
+      "slack_oauth_install_start_unavailable",
+      "Slack OAuth install-start unavailable",
+      corsHeaders
+    );
+  }
+}
+
 async function resolveDashboard(
   request: Request,
   route: Exclude<
@@ -1476,6 +1565,7 @@ async function resolveDashboard(
     | "rollbackCreate"
     | "approvalDecisionCreate"
     | "serviceTokenCollection"
+    | "slackOAuthInstallStart"
     | "executionDetail"
     | "usage"
     | "providerConnections"
@@ -1991,6 +2081,7 @@ function jsonResponse(status: number, body: unknown, headers?: Record<string, st
 function corsResponseHeaders(origin: string): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Credentials": "true",
     Vary: "Origin"
   };
 }

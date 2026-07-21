@@ -52,7 +52,13 @@ destructive class tombstone. Before using provider connections, provision
 `PROVIDER_SECRET_KEYRING_JSON` with `wrangler secret put`; never place its key material in this input
 or the generated config.
 
-Artifact R2, provider-facing OAuth callback composition, approval Workflow, and tenant runtime bindings
+To enable authenticated Slack install-start, also set the non-secret `SLACK_OAUTH_CLIENT_ID`,
+comma-separated least-privilege `SLACK_OAUTH_SCOPES`, and exact HTTPS
+`SLACK_OAUTH_REDIRECT_URI` Worker variables. All three variables and `OAUTH_STATE_STORE_DO` are
+required together; partial configuration fails closed. The strict setup input does not yet render
+provider-specific variables, so add them through a reviewed deployment change.
+
+Artifact R2, provider-facing OAuth callback composition after install-start, approval Workflow, and tenant runtime bindings
 remain `integration-required`. The Analytics Engine dataset is binding-owned and appears after its first
 data point write; it is not a separately created or automatically deleted setup resource. See
 [the self-host production guide](../../../docs/operations/self-host-production.md) for migration,
