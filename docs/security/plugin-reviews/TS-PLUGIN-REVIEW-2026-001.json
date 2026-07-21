@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "id": "TS-PLUGIN-REVIEW-2026-001",
+  "baselineCommit": "45a26e232fffa1a50c7973b976fe7a05bfc97a0a",
+  "target": {
+    "name": "Built-in ext init plugin scaffold",
+    "scope": [
+      "packages/cli/src/index.ts",
+      "packages/cli/src/plugin-scaffold.ts",
+      "packages/cli/test/init.test.ts"
+    ]
+  },
+  "reviewer": {
+    "identity": "TenantScript maintainers",
+    "relationship": "First-party self-review of the built-in scaffold"
+  },
+  "reviewedAt": "2026-07-21T11:08:25.000Z",
+  "domains": [
+    {
+      "name": "security",
+      "status": "pass",
+      "evidence": [
+        "packages/cli/src/index.ts",
+        "packages/cli/src/plugin-scaffold.ts",
+        "packages/cli/test/init.test.ts",
+        "scripts/agent-plugin-scaffold-e2e.test.mjs"
+      ],
+      "notes": "The CLI bounds names and hooks before interpolation; the scaffold requests no capabilities, denies egress, uses bounded limits, rejects undeclared hooks, and is audited before its generated tests run."
+    },
+    {
+      "name": "compatibility",
+      "status": "pass",
+      "evidence": [
+        "packages/cli/src/plugin-scaffold.ts",
+        "scripts/agent-plugin-scaffold-e2e.test.mjs",
+        "docs/quickstarts/agent-plugin-authoring.md"
+      ],
+      "notes": "Generated manifest and package metadata use the CLI version exactly, then build and test against packed public package contents."
+    },
+    {
+      "name": "operations",
+      "status": "pass",
+      "evidence": [
+        "packages/cli/src/plugin-scaffold.ts",
+        "packages/cli/test/init.test.ts",
+        "scripts/agent-plugin-scaffold-e2e.test.mjs"
+      ],
+      "notes": "Generated CPU and timeout limits are bounded, network access is denied, and the accountless E2E exercises install, audit, build, and test failure boundaries."
+    },
+    {
+      "name": "documentation",
+      "status": "pass",
+      "evidence": [
+        "docs/quickstarts/agent-plugin-authoring.md",
+        "docs/security/plugin-review-checklist.md",
+        "scripts/agent-plugin-authoring-doc-contract.test.mjs"
+      ],
+      "notes": "The authoring quickstart states the generated files, verification commands, registry blocker, and security boundary; the human checklist states all non-guarantees."
+    },
+    {
+      "name": "license",
+      "status": "pass",
+      "evidence": ["LICENSE", "package.json", "packages/cli/package.json"],
+      "notes": "The repository and CLI declare Apache-2.0, and the scaffold generates source-only first-party content without vendored third-party assets."
+    }
+  ],
+  "evidenceDigests": {
+    "packages/cli/src/index.ts": "6302b27628c904735c64d601af0f32f2efc90a07b333a13078a8144b4fe111d7",
+    "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
+    "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc",
+    "scripts/agent-plugin-scaffold-e2e.test.mjs": "7349fa72e5648b2d2f65f86b04cf8a04de80a2c4968a3c4d957b8e1d4d9b05fb",
+    "docs/quickstarts/agent-plugin-authoring.md": "5589704355739244597f38af74ab484c4969bf89854aca9b00014c88319b1644",
+    "docs/security/plugin-review-checklist.md": "47dffee998ee7896ec21a5c96dd084c3d31feee9b99777219c987fcbd4ba9a55",
+    "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
+    "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
+    "package.json": "8ab0df9480422171272cfdb2556e3d6c13202084b972d7b7f16c8f9009ff68f3",
+    "packages/cli/package.json": "3fc19043fe7b7fd7cc2fae985cc5be60785063d884c798f2e3a23c5425c43123"
+  },
+  "decision": "approve",
+  "blockingFindings": [],
+  "unverified": [
+    {
+      "item": "Install generated dependencies from the public npm registry",
+      "required": false,
+      "reason": "The TenantScript npm scope is not yet activated; the E2E uses freshly packed public package contents instead."
+    },
+    {
+      "item": "Independent third-party review",
+      "required": false,
+      "reason": "This record is an explicitly first-party review of the repository-owned baseline."
+    }
+  ],
+  "limitations": [
+    "The decision covers only the listed scaffold source at the pinned baseline commit.",
+    "The scaffold is intentionally minimal and does not prove the safety of code added by a plugin author."
+  ],
+  "nonGuarantees": [
+    "This approval is not a security certification or an independent audit.",
+    "It does not claim live deployment, public registry installation, or compatibility with later commits and dependency resolutions."
+  ]
+}

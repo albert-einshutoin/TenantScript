@@ -37,7 +37,7 @@
 - [ ] **P4-T05**(S)plugin review ガイドライン
   - 内容: 人間レビューの観点表(security / 互換性 / 運用)。certification を主張しないreviewチェックリスト
   - DoD: 公開済み、template レビューに適用
-  - Progress: Issue #292で固定commitの証跡、5領域のblocking条件、判定、非保証を含むhuman review正本を追加。実templateへの適用証跡は未完
+  - Progress: Issue #292で固定commitの証跡、5領域のblocking条件、判定、非保証を含むhuman review正本を追加。Issue #294で組み込みscaffoldへ適用し、対象source driftで自動失効する機械可読証跡とaudit E2Eを追加。community templateへの適用と独立reviewは未完
 
 - [ ] **P4-T06**(S)バージョン互換ダッシュボード
   - 内容: template/plugin の SDK バージョン互換状況の可視化
