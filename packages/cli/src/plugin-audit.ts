@@ -191,6 +191,7 @@ function finding(
 interface BundleToken {
   kind: "identifier" | "punctuation" | "string";
   value: string;
+  literalValid?: boolean;
 }
 
 function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
@@ -202,10 +203,7 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
   for (let index = 0; index < tokens.length; index += 1) {
     if (matchesTokenSequence(tokens, index, ["context", ".", "capability", "("])) {
       const argument = tokens[index + 4];
-      if (
-        argument?.kind === "string" &&
-        /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/u.test(argument.value)
-      ) {
+      if (argument?.kind === "string" && argument.literalValid === true) {
         staticCalls.add(argument.value);
       } else {
         hasDynamicCapabilityCall = true;
@@ -297,7 +295,7 @@ function readStringToken(
       index = escape.nextIndex;
     } else if (character === quote) {
       return {
-        token: { kind: "string", value: valid ? value : "" },
+        token: { kind: "string", value: valid ? value : "", literalValid: valid },
         nextIndex: index + 1
       };
     } else {
@@ -305,7 +303,10 @@ function readStringToken(
       index += 1;
     }
   }
-  return { token: { kind: "string", value: "" }, nextIndex: source.length };
+  return {
+    token: { kind: "string", value: "", literalValid: false },
+    nextIndex: source.length
+  };
 }
 
 function readStringEscape(

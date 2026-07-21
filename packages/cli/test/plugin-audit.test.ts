@@ -54,6 +54,39 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("rejects a static capability literal that the manifest schema cannot grant", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: 'context.capability("Slack", {});'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+      finding("bundle_grant_potentially_unused", "warning", "manifest.capabilities.*", "heuristic")
+    ]);
+  });
+
+  it("keeps malformed escaped capability literals in the dynamic boundary", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: String.raw`context.capability("slack\xZZsend", {});`
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
+    ]);
+  });
+
   it("reports unused, undeclared, dynamic, and direct egress bundle risks", () => {
     const manifest = validManifest();
     manifest.capabilities = { "slack.send": {}, "email.send": {} };
