@@ -47,6 +47,10 @@ export interface DynamicWorkerInvocationEvidence {
   workflowRuns: number;
 }
 
+export interface DynamicWorkerCapabilityBinding {
+  call: (executionId: string, name: string, input: unknown) => Promise<unknown>;
+}
+
 export interface CloudflareDynamicWorkerCallerFailure {
   code: "runtime_evidence_unavailable";
   executionId: string;
@@ -345,6 +349,9 @@ function validateScopeBindings(value: unknown): Record<string, unknown> {
     ) {
       throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
     }
+    if (name === "CAPABILITIES" && (!isRecord(binding) || typeof binding.call !== "function")) {
+      throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+    }
   }
   return value;
 }
@@ -539,16 +546,21 @@ function isIdentifier(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value);
 }
 
-// ext deploy emits a CommonJS bundle exporting `handlers`. Dynamic Worker string modules are ESM,
-// so a fixed trusted wrapper must adapt the verified CJS artifact to the Worker's fetch contract.
+// ext deploy emits a CommonJS bundle whose scaffold exports `plugin.dispatch` (older entries may
+// export `handlers`). A fixed trusted wrapper adapts either verified CJS shape to Worker fetch.
 const DYNAMIC_WORKER_RUNTIME_SOURCE = String.raw`
 import pluginModule from "./tenant-plugin.cjs";
 
+const plugin = pluginModule.plugin ?? pluginModule.default;
 const handlers = pluginModule.handlers;
 
 export default {
   async fetch(request, env) {
-    if (request.method !== "POST" || handlers === null || typeof handlers !== "object") {
+    if (
+      request.method !== "POST" ||
+      ((plugin === null || typeof plugin !== "object" || typeof plugin.dispatch !== "function") &&
+        (handlers === null || typeof handlers !== "object"))
+    ) {
       throw new Error("invalid TenantScript runtime request");
     }
     const input = await request.json();
@@ -563,11 +575,7 @@ export default {
     ) {
       throw new Error("invalid TenantScript runtime request");
     }
-    const handler = handlers[input.hookName];
-    if (typeof handler !== "function") {
-      throw new Error("TenantScript handler is unavailable");
-    }
-    const value = await handler(input.payload, {
+    const context = {
       capability(name, capabilityInput) {
         if (
           env.CAPABILITIES === null ||
@@ -576,9 +584,32 @@ export default {
         ) {
           throw new Error("TenantScript capability binding is unavailable");
         }
-        return env.CAPABILITIES.call(name, capabilityInput);
+        return env.CAPABILITIES.call(input.executionId, name, capabilityInput);
       }
-    });
+    };
+    let value;
+    if (plugin !== null && typeof plugin === "object" && typeof plugin.dispatch === "function") {
+      const result = await plugin.dispatch({
+        hookName: input.hookName,
+        payload: input.payload,
+        context
+      });
+      if (
+        result === null ||
+        typeof result !== "object" ||
+        result.ok !== true ||
+        !("value" in result)
+      ) {
+        throw new Error("TenantScript plugin dispatch failed");
+      }
+      value = result.value;
+    } else {
+      const handler = handlers[input.hookName];
+      if (typeof handler !== "function") {
+        throw new Error("TenantScript handler is unavailable");
+      }
+      value = await handler(input.payload, context);
+    }
     return Response.json({ value: value === undefined ? null : value });
   }
 };

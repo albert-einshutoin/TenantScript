@@ -624,6 +624,7 @@
             { "name": "CloudflareDynamicWorkerRunRequest", "kind": "type" },
             { "name": "CloudflareDynamicWorkerRunResult", "kind": "type" },
             { "name": "createCloudflareDynamicWorkerCaller", "kind": "value" },
+            { "name": "DynamicWorkerCapabilityBinding", "kind": "type" },
             { "name": "DynamicWorkerCode", "kind": "type" },
             { "name": "DynamicWorkerEntrypoint", "kind": "type" },
             { "name": "DynamicWorkerInvocationEvidence", "kind": "type" },

@@ -61,7 +61,8 @@ In order to use Dynamic Workers, you must switch to a paid plan
 On 2026-07-21, Issue #288 added an accountless production-caller contract for the preferred
 Dynamic Workers candidate. It verifies artifact integrity, derives cached worker IDs from the full
 tenant capability scope, disables global outbound access, applies per-invocation limits, bounds the
-wire contract, adapts deployed CommonJS handler bundles through a fixed ES module wrapper, enforces
+wire contract, adapts deployed CommonJS plugin bundles through a fixed ES module dispatch wrapper,
+passes the server-owned execution ID into every cached capability-binding RPC, enforces
 a host-side wall-clock abort in addition to Cloudflare CPU/subrequest limits, and records trusted
 execution evidence through the control-plane recorder. Its Tier 1 security tests do not substitute
 for the blocked live latency or isolation comparison.

@@ -67,11 +67,12 @@ timeoutは`ScopedRuntimeTimeoutError`（`executionStatus: "timeout"`）、subreq
 Cloudflare Dynamic Worker Loaderを呼ぶproduction composition境界である。
 
 - worker IDはtenant、installation、plugin、artifact SHA-256、grant revisionの全scopeからopaqueに導出し、同じauthorityだけを再利用する。
-- artifactは4 MiB以内かつ宣言SHA-256との完全一致を確認し、`ext deploy`が生成するCommonJS `handlers` bundleを固定ES module fetch wrapperから呼び出す。
+- artifactは4 MiB以内かつ宣言SHA-256との完全一致を確認し、`ext deploy`が生成するCommonJS bundleのscaffold標準`plugin.dispatch`を固定ES module fetch wrapperから呼び出す。top-level `handlers`は既存bundle向けfallbackである。
 - `globalOutbound: null`と信頼済みscoped bindingだけを渡し、呼び出しごとにCPU/subrequest limitとwall-clock timeoutを適用する。timeout時はrequestをabortし、`timeout` executionを永続化する。
 - request/responseはclosed shapeかつ1 MiB以内とし、tenant codeの返値からusageやcapability evidenceを採用しない。
 - runtime失敗は固定errorへ正規化してexecutionを1回だけ永続化する。永続化失敗もretryせず、provider error本文を反射しない。
 - `readInvocationEvidence`失敗時はcapability callsとusageを0へfail-safeし、固定診断をreportする。
+- cached `CAPABILITIES` bindingのRPCは`call(executionId, name, input)`で、server-owned execution IDを毎回渡す。bindingはこのIDをjournal帰属に使い、capability inputからexecution identityを受け取らない。
 
 同期callerは正確なCPU時間を取得できないため`cpuMs: 0`を記録する。wall timeをCPU時間へ代用せず、
 Workers Trace Events Logpushの`CPUTimeMs`をexecution IDへ非同期照合する責務は別の運用境界である。

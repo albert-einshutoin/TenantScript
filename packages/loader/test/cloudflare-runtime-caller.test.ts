@@ -12,7 +12,8 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
   });
 
   it("reuses one scoped worker while recording trusted execution evidence per invocation", async () => {
-    const artifact = "exports.handlers = { 'invoice.created': async () => undefined };";
+    const artifact =
+      "exports.plugin = { dispatch: async () => ({ ok: true, value: undefined }) }; exports.default = exports.plugin;";
     const artifactSha256 = sha256(artifact);
     const loader = createCachingLoader(() =>
       Response.json({ value: { accepted: true, subrequests: 999, workflowRuns: 999 } })
@@ -73,7 +74,12 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     const runtimeModule = loader.loadedCode?.modules["tenantscript-runtime.js"];
     expect(runtimeModule).toBeTypeOf("string");
     expect(runtimeModule).toContain('import pluginModule from "./tenant-plugin.cjs"');
+    expect(runtimeModule).toContain("pluginModule.plugin ?? pluginModule.default");
+    expect(runtimeModule).toContain("plugin.dispatch");
     expect(runtimeModule).toContain("pluginModule.handlers");
+    expect(runtimeModule).toContain(
+      "env.CAPABILITIES.call(input.executionId, name, capabilityInput)"
+    );
     expect(loader.entrypointLimits).toEqual([
       { cpuMs: 10, subRequests: 3 },
       { cpuMs: 10, subRequests: 3 }
@@ -525,7 +531,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     );
   });
 
-  it.each(["SLACK_TOKEN", "LOADER", "lowercase", "A".repeat(65)])(
+  it.each(["SLACK_TOKEN", "LOADER", "lowercase", "A".repeat(65), "CAPABILITIES"])(
     "rejects unsafe scoped binding name %s before tenant code runs",
     async (bindingName) => {
       const loader = createCachingLoader(() => Response.json({ value: true }));

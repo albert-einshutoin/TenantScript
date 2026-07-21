@@ -15,10 +15,16 @@ and security suite before changing isolation, timeout, capability, or continuati
 
 The Cloudflare caller derives an opaque cache ID from the complete tenant, installation, plugin,
 artifact, and grant scope; verifies the artifact SHA-256 before loading it; adapts the deployed
-CommonJS `handlers` bundle through a fixed Worker fetch wrapper; exposes only trusted scoped
+CommonJS plugin bundle through a fixed Worker fetch wrapper that dispatches the scaffolded
+`plugin` export; exposes only trusted scoped
 bindings; disables ambient outbound access; and applies CPU/subrequest plus wall-clock limits on
 every entrypoint call. Requests, responses, artifacts, configuration, and runtime evidence are
 closed and byte-bounded before they cross a trust boundary.
+
+If a plugin calls a capability, the trusted `CAPABILITIES` binding must implement
+`call(executionId, name, input)`. The wrapper supplies the server-owned execution ID on every RPC;
+the cached binding must use it for journal attribution and must never accept an execution identity
+from capability input.
 
 Execution persistence is authoritative. Supply an `ExecutionUsageRecorder` and a trusted evidence
 reader; never derive usage or capability calls from tenant-code output. The synchronous caller
