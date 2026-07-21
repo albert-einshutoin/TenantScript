@@ -388,6 +388,22 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("treats an interpolated template capability name as dynamic", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "send.message": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle('context.capability(`slack.${"send.message"}`, {});')
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
+    ]);
+  });
+
   it("detects renamed context bindings in referenced function-expression handlers", () => {
     expect(
       auditPluginPackage({

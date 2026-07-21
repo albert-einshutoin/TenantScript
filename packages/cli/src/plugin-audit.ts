@@ -1134,6 +1134,11 @@ function tokenizeTemplateExpressions(
       }
       return { tokens, nextIndex: index + 1 };
     } else if (character === "$" && source[index + 1] === "{") {
+      if (!hasExpression) {
+        // Keep the template itself visibly dynamic even when its first expression token happens to
+        // be a string literal; otherwise static fragments could be mistaken for the runtime value.
+        tokens.push({ kind: "string", value: "", literalValid: false });
+      }
       hasExpression = true;
       const expression = tokenizeCode(source, index + 2, true);
       tokens.push(...expression.tokens);
