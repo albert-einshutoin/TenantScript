@@ -59,6 +59,27 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("audits plugin dispatch lowered by the production bundle pipeline", async () => {
+    const root = await createTempDir();
+    const entry = join(root, "plugin.ts");
+    await writeFile(
+      entry,
+      'export const plugin = { dispatch(request) { return request.context.capability("slack.send", {}); } };'
+    );
+    const bundle = await bundlePlugin(entry);
+
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: bundle.code
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("detects capability calls through renamed and destructured context bindings", () => {
     const manifest = validManifest();
     manifest.capabilities = { "slack.send": {} };
@@ -348,6 +369,19 @@ describe("plugin audit", () => {
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
         bundleCode: handlerBundle('`${context.capability("slack.send", {})}`;')
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
+  it("treats a no-substitution template capability name as exact", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle("context.capability(`slack.send`, {});")
       }).findings
     ).toEqual([
       finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")

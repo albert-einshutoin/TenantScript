@@ -445,12 +445,18 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   };
 
   const enclosingObjects = collectEnclosingObjectOpens(tokens);
+  const loweredPluginBindings = collectEsbuildCommonJsPluginBindings(tokens);
   // Production prefers plugin.dispatch over legacy handlers. Restricting discovery to exported
   // plugin objects covers the runtime surface without trusting unrelated application dispatchers.
   for (let index = 0; index < tokens.length; index += 1) {
     if (tokens[index]?.value !== "dispatch") continue;
     const objectOpen = enclosingObjects[index];
-    if (objectOpen === undefined || !isPluginDispatchObject(tokens, objectOpen)) continue;
+    if (
+      objectOpen === undefined ||
+      !isPluginDispatchObject(tokens, objectOpen, loweredPluginBindings)
+    ) {
+      continue;
+    }
     const startsObjectField = ["{", ","].includes(tokens[index - 1]?.value ?? "");
     if (!startsObjectField) continue;
 
@@ -704,7 +710,11 @@ function isPluginHandlersDeclaration(
   return isDefinePluginInput || isDirectCommonJsModule;
 }
 
-function isPluginDispatchObject(tokens: readonly BundleToken[], objectOpen: number): boolean {
+function isPluginDispatchObject(
+  tokens: readonly BundleToken[],
+  objectOpen: number,
+  loweredPluginBindings: ReadonlySet<string>
+): boolean {
   if (
     matchesTokenSequence(tokens, objectOpen - 4, ["module", ".", "exports", "=", "{"]) ||
     matchesTokenSequence(tokens, objectOpen - 2, ["export", "default", "{"])
@@ -712,6 +722,13 @@ function isPluginDispatchObject(tokens: readonly BundleToken[], objectOpen: numb
     return true;
   }
   const exportedProperty = tokens[objectOpen - 2]?.value;
+  if (
+    loweredPluginBindings.has(exportedProperty ?? "") &&
+    tokens[objectOpen - 1]?.value === "=" &&
+    isTopLevelVariableDeclarator(tokens, objectOpen - 2)
+  ) {
+    return true;
+  }
   if (!["plugin", "default"].includes(exportedProperty ?? "")) return false;
   return (
     matchesTokenSequence(tokens, objectOpen - 4, [
@@ -734,6 +751,24 @@ function isPluginDispatchObject(tokens: readonly BundleToken[], objectOpen: numb
       ["const", "let", "var"].includes(tokens[objectOpen - 3]?.value ?? "") &&
       tokens[objectOpen - 4]?.value === "export")
   );
+}
+
+function collectEsbuildCommonJsPluginBindings(tokens: readonly BundleToken[]): Set<string> {
+  const bindings = new Set<string>();
+  let assignsCommonJsModule = false;
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (
+      ["plugin", "default"].includes(tokens[index]?.value ?? "") &&
+      matchesTokenSequence(tokens, index + 1, [":", "(", ")", "=", ">"]) &&
+      tokens[index + 6]?.kind === "identifier"
+    ) {
+      bindings.add(tokens[index + 6]?.value ?? "");
+    }
+    if (matchesTokenSequence(tokens, index, ["module", ".", "exports", "=", "__toCommonJS", "("])) {
+      assignsCommonJsModule = true;
+    }
+  }
+  return assignsCommonJsModule ? bindings : new Set<string>();
 }
 
 function hasEsbuildCommonJsHandlerExport(tokens: readonly BundleToken[]): boolean {
@@ -1083,20 +1118,32 @@ function tokenizeTemplateExpressions(
   // segments recursively so nested templates cannot hide broker or egress calls in static text.
   const tokens: BundleToken[] = [];
   let index = templateStart + 1;
+  let value = "";
+  let valid = true;
+  let hasExpression = false;
   while (index < source.length) {
     const character = source[index];
     if (character === "\\") {
-      index = Math.min(source.length, index + 2);
+      const escape = readStringEscape(source, index);
+      value += escape.value;
+      valid &&= escape.valid;
+      index = escape.nextIndex;
     } else if (character === "`") {
+      if (!hasExpression) {
+        tokens.push({ kind: "string", value: valid ? value : "", literalValid: valid });
+      }
       return { tokens, nextIndex: index + 1 };
     } else if (character === "$" && source[index + 1] === "{") {
+      hasExpression = true;
       const expression = tokenizeCode(source, index + 2, true);
       tokens.push(...expression.tokens);
       index = expression.nextIndex;
     } else {
+      value += character ?? "";
       index += 1;
     }
   }
+  if (!hasExpression) tokens.push({ kind: "string", value: "", literalValid: false });
   return { tokens, nextIndex: source.length };
 }
 
