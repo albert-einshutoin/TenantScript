@@ -1212,6 +1212,25 @@ describe("plugin audit", () => {
     expect(JSON.stringify(report)).not.toContain("secret.sentinel");
   });
 
+  it.each(["\r", "\u2028", "\u2029"])(
+    "ends line comments at the %j line terminator before auditing executable calls",
+    (lineTerminator) => {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode: handlerBundle(
+            `// harmless${lineTerminator}context.capability("admin.delete", {}); fetch("https://direct.invalid");`
+          )
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+        finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+      ]);
+    }
+  );
+
   it("ignores regex statements after control-flow conditions", () => {
     expect(
       auditPluginPackage({

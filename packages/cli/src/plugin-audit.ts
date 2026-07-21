@@ -1912,8 +1912,12 @@ function readHexEscape(
 }
 
 function skipLineComment(source: string, start: number): number {
-  const newline = source.indexOf("\n", start);
-  return newline === -1 ? source.length : newline + 1;
+  for (let index = start; index < source.length; index += 1) {
+    // ECMAScript recognizes CR, LF, LS, and PS as line terminators. Matching that grammar keeps
+    // executable code after non-LF bundle output from being hidden inside an audit-only comment.
+    if (["\r", "\n", "\u2028", "\u2029"].includes(source[index] ?? "")) return index + 1;
+  }
+  return source.length;
 }
 
 function skipBlockComment(source: string, start: number): number {
