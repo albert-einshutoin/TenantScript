@@ -83,6 +83,19 @@ describe("Slack credential lifecycle", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  it("refreshes through the trusted capability resolver before returning a due token", async () => {
+    const secretStore = await initializedStore();
+    const refresh = vi.fn().mockResolvedValue({
+      accessToken: "xoxe.xoxb-2-capability-access",
+      refreshToken: "xoxe-2-capability-refresh",
+      expiresIn: 43_200
+    });
+    const manager = dueManager(secretStore, refresh);
+
+    await expect(manager.resolveAccessToken()).resolves.toBe("xoxe.xoxb-2-capability-access");
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a stale generation before provider access", async () => {
     const base = await initializedStore();
     let injected = false;

@@ -117,83 +117,93 @@ export function createSlackCredentialLifecycleManager(params: {
   }
   const jitterMs = stableJitter(params.ref, maxJitterMs);
 
+  const refreshIfDue = async (): Promise<SlackCredentialRefreshResult> => {
+    const currentTimeMs = currentTime(now);
+    const current = await readState(params.secretStore, params.ref);
+    if (current.state.status === "intervention_required") throw interventionRequired();
+    if (current.state.status === "refreshing") {
+      if (currentTimeMs - Date.parse(current.state.startedAt) >= attemptTimeoutMs) {
+        await persistIntervention(params.secretStore, params.ref, current);
+        throw interventionRequired();
+      }
+      return { ...metadata(current.state), refreshed: false };
+    }
+    if (currentTimeMs < Date.parse(current.state.expiresAt) - refreshSkewMs - jitterMs) {
+      return { ...metadata(current.state), refreshed: false };
+    }
+
+    const refreshing: SlackCredentialRefreshingStateV1 = {
+      ...current.state,
+      status: "refreshing",
+      startedAt: new Date(currentTimeMs).toISOString()
+    };
+    const stagedValue = JSON.stringify(refreshing);
+    const staged = await params.secretStore.compareAndSwapSecret({
+      ref: params.ref,
+      expectedValue: current.serialized,
+      nextValue: stagedValue
+    });
+    if (!staged.matched) {
+      const winner = await readState(params.secretStore, params.ref);
+      return { ...metadata(winner.state), refreshed: false };
+    }
+
+    try {
+      const replacement = await params.refreshClient.refresh(refreshing.refreshToken);
+      if (
+        !isCredential(replacement.accessToken) ||
+        !isCredential(replacement.refreshToken) ||
+        !isBoundedInteger(replacement.expiresIn, 1, 604_800)
+      ) {
+        throw new Error("invalid Slack refresh credential replacement");
+      }
+      const ready: SlackCredentialReadyStateV1 = {
+        version: STATE_VERSION,
+        status: "ready",
+        generation: refreshing.generation + 1,
+        tokenId: await credentialTokenId(replacement.accessToken),
+        accessToken: replacement.accessToken,
+        refreshToken: replacement.refreshToken,
+        expiresAt: new Date(currentTimeMs + replacement.expiresIn * 1_000).toISOString()
+      };
+      const persisted = await params.secretStore.compareAndSwapSecret({
+        ref: params.ref,
+        expectedValue: stagedValue,
+        nextValue: JSON.stringify(ready)
+      });
+      if (!persisted.matched) throw stateChanged();
+      return { ...metadata(ready), refreshed: true };
+    } catch (error) {
+      if (error instanceof SlackCredentialLifecycleError) throw error;
+      await persistIntervention(params.secretStore, params.ref, {
+        state: refreshing,
+        serialized: stagedValue
+      });
+      throw interventionRequired();
+    }
+  };
+
   return {
     inspect: async () => metadata((await readState(params.secretStore, params.ref)).state),
     resolveAccessToken: async () => {
+      const current = (await readState(params.secretStore, params.ref)).state;
+      if (current.status === "intervention_required") throw interventionRequired();
+      if (Date.parse(current.expiresAt) <= currentTime(now)) {
+        throw new SlackCredentialLifecycleError("slack_credential_expired");
+      }
+      // Capability calls are the request-driven refresh trigger. This avoids requiring a global
+      // scheduler while the encrypted CAS gate still serializes concurrent calls and future alarms.
+      await refreshIfDue();
       const { state } = await readState(params.secretStore, params.ref);
       if (state.status === "intervention_required") throw interventionRequired();
       if (Date.parse(state.expiresAt) <= currentTime(now)) {
         throw new SlackCredentialLifecycleError("slack_credential_expired");
       }
-      // A refresh is staged before the provider call. Slack keeps the previous access token usable
-      // briefly, so callers can continue only until the replacement is durably committed.
+      // Slack keeps the previous access token usable briefly, so a concurrent caller may continue
+      // with it only while the replacement pair is still being durably committed.
       return state.accessToken;
     },
-    refreshIfDue: async () => {
-      const currentTimeMs = currentTime(now);
-      const current = await readState(params.secretStore, params.ref);
-      if (current.state.status === "intervention_required") throw interventionRequired();
-      if (current.state.status === "refreshing") {
-        if (currentTimeMs - Date.parse(current.state.startedAt) >= attemptTimeoutMs) {
-          await persistIntervention(params.secretStore, params.ref, current);
-          throw interventionRequired();
-        }
-        return { ...metadata(current.state), refreshed: false };
-      }
-      if (currentTimeMs < Date.parse(current.state.expiresAt) - refreshSkewMs - jitterMs) {
-        return { ...metadata(current.state), refreshed: false };
-      }
-
-      const refreshing: SlackCredentialRefreshingStateV1 = {
-        ...current.state,
-        status: "refreshing",
-        startedAt: new Date(currentTimeMs).toISOString()
-      };
-      const stagedValue = JSON.stringify(refreshing);
-      const staged = await params.secretStore.compareAndSwapSecret({
-        ref: params.ref,
-        expectedValue: current.serialized,
-        nextValue: stagedValue
-      });
-      if (!staged.matched) {
-        const winner = await readState(params.secretStore, params.ref);
-        return { ...metadata(winner.state), refreshed: false };
-      }
-
-      try {
-        const replacement = await params.refreshClient.refresh(refreshing.refreshToken);
-        if (
-          !isCredential(replacement.accessToken) ||
-          !isCredential(replacement.refreshToken) ||
-          !isBoundedInteger(replacement.expiresIn, 1, 604_800)
-        ) {
-          throw new Error("invalid Slack refresh credential replacement");
-        }
-        const ready: SlackCredentialReadyStateV1 = {
-          version: STATE_VERSION,
-          status: "ready",
-          generation: refreshing.generation + 1,
-          tokenId: await credentialTokenId(replacement.accessToken),
-          accessToken: replacement.accessToken,
-          refreshToken: replacement.refreshToken,
-          expiresAt: new Date(currentTimeMs + replacement.expiresIn * 1_000).toISOString()
-        };
-        const persisted = await params.secretStore.compareAndSwapSecret({
-          ref: params.ref,
-          expectedValue: stagedValue,
-          nextValue: JSON.stringify(ready)
-        });
-        if (!persisted.matched) throw stateChanged();
-        return { ...metadata(ready), refreshed: true };
-      } catch (error) {
-        if (error instanceof SlackCredentialLifecycleError) throw error;
-        await persistIntervention(params.secretStore, params.ref, {
-          state: refreshing,
-          serialized: stagedValue
-        });
-        throw interventionRequired();
-      }
-    }
+    refreshIfDue
   };
 }
 

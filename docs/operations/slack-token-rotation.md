@@ -56,9 +56,10 @@ not restoring an earlier encrypted payload.
 ## Capability boundary
 
 `createSlackCredentialLifecycleManager(...).resolveAccessToken()` is for a trusted server-side adapter.
-It returns only the current access token and only while the state is `ready` or an in-flight refresh still
-has an unexpired prior token. Expired, malformed, and intervention-required states return stable,
-secret-free errors. Do not expose this resolver to browser, plugin, audit, telemetry, or Admin API input.
+It triggers the serialized refresh when an unexpired credential enters its refresh window, then returns
+only the current access token. A concurrent in-flight refresh may continue using its still-unexpired prior
+token. Expired, malformed, and intervention-required states return stable, secret-free errors. Do not
+expose this resolver to browser, plugin, audit, telemetry, or Admin API input.
 
 ## Repository verification
 
