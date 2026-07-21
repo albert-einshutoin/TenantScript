@@ -314,6 +314,26 @@ describe("plugin audit", () => {
     }
   });
 
+  it("detects capability calls in computed handler methods", () => {
+    const sources = [
+      'exports.handlers = { ["invoice.created"](_payload, ctx) { return ctx.capability("admin.delete", {}); } };',
+      'module.exports.handlers = { async ["invoice.created"](_payload, ctx) { return ctx.capability("admin.delete", {}); } };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects capabilities in runtime-supported plugin dispatch exports", () => {
     const sources = [
       'module.exports = { dispatch(request) { return request.context.capability("slack.send", {}); } };',

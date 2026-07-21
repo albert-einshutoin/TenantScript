@@ -628,7 +628,21 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
         // a handler declaration and accidentally trusting an unrelated second argument.
         let methodOpen = -1;
         const startsObjectField = ["{", ","].includes(tokens[field - 1]?.value ?? "");
-        if (
+        const computedOpen =
+          startsObjectField && tokens[field]?.value === "["
+            ? field
+            : startsObjectField &&
+                tokens[field]?.value === "async" &&
+                tokens[field + 1]?.value === "["
+              ? field + 1
+              : -1;
+        const computedClose =
+          computedOpen === -1 ? -1 : findMatchingToken(tokens, computedOpen, "[", "]");
+        if (computedClose !== -1 && tokens[computedClose + 1]?.value === "(") {
+          // Computed methods are ordinary own properties at runtime. Their key expression does not
+          // affect whether the body can reach the broker, so scan any well-formed computed method.
+          methodOpen = computedClose + 1;
+        } else if (
           startsObjectField &&
           ["identifier", "string"].includes(tokens[field]?.kind ?? "") &&
           tokens[field]?.literalValid !== false &&
