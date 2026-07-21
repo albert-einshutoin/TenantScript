@@ -14,7 +14,7 @@ test("built-in ext init templates build and test against packed public packages"
   try {
     const manifestTarball = packPublicPackage("packages/manifest", tempRoot);
     const pluginSdkTarball = packPublicPackage("packages/plugin-sdk", tempRoot);
-    for (const templateName of ["webhook-transformer", "invoice-approval"]) {
+    for (const templateName of ["webhook-transformer", "invoice-approval", "api-policy"]) {
       await verifyGeneratedTemplate({
         templateName,
         tempRoot,

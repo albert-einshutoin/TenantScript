@@ -191,6 +191,68 @@ describe("ext init", () => {
     );
   });
 
+  it("creates a fail-closed API policy template with route-boundary tests", async () => {
+    const root = await createTempDir();
+    const target = join(root, "api-policy");
+    const stdout: string[] = [];
+
+    await expect(
+      runExtCli(
+        ["init", "--template", "api-policy", "--dir", target],
+        rollbackOnlyClient,
+        captureIo(stdout, [])
+      )
+    ).resolves.toBe(0);
+
+    await expect(readJsonFile(join(target, "package.json"))).resolves.toMatchObject({
+      name: "@tenantscript-plugin/api-policy"
+    });
+    await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
+      'hooks: [{ name: "api.request", type: "policy"'
+    );
+    const source = await readFile(join(target, "src", "index.ts"), "utf8");
+    expect(source).toContain('const ALLOWED_ROUTE = "/v1/reports"');
+    expect(source).toContain('payload.method === "GET" || payload.method === "HEAD"');
+    expect(source).toContain("payload.path !== ALLOWED_ROUTE");
+    expect(source).toContain("!payload.path.startsWith(`${ALLOWED_ROUTE}/`)");
+    expect(source).toContain('decision: "deny", reason: "invalid API request"');
+    expect(source).toContain('decision: "deny", reason: "API request not allowed"');
+
+    const generatedTest = await readFile(join(target, "test", "plugin.test.ts"), "utf8");
+    for (const required of [
+      'method: "GET", path: "/v1/reports"',
+      'method: "HEAD", path: "/v1/reports/weekly"',
+      'method: "POST", path: "/v1/reports"',
+      'path: "/v1/reports-private"',
+      'path: "/v1/reports?admin=true"',
+      'path: "/v1/reports/%2e%2e/private"',
+      'path: "/v1/reports\\\\private"',
+      'path: "/v1/reports\\u0000private"',
+      "expect(capability).not.toHaveBeenCalled()"
+    ]) {
+      expect(generatedTest).toContain(required);
+    }
+
+    const securityNote = await readFile(join(target, "SECURITY.md"), "utf8");
+    expect(securityNote).toContain("normalized pathname");
+    expect(securityNote).toContain("authentication");
+    expect(securityNote).toContain("production certification");
+    expect(stdout).toEqual([
+      JSON.stringify({
+        name: "api-policy",
+        directory: target,
+        files: [
+          "package.json",
+          "tsconfig.json",
+          "SECURITY.md",
+          "src/manifest.ts",
+          "src/index.ts",
+          "test/plugin.test.ts"
+        ]
+      })
+    ]);
+  });
+
   it("rejects an unknown template before creating the target directory", async () => {
     const root = await createTempDir();
     const target = join(root, "unknown-template");
@@ -205,7 +267,7 @@ describe("ext init", () => {
     ).resolves.toBe(2);
 
     expect(stderr).toEqual([
-      "invalid init option: unknown --template; available: webhook-transformer, invoice-approval"
+      "invalid init option: unknown --template; available: webhook-transformer, invoice-approval, api-policy"
     ]);
     await expect(access(target)).rejects.toMatchObject({ code: "ENOENT" });
   });

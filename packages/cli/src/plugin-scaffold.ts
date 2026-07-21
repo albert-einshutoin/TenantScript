@@ -15,7 +15,11 @@ export interface PluginScaffoldResult {
   files: readonly string[];
 }
 
-export const pluginTemplateNames = ["webhook-transformer", "invoice-approval"] as const;
+export const pluginTemplateNames = [
+  "webhook-transformer",
+  "invoice-approval",
+  "api-policy"
+] as const;
 export type PluginTemplateName = (typeof pluginTemplateNames)[number];
 
 export interface PluginTemplateDefinition {
@@ -37,6 +41,12 @@ const pluginTemplateDefinitions: Record<PluginTemplateName, PluginTemplateDefini
     defaultPluginName: "invoice-approval",
     hookName: "invoice.approve",
     hookType: "policy"
+  },
+  "api-policy": {
+    name: "api-policy",
+    defaultPluginName: "api-policy",
+    hookName: "api.request",
+    hookType: "policy"
   }
 };
 
@@ -52,6 +62,13 @@ const pluginTemplateSecurityNotes: Record<PluginTemplateName, string> = {
 - Treat every invoice payload as untrusted input. Invalid, negative, fractional, and unsafe integer amounts are denied without reflecting payload data.
 - Amounts use integer cents so approval decisions do not depend on floating-point currency rounding.
 - The 100,000-cent auto-approval limit is a conservative example threshold, not a production business, accounting, or legal rule.
+- This template declares no capabilities and denies egress by default. Its review record is development guidance, not production certification or live Cloudflare deployment proof.
+`,
+  "api-policy": `# Security boundaries
+
+- Treat the method and path as untrusted input. Caller authentication belongs to the host, which must provide a decoded, normalized pathname without a query or fragment before dispatch.
+- This example allows only GET and HEAD for /v1/reports and its path-segment descendants. Replace the route with a reviewed product contract; this is not tenant RBAC or an identity policy.
+- Encoded or otherwise ambiguous paths, malformed payloads, mutations, and routes outside the allowlist are denied with fixed reasons that do not reflect request data.
 - This template declares no capabilities and denies egress by default. Its review record is development guidance, not production certification or live Cloudflare deployment proof.
 `
 };
@@ -228,8 +245,8 @@ export default plugin;
 }
 
 function templateHandlerSupport(template: PluginTemplateName | undefined): string {
-  if (template !== "invoice-approval") return "";
-  return `// Integer cents keep the example threshold deterministic and avoid floating-point currency rounding.
+  if (template === "invoice-approval") {
+    return `// Integer cents keep the example threshold deterministic and avoid floating-point currency rounding.
 const AUTO_APPROVAL_LIMIT_CENTS = 100_000;
 
 interface InvoiceApprovalPayload {
@@ -248,6 +265,43 @@ function isInvoiceApprovalPayload(payload: unknown): payload is InvoiceApprovalP
   );
 }
 `;
+  }
+  if (template === "api-policy") {
+    return `const ALLOWED_ROUTE = "/v1/reports";
+
+interface ApiRequestPayload {
+  method: "GET" | "HEAD";
+  path: string;
+}
+
+function isCanonicalPath(path: string): boolean {
+  // Reject URL forms whose interpretation can change across proxies. The host remains responsible
+  // for decoding and normalizing the pathname before this policy executes.
+  return (
+    path.length > 0 &&
+    path.length <= 2_048 &&
+    path.startsWith("/") &&
+    !/[?%\\\\#\\u0000-\\u001f\\u007f]/u.test(path) &&
+    !path.includes("//") &&
+    !/(?:^|\\/)\\.{1,2}(?:\\/|$)/u.test(path)
+  );
+}
+
+function isApiRequestPayload(payload: unknown): payload is ApiRequestPayload {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    !Array.isArray(payload) &&
+    "method" in payload &&
+    "path" in payload &&
+    (payload.method === "GET" || payload.method === "HEAD") &&
+    typeof payload.path === "string" &&
+    isCanonicalPath(payload.path)
+  );
+}
+`;
+  }
+  return "";
 }
 
 function handlerTemplate(request: PluginScaffoldRequest): string {
@@ -258,6 +312,20 @@ function handlerTemplate(request: PluginScaffoldRequest): string {
       }
       if (payload.amountCents > AUTO_APPROVAL_LIMIT_CENTS) {
         return { decision: "deny", reason: "manual approval required" };
+      }
+      return { decision: "allow" };
+    }`;
+  }
+  if (request.template === "api-policy") {
+    return `async (payload, _context) => {
+      if (!isApiRequestPayload(payload)) {
+        return { decision: "deny", reason: "invalid API request" };
+      }
+      if (
+        payload.path !== ALLOWED_ROUTE &&
+        !payload.path.startsWith(\`\${ALLOWED_ROUTE}/\`)
+      ) {
+        return { decision: "deny", reason: "API request not allowed" };
       }
       return { decision: "allow" };
     }`;
@@ -275,6 +343,9 @@ function pluginTestTemplate(request: PluginScaffoldRequest): string {
   const undeclaredHookName = "tenantscript.scaffold-undeclared";
   if (request.template === "invoice-approval") {
     return invoiceApprovalTestTemplate(request, undeclaredHookName);
+  }
+  if (request.template === "api-policy") {
+    return apiPolicyTestTemplate(request, undeclaredHookName);
   }
   return `import { describe, expect, it, vi } from "vitest";
 import { plugin } from "../src/index.js";
@@ -344,6 +415,52 @@ describe("${request.name}", () => {
     const result = await plugin.dispatch({
       hookName: "${undeclaredHookName}",
       payload: { amountCents: 100_000 },
+      context: { capability: vi.fn() }
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: { name: "UnknownHookError", hookName: "${undeclaredHookName}" }
+    });
+  });
+});
+`;
+}
+
+function apiPolicyTestTemplate(request: PluginScaffoldRequest, undeclaredHookName: string): string {
+  return `import { describe, expect, it, vi } from "vitest";
+import { plugin } from "../src/index.js";
+
+describe("${request.name}", () => {
+  it.each([
+    [{ method: "GET", path: "/v1/reports" }, { decision: "allow" }],
+    [{ method: "HEAD", path: "/v1/reports/weekly" }, { decision: "allow" }],
+    [{ method: "POST", path: "/v1/reports" }, { decision: "deny", reason: "invalid API request" }],
+    [{ method: "GET", path: "/v1/reports-private" }, { decision: "deny", reason: "API request not allowed" }],
+    [{ method: "GET", path: "/v1/reports?admin=true" }, { decision: "deny", reason: "invalid API request" }],
+    [{ method: "GET", path: "/v1/reports/%2e%2e/private" }, { decision: "deny", reason: "invalid API request" }],
+    [{ method: "GET", path: "/v1/reports\\\\private" }, { decision: "deny", reason: "invalid API request" }],
+    [{ method: "GET", path: "/v1/reports\\u0000private" }, { decision: "deny", reason: "invalid API request" }],
+    [{ method: "GET", path: "/v1/reports/../private" }, { decision: "deny", reason: "invalid API request" }],
+    [{ method: "get", path: "/v1/reports" }, { decision: "deny", reason: "invalid API request" }],
+    [{}, { decision: "deny", reason: "invalid API request" }],
+    [[], { decision: "deny", reason: "invalid API request" }]
+  ])("decides API access without capabilities for %#", async (payload, decision) => {
+    const capability = vi.fn();
+    const result = await plugin.dispatch({
+      hookName: "${request.hookName}",
+      payload,
+      context: { capability }
+    });
+
+    expect(result).toEqual({ ok: true, value: decision });
+    expect(capability).not.toHaveBeenCalled();
+  });
+
+  it("rejects hooks that are not declared in the manifest", async () => {
+    const result = await plugin.dispatch({
+      hookName: "${undeclaredHookName}",
+      payload: { method: "GET", path: "/v1/reports" },
       context: { capability: vi.fn() }
     });
 
