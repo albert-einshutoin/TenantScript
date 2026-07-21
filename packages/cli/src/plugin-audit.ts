@@ -288,13 +288,33 @@ function registerHandlerContextParameters(
   receivers: Set<string>,
   direct: Set<string>
 ): void {
-  const namedFunctions = new Map<string, { open: number; close: number }>();
+  const callableBindings = new Map<string, { open: number; close: number }>();
   for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index]?.value !== "function" || tokens[index + 1]?.kind !== "identifier") continue;
-    const open = index + 2;
+    if (tokens[index]?.value === "function" && tokens[index + 1]?.kind === "identifier") {
+      const open = index + 2;
+      if (tokens[open]?.value !== "(") continue;
+      const close = findMatchingToken(tokens, open, "(", ")");
+      if (close !== -1) callableBindings.set(tokens[index + 1]?.value ?? "", { open, close });
+      continue;
+    }
+
+    // Bundlers commonly hoist a handler into a const-bound arrow and reference that binding from
+    // the handlers map. Recording only the parameter span keeps resolution lexical and prevents an
+    // unrelated call site with the same identifier from being interpreted as a handler.
+    if (
+      tokens[index]?.kind !== "identifier" ||
+      !["const", "let", "var"].includes(tokens[index - 1]?.value ?? "") ||
+      tokens[index + 1]?.value !== "="
+    ) {
+      continue;
+    }
+    let open = index + 2;
+    if (tokens[open]?.value === "async") open += 1;
     if (tokens[open]?.value !== "(") continue;
     const close = findMatchingToken(tokens, open, "(", ")");
-    if (close !== -1) namedFunctions.set(tokens[index + 1]?.value ?? "", { open, close });
+    if (close !== -1 && tokens[close + 1]?.value === "=" && tokens[close + 2]?.value === ">") {
+      callableBindings.set(tokens[index]?.value ?? "", { open, close });
+    }
   }
 
   for (let index = 0; index < tokens.length; index += 1) {
@@ -353,7 +373,7 @@ function registerHandlerContextParameters(
           registerSecondContextParameter(tokens, value, close, receivers, direct);
         }
       } else if (tokens[value]?.kind === "identifier") {
-        const named = namedFunctions.get(tokens[value]?.value ?? "");
+        const named = callableBindings.get(tokens[value]?.value ?? "");
         if (named !== undefined) {
           registerSecondContextParameter(tokens, named.open, named.close, receivers, direct);
         }

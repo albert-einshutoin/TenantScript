@@ -103,6 +103,22 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects renamed context bindings in referenced arrow handlers", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          'const handler = async (_payload, ctx) => ctx.capability("slack.send", {});',
+          "export const handlers = { event: handler };"
+        ].join("\n")
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("keeps malformed delimiter analysis within a bounded CPU budget", () => {
     const startedAt = performance.now();
     const report = auditPluginPackage({
