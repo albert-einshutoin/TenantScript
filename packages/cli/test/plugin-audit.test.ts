@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { auditPluginPackage, runExtCli, type CliIo, type RollbackClient } from "../src/index.js";
+import { readCliPackageVersion } from "../src/plugin-scaffold.js";
 
 const tempDirs: string[] = [];
 
@@ -158,11 +159,12 @@ describe("plugin audit", () => {
     const root = await createTempDir();
     const manifest = join(root, "manifest.json");
     const packageJson = join(root, "package.json");
+    const cliVersion = await readCliPackageVersion();
     await writeFile(
       manifest,
       JSON.stringify({ ...validManifest(), limits: { cpuMs: 51, timeoutMs: 501 } })
     );
-    await writeFile(packageJson, JSON.stringify(validPackageJson("0.0.0")));
+    await writeFile(packageJson, JSON.stringify(validPackageJson(cliVersion)));
     const stdout: string[] = [];
     const stderr: string[] = [];
 
