@@ -309,6 +309,33 @@ function registerHandlerContextParameters(
     if (handlersClose === -1) continue;
     let depth = 0;
     for (let field = index + 3; field < handlersClose; field += 1) {
+      if (depth === 0) {
+        // Object-method handlers have no colon, so recognize only a direct property name followed
+        // by parameters and a body. Requiring the body avoids treating `event: factory(a, b)` as
+        // a handler declaration and accidentally trusting an unrelated second argument.
+        let methodOpen = -1;
+        const startsObjectField = ["{", ","].includes(tokens[field - 1]?.value ?? "");
+        if (
+          startsObjectField &&
+          tokens[field]?.kind === "identifier" &&
+          tokens[field + 1]?.value === "("
+        ) {
+          methodOpen = field + 1;
+        } else if (
+          startsObjectField &&
+          tokens[field]?.value === "async" &&
+          tokens[field + 1]?.kind === "identifier" &&
+          tokens[field + 2]?.value === "("
+        ) {
+          methodOpen = field + 2;
+        }
+        if (methodOpen !== -1) {
+          const methodClose = findMatchingToken(tokens, methodOpen, "(", ")");
+          if (methodClose !== -1 && tokens[methodClose + 1]?.value === "{") {
+            registerSecondContextParameter(tokens, methodOpen, methodClose, receivers, direct);
+          }
+        }
+      }
       if (tokens[field]?.value === "{") depth += 1;
       else if (tokens[field]?.value === "}") depth = Math.max(0, depth - 1);
       if (depth !== 0 || tokens[field]?.value !== ":") continue;
