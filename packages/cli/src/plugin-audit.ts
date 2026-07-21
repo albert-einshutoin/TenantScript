@@ -375,7 +375,14 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
         ) {
           if (bindingAppliesAt(containers, source.value, close + 2)) {
             const aliases = collectDestructuredContext(tokens.slice(index + 1, close));
-            registerDerivedBindings(tokens, receivers, aliases.receivers, close + 3, close + 2, scope);
+            registerDerivedBindings(
+              tokens,
+              receivers,
+              aliases.receivers,
+              close + 3,
+              close + 2,
+              scope
+            );
             registerDerivedBindings(tokens, direct, aliases.direct, close + 3, close + 2, scope);
           } else if (bindingAppliesAt(receivers, source.value, close + 2)) {
             const aliases = new Set<string>();
