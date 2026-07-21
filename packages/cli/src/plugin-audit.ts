@@ -1423,6 +1423,16 @@ function collectNestedShadowRanges(
   const registerTopLevelReassignment = (bindingIndex: number, valueStart: number): void => {
     if (enclosingBlocks[bindingIndex] !== outer.start - 1) return;
     const initializerEnd = findExpressionBoundary(tokens, valueStart, outer.end);
+    const reassignedValue = tokens[valueStart];
+    if (
+      initializerEnd === valueStart &&
+      reassignedValue?.kind === "identifier" &&
+      reassignedValue.value === name
+    ) {
+      // A self-assignment preserves the broker object; dropping trust here would create a trivial
+      // undeclared-capability bypass while providing no new runtime value.
+      return;
+    }
     if (initializerEnd < outer.end) {
       shadows.push({ start: initializerEnd + 1, end: outer.end });
     }

@@ -991,6 +991,19 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("keeps broker trust through a no-op self reassignment", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle('context = context; context.capability("admin.delete", {});')
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("does not reuse a handler context receiver name outside its handler body", () => {
     expect(
       auditPluginPackage({
