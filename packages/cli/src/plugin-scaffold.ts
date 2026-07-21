@@ -72,7 +72,7 @@ export function renderPluginPackageJson(
   )}\n`;
 }
 
-async function readCliPackageVersion(): Promise<string> {
+export async function readCliPackageVersion(): Promise<string> {
   try {
     const value: unknown = JSON.parse(
       await readFile(new URL("../package.json", import.meta.url), "utf8")

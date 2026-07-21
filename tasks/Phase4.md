@@ -32,6 +32,7 @@
 - [ ] **P4-T04**(M)`ext audit`(自動検査)
   - RED: 過剰 capability 要求(未使用 grant)、egress 宣言漏れ、limits 過大、テスト不在を検知する
   - DoD: 既知の悪性/粗悪パターン fixture を全検知
+  - Progress: Issue #290でversioned report、manifest、test script、exact SDK pin/一致、limits warningの決定論的baselineを実装中。unused grant、egress、test品質はfalse confidenceを避けるため次段へ残す
 
 - [ ] **P4-T05**(S)plugin review ガイドライン
   - 内容: 人間レビューの観点表(security / 互換性 / 運用)。certification チェックリスト

@@ -22,7 +22,12 @@ import {
   parseSupportedDoctorReport
 } from "./doctor.js";
 import type { CliRuntime } from "./cli-runtime.js";
-import { writePluginScaffold, type PluginScaffoldRequest } from "./plugin-scaffold.js";
+import {
+  readCliPackageVersion,
+  writePluginScaffold,
+  type PluginScaffoldRequest
+} from "./plugin-scaffold.js";
+import { auditPluginPackage } from "./plugin-audit.js";
 import { createProductionSetupPlan, isSetupRuntimePrimitive } from "./setup-plan.js";
 import {
   parseProductionWranglerInput,
@@ -44,6 +49,14 @@ export { createBinaryAdminClient, type BinaryAdminClient } from "./binary-client
 export { createBinaryDoctorRuntime } from "./binary-doctor.js";
 
 export type { CliRuntime } from "./cli-runtime.js";
+
+export {
+  auditPluginPackage,
+  type PluginAuditFinding,
+  type PluginAuditFindingCode,
+  type PluginAuditReportV1,
+  type PluginAuditRequest
+} from "./plugin-audit.js";
 
 export {
   evaluateDoctorReport,
@@ -241,6 +254,9 @@ export async function runExtCli(
   }
   if (command === "build") {
     return await runBuild(args, io);
+  }
+  if (command === "audit") {
+    return await runAudit(args, io);
   }
   if (command === "dev") {
     return await runDev(args, io);
@@ -620,6 +636,27 @@ async function runBuild(args: readonly string[], io: CliIo): Promise<number> {
   }
 }
 
+async function runAudit(args: readonly string[], io: CliIo): Promise<number> {
+  const parsed = parseAuditArgs(args);
+  if (!parsed.ok) {
+    io.stderr("invalid audit options");
+    return 2;
+  }
+  try {
+    const [manifest, packageJson, expectedSdkVersion] = await Promise.all([
+      readBoundedAuditJson(parsed.request.manifest),
+      readBoundedAuditJson(parsed.request.packageJson),
+      readCliPackageVersion()
+    ]);
+    const report = auditPluginPackage({ manifest, packageJson, expectedSdkVersion });
+    io.stdout(JSON.stringify(report));
+    return report.passed ? 0 : 1;
+  } catch {
+    io.stderr("plugin audit input is invalid");
+    return 2;
+  }
+}
+
 async function runDev(args: readonly string[], io: CliIo): Promise<number> {
   const parsed = parseDevArgs(args);
   if (!parsed.ok) {
@@ -917,6 +954,11 @@ interface ManifestLintRequest {
   manifest: string;
 }
 
+interface AuditRequest {
+  manifest: string;
+  packageJson: string;
+}
+
 interface DeployRequest {
   appId: string;
   pluginKey: string;
@@ -1073,6 +1115,53 @@ function parseManifestLintArgs(
     return { ok: false, error: "missing required manifest lint option: --manifest" };
   }
   return { ok: true, request: { manifest: resolve(manifest) } };
+}
+
+function parseAuditArgs(
+  args: readonly string[]
+): { ok: true; request: AuditRequest } | { ok: false } {
+  if (args.length !== 4) return { ok: false };
+  const values = new Map<string, string>();
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (
+      name === undefined ||
+      value === undefined ||
+      (name !== "--manifest" && name !== "--package") ||
+      values.has(name)
+    ) {
+      return { ok: false };
+    }
+    values.set(name, value);
+  }
+  const manifest = values.get("--manifest");
+  const packageJson = values.get("--package");
+  if (manifest === undefined || packageJson === undefined) return { ok: false };
+  return { ok: true, request: { manifest: resolve(manifest), packageJson: resolve(packageJson) } };
+}
+
+async function readBoundedAuditJson(path: string): Promise<unknown> {
+  const maximumBytes = 64 * 1024;
+  const handle = await open(path, "r");
+  try {
+    const content = Buffer.alloc(maximumBytes + 1);
+    let bytesRead = 0;
+    while (bytesRead < content.byteLength) {
+      const result = await handle.read(
+        content,
+        bytesRead,
+        content.byteLength - bytesRead,
+        bytesRead
+      );
+      if (result.bytesRead === 0) break;
+      bytesRead += result.bytesRead;
+    }
+    if (bytesRead > maximumBytes) throw new Error("plugin audit input is invalid");
+    return JSON.parse(content.subarray(0, bytesRead).toString("utf8")) as unknown;
+  } finally {
+    await handle.close();
+  }
 }
 
 function parseDeployArgs(

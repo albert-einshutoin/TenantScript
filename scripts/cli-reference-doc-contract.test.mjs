@@ -7,6 +7,7 @@ const referenceUrl = new URL("../docs/reference/cli.md", import.meta.url);
 const commandContracts = new Map([
   ["init", { required: ["--name", "--dir"], exits: [0, 2] }],
   ["build", { required: ["--entry"], exits: [0, 1, 2] }],
+  ["audit", { required: ["--manifest", "--package"], exits: [0, 1, 2] }],
   ["dev", { required: ["--entry", "--hook"], exits: [0, 1, 2] }],
   ["replay", { required: ["--entry", "--sample"], exits: [0, 1, 2] }],
   ["schema", { required: ["diff", "--from", "--to"], exits: [0, 1, 2] }],
