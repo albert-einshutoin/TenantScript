@@ -5,8 +5,16 @@ import {
   type CapabilityBroker
 } from "@tenantscript/capabilities";
 import {
+  createExecutionUsageRecorder,
   createInMemoryExecutionLogStore,
-  type ExecutionLogStore
+  createInMemoryUsageMeter,
+  type AnalyticsEngineDatasetLike,
+  type ExecutionLogStore,
+  type ExecutionUsageRecorder,
+  type GetDailyUsageSummariesRequest,
+  type GetDailyUsageSummaryRequest,
+  type UsageHookType,
+  type UsageMeter
 } from "@tenantscript/control-plane";
 import {
   planExecution,
@@ -42,10 +50,17 @@ export interface ExampleSaasDemo {
   transformWebhookOutbound: (payload: WebhookPayload) => Promise<WebhookPayload>;
   slackMessages: readonly SlackMessage[];
   executionLog: ExecutionLogStore;
+  usage: ExampleSaasUsageReader;
+}
+
+export interface ExampleSaasUsageReader {
+  getDailyUsageSummary: UsageMeter["getDailyUsageSummary"];
+  getDailyUsageSummaries: UsageMeter["getDailyUsageSummaries"];
 }
 
 export interface ExampleSaasDemoOptions {
   omitTransformPlugin?: boolean;
+  usageAnalytics?: AnalyticsEngineDatasetLike;
 }
 
 const notifyManifest = {
@@ -73,6 +88,13 @@ const transformManifest = {
 export function createExampleSaasDemo(options: ExampleSaasDemoOptions = {}): ExampleSaasDemo {
   const slackMessages: SlackMessage[] = [];
   const executionLog = createInMemoryExecutionLogStore();
+  const usageMeter = createInMemoryUsageMeter({
+    ...(options.usageAnalytics === undefined ? {} : { analytics: options.usageAnalytics })
+  });
+  const executionUsageRecorder = createExecutionUsageRecorder({
+    store: executionLog,
+    usageMeter
+  });
   const capabilityBroker = createCapabilityBroker({
     grants: { "slack.send": { channel: "C123" } },
     providers: {
@@ -88,13 +110,14 @@ export function createExampleSaasDemo(options: ExampleSaasDemoOptions = {}): Exa
   return {
     slackMessages,
     executionLog,
+    usage: createUsageReader(usageMeter),
     emitInvoiceCreated: (payload) =>
       emitInvoiceCreated({
         payload,
         installations,
         plugins,
         capabilityBroker,
-        executionLog
+        executionUsageRecorder
       }),
     transformWebhookOutbound: (payload) =>
       transformWebhookOutbound({
@@ -102,7 +125,7 @@ export function createExampleSaasDemo(options: ExampleSaasDemoOptions = {}): Exa
         installations,
         plugins,
         capabilityBroker,
-        executionLog
+        executionUsageRecorder
       })
   };
 }
@@ -112,7 +135,7 @@ async function emitInvoiceCreated(params: {
   installations: readonly Installation[];
   plugins: Record<string, TenantScriptPlugin>;
   capabilityBroker: CapabilityBroker;
-  executionLog: ExecutionLogStore;
+  executionUsageRecorder: ExecutionUsageRecorder;
 }): Promise<void> {
   const plan = planExecution({
     hookName: "invoice.created",
@@ -128,7 +151,8 @@ async function emitInvoiceCreated(params: {
         payload: params.payload,
         plugin: params.plugins[step.installationId],
         capabilityBroker: params.capabilityBroker,
-        executionLog: params.executionLog
+        hookType: "event",
+        executionUsageRecorder: params.executionUsageRecorder
       })
     )
   );
@@ -139,7 +163,7 @@ async function transformWebhookOutbound(params: {
   installations: readonly Installation[];
   plugins: Record<string, TenantScriptPlugin>;
   capabilityBroker: CapabilityBroker;
-  executionLog: ExecutionLogStore;
+  executionUsageRecorder: ExecutionUsageRecorder;
 }): Promise<WebhookPayload> {
   const plan = planExecution({
     hookName: "webhook.outbound",
@@ -154,7 +178,8 @@ async function transformWebhookOutbound(params: {
       payload: currentPayload,
       plugin: params.plugins[step.installationId],
       capabilityBroker: params.capabilityBroker,
-      executionLog: params.executionLog
+      hookType: "transform",
+      executionUsageRecorder: params.executionUsageRecorder
     });
 
     if (!result.ok) {
@@ -236,7 +261,8 @@ async function dispatchAndRecord(params: {
   payload: unknown;
   plugin: TenantScriptPlugin | undefined;
   capabilityBroker: CapabilityBroker;
-  executionLog: ExecutionLogStore;
+  hookType: UsageHookType;
+  executionUsageRecorder: ExecutionUsageRecorder;
 }): Promise<DispatchResult> {
   const startedAt = performance.now();
   const result =
@@ -254,21 +280,41 @@ async function dispatchAndRecord(params: {
           context: createPluginCapabilityContext(params.capabilityBroker)
         });
 
-  params.executionLog.writeExecution({
-    id: `${params.step.installationId}:${params.hookName}:${String(startedAt)}`,
-    tenantId: "tenant_1",
-    pluginId: params.step.pluginId,
-    hookName: params.hookName,
-    version: "1.0.0",
-    status: result.ok ? "success" : "error",
-    durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
-    ...(result.ok
-      ? {}
-      : { error: "message" in result.error ? result.error.message : result.error.name }),
-    capabilityCalls:
-      params.hookName === "invoice.created" ? [{ name: "slack.send", status: "success" }] : [],
-    createdAt: new Date("2026-06-12T00:00:00.000Z")
+  const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+  await params.executionUsageRecorder.record({
+    execution: {
+      id: `${params.step.installationId}:${params.hookName}:${String(startedAt)}`,
+      tenantId: "tenant_1",
+      pluginId: params.step.pluginId,
+      hookName: params.hookName,
+      version: "1.0.0",
+      status: result.ok ? "success" : "error",
+      durationMs,
+      ...(result.ok
+        ? {}
+        : { error: "message" in result.error ? result.error.message : result.error.name }),
+      capabilityCalls:
+        params.hookName === "invoice.created" ? [{ name: "slack.send", status: "success" }] : [],
+      createdAt: new Date("2026-06-12T00:00:00.000Z")
+    },
+    metrics: {
+      hookType: params.hookType,
+      // The accountless reference host has no platform billing counters. Zero is explicit and
+      // safer than presenting elapsed wall time or inferred capability calls as provider CPU.
+      cpuMs: 0,
+      subrequests: 0,
+      workflowRuns: 0
+    }
   });
 
   return result;
+}
+
+function createUsageReader(usageMeter: UsageMeter): ExampleSaasUsageReader {
+  return {
+    getDailyUsageSummary: (request: GetDailyUsageSummaryRequest) =>
+      usageMeter.getDailyUsageSummary(request),
+    getDailyUsageSummaries: (request: GetDailyUsageSummariesRequest) =>
+      usageMeter.getDailyUsageSummaries(request)
+  };
 }

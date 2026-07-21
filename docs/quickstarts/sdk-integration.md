@@ -96,7 +96,7 @@ pnpm --filter @tenantscript/capabilities test:security
 
 ## 4. Host + Plugin integrationを実行する
 
-`apps/example-saas`はhost plan、plugin dispatch、scoped capability、execution logを接続したfork-safeなreference integrationである。
+`apps/example-saas`はhost plan、plugin dispatch、scoped capability、execution log、usage meterを接続したfork-safeなreference integrationである。executionを先に保存し、その保存結果からusageのtenant/plugin/status/dateを導出するため、caller側の二重書きでauthorityがずれない。
 
 ```sh
 # cwd: repository root
@@ -109,7 +109,10 @@ pnpm --filter @tenantscript/example-saas test
 - schema違反payloadはpluginを実行しない
 - large invoiceだけがmock `slack.send`を1回呼ぶ
 - execution logにtenant/plugin/hook/version/statusが残る
+- 同じ実行から日次usageが1回だけ集計され、公開されるのはread-only queryだけである
 - raw Slack tokenはplugin contextとresultへ出ない
+
+このaccountless demoはCloudflareの課金counterを取得できないため、`cpuMs`、`subrequests`、`workflowRuns`を明示的に0で記録する。これはproduction meteringの代替証跡ではない。production tenant runtimeではplatformが計測した値をrecorderへ渡し、Dynamic Workersのlive検証はpaid-planのTier 2 gateで別途行う。
 
 ## 5. Deploy contractを検証する
 
