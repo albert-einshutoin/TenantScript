@@ -158,8 +158,8 @@ path, and an explicit Wrangler binding. Cloudflare creates the dataset on its fi
 does not model a separate create/delete lifecycle. The encrypted provider secret store now has a
 tenant-isolated production Durable Object adapter and declarative binding, and Slack OAuth has an
 accountless repository-verified Worker composition. Live key provisioning/rotation and credentialed
-Slack callback evidence, approval Workflow, the
-execution-recording caller, and tenant runtime/dispatch binding remain incomplete. Track the remaining
+Slack callback evidence, approval Workflow, the production tenant-runtime caller for the accountless
+execution-recording boundary, and tenant runtime/dispatch binding remain incomplete. Track the remaining
 setup/IaC/Tier 2 work in
 [Issue #34](https://github.com/albert-einshutoin/TenantScript/issues/34). Their absence must remain
 visible in reviews and release evidence.

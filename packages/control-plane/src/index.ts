@@ -172,6 +172,16 @@ export {
 } from "./usage-meter.js";
 
 export {
+  createExecutionUsageRecorder,
+  ExecutionUsageRecorderError,
+  type ExecutionUsageMetrics,
+  type ExecutionUsageRecorder,
+  type ExecutionUsageRecorderErrorCode,
+  type ExecutionUsageRecorderFailure,
+  type ExecutionUsageRecordingRequest
+} from "./execution-usage-recorder.js";
+
+export {
   enforceBudgetBeforeExecution,
   reEnableBudgetDisabledInstallation,
   type BudgetExceededNotification,
