@@ -1383,6 +1383,13 @@ function collectNestedShadowRanges(
     const close = findMatchingToken(tokens, open, "{", "}");
     if (close !== -1 && close <= outer.end) shadows.push({ start: open + 1, end: close - 1 });
   };
+  const registerTopLevelReassignment = (bindingIndex: number, valueStart: number): void => {
+    if (enclosingBlocks[bindingIndex] !== outer.start - 1) return;
+    const initializerEnd = findExpressionBoundary(tokens, valueStart, outer.end);
+    if (initializerEnd < outer.end) {
+      shadows.push({ start: initializerEnd + 1, end: outer.end });
+    }
+  };
   for (let index = outer.start; index <= outer.end; index += 1) {
     if (tokens[index]?.value === "catch" && tokens[index + 1]?.value === "(") {
       const close = findMatchingToken(tokens, index + 1, "(", ")");
@@ -1432,7 +1439,13 @@ function collectNestedShadowRanges(
       const declaration = variableDeclarationKeyword(tokens, index);
       if (declaration === "var") {
         const callableBody = enclosingNestedCallableBody(tokens, index, outer);
-        if (callableBody !== undefined) shadows.push(callableBody);
+        if (callableBody !== undefined) {
+          shadows.push(callableBody);
+        } else if (enclosingBlocks[index] === outer.start - 1 && tokens[index + 1]?.value === "=") {
+          // A top-level `var` redeclaration of a parameter is an assignment to that same binding,
+          // not a nested shadow. Trust remains valid in the initializer RHS and ends afterwards.
+          registerTopLevelReassignment(index, index + 2);
+        }
       } else if (
         declaration === "const" ||
         declaration === "let" ||
@@ -1442,6 +1455,12 @@ function collectNestedShadowRanges(
         // Lexical declarations shadow for the entire containing block, including the temporal dead
         // zone before the declaration. Excluding only the post-declaration range would be unsound.
         registerEnclosingBlock(index);
+      } else if (
+        tokens[index - 1]?.value !== "." &&
+        tokens[index + 1]?.value === "=" &&
+        !["=", ">"].includes(tokens[index + 2]?.value ?? "")
+      ) {
+        registerTopLevelReassignment(index, index + 2);
       }
     }
 

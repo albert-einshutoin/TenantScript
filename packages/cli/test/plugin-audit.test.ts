@@ -902,6 +902,39 @@ describe("plugin audit", () => {
     ).toEqual([]);
   });
 
+  it("stops trusting a handler context parameter after a top-level var initializer", () => {
+    const bodies = [
+      'var context = fake; context.capability("admin.delete", {});',
+      'context = fake; context.capability("admin.delete", {});'
+    ];
+
+    for (const body of bodies) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode: handlerBundle(body)
+        }).findings
+      ).toEqual([]);
+    }
+  });
+
+  it("keeps broker calls that execute before a handler context reassignment", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle(
+          'context.capability("admin.delete", {}); var context = fake; context.capability("ignored", {});'
+        )
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("does not reuse a handler context receiver name outside its handler body", () => {
     expect(
       auditPluginPackage({
