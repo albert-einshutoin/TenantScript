@@ -57,7 +57,9 @@ configured callback returns a stable secret-free `503` and still deletes the bin
 
 Production Worker composition uses the state Durable Object, fixed-origin Slack client, encrypted
 provider-secret Durable Object, and the D1 connection store selected by the app ID restored from state.
-For sharded deployments, callback query input cannot choose the database.
+For sharded deployments, callback query input cannot choose the database. The restored app ID is also
+part of the encrypted secret ref and its Durable Object shard, so two app databases may reuse the same
+tenant and Slack workspace IDs without sharing or overwriting tokens.
 
 | Name                               | Contract                                                              |
 | ---------------------------------- | --------------------------------------------------------------------- |

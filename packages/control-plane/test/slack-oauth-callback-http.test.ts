@@ -210,7 +210,12 @@ function connection() {
     id: "slack:tenant:T123",
     tenantId: "tenant",
     workspaceId: "T123",
-    secretRef: { provider: "slack" as const, tenantId: "tenant", secretId: "slack:T123" },
+    secretRef: {
+      provider: "slack" as const,
+      appId: "app",
+      tenantId: "tenant",
+      secretId: "slack:T123"
+    },
     connectedAt: new Date("2026-07-21T01:00:00.000Z")
   };
 }

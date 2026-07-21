@@ -16,12 +16,17 @@ beforeEach(async () => {
 describe("production provider secret store Durable Object", () => {
   it("round-trips encrypted provider secrets and compares updates atomically", async () => {
     const store = createDurableObjectNamespaceSecretStore(testEnv.PROVIDER_SECRET_STORE_DO);
-    const ref = { provider: "slack", tenantId: "tenant_1", secretId: "workspace:T123" };
+    const ref = {
+      provider: "slack",
+      appId: "app_1",
+      tenantId: "tenant_1",
+      secretId: "workspace:T123"
+    };
 
     await expect(store.getSecret(ref)).resolves.toBeNull();
     await expect(store.putSecret({ ref, value: "oauth-token-v1" })).resolves.toEqual(ref);
     await expect(store.getSecret(ref)).resolves.toBe("oauth-token-v1");
-    const objectName = await tenantObjectName(ref.tenantId);
+    const objectName = await tenantObjectName(ref.appId, ref.tenantId);
     const stub = testEnv.PROVIDER_SECRET_STORE_DO.get(
       testEnv.PROVIDER_SECRET_STORE_DO.idFromName(objectName)
     );
@@ -53,7 +58,12 @@ describe("production provider secret store Durable Object", () => {
 
   it("isolates the same provider secret ID by tenant", async () => {
     const store = createDurableObjectNamespaceSecretStore(testEnv.PROVIDER_SECRET_STORE_DO);
-    const tenantOne = { provider: "slack", tenantId: "tenant_1", secretId: "workspace:T123" };
+    const tenantOne = {
+      provider: "slack",
+      appId: "app_1",
+      tenantId: "tenant_1",
+      secretId: "workspace:T123"
+    };
     const tenantTwo = { ...tenantOne, tenantId: "tenant_2" };
 
     await store.putSecret({ ref: tenantOne, value: "tenant-one-token" });
@@ -63,6 +73,23 @@ describe("production provider secret store Durable Object", () => {
     await expect(store.getSecret(tenantTwo)).resolves.toBe("tenant-two-token");
   });
 
+  it("isolates reused tenant and provider secret IDs by app", async () => {
+    const store = createDurableObjectNamespaceSecretStore(testEnv.PROVIDER_SECRET_STORE_DO);
+    const appOne = {
+      provider: "slack",
+      appId: "app_1",
+      tenantId: "prod",
+      secretId: "workspace:T_SHARED"
+    };
+    const appTwo = { ...appOne, appId: "app_2" };
+
+    await store.putSecret({ ref: appOne, value: "app-one-token" });
+    await store.putSecret({ ref: appTwo, value: "app-two-token" });
+
+    await expect(store.getSecret(appOne)).resolves.toBe("app-one-token");
+    await expect(store.getSecret(appTwo)).resolves.toBe("app-two-token");
+  });
+
   it("returns stable failures without reflecting secret values", async () => {
     const store = createDurableObjectNamespaceSecretStore(testEnv.PROVIDER_SECRET_STORE_DO);
     const secret = "secret-sentinel-" + "x".repeat(70_000);
@@ -70,7 +97,12 @@ describe("production provider secret store Durable Object", () => {
     let failure: unknown;
     try {
       await store.putSecret({
-        ref: { provider: "slack", tenantId: "tenant_1", secretId: "workspace:T123" },
+        ref: {
+          provider: "slack",
+          appId: "app_1",
+          tenantId: "tenant_1",
+          secretId: "workspace:T123"
+        },
         value: secret
       });
     } catch (error) {
@@ -87,7 +119,12 @@ describe("production provider secret store Durable Object", () => {
 
     await expect(
       store.putSecret({
-        ref: { provider: "slack", tenantId: "tenant_1", secretId: "workspace:T123" },
+        ref: {
+          provider: "slack",
+          appId: "app_1",
+          tenantId: "tenant_1",
+          secretId: "workspace:T123"
+        },
         value: "é".repeat(8_193)
       })
     ).rejects.toThrow("provider secret store unavailable");
@@ -119,8 +156,11 @@ describe("production provider secret store Durable Object", () => {
   });
 });
 
-async function tenantObjectName(tenantId: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(tenantId));
+async function tenantObjectName(appId: string, tenantId: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify([appId, tenantId]))
+  );
   return `provider-secrets-v1-${[...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("")}`;

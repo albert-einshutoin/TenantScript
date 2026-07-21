@@ -525,6 +525,7 @@ async function connectSlackWorkspace(
     redirectUri: request.redirectUri
   });
   const secretRef = slackSecretRef({
+    appId: request.appId,
     tenantId: request.tenantId,
     workspaceId: token.workspaceId
   });
@@ -805,9 +806,14 @@ function requireUsageMeter(usageMeter: UsageMeter | undefined): UsageMeter {
   return usageMeter;
 }
 
-function slackSecretRef(params: { tenantId: string; workspaceId: string }): SecretRef {
+function slackSecretRef(params: {
+  appId: string;
+  tenantId: string;
+  workspaceId: string;
+}): SecretRef {
   return {
     provider: "slack",
+    appId: params.appId,
     tenantId: params.tenantId,
     secretId: `slack:${params.workspaceId}`
   };

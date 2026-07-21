@@ -51,6 +51,23 @@ describe("encrypted secret store", () => {
     await expect(store.getSecret(sourceRef)).resolves.toBe("tenant-bound-secret");
   });
 
+  it("rejects ciphertext moved to the same tenant and secret ID in another app", async () => {
+    const records = new Map<string, string>();
+    const store = createDurableObjectSecretStore(mapStorage(records), await keyring("key-v1", 23));
+    const sourceRef = secretRef("tenant_shared", "workspace_shared");
+    const targetRef = { ...sourceRef, appId: "app_2" };
+
+    await store.putSecret({ ref: sourceRef, value: "app-bound-secret" });
+    const sourceRecord = onlyRecord(records);
+    await store.putSecret({ ref: targetRef, value: "placeholder" });
+    const targetKey = [...records.keys()].find((key) => records.get(key) !== sourceRecord);
+    expect(targetKey).toBeDefined();
+    records.set(targetKey ?? "", sourceRecord);
+
+    await expect(store.getSecret(targetRef)).rejects.toThrow("secret record is invalid");
+    await expect(store.getSecret(sourceRef)).resolves.toBe("app-bound-secret");
+  });
+
   it("rejects tampered wrapped keys and ciphertext without exposing cryptographic details", async () => {
     const records = new Map<string, string>();
     const store = createDurableObjectSecretStore(mapStorage(records), await keyring("key-v1", 33));
@@ -482,7 +499,7 @@ function importSyntheticKey(fill: number): Promise<CryptoKey> {
 }
 
 function secretRef(tenantId: string, workspaceId: string): SecretRef {
-  return { provider: "slack", tenantId, secretId: `slack:${workspaceId}` };
+  return { provider: "slack", appId: "app_1", tenantId, secretId: `slack:${workspaceId}` };
 }
 
 function onlyRecord(records: ReadonlyMap<string, string>): string {

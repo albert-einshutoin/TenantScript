@@ -112,9 +112,11 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
     expect(JSON.stringify(connection)).not.toContain(rawToken);
     const secretRef = JSON.parse(connection?.secret_ref_json as string) as {
       provider: "slack";
+      appId: string;
       tenantId: string;
       secretId: string;
     };
+    expect(secretRef.appId).toBe("app_worker");
     await expect(
       createDurableObjectNamespaceSecretStore(testEnv.PROVIDER_SECRET_STORE_DO).getSecret(secretRef)
     ).resolves.toBe(rawToken);

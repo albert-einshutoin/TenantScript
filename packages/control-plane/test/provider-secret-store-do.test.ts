@@ -4,7 +4,12 @@ import {
   ProviderSecretStoreDurableObject
 } from "../src/index.js";
 
-const ref = { provider: "slack", tenantId: "tenant_1", secretId: "workspace:T123" };
+const ref = {
+  provider: "slack",
+  appId: "app_1",
+  tenantId: "tenant_1",
+  secretId: "workspace:T123"
+};
 const keyringJson = JSON.stringify({
   currentKeyId: "test-key-v1",
   keys: [{ id: "test-key-v1", material: "A".repeat(43) }]

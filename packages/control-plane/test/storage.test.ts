@@ -315,6 +315,7 @@ describe("createD1ControlPlaneStore", () => {
         botUserId: "B123",
         secretRef: {
           provider: "slack",
+          appId: "app_1",
           tenantId: "tenant_1",
           secretId: "slack:T123"
         },
@@ -331,6 +332,7 @@ describe("createD1ControlPlaneStore", () => {
       botUserId: "B123",
       secretRef: {
         provider: "slack",
+        appId: "app_1",
         tenantId: "tenant_1",
         secretId: "slack:T123"
       },

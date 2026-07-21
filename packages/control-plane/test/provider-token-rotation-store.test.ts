@@ -8,6 +8,7 @@ import {
 
 const ref: SecretRef = {
   provider: "github",
+  appId: "app_1",
   tenantId: "tenant_1",
   secretId: "provider-token-set:installation_1"
 };
