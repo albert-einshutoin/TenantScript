@@ -388,6 +388,41 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects bracketed Function.prototype call and apply invocations", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle(
+          'context.capability["call"](context, "admin.delete", {}); globalThis.fetch["call"](globalThis, "https://example.com");'
+        )
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    ]);
+
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle(
+          'context["capability"]["apply"](context, ["admin.delete", {}]); globalThis["fetch"]["apply"](globalThis, ["https://example.com"]);'
+        )
+      }).findings
+    ).toEqual([
+      finding(
+        "bundle_capability_usage_dynamic",
+        "warning",
+        "bundle.capabilityCalls.*",
+        "heuristic"
+      ),
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    ]);
+  });
+
   it("detects parenthesized indirect capability calls", () => {
     const sources = [
       handlerBundle('(0, context.capability)("admin.delete", {});'),

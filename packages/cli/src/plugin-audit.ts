@@ -255,14 +255,9 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
       const callClose = callOpen === -1 ? -1 : findMatchingToken(tokens, callOpen, "(", ")");
       const argumentsList =
         callClose === -1 ? [] : splitTopLevel(tokens.slice(callOpen + 1, callClose), ",");
-      const usesFunctionCall =
-        callOpen !== -1 &&
-        tokens[callOpen - 1]?.value === "call" &&
-        tokens[callOpen - 2]?.value === ".";
-      const usesFunctionApply =
-        callOpen !== -1 &&
-        tokens[callOpen - 1]?.value === "apply" &&
-        tokens[callOpen - 2]?.value === ".";
+      const invocationKind = functionInvocationKind(tokens, callOpen);
+      const usesFunctionCall = invocationKind === "call";
+      const usesFunctionApply = invocationKind === "apply";
       const argument =
         taggedArgument === undefined
           ? (argumentsList[usesFunctionCall ? 1 : 0] ?? [])
@@ -343,12 +338,48 @@ function callOpenAfterMember(tokens: readonly BundleToken[], memberEnd: number):
     // end its balanced group avoids treating a reference elsewhere in the group as the callee.
     if (groupOpen !== undefined && tokens[groupOpen]?.value === "(") return memberEnd + 2;
   }
+  const directBracketedMethod = memberEnd + 2;
+  if (
+    ["apply", "call"].some((method) =>
+      isStaticBracketedProperty(tokens, directBracketedMethod, method)
+    ) &&
+    tokens[directBracketedMethod + 2]?.value === "("
+  ) {
+    return directBracketedMethod + 2;
+  }
   if (tokens[memberEnd + 1]?.value !== ".") return -1;
   if (tokens[memberEnd + 2]?.value === "(") return memberEnd + 2;
-  return ["apply", "call"].includes(tokens[memberEnd + 2]?.value ?? "") &&
+  if (
+    ["apply", "call"].includes(tokens[memberEnd + 2]?.value ?? "") &&
     tokens[memberEnd + 3]?.value === "("
-    ? memberEnd + 3
+  ) {
+    return memberEnd + 3;
+  }
+  const bracketedMethod = memberEnd + 3;
+  return ["apply", "call"].some((method) =>
+    isStaticBracketedProperty(tokens, bracketedMethod, method)
+  ) && tokens[bracketedMethod + 2]?.value === "("
+    ? bracketedMethod + 2
     : -1;
+}
+
+function functionInvocationKind(
+  tokens: readonly BundleToken[],
+  callOpen: number
+): "apply" | "call" | undefined {
+  if (callOpen === -1) return undefined;
+  const dottedMethod = tokens[callOpen - 1]?.value;
+  if (tokens[callOpen - 2]?.value === "." && ["apply", "call"].includes(dottedMethod ?? "")) {
+    return dottedMethod as "apply" | "call";
+  }
+  const bracketedMethod = tokens[callOpen - 2]?.value;
+  if (
+    ["apply", "call"].includes(bracketedMethod ?? "") &&
+    isStaticBracketedProperty(tokens, callOpen - 2, bracketedMethod ?? "")
+  ) {
+    return bracketedMethod as "apply" | "call";
+  }
+  return undefined;
 }
 
 function hasInvocationAfterMember(tokens: readonly BundleToken[], memberEnd: number): boolean {
