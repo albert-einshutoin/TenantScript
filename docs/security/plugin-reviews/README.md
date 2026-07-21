@@ -6,12 +6,13 @@ immutable commit and an explicit source scope. It is evidence of a review, not a
 
 | Record                                                        | Target                       | Baseline                                   | Decision  | Boundary                 |
 | ------------------------------------------------------------- | ---------------------------- | ------------------------------------------ | --------- | ------------------------ |
-| [`TS-PLUGIN-REVIEW-2026-001`](TS-PLUGIN-REVIEW-2026-001.json) | Built-in `ext init` scaffold | `f2140cfc18ee844c01745781af63d16a77c951d3` | `approve` | First-party, accountless |
+| [`TS-PLUGIN-REVIEW-2026-001`](TS-PLUGIN-REVIEW-2026-001.json) | Built-in `ext init` scaffold | `45a26e232fffa1a50c7973b976fe7a05bfc97a0a` | `approve` | First-party, accountless |
 
 The checker fails closed when a record has unknown fields, omits one of the five review domains,
 references missing evidence, contains secret-like or machine-local data, or approves with a failed
-domain, blocker, or required unverified item. It also compares the reviewed source with the pinned
-baseline; a later source change invalidates the decision until a new review is recorded.
+domain, blocker, or required unverified item. It compares reviewed source with the reachable pinned
+baseline and verifies the SHA-256 of every evidence file; later source or evidence changes invalidate
+the decision until a new review is recorded. This remains valid after either squash or merge commits.
 
 Run both the schema tests and repository records locally:
 

@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
 const repoRoot = resolve(process.argv[2] ?? process.cwd());
@@ -72,6 +73,7 @@ function validateRecord(relativePath) {
       "reviewer",
       "reviewedAt",
       "domains",
+      "evidenceDigests",
       "decision",
       "blockingFindings",
       "unverified",
@@ -94,6 +96,7 @@ function validateRecord(relativePath) {
   validateReviewer(record.reviewer, relativePath);
   validateTimestamp(record.reviewedAt, `${relativePath}: reviewedAt`);
   const domainResults = validateDomains(record.domains, relativePath);
+  validateEvidenceDigests(record.evidenceDigests, domainResults.evidencePaths, relativePath);
 
   if (typeof record.decision !== "string" || !decisions.has(record.decision)) {
     errors.push(`${relativePath}: decision must be approve, request-changes, or reject`);
@@ -184,9 +187,10 @@ function validateReviewer(value, relativePath) {
 function validateDomains(value, relativePath) {
   if (!Array.isArray(value)) {
     errors.push(`${relativePath}: domains must be an array`);
-    return { everyPassed: false };
+    return { everyPassed: false, evidencePaths: new Set() };
   }
   const seen = new Set();
+  const evidencePaths = new Set();
   let everyPassed = value.length === requiredDomains.length;
   for (const [index, domain] of value.entries()) {
     const path = `${relativePath}: domains.${String(index)}`;
@@ -212,6 +216,13 @@ function validateDomains(value, relativePath) {
       everyPassed = false;
     }
     validateEvidence(domain.evidence, `${path}.evidence`);
+    if (Array.isArray(domain.evidence)) {
+      for (const evidence of domain.evidence) {
+        if (typeof evidence === "string" && evidence.trim() !== "" && isRepositoryPath(evidence)) {
+          evidencePaths.add(evidence);
+        }
+      }
+    }
     requireNonEmptyString(domain.notes, "notes", path);
   }
   for (const domain of requiredDomains) {
@@ -220,7 +231,50 @@ function validateDomains(value, relativePath) {
       everyPassed = false;
     }
   }
-  return { everyPassed };
+  return { everyPassed, evidencePaths };
+}
+
+function validateEvidenceDigests(value, evidencePaths, relativePath) {
+  if (!isRecord(value)) {
+    errors.push(`${relativePath}: evidenceDigests must be an object`);
+    return;
+  }
+
+  for (const evidence of evidencePaths) {
+    if (!(evidence in value)) {
+      errors.push(`${relativePath}: missing digest for evidence ${evidence}`);
+    }
+  }
+  for (const evidence of Object.keys(value)) {
+    if (!evidencePaths.has(evidence)) {
+      errors.push(`${relativePath}: digest has no matching domain evidence: ${evidence}`);
+    }
+  }
+
+  for (const evidence of evidencePaths) {
+    const digest = value[evidence];
+    if (typeof digest !== "string" || !/^[0-9a-f]{64}$/.test(digest)) {
+      errors.push(`${relativePath}: evidence digest must be lowercase SHA-256: ${evidence}`);
+      continue;
+    }
+    try {
+      // Evidence may be newer than the reviewed source baseline, so its content hash—not branch
+      // reachability—binds the exact proof while remaining valid after a squash merge.
+      if (!lstatSync(join(repoRoot, evidence)).isFile()) {
+        errors.push(`${relativePath}: evidence must be a regular file: ${evidence}`);
+        continue;
+      }
+      const actual = createHash("sha256")
+        .update(readFileSync(join(repoRoot, evidence)))
+        .digest("hex");
+      if (actual !== digest) {
+        errors.push(`${relativePath}: evidence digest does not match: ${evidence}`);
+      }
+    } catch {
+      // validateEvidence already reports missing paths; keep digest verification fail-closed too.
+      errors.push(`${relativePath}: evidence digest could not be verified: ${evidence}`);
+    }
+  }
 }
 
 function validateEvidence(value, path) {

@@ -1,14 +1,10 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-001",
-  "baselineCommit": "f2140cfc18ee844c01745781af63d16a77c951d3",
+  "baselineCommit": "45a26e232fffa1a50c7973b976fe7a05bfc97a0a",
   "target": {
     "name": "Built-in ext init plugin scaffold",
-    "scope": [
-      "packages/cli/src/plugin-scaffold.ts",
-      "packages/cli/test/init.test.ts",
-      "scripts/agent-plugin-scaffold-e2e.test.mjs"
-    ]
+    "scope": ["packages/cli/src/plugin-scaffold.ts", "packages/cli/test/init.test.ts"]
   },
   "reviewer": {
     "identity": "TenantScript maintainers",
@@ -63,6 +59,17 @@
       "notes": "The repository and CLI declare Apache-2.0, and the scaffold generates source-only first-party content without vendored third-party assets."
     }
   ],
+  "evidenceDigests": {
+    "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
+    "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc",
+    "scripts/agent-plugin-scaffold-e2e.test.mjs": "7349fa72e5648b2d2f65f86b04cf8a04de80a2c4968a3c4d957b8e1d4d9b05fb",
+    "docs/quickstarts/agent-plugin-authoring.md": "5589704355739244597f38af74ab484c4969bf89854aca9b00014c88319b1644",
+    "docs/security/plugin-review-checklist.md": "47dffee998ee7896ec21a5c96dd084c3d31feee9b99777219c987fcbd4ba9a55",
+    "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
+    "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
+    "package.json": "8ab0df9480422171272cfdb2556e3d6c13202084b972d7b7f16c8f9009ff68f3",
+    "packages/cli/package.json": "3fc19043fe7b7fd7cc2fae985cc5be60785063d884c798f2e3a23c5425c43123"
+  },
   "decision": "approve",
   "blockingFindings": [],
   "unverified": [

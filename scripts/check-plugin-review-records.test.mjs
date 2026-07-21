@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,7 +39,7 @@ function runChecker(repoRoot) {
 
 test("accepts an approved review pinned to unchanged source", () => {
   withRepo((repoRoot, baselineCommit) => {
-    writeRecord(repoRoot, validRecord(baselineCommit));
+    writeRecord(repoRoot, validRecord(baselineCommit, repoRoot));
 
     const result = runChecker(repoRoot);
 
@@ -49,17 +50,20 @@ test("accepts an approved review pinned to unchanged source", () => {
 
 test("rejects mutable, missing, or drifted baselines", () => {
   withRepo((repoRoot, baselineCommit) => {
-    writeRecord(repoRoot, { ...validRecord(baselineCommit), baselineCommit: "main" });
+    writeRecord(repoRoot, { ...validRecord(baselineCommit, repoRoot), baselineCommit: "main" });
     let result = runChecker(repoRoot);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /baselineCommit must be a full 40-character commit SHA/);
 
-    writeRecord(repoRoot, { ...validRecord(baselineCommit), baselineCommit: "f".repeat(40) });
+    writeRecord(repoRoot, {
+      ...validRecord(baselineCommit, repoRoot),
+      baselineCommit: "f".repeat(40)
+    });
     result = runChecker(repoRoot);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /baselineCommit does not exist/);
 
-    writeRecord(repoRoot, validRecord(baselineCommit));
+    writeRecord(repoRoot, validRecord(baselineCommit, repoRoot));
     writeFileSync(
       join(repoRoot, "packages", "cli", "src", "plugin-scaffold.ts"),
       "export const drift = true;\n"
@@ -72,7 +76,7 @@ test("rejects mutable, missing, or drifted baselines", () => {
 
 test("rejects incomplete domains and approval with blockers", () => {
   withRepo((repoRoot, baselineCommit) => {
-    const record = validRecord(baselineCommit);
+    const record = validRecord(baselineCommit, repoRoot);
     record.domains = record.domains.slice(1);
     record.blockingFindings = ["Generated package does not build."];
     record.unverified = [
@@ -91,7 +95,7 @@ test("rejects incomplete domains and approval with blockers", () => {
 
 test("rejects failed domains, path escapes, missing evidence, and unknown fields", () => {
   withRepo((repoRoot, baselineCommit) => {
-    const record = validRecord(baselineCommit);
+    const record = validRecord(baselineCommit, repoRoot);
     record.domains[0].status = "fail";
     record.domains[0].evidence = ["../private.txt", "evidence/missing.txt"];
     record.unexpected = true;
@@ -109,7 +113,7 @@ test("rejects failed domains, path escapes, missing evidence, and unknown fields
 
 test("rejects sensitive fields, secret-like values, and machine-local paths", () => {
   withRepo((repoRoot, baselineCommit) => {
-    const record = validRecord(baselineCommit);
+    const record = validRecord(baselineCommit, repoRoot);
     record.reviewer.token = "redacted";
     // Assemble scanner fixtures at runtime so the repository never contains a token-shaped literal
     // or a machine-local absolute path that generic secret scanners could misclassify.
@@ -128,6 +132,37 @@ test("rejects sensitive fields, secret-like values, and machine-local paths", ()
   });
 });
 
+test("rejects missing, unknown, or drifted evidence digests", () => {
+  withRepo((repoRoot, baselineCommit) => {
+    const record = validRecord(baselineCommit, repoRoot);
+    record.evidenceDigests["evidence/unknown.txt"] = "a".repeat(64);
+    delete record.evidenceDigests["evidence/review.txt"];
+    writeRecord(repoRoot, record);
+
+    let result = runChecker(repoRoot);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /missing digest for evidence evidence\/review\.txt/);
+    assert.match(result.stderr, /digest has no matching domain evidence: evidence\/unknown\.txt/);
+
+    const valid = validRecord(baselineCommit, repoRoot);
+    writeRecord(repoRoot, valid);
+    writeFileSync(join(repoRoot, "evidence", "review.txt"), "drifted evidence\n");
+    result = runChecker(repoRoot);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /evidence digest does not match: evidence\/review\.txt/);
+
+    writeFileSync(join(repoRoot, "evidence", "review.txt"), "sanitized evidence\n");
+    const symlinked = validRecord(baselineCommit, repoRoot);
+    writeRecord(repoRoot, symlinked);
+    writeFileSync(join(repoRoot, "outside.txt"), "sanitized evidence\n");
+    rmSync(join(repoRoot, "evidence", "review.txt"));
+    symlinkSync("../outside.txt", join(repoRoot, "evidence", "review.txt"));
+    result = runChecker(repoRoot);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /evidence must be a regular file: evidence\/review\.txt/);
+  });
+});
+
 function writeRecord(repoRoot, record) {
   writeFileSync(
     join(repoRoot, "docs", "security", "plugin-reviews", "review.json"),
@@ -135,7 +170,7 @@ function writeRecord(repoRoot, record) {
   );
 }
 
-function validRecord(baselineCommit) {
+function validRecord(baselineCommit, repoRoot) {
   return {
     schemaVersion: 1,
     id: "TS-PLUGIN-REVIEW-2026-001",
@@ -155,6 +190,11 @@ function validRecord(baselineCommit) {
       evidence: ["evidence/review.txt"],
       notes: `Reviewed ${name}.`
     })),
+    evidenceDigests: {
+      "evidence/review.txt": createHash("sha256")
+        .update(readFileSync(join(repoRoot, "evidence", "review.txt")))
+        .digest("hex")
+    },
     decision: "approve",
     blockingFindings: [],
     unverified: [],
