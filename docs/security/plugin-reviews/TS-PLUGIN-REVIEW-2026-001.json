@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-001",
-  "baselineCommit": "45a26e232fffa1a50c7973b976fe7a05bfc97a0a",
+  "baselineCommit": "92a9951a97bd787c3e6c42553470d0d56b3af8f1",
   "target": {
     "name": "Built-in ext init plugin scaffold",
     "scope": [
@@ -14,7 +14,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-07-21T11:08:25.000Z",
+  "reviewedAt": "2026-07-21T12:22:30.000Z",
   "domains": [
     {
       "name": "security",
@@ -25,7 +25,7 @@
         "packages/cli/test/init.test.ts",
         "scripts/agent-plugin-scaffold-e2e.test.mjs"
       ],
-      "notes": "The CLI bounds names and hooks before interpolation; the scaffold requests no capabilities, denies egress, uses bounded limits, rejects undeclared hooks, and is audited before its generated tests run."
+      "notes": "The CLI bounds names and hooks before interpolation; the scaffold requests no capabilities, denies egress, uses bounded limits, rejects undeclared hooks, and its generated bundle is audited before its generated tests run."
     },
     {
       "name": "compatibility",
@@ -65,12 +65,12 @@
     }
   ],
   "evidenceDigests": {
-    "packages/cli/src/index.ts": "6302b27628c904735c64d601af0f32f2efc90a07b333a13078a8144b4fe111d7",
+    "packages/cli/src/index.ts": "2008fe809a824757aaeb64abf4349e8dc4584f26e9c0882ba070c177c250f45d",
     "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
     "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc",
-    "scripts/agent-plugin-scaffold-e2e.test.mjs": "7349fa72e5648b2d2f65f86b04cf8a04de80a2c4968a3c4d957b8e1d4d9b05fb",
+    "scripts/agent-plugin-scaffold-e2e.test.mjs": "35d5a53f8a5aa897ae8b5974c943ba201406b37ac65d3d53b126999cbf9a8ceb",
     "docs/quickstarts/agent-plugin-authoring.md": "5589704355739244597f38af74ab484c4969bf89854aca9b00014c88319b1644",
-    "docs/security/plugin-review-checklist.md": "47dffee998ee7896ec21a5c96dd084c3d31feee9b99777219c987fcbd4ba9a55",
+    "docs/security/plugin-review-checklist.md": "1bee7b0bebadfd44b9cf86e288af48d3a8f9f42c0883d39823809dd1857f54f5",
     "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
     "package.json": "8ab0df9480422171272cfdb2556e3d6c13202084b972d7b7f16c8f9009ff68f3",
@@ -92,7 +92,8 @@
   ],
   "limitations": [
     "The decision covers only the listed scaffold source at the pinned baseline commit.",
-    "The scaffold is intentionally minimal and does not prove the safety of code added by a plugin author."
+    "The scaffold is intentionally minimal and does not prove the safety of code added by a plugin author.",
+    "A finding-free bundle audit does not prove the absence of aliased, dynamic, templated, dead-code, or runtime-only behavior."
   ],
   "nonGuarantees": [
     "This approval is not a security certification or an independent audit.",
