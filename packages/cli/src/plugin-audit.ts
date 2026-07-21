@@ -360,27 +360,78 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
   const scopes = collectHandlerCapabilityScopes(tokens);
 
   for (const scope of scopes) {
-    for (let index = scope.start; index <= scope.end; index += 1) {
-      if (tokens[index]?.value !== "{") continue;
-      const close = findMatchingToken(tokens, index, "{", "}");
-      if (
-        close !== -1 &&
-        close <= scope.end &&
-        tokens[close + 1]?.value === "=" &&
-        tokens[close + 2]?.kind === "identifier" &&
-        scope.receivers.has(tokens[close + 2]?.value ?? "")
-      ) {
-        registerDestructuredCapability(tokens.slice(index + 1, close), scope.direct);
-      }
-    }
     registerBindingRanges(tokens, receivers, scope.receivers, scope);
     registerBindingRanges(tokens, direct, scope.direct, scope);
     registerBindingRanges(tokens, containers, scope.containers, scope);
+    for (let index = scope.start; index <= scope.end; index += 1) {
+      if (tokens[index]?.value === "{") {
+        const close = findMatchingToken(tokens, index, "{", "}");
+        const source = tokens[close + 2];
+        if (
+          close !== -1 &&
+          close <= scope.end &&
+          tokens[close + 1]?.value === "=" &&
+          source?.kind === "identifier"
+        ) {
+          if (bindingAppliesAt(containers, source.value, close + 2)) {
+            const aliases = collectDestructuredContext(tokens.slice(index + 1, close));
+            registerDerivedBindings(tokens, receivers, aliases.receivers, close + 3, close + 2, scope);
+            registerDerivedBindings(tokens, direct, aliases.direct, close + 3, close + 2, scope);
+          } else if (bindingAppliesAt(receivers, source.value, close + 2)) {
+            const aliases = new Set<string>();
+            registerDestructuredCapability(tokens.slice(index + 1, close), aliases);
+            registerDerivedBindings(tokens, direct, aliases, close + 3, close + 2, scope);
+          }
+        }
+      }
+
+      if (
+        tokens[index]?.kind === "identifier" &&
+        ["const", "let"].includes(variableDeclarationKeyword(tokens, index) ?? "") &&
+        tokens[index + 1]?.value === "=" &&
+        tokens[index + 2]?.kind === "identifier" &&
+        tokens[index + 3]?.value === "." &&
+        tokens[index + 4]?.value === "context" &&
+        bindingAppliesAt(containers, tokens[index + 2]?.value ?? "", index + 2)
+      ) {
+        registerDerivedBindings(
+          tokens,
+          receivers,
+          new Set([tokens[index]?.value ?? ""]),
+          index + 5,
+          index,
+          scope
+        );
+      }
+    }
   }
   sortBindingRanges(receivers);
   sortBindingRanges(direct);
   sortBindingRanges(containers);
   return { receivers, direct, containers };
+}
+
+function registerDerivedBindings(
+  tokens: readonly BundleToken[],
+  output: Map<string, BindingRange[]>,
+  names: ReadonlySet<string>,
+  start: number,
+  anchor: number,
+  scope: BindingRange
+): void {
+  // A dispatch request can expose its broker through a local alias. Bound that derived trust to
+  // the declaration block so an unrelated same-named value elsewhere is never treated as SDK API.
+  const enclosing = collectEnclosingObjectOpens(tokens)[anchor];
+  const enclosingClose =
+    enclosing !== undefined && enclosing >= scope.start
+      ? findMatchingToken(tokens, enclosing, "{", "}")
+      : -1;
+  const range = {
+    start,
+    end: enclosingClose !== -1 && enclosingClose <= scope.end ? enclosingClose - 1 : scope.end
+  };
+  if (range.start > range.end) return;
+  registerBindingRanges(tokens, output, names, range);
 }
 
 function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): CapabilityScope[] {
@@ -1089,6 +1140,17 @@ function registerDestructuredContext(
   receivers: Set<string>,
   direct: Set<string>
 ): void {
+  const aliases = collectDestructuredContext(tokens);
+  for (const receiver of aliases.receivers) receivers.add(receiver);
+  for (const binding of aliases.direct) direct.add(binding);
+}
+
+function collectDestructuredContext(tokens: readonly BundleToken[]): {
+  receivers: Set<string>;
+  direct: Set<string>;
+} {
+  const receivers = new Set<string>();
+  const direct = new Set<string>();
   for (const property of splitTopLevel(tokens, ",")) {
     if (property[0]?.value !== "context") continue;
     if (property[1]?.value === ":" && property[2]?.value === "{") {
@@ -1098,6 +1160,7 @@ function registerDestructuredContext(
     const alias = property[1]?.value === ":" ? property[2] : undefined;
     receivers.add(alias?.kind === "identifier" ? alias.value : "context");
   }
+  return { receivers, direct };
 }
 
 function splitTopLevel(tokens: readonly BundleToken[], delimiter: string): BundleToken[][] {

@@ -351,6 +351,46 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects context aliases introduced inside dispatch handlers", () => {
+    const sources = [
+      'exports.plugin = { dispatch(request) { const { context } = request; return context.capability("slack.send", {}); } };',
+      'exports.plugin = { dispatch(request) { const { context: broker } = request; return broker.capability("slack.send", {}); } };',
+      'exports.plugin = { dispatch(request) { const broker = request.context; return broker.capability("slack.send", {}); } };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
+  it("bounds dispatch context aliases to their declaration block", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          "exports.plugin = { dispatch(request) {",
+          '  { const { context } = request; context.capability("slack.send", {}); }',
+          '  const context = client; context.capability("github.issue.create", {});',
+          "} };"
+        ].join("\n")
+      }).findings
+    ).toEqual([]);
+  });
+
   it("detects nested-destructured dispatch arrows", () => {
     expect(
       auditPluginPackage({
