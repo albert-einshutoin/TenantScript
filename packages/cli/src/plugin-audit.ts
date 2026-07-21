@@ -364,21 +364,25 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
 
   const enclosingObjects = collectEnclosingObjectOpens(tokens);
   const hasLoweredHandlerExport = hasEsbuildCommonJsHandlerExport(tokens);
+  const definePluginHandlerBindings = collectDefinePluginHandlerBindings(tokens, enclosingObjects);
   for (let index = 0; index < tokens.length; index += 1) {
-    if (
-      tokens[index]?.value !== "handlers" ||
-      ![":", "="].includes(tokens[index + 1]?.value ?? "") ||
-      tokens[index + 2]?.value !== "{" ||
-      !isPluginHandlersDeclaration(
+    if (![":", "="].includes(tokens[index + 1]?.value ?? "") || tokens[index + 2]?.value !== "{") {
+      continue;
+    }
+    const isDirectHandlersDeclaration =
+      tokens[index]?.value === "handlers" &&
+      isPluginHandlersDeclaration(
         tokens,
         index,
         braceDepths[index] ?? 0,
         enclosingObjects[index],
         hasLoweredHandlerExport
-      )
-    ) {
-      continue;
-    }
+      );
+    const isReferencedHandlersDeclaration =
+      definePluginHandlerBindings.has(tokens[index]?.value ?? "") &&
+      (braceDepths[index] ?? 0) === 0 &&
+      ["const", "let", "var"].includes(tokens[index - 1]?.value ?? "");
+    if (!isDirectHandlersDeclaration && !isReferencedHandlersDeclaration) continue;
     const handlersClose = findMatchingToken(tokens, index + 2, "{", "}");
     if (handlersClose === -1) continue;
     let depth = 0;
@@ -469,6 +473,30 @@ function collectEnclosingObjectOpens(tokens: readonly BundleToken[]): Array<numb
     if (tokens[index]?.value === "{") stack.push(index);
   }
   return enclosing;
+}
+
+function collectDefinePluginHandlerBindings(
+  tokens: readonly BundleToken[],
+  enclosingObjects: readonly (number | undefined)[]
+): Set<string> {
+  const bindings = new Set<string>();
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.value !== "handlers") continue;
+    const objectOpen = enclosingObjects[index];
+    const isDefinePluginInput =
+      objectOpen !== undefined &&
+      tokens[objectOpen - 1]?.value === "(" &&
+      tokens[objectOpen - 2]?.value === "definePlugin";
+    const startsObjectField = ["{", ","].includes(tokens[index - 1]?.value ?? "");
+    if (!isDefinePluginInput || !startsObjectField) continue;
+
+    if ([",", "}"].includes(tokens[index + 1]?.value ?? "")) {
+      bindings.add("handlers");
+    } else if (tokens[index + 1]?.value === ":" && tokens[index + 2]?.kind === "identifier") {
+      bindings.add(tokens[index + 2]?.value ?? "");
+    }
+  }
+  return bindings;
 }
 
 function isPluginHandlersDeclaration(

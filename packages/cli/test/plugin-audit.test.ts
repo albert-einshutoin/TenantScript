@@ -167,6 +167,32 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects handler maps referenced by definePlugin", () => {
+    const sources = [
+      [
+        'const handlers = { event(_payload, ctx) { return ctx.capability("slack.send", {}); } };',
+        "export const plugin = definePlugin({ manifest: {}, handlers });"
+      ].join("\n"),
+      [
+        'const pluginHandlers = { event(_payload, ctx) { return ctx.capability("slack.send", {}); } };',
+        "export const plugin = definePlugin({ manifest: {}, handlers: pluginHandlers });"
+      ].join("\n")
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects renamed context bindings in referenced arrow handlers", () => {
     expect(
       auditPluginPackage({
