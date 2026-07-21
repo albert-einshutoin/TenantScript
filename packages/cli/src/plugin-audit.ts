@@ -196,7 +196,7 @@ interface BundleToken {
 
 function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
   const tokens = tokenizeBundle(bundleCode);
-  const directCapabilityBindings = collectDirectCapabilityBindings(tokens);
+  const capabilityBindings = collectCapabilityBindings(tokens);
   const staticCalls = new Set<string>();
   let hasDynamicCapabilityCall = false;
   let hasDirectEgressCall = false;
@@ -205,10 +205,12 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
     const isMemberCapabilityCall =
       tokens[index]?.value === "capability" &&
       tokens[index - 1]?.value === "." &&
+      tokens[index - 2]?.kind === "identifier" &&
+      capabilityBindings.receivers.has(tokens[index - 2]?.value ?? "") &&
       tokens[index + 1]?.value === "(";
     const isDirectCapabilityCall =
       tokens[index]?.kind === "identifier" &&
-      directCapabilityBindings.has(tokens[index]?.value ?? "") &&
+      capabilityBindings.direct.has(tokens[index]?.value ?? "") &&
       tokens[index - 1]?.value !== "." &&
       tokens[index + 1]?.value === "(";
     if (isMemberCapabilityCall || isDirectCapabilityCall) {
@@ -253,24 +255,99 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
   return findings;
 }
 
-function collectDirectCapabilityBindings(tokens: readonly BundleToken[]): Set<string> {
+function collectCapabilityBindings(tokens: readonly BundleToken[]): {
+  receivers: Set<string>;
+  direct: Set<string>;
+} {
   // PluginContext is a structural SDK type, so neither bundlers nor authors must preserve the
-  // local name `context`. Member calls are handled separately; this set covers destructured calls.
-  const bindings = new Set(["capability"]);
-  let braceDepth = 0;
+  // local name `context`. Deriving bindings from handler parameters avoids classifying unrelated
+  // dependency methods named `capability` as exact SDK broker calls.
+  const receivers = new Set(["context"]);
+  const direct = new Set<string>();
+
   for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index]?.value === "{") braceDepth += 1;
-    else if (tokens[index]?.value === "}") braceDepth = Math.max(0, braceDepth - 1);
-    else if (
-      braceDepth > 0 &&
-      tokens[index]?.value === "capability" &&
-      tokens[index + 1]?.value === ":" &&
-      tokens[index + 2]?.kind === "identifier"
-    ) {
-      bindings.add(tokens[index + 2]?.value ?? "");
+    if (tokens[index]?.value === "function") {
+      let open = index + 1;
+      while (open < tokens.length && open <= index + 3 && tokens[open]?.value !== "(") open += 1;
+      if (tokens[open]?.value === "(") {
+        const close = findMatchingToken(tokens, open, "(", ")");
+        if (close !== -1) registerSecondContextParameter(tokens, open, close, receivers, direct);
+      }
+    }
+    if (tokens[index]?.value === "(") {
+      const close = findMatchingToken(tokens, index, "(", ")");
+      if (close !== -1 && tokens[close + 1]?.value === "=" && tokens[close + 2]?.value === ">") {
+        registerSecondContextParameter(tokens, index, close, receivers, direct);
+      }
     }
   }
-  return bindings;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.value !== "{") continue;
+    const close = findMatchingToken(tokens, index, "{", "}");
+    if (
+      close !== -1 &&
+      tokens[close + 1]?.value === "=" &&
+      tokens[close + 2]?.kind === "identifier" &&
+      receivers.has(tokens[close + 2]?.value ?? "")
+    ) {
+      registerDestructuredCapability(tokens.slice(index + 1, close), direct);
+    }
+  }
+  return { receivers, direct };
+}
+
+function registerSecondContextParameter(
+  tokens: readonly BundleToken[],
+  open: number,
+  close: number,
+  receivers: Set<string>,
+  direct: Set<string>
+): void {
+  const parameters = splitTopLevel(tokens.slice(open + 1, close), ",");
+  const contextParameter = parameters[1];
+  if (contextParameter?.[0]?.kind === "identifier") {
+    receivers.add(contextParameter[0].value);
+  } else if (contextParameter?.[0]?.value === "{") {
+    registerDestructuredCapability(contextParameter.slice(1, -1), direct);
+  }
+}
+
+function registerDestructuredCapability(tokens: readonly BundleToken[], direct: Set<string>): void {
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index]?.value !== "capability") continue;
+    const alias = tokens[index + 1]?.value === ":" ? tokens[index + 2] : undefined;
+    direct.add(alias?.kind === "identifier" ? alias.value : "capability");
+  }
+}
+
+function splitTopLevel(tokens: readonly BundleToken[], delimiter: string): BundleToken[][] {
+  const output: BundleToken[][] = [[]];
+  let depth = 0;
+  for (const token of tokens) {
+    if (["(", "{", "["].includes(token.value)) depth += 1;
+    else if ([")", "}", "]"].includes(token.value)) depth = Math.max(0, depth - 1);
+    if (token.value === delimiter && depth === 0) output.push([]);
+    else output.at(-1)?.push(token);
+  }
+  return output;
+}
+
+function findMatchingToken(
+  tokens: readonly BundleToken[],
+  openIndex: number,
+  open: string,
+  close: string
+): number {
+  let depth = 0;
+  for (let index = openIndex; index < tokens.length; index += 1) {
+    if (tokens[index]?.value === open) depth += 1;
+    else if (tokens[index]?.value === close) {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
 }
 
 function tokenizeBundle(source: string): BundleToken[] {
@@ -299,7 +376,7 @@ function tokenizeBundle(source: string): BundleToken[] {
       while (index < source.length && /[A-Za-z0-9_$]/u.test(source[index] ?? "")) index += 1;
       tokens.push({ kind: "identifier", value: source.slice(start, index) });
     } else {
-      if (character !== undefined && ".(),{}:".includes(character)) {
+      if (character !== undefined && ".(),{}:[]=>".includes(character)) {
         tokens.push({ kind: "punctuation", value: character });
       }
       index += 1;

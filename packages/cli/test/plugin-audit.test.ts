@@ -48,11 +48,28 @@ describe("plugin audit", () => {
         expectedSdkVersion: "1.2.3",
         bundleCode: [
           'async function run(_payload, ctx) { await ctx.capability("github.issue.create", {}); }',
-          'const { capability: invoke } = ctx; invoke("email.send", {});'
+          'const { capability: invoke } = ctx; invoke("email.send", {});',
+          'const handler = async (_payload, { capability }) => capability("storage.read", {});'
         ].join("\n")
       }).findings
     ).toEqual([
       finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+      finding("bundle_grant_potentially_unused", "warning", "manifest.capabilities.*", "heuristic")
+    ]);
+  });
+
+  it("does not treat an unrelated capability method as an SDK broker call", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: 'client.capability("slack.send", {});'
+      }).findings
+    ).toEqual([
       finding("bundle_grant_potentially_unused", "warning", "manifest.capabilities.*", "heuristic")
     ]);
   });
