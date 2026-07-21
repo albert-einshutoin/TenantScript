@@ -612,6 +612,26 @@
             { "name": "ScopedRuntimeResult", "kind": "type" },
             { "name": "ScopedRuntimeTimeoutError", "kind": "type+value" }
           ]
+        },
+        {
+          "subpath": "./cloudflare",
+          "exports": [
+            { "name": "CloudflareDynamicWorkerCaller", "kind": "type" },
+            { "name": "CloudflareDynamicWorkerCallerConfiguration", "kind": "type" },
+            { "name": "CloudflareDynamicWorkerCallerError", "kind": "type+value" },
+            { "name": "CloudflareDynamicWorkerCallerErrorCode", "kind": "type" },
+            { "name": "CloudflareDynamicWorkerCallerFailure", "kind": "type" },
+            { "name": "CloudflareDynamicWorkerRunRequest", "kind": "type" },
+            { "name": "CloudflareDynamicWorkerRunResult", "kind": "type" },
+            { "name": "createCloudflareDynamicWorkerCaller", "kind": "value" },
+            { "name": "DynamicWorkerCapabilityBinding", "kind": "type" },
+            { "name": "DynamicWorkerCode", "kind": "type" },
+            { "name": "DynamicWorkerEntrypoint", "kind": "type" },
+            { "name": "DynamicWorkerInvocationEvidence", "kind": "type" },
+            { "name": "DynamicWorkerLoaderBinding", "kind": "type" },
+            { "name": "DynamicWorkerModule", "kind": "type" },
+            { "name": "DynamicWorkerStub", "kind": "type" }
+          ]
         }
       ]
     },

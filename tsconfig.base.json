@@ -17,6 +17,7 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
+      "@tenantscript/loader/cloudflare": ["packages/loader/src/cloudflare.ts"],
       "@tenantscript/control-plane/rbac": ["packages/control-plane/src/rbac.ts"],
       "@tenantscript/*": ["packages/*/src/index.ts"]
     }

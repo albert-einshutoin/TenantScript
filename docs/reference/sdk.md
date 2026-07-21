@@ -63,6 +63,25 @@ Return contract:
 
 timeoutは`ScopedRuntimeTimeoutError`（`executionStatus: "timeout"`）、subrequestまたはheap上限超過は`ScopedRuntimeLimitError`（`executionStatus: "budget_exceeded"`）になる。`memoryMb`はV8 heap境界であり、OS、Cloudflare isolate、external/native allocationのproduction memory保証ではない。
 
+`@tenantscript/loader/cloudflare`の`createCloudflareDynamicWorkerCaller`は、信頼されたhost Workerから
+Cloudflare Dynamic Worker Loaderを呼ぶproduction composition境界である。
+
+- worker IDはruntime wrapper version、compatibility date、tenant、installation、plugin、artifact SHA-256、grant revisionの全scopeからopaqueに導出し、同じWorkerCodeとauthorityだけを再利用する。
+- artifactは4 MiB以内かつ宣言SHA-256との完全一致を確認し、`ext deploy`が生成するCommonJS bundleのscaffold標準`plugin.dispatch`を固定ES module fetch wrapperから呼び出す。top-level `handlers`は既存bundle向けfallbackである。
+- `globalOutbound: null`と信頼済みscoped bindingだけを渡し、呼び出しごとにCPU/subrequest limitとwall-clock timeoutを適用する。timeout時はrequestをabortし、`timeout` executionを永続化する。
+- request/responseはclosed shapeかつ1 MiB以内とし、payloadとplugin戻り値はlossless JSON data modelだけを許可する。`Map`、`Set`、nested `undefined`、非有限numberなどJSONが黙って欠落・変換する値は実行前またはsuccess response前に拒否し、tenant codeの返値からusageやcapability evidenceを採用しない。
+- plugin versionはexecution recorderと同じ128文字以内に制限し、永続化不能なexecutionをtenant code実行前に拒否する。
+- hook nameはmanifestのdispatch keyをUnicode、空白、slashを含めてそのまま保持し、execution recorderと同じ256文字以内に制限する。
+- runtime失敗は固定errorへ正規化してexecutionを1回だけ永続化する。永続化失敗もretryせず、provider error本文を反射しない。
+- CloudflareのCPU/subrequest limit例外は公開された安定error shapeがないため、host adapterの`classifyInvocationError`で検証済み例外だけを`budget_exceeded`へ分類する。未分類例外は通常errorへfail-safeする。
+- `readInvocationEvidence`失敗時はcapability callsとusageを0へfail-safeし、固定診断をbest-effortでreportする。診断はexecution永続化を待たせず、delivery保証が必要なsinkは自身で`waitUntil`へscheduleする。
+- evidence readはinvocationの`timeoutMs`を独立した上限として使い、backendがstallしてもzero evidenceでexecution永続化へ進む。
+- trusted tail/egress adapterは`deniedEgressAttempts`を返し、1件以上ならtenantが例外をcatchしていてもexecutionを`egress_denied`として永続化する。
+- cached `CAPABILITIES` bindingのRPCは`call(executionId, name, input)`で、server-owned execution IDを毎回渡す。bindingはこのIDをjournal帰属に使い、capability inputからexecution identityを受け取らない。
+
+同期callerは正確なCPU時間を取得できないため`cpuMs: 0`を記録する。wall timeをCPU時間へ代用せず、
+Workers Trace Events Logpushの`CPUTimeMs`をexecution IDへ非同期照合する責務は別の運用境界である。
+
 ## `@tenantscript/capabilities`
 
 `createCapabilityBroker`はgrant scope、provider、journal、rate limiter、audit sinkを結合する。pluginには`createPluginCapabilityContext`の結果だけを渡す。
