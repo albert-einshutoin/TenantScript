@@ -45,6 +45,7 @@
             { "name": "createMockSlackSendProvider", "kind": "value" },
             { "name": "createPluginCapabilityContext", "kind": "value" },
             { "name": "createRotatingTokenCapabilityProvider", "kind": "value" },
+            { "name": "createSlackSendProvider", "kind": "value" },
             { "name": "createWebFetchHttpTransport", "kind": "value" },
             { "name": "EmailDelivery", "kind": "type" },
             { "name": "EmailTemplate", "kind": "type" },
@@ -70,6 +71,9 @@
             { "name": "ProviderTokenRotationErrorCode", "kind": "type" },
             { "name": "ProviderTokenRotationSnapshot", "kind": "type" },
             { "name": "RotatingTokenCapabilityProviderOptions", "kind": "type" },
+            { "name": "SlackSendProviderError", "kind": "type+value" },
+            { "name": "SlackSendProviderErrorCode", "kind": "type" },
+            { "name": "SlackSendProviderOptions", "kind": "type" },
             { "name": "WebFetchFunction", "kind": "type" }
           ]
         }
