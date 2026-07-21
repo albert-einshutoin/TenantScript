@@ -9,6 +9,8 @@ const MAX_DYNAMIC_WORKER_RESPONSE_BYTES = 1_048_576;
 const MAX_DYNAMIC_WORKER_REQUEST_BYTES = 1_048_576;
 const MAX_DYNAMIC_WORKER_ARTIFACT_BYTES = 4_194_304;
 const MAX_DYNAMIC_WORKER_TIMEOUT_MS = 2_147_483_647;
+// Invocation must fail before tenant code runs when the authoritative recorder cannot persist it.
+const MAX_RECORDED_PLUGIN_VERSION_LENGTH = 128;
 const DYNAMIC_WORKER_RUNTIME_VERSION = "v1";
 const DYNAMIC_WORKER_MAIN_MODULE = "tenantscript-runtime.js";
 const DYNAMIC_WORKER_PLUGIN_MODULE = "tenant-plugin.cjs";
@@ -407,6 +409,7 @@ function validateRunRequest(value: unknown): string {
     !isIdentifier(value.pluginId) ||
     !isIdentifier(value.hookName) ||
     !isIdentifier(value.version) ||
+    value.version.length > MAX_RECORDED_PLUGIN_VERSION_LENGTH ||
     !isIdentifier(value.grantRevision) ||
     !(
       value.hookType === "event" ||

@@ -20,7 +20,8 @@ CommonJS plugin bundle through a fixed Worker fetch wrapper that dispatches the 
 `plugin` export; exposes only trusted scoped
 bindings; disables ambient outbound access; and applies CPU/subrequest plus wall-clock limits on
 every entrypoint call. Requests, responses, artifacts, configuration, and runtime evidence are
-closed and byte-bounded before they cross a trust boundary.
+closed and byte-bounded before they cross a trust boundary. Plugin versions longer than the
+execution recorder's 128-character limit are rejected before tenant code can run.
 
 If a plugin calls a capability, the trusted `CAPABILITIES` binding must implement
 `call(executionId, name, input)`. The wrapper supplies the server-owned execution ID on every RPC;

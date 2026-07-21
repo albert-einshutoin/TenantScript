@@ -533,6 +533,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     const invalid = [
       { ...base, token: "credential-secret-sentinel" },
       { ...base, executionId: "exec\ninvalid" },
+      { ...base, version: `v${"1".repeat(128)}` },
       { ...base, artifactSha256: "A".repeat(64) },
       { ...base, hookType: "unknown" },
       { ...base, limits: { cpuMs: 0, timeoutMs: 250, subrequests: 2 } },
