@@ -517,9 +517,10 @@ async function withWallClockTimeout<T>(
   const timeout = new Promise<never>((_resolve, reject) => {
     timeoutId = setTimeout(() => {
       // CPU budgets do not stop an isolate awaiting a never-settling promise. Abort the request and
-      // settle the trusted host independently so a timeout execution is always persisted.
-      abortController.abort();
+      // settle the trusted host independently so a timeout execution is always persisted. Reject
+      // first because an abort-aware provider may synchronously reject with a generic AbortError.
       reject(new DynamicWorkerInvocationTimeoutError());
+      abortController.abort();
     }, timeoutMs);
   });
   try {

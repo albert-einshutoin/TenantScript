@@ -417,13 +417,42 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       const invocationStarted = new Promise<void>((resolve) => {
         resolveInvocationStarted = resolve;
       });
-      const loader = createCachingLoader(
-        (request) =>
-          new Promise<Response>(() => {
-            invokedRequest = request;
-            resolveInvocationStarted?.();
-          })
-      );
+      const loader = {
+        get() {
+          return {
+            getEntrypoint() {
+              return {
+                fetch(request: Request) {
+                  invokedRequest = request;
+                  resolveInvocationStarted?.();
+                  // Model a provider promise whose abort rejection reaches Promise.race without an
+                  // extra native Promise hop; this preserves the ordering that exposed the deadline race.
+                  const rejectionHandlers: Array<(reason: unknown) => unknown> = [];
+                  const abortableInvocation = {
+                    then(
+                      _onFulfilled?: (response: Response) => unknown,
+                      onRejected?: (reason: unknown) => unknown
+                    ) {
+                      if (onRejected !== undefined) rejectionHandlers.push(onRejected);
+                      return abortableInvocation;
+                    }
+                  };
+                  request.signal.addEventListener(
+                    "abort",
+                    () => {
+                      for (const reject of rejectionHandlers) {
+                        reject(new DOMException("The operation was aborted", "AbortError"));
+                      }
+                    },
+                    { once: true }
+                  );
+                  return abortableInvocation as unknown as Promise<Response>;
+                }
+              };
+            }
+          };
+        }
+      };
       const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
         Promise.resolve(request.execution)
       );
