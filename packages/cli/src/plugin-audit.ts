@@ -580,27 +580,35 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     const fieldStart =
       tokens[propertyStart - 1]?.value === "async" ? propertyStart - 1 : propertyStart;
     const objectOpen = enclosingObjects[index];
-    if (
-      objectOpen === undefined ||
-      !isPluginDispatchObject(tokens, objectOpen, exportedPluginBindings, enclosingObjects)
-    ) {
-      continue;
-    }
     const startsObjectField = ["{", ","].includes(tokens[fieldStart - 1]?.value ?? "");
-    if (!startsObjectField) continue;
+    const isObjectField =
+      startsObjectField &&
+      objectOpen !== undefined &&
+      isPluginDispatchObject(tokens, objectOpen, exportedPluginBindings, enclosingObjects);
+    const isMutation = isExportedPluginDispatchMutation(
+      tokens,
+      propertyStart,
+      propertyEnd,
+      exportedPluginBindings
+    );
+    if (!isObjectField && !isMutation) continue;
 
-    if (tokens[propertyEnd + 1]?.value === "(") {
+    if (isObjectField && tokens[propertyEnd + 1]?.value === "(") {
       const close = findMatchingToken(tokens, propertyEnd + 1, "(", ")");
       const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
       if (body !== undefined) addDispatchScope(propertyEnd + 1, close, body);
       continue;
     }
-    if (!isComputedDispatch && [",", "}"].includes(tokens[propertyEnd + 1]?.value ?? "")) {
+    if (
+      isObjectField &&
+      !isComputedDispatch &&
+      [",", "}"].includes(tokens[propertyEnd + 1]?.value ?? "")
+    ) {
       const named = callableBindings.get("dispatch");
       if (named !== undefined) addNamedDispatchScope(named);
       continue;
     }
-    if (tokens[propertyEnd + 1]?.value !== ":") continue;
+    if (tokens[propertyEnd + 1]?.value !== (isMutation ? "=" : ":")) continue;
     let value = propertyEnd + 2;
     if (tokens[value]?.value === "async") value += 1;
     if (tokens[value]?.value === "function") {
@@ -743,6 +751,39 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     index = handlersClose;
   }
   return [...scopes.values()];
+}
+
+function isExportedPluginDispatchMutation(
+  tokens: readonly BundleToken[],
+  propertyStart: number,
+  propertyEnd: number,
+  exportedPluginBindings: ReadonlySet<string>
+): boolean {
+  if (tokens[propertyEnd + 1]?.value !== "=") return false;
+  const isComputed = tokens[propertyStart]?.value === "[";
+  const receiverEnd =
+    tokens[propertyStart - 1]?.value === "." ? propertyStart - 2 : propertyStart - 1;
+  if (!isComputed && tokens[propertyStart - 1]?.value !== ".") return false;
+  const receiver = tokens[receiverEnd];
+  if (receiver?.kind === "identifier") {
+    if (exportedPluginBindings.has(receiver.value)) return true;
+    if (isCommonJsExportsIdentifier(tokens, receiverEnd)) return true;
+    return (
+      receiver.value === "plugin" &&
+      tokens[receiverEnd - 1]?.value === "." &&
+      isCommonJsExportsIdentifier(tokens, receiverEnd - 2)
+    );
+  }
+  if (receiver?.value !== "]") return false;
+  const pluginReceiver = bracketedPropertyReceiverIndex(tokens, receiverEnd - 1, "plugin");
+  return isCommonJsExportsIdentifier(tokens, pluginReceiver);
+}
+
+function isCommonJsExportsIdentifier(tokens: readonly BundleToken[], index: number): boolean {
+  return (
+    tokens[index]?.value === "exports" &&
+    (tokens[index - 1]?.value !== "." || tokens[index - 2]?.value === "module")
+  );
 }
 
 function collectCommonJsObjectExportBindings(

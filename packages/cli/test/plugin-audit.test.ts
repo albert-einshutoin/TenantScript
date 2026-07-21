@@ -489,6 +489,28 @@ describe("plugin audit", () => {
     }
   });
 
+  it("detects capabilities in mutated plugin dispatch exports", () => {
+    const sources = [
+      'exports.plugin = {}; exports.plugin.dispatch = ({ context }) => context.capability("admin.delete", {});',
+      'module.exports.plugin = {}; module.exports.plugin.dispatch = function(request) { return request.context.capability("admin.delete", {}); };',
+      'const plugin = {}; exports.plugin = plugin; plugin["dispatch"] = request => request.context.capability("admin.delete", {});',
+      'module.exports = {}; module.exports["dispatch"] = request => request.context.capability("admin.delete", {});'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects capabilities in CommonJS-exported plugin bindings", () => {
     const sources = [
       'const plugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; exports.plugin = plugin;',
