@@ -123,7 +123,26 @@ describe("execution usage recorder", () => {
     expect(recordExecutionUsage).not.toHaveBeenCalled();
   });
 
-  it("rejects widened recorder configuration without reflecting it", () => {
+  it("accepts a production store with methods beyond writeExecution", async () => {
+    const persisted = execution();
+    const store = {
+      writeExecution: () => Promise.resolve(persisted),
+      findAppById: () => Promise.resolve(null)
+    };
+    const recorder = createExecutionUsageRecorder({
+      store,
+      usageMeter: usageMeter(vi.fn(() => Promise.resolve(summary("tenant_1", "plugin_1"))))
+    });
+
+    await expect(
+      recorder.record({
+        execution: persisted,
+        metrics: { hookType: "event", cpuMs: 1, subrequests: 0, workflowRuns: 0 }
+      })
+    ).resolves.toEqual(persisted);
+  });
+
+  it("rejects widened top-level configuration without reflecting it", () => {
     let thrown: unknown;
     try {
       createExecutionUsageRecorder({

@@ -101,7 +101,6 @@ function validateConfiguration(value: unknown): asserts value is {
     !isRecord(value) ||
     !hasOnlyKeys(value, ["store", "usageMeter", "reportFailure"]) ||
     !isRecord(value.store) ||
-    !hasExactKeys(value.store, ["writeExecution"]) ||
     typeof value.store.writeExecution !== "function" ||
     !isRecord(value.usageMeter) ||
     !hasExactKeys(value.usageMeter, [
