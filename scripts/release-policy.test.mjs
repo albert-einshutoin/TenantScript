@@ -118,6 +118,38 @@ test("rejects a changed REST success status or body schema without a major chang
   );
 });
 
+test("rejects a changed provider callback contract without a major changeset", () => {
+  const callback = {
+    id: "slackOAuthCallback",
+    path: "/v1/provider-callbacks/slack",
+    methods: ["GET"],
+    isolation: "oauth-state-browser-binding"
+  };
+
+  assert.throws(
+    () =>
+      validateBreakingReleasePolicy({
+        baseSurface: surface({ callbacks: [callback] }),
+        currentSurface: surface({
+          callbacks: [{ ...callback, methods: ["POST"], isolation: "none" }]
+        }),
+        changesets: [],
+        repositoryFiles: new Set()
+      }),
+    /@tenantscript\/control-plane.*changed callback contract slackOAuthCallback.*removed callback methods GET from slackOAuthCallback.*major Changeset/su
+  );
+  assert.throws(
+    () =>
+      validateBreakingReleasePolicy({
+        baseSurface: surface({ callbacks: [callback] }),
+        currentSurface: surface(),
+        changesets: [],
+        repositoryFiles: new Set()
+      }),
+    /@tenantscript\/control-plane.*removed callback slackOAuthCallback.*major Changeset/su
+  );
+});
+
 test("rejects unknown packages in a breaking-change changeset", () => {
   assert.throws(
     () =>
@@ -144,7 +176,7 @@ function changeset(name, bump, body) {
   };
 }
 
-function surface({ exports = [], rest = [], successSchemas } = {}) {
+function surface({ exports = [], rest = [], callbacks = [], successSchemas } = {}) {
   return {
     version: 1,
     packages: [
@@ -158,6 +190,7 @@ function surface({ exports = [], rest = [], successSchemas } = {}) {
       }
     ],
     controlPlaneRest: rest,
+    controlPlaneCallbacks: callbacks,
     ...(successSchemas === undefined ? {} : { controlPlaneSuccessResponses: successSchemas })
   };
 }

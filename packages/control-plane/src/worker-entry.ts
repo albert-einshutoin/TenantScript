@@ -177,7 +177,7 @@ export default {
         requestDatabase = routed;
       }
     } catch {
-      return configurationUnavailableResponse();
+      return configurationUnavailableResponseForRequest(request);
     }
     const installationDetailStore =
       requestDatabase === undefined
@@ -272,9 +272,7 @@ export default {
     } catch {
       // Binding errors can contain deployment values. Return a stable response without
       // reflecting invalid origin or secret configuration into the public Worker response.
-      return new URL(request.url).pathname === SLACK_OAUTH_CALLBACK_PATH
-        ? slackOAuthCallbackUnavailableResponse()
-        : configurationUnavailableResponse();
+      return configurationUnavailableResponseForRequest(request);
     }
     return handler(request);
   },
@@ -462,6 +460,14 @@ function configurationUnavailableResponse(): Response {
     },
     { status: 503, headers: { "Cache-Control": "no-store" } }
   );
+}
+
+function configurationUnavailableResponseForRequest(request: Request): Response {
+  // Callback failures must always clear the one-time browser binding, including failures that
+  // happen while constructing the app database router before the callback handler exists.
+  return new URL(request.url).pathname === SLACK_OAUTH_CALLBACK_PATH
+    ? slackOAuthCallbackUnavailableResponse()
+    : configurationUnavailableResponse();
 }
 
 export async function runScheduledTelemetry(

@@ -142,6 +142,22 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
     expect(await response.text()).not.toContain(secret);
   });
 
+  it("clears the browser binding when the app database router configuration is invalid", async () => {
+    const response = await worker.fetch(
+      new Request(`${callbackUri}?state=${"s".repeat(43)}&code=temporary-code`, {
+        headers: callbackNavigationHeaders("b".repeat(43))
+      }),
+      {
+        ...callbackEnvironment(),
+        APP_DATABASE_ROUTES_JSON: "{"
+      }
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
   it("validates the provider keyring before consuming state or exchanging the Slack code", async () => {
     const slackFetch = vi.fn().mockResolvedValue(
       Response.json({

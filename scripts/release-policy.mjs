@@ -128,6 +128,37 @@ export function collectBreakingChanges(baseSurface, currentSurface) {
     }
   }
 
+  const currentCallbacks = new Map(
+    (Array.isArray(currentSurface.controlPlaneCallbacks)
+      ? currentSurface.controlPlaneCallbacks
+      : []
+    ).map((entry) => [entry.id, entry])
+  );
+  for (const baseCallback of Array.isArray(baseSurface.controlPlaneCallbacks)
+    ? baseSurface.controlPlaneCallbacks
+    : []) {
+    const currentCallback = currentCallbacks.get(baseCallback.id);
+    if (currentCallback === undefined) {
+      addChange(changes, controlPlanePackage, `removed callback ${baseCallback.id}`);
+      continue;
+    }
+    if (
+      currentCallback.path !== baseCallback.path ||
+      currentCallback.isolation !== baseCallback.isolation
+    ) {
+      addChange(changes, controlPlanePackage, `changed callback contract ${baseCallback.id}`);
+    }
+    const currentMethods = new Set(currentCallback.methods);
+    const removedMethods = baseCallback.methods.filter((method) => !currentMethods.has(method));
+    if (removedMethods.length > 0) {
+      addChange(
+        changes,
+        controlPlanePackage,
+        `removed callback methods ${removedMethods.join(",")} from ${baseCallback.id}`
+      );
+    }
+  }
+
   if (isRecord(baseSurface.controlPlaneSuccessResponses)) {
     const currentSchemas = isRecord(currentSurface.controlPlaneSuccessResponses)
       ? currentSurface.controlPlaneSuccessResponses
