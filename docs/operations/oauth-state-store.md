@@ -5,9 +5,10 @@ future provider OAuth callback. It issues a 256-bit opaque value, stores only di
 restores the server-owned provider, app, tenant, actor, redirect URI, issue time, and expiry binding
 exactly once.
 
-This is not an HTTP callback and does not create a Slack authorization URL. A production callback
-must authenticate the initiating browser session, consume state with that same session binding, compare
-the returned actor and tenant to current authority, and only then call the provider code exchange.
+This is not an HTTP callback and does not create a Slack authorization URL. The repository-verified
+[Slack callback composition service](slack-oauth-callback.md) consumes state before provider access and
+uses only its returned scope. A production HTTP flow must still authenticate the initiating browser
+session and supply its server-managed binding to that service.
 
 ## State and browser binding contract
 
@@ -68,8 +69,9 @@ Before exposing OAuth routes, add all of the following in a separate reviewed sl
 
 1. an authenticated install-start route that derives app, tenant, actor, and browser session server-side;
 2. a `Secure`, `HttpOnly`, `SameSite=Lax` or stricter session cookie lifecycle with explicit rotation;
-3. a callback that consumes state before any Slack request and compares returned authority to the session;
-4. the fixed-origin Slack exchange client and encrypted provider secret store;
+3. an HTTP callback that invokes `createSlackOAuthCallbackService` and compares returned authority to the
+   authenticated session;
+4. Worker composition of the fixed-origin Slack exchange client and encrypted provider secret store;
 5. stable user-facing callback responses without code, state, token, or provider-error reflection;
 6. live credential-bearing Tier 2 evidence.
 

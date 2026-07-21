@@ -40,10 +40,11 @@ pluginへ公開してはいけません。
 response上限を持ちます。providerの完全な成功responseを検証した後、tokenとworkspace metadataだけを
 既存`connectSlackWorkspace`境界へ渡します。refresh tokenやprovider errorは公開結果に含めません。
 
-これはprovider capabilityそのものでも公開callbackでもありません。公開routeは先に
-`createDurableObjectNamespaceOAuthStateStore`でbrowser/app/tenant/actor/redirectへ束縛したstateを一回だけ
-consumeしなければなりません。state storeのaccountless contractは
-[OAuth state store](../operations/oauth-state-store.md)、交換と未実装callback境界は
+これはprovider capabilityそのものでも公開HTTP callbackでもありません。
+`createSlackOAuthCallbackService`は先に`createDurableObjectNamespaceOAuthStateStore`で
+browser/app/tenant/actor/redirectへ束縛したstateを一回だけconsumeし、復元scopeだけを既存接続境界へ渡します。
+state storeは[OAuth state store](../operations/oauth-state-store.md)、合成順序は
+[Slack OAuth callback composition](../operations/slack-oauth-callback.md)、交換と未実装HTTP境界は
 [Slack OAuth v2 exchange boundary](../operations/slack-oauth-exchange.md)を参照してください。
 
 ## 検証境界
@@ -55,6 +56,7 @@ pnpm --filter @tenantscript/capabilities exec vitest run test/github-provider.te
 pnpm --filter @tenantscript/capabilities test:security
 pnpm --filter @tenantscript/control-plane exec vitest run test/slack-oauth-client.test.ts
 pnpm --filter @tenantscript/control-plane exec vitest run test/oauth-state-store.test.ts
+pnpm --filter @tenantscript/control-plane exec vitest run test/slack-oauth-callback.test.ts
 ```
 
 これはaccountlessなadapter contractです。GitHub OAuth callback、GitHub App installation token発行、
