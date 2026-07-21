@@ -97,6 +97,100 @@ describe("ext init", () => {
     );
   });
 
+  it("creates a fail-closed invoice approval template with boundary tests", async () => {
+    const root = await createTempDir();
+    const target = join(root, "invoice-approval");
+    const stdout: string[] = [];
+
+    await expect(
+      runExtCli(
+        ["init", "--template", "invoice-approval", "--dir", target],
+        rollbackOnlyClient,
+        captureIo(stdout, [])
+      )
+    ).resolves.toBe(0);
+
+    await expect(readJsonFile(join(target, "package.json"))).resolves.toMatchObject({
+      name: "@tenantscript-plugin/invoice-approval"
+    });
+    await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
+      'hooks: [{ name: "invoice.approve", type: "policy"'
+    );
+    const source = await readFile(join(target, "src", "index.ts"), "utf8");
+    expect(source).toContain("const AUTO_APPROVAL_LIMIT_CENTS = 100_000");
+    expect(source).toContain("Number.isSafeInteger(payload.amountCents)");
+    expect(source).toContain("payload.amountCents >= 0");
+    expect(source).toContain("!Array.isArray(payload)");
+    expect(source).toContain('decision: "deny", reason: "invalid invoice amount"');
+    expect(source).toContain('decision: "deny", reason: "manual approval required"');
+
+    const generatedTest = await readFile(join(target, "test", "plugin.test.ts"), "utf8");
+    for (const required of [
+      "amountCents: 100_000",
+      "amountCents: 100_001",
+      "amountCents: -1",
+      "amountCents: 1.5",
+      "Number.MAX_SAFE_INTEGER + 1",
+      "[[], { decision:",
+      'decision: "allow"',
+      'decision: "deny"',
+      "expect(capability).not.toHaveBeenCalled()"
+    ]) {
+      expect(generatedTest).toContain(required);
+    }
+
+    const securityNote = await readFile(join(target, "SECURITY.md"), "utf8");
+    expect(securityNote).toContain("untrusted");
+    expect(securityNote).toContain("integer cents");
+    expect(securityNote).toContain("example threshold");
+    expect(securityNote).toContain("production certification");
+    expect(stdout).toEqual([
+      JSON.stringify({
+        name: "invoice-approval",
+        directory: target,
+        files: [
+          "package.json",
+          "tsconfig.json",
+          "SECURITY.md",
+          "src/manifest.ts",
+          "src/index.ts",
+          "test/plugin.test.ts"
+        ]
+      })
+    ]);
+  });
+
+  it("applies a safe name override to the invoice approval template", async () => {
+    const root = await createTempDir();
+    const target = join(root, "custom-invoice-approval");
+
+    await expect(
+      runExtCli(
+        [
+          "init",
+          "--template",
+          "invoice-approval",
+          "--name",
+          "custom-invoice-approval",
+          "--dir",
+          target
+        ],
+        rollbackOnlyClient,
+        captureIo([], [])
+      )
+    ).resolves.toBe(0);
+
+    await expect(readJsonFile(join(target, "package.json"))).resolves.toMatchObject({
+      name: "@tenantscript-plugin/custom-invoice-approval"
+    });
+    await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
+      'name: "custom-invoice-approval"'
+    );
+    await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
+      'describe("custom-invoice-approval"'
+    );
+  });
+
   it("rejects an unknown template before creating the target directory", async () => {
     const root = await createTempDir();
     const target = join(root, "unknown-template");
@@ -111,7 +205,7 @@ describe("ext init", () => {
     ).resolves.toBe(2);
 
     expect(stderr).toEqual([
-      "invalid init option: unknown --template; available: webhook-transformer"
+      "invalid init option: unknown --template; available: webhook-transformer, invoice-approval"
     ]);
     await expect(access(target)).rejects.toMatchObject({ code: "ENOENT" });
   });

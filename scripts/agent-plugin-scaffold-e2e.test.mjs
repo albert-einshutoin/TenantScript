@@ -7,112 +7,125 @@ import { test } from "node:test";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-test("ext init output builds and tests against packed public packages", async () => {
+test("built-in ext init templates build and test against packed public packages", async () => {
   await mkdir(join(repoRoot, ".tmp"), { recursive: true });
   const tempRoot = await mkdtemp(join(repoRoot, ".tmp", "agent-plugin-scaffold-"));
-  const pluginDirectory = join(tempRoot, "webhook-transformer");
 
   try {
     const manifestTarball = packPublicPackage("packages/manifest", tempRoot);
     const pluginSdkTarball = packPublicPackage("packages/plugin-sdk", tempRoot);
-    run(process.execPath, [
-      join(repoRoot, "packages/cli/dist/bin.js"),
-      "init",
-      "--template",
-      "webhook-transformer",
-      "--dir",
-      pluginDirectory
-    ]);
-
-    const securityNote = await readFile(join(pluginDirectory, "SECURITY.md"), "utf8");
-    assert.match(securityNote, /untrusted/);
-    assert.match(securityNote, /production certification/);
-
-    const packageJsonPath = join(pluginDirectory, "package.json");
-    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
-    const cliPackageJson = JSON.parse(
-      await readFile(join(repoRoot, "packages/cli/package.json"), "utf8")
-    );
-    assert.deepEqual(packageJson.dependencies, {
-      "@tenantscript/manifest": cliPackageJson.version,
-      "@tenantscript/plugin-sdk": cliPackageJson.version
-    });
-
-    // Preserve the public dependency contract before replacing install locations with local
-    // tarballs. Auditing the rewritten file would incorrectly reject the intentional file: URLs.
-    const auditPackagePath = join(tempRoot, "audit-package.json");
-    await writeFile(auditPackagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
-
-    // The checkout is intentionally unpublished. Swap only the install locations to fresh tarballs
-    // after proving emitted versions, so this exercises public package contents rather than sources.
-    packageJson.dependencies = {
-      "@tenantscript/manifest": `file:${manifestTarball}`,
-      "@tenantscript/plugin-sdk": `file:${pluginSdkTarball}`
-    };
-    packageJson.pnpm = {
-      overrides: {
-        "@tenantscript/manifest": `file:${manifestTarball}`,
-        // Reuse the root lock's tested Vite instead of consulting mutable registry metadata.
-        vite: JSON.parse(
-          await readFile(
-            join(repoRoot, "node_modules/.pnpm/node_modules/vite/package.json"),
-            "utf8"
-          )
-        ).version
-      }
-    };
-    await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
-
-    run("pnpm", [
-      "--dir",
-      pluginDirectory,
-      "install",
-      "--ignore-workspace",
-      "--prefer-offline",
-      "--ignore-scripts"
-    ]);
-
-    const manifestJson = run(
-      process.execPath,
-      [
-        "--experimental-strip-types",
-        "--input-type=module",
-        "--eval",
-        'import { manifest } from "./src/manifest.ts"; process.stdout.write(JSON.stringify(manifest));'
-      ],
-      { cwd: pluginDirectory }
-    );
-    const auditManifestPath = join(tempRoot, "audit-manifest.json");
-    await writeFile(auditManifestPath, `${manifestJson}\n`);
-    const auditBundlePath = join(tempRoot, "audit-bundle.cjs");
-    run(process.execPath, [
-      join(repoRoot, "packages/cli/dist/bin.js"),
-      "build",
-      "--entry",
-      join(pluginDirectory, "src", "index.ts"),
-      "--out",
-      auditBundlePath
-    ]);
-    const auditReport = JSON.parse(
-      run(process.execPath, [
-        join(repoRoot, "packages/cli/dist/bin.js"),
-        "audit",
-        "--manifest",
-        auditManifestPath,
-        "--package",
-        auditPackagePath,
-        "--bundle",
-        auditBundlePath
-      ])
-    );
-    assert.deepEqual(auditReport, { version: 1, passed: true, findings: [] });
-
-    run("pnpm", ["--dir", pluginDirectory, "build"]);
-    run("pnpm", ["--dir", pluginDirectory, "test"]);
+    for (const templateName of ["webhook-transformer", "invoice-approval"]) {
+      await verifyGeneratedTemplate({
+        templateName,
+        tempRoot,
+        manifestTarball,
+        pluginSdkTarball
+      });
+    }
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+async function verifyGeneratedTemplate({
+  templateName,
+  tempRoot,
+  manifestTarball,
+  pluginSdkTarball
+}) {
+  const pluginDirectory = join(tempRoot, templateName);
+  run(process.execPath, [
+    join(repoRoot, "packages/cli/dist/bin.js"),
+    "init",
+    "--template",
+    templateName,
+    "--dir",
+    pluginDirectory
+  ]);
+
+  const securityNote = await readFile(join(pluginDirectory, "SECURITY.md"), "utf8");
+  assert.match(securityNote, /untrusted/);
+  assert.match(securityNote, /production certification/);
+
+  const packageJsonPath = join(pluginDirectory, "package.json");
+  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
+  const cliPackageJson = JSON.parse(
+    await readFile(join(repoRoot, "packages/cli/package.json"), "utf8")
+  );
+  assert.deepEqual(packageJson.dependencies, {
+    "@tenantscript/manifest": cliPackageJson.version,
+    "@tenantscript/plugin-sdk": cliPackageJson.version
+  });
+
+  // Preserve the public dependency contract before replacing install locations with local
+  // tarballs. Auditing the rewritten file would incorrectly reject the intentional file: URLs.
+  const auditPackagePath = join(tempRoot, `${templateName}-audit-package.json`);
+  await writeFile(auditPackagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+  // The checkout is intentionally unpublished. Swap only the install locations to fresh tarballs
+  // after proving emitted versions, so this exercises public package contents rather than sources.
+  packageJson.dependencies = {
+    "@tenantscript/manifest": `file:${manifestTarball}`,
+    "@tenantscript/plugin-sdk": `file:${pluginSdkTarball}`
+  };
+  packageJson.pnpm = {
+    overrides: {
+      "@tenantscript/manifest": `file:${manifestTarball}`,
+      // Reuse the root lock's tested Vite instead of consulting mutable registry metadata.
+      vite: JSON.parse(
+        await readFile(join(repoRoot, "node_modules/.pnpm/node_modules/vite/package.json"), "utf8")
+      ).version
+    }
+  };
+  await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+  run("pnpm", [
+    "--dir",
+    pluginDirectory,
+    "install",
+    "--ignore-workspace",
+    "--prefer-offline",
+    "--ignore-scripts"
+  ]);
+
+  const manifestJson = run(
+    process.execPath,
+    [
+      "--experimental-strip-types",
+      "--input-type=module",
+      "--eval",
+      'import { manifest } from "./src/manifest.ts"; process.stdout.write(JSON.stringify(manifest));'
+    ],
+    { cwd: pluginDirectory }
+  );
+  const auditManifestPath = join(tempRoot, `${templateName}-audit-manifest.json`);
+  await writeFile(auditManifestPath, `${manifestJson}\n`);
+  const auditBundlePath = join(tempRoot, `${templateName}-audit-bundle.cjs`);
+  run(process.execPath, [
+    join(repoRoot, "packages/cli/dist/bin.js"),
+    "build",
+    "--entry",
+    join(pluginDirectory, "src", "index.ts"),
+    "--out",
+    auditBundlePath
+  ]);
+  const auditReport = JSON.parse(
+    run(process.execPath, [
+      join(repoRoot, "packages/cli/dist/bin.js"),
+      "audit",
+      "--manifest",
+      auditManifestPath,
+      "--package",
+      auditPackagePath,
+      "--bundle",
+      auditBundlePath
+    ])
+  );
+  assert.deepEqual(auditReport, { version: 1, passed: true, findings: [] });
+
+  run("pnpm", ["--dir", pluginDirectory, "build"]);
+  run("pnpm", ["--dir", pluginDirectory, "test"]);
+}
 
 function packPublicPackage(packageDirectory, destination) {
   const output = run("pnpm", [
