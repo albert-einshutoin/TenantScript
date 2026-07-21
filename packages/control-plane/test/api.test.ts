@@ -317,6 +317,44 @@ describe("createControlPlaneApi usage meter", () => {
 });
 
 describe("createControlPlaneApi Slack OAuth connection", () => {
+  it("rejects a partial rotating credential pair before persistence", async () => {
+    const store = new InMemoryControlPlaneStore();
+    const secretStore = createInMemorySecretStore();
+    const api = createControlPlaneApi({
+      store,
+      artifacts: new InMemoryArtifactStore(),
+      secretStore,
+      slackConnections: createInMemorySlackConnectionStore(),
+      slackOAuth: {
+        exchangeCode: () =>
+          Promise.resolve({
+            accessToken: "xoxe.xoxb-partial-access",
+            refreshToken: "xoxe-partial-refresh",
+            workspaceId: "T_PARTIAL"
+          })
+      }
+    });
+    store.seedApp({ id: "app_1", name: "Example SaaS" });
+    store.seedTenant({ id: "tenant_1", appId: "app_1", name: "Acme" });
+
+    await expect(
+      api.connectSlackWorkspace({
+        appId: "app_1",
+        tenantId: "tenant_1",
+        code: "oauth_code_partial",
+        redirectUri: "https://app.example.com/oauth/slack/callback"
+      })
+    ).rejects.toMatchObject({ code: "slack_credential_state_invalid" });
+    await expect(
+      secretStore.getSecret({
+        provider: "slack",
+        appId: "app_1",
+        tenantId: "tenant_1",
+        secretId: "slack:T_PARTIAL"
+      })
+    ).resolves.toBeNull();
+  });
+
   it("persists rotating bot credentials as one encrypted lifecycle state", async () => {
     const accessToken = "xoxe.xoxb-1-synthetic-access";
     const refreshToken = "xoxe-1-synthetic-refresh";

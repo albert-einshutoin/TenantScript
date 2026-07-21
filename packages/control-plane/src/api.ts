@@ -11,7 +11,10 @@ import { resolveApprovalDecisionTransition } from "./approval-state.js";
 import type { ApprovalDecision, ApprovalState } from "./approval-state.js";
 import type { SecretRef, SecretStore } from "./secret-store.js";
 import type { SlackConnectionRecord, SlackConnectionStore } from "./slack-connection-store.js";
-import { initializeSlackCredentialLifecycle } from "./slack-credential-lifecycle.js";
+import {
+  initializeSlackCredentialLifecycle,
+  SlackCredentialLifecycleError
+} from "./slack-credential-lifecycle.js";
 import type {
   DailyUsageSummary,
   GetDailyUsageSummariesRequest,
@@ -533,6 +536,9 @@ async function connectSlackWorkspace(
     workspaceId: token.workspaceId
   });
   const connectedAt = request.connectedAt ?? new Date();
+  if ((token.refreshToken === undefined) !== (token.expiresIn === undefined)) {
+    throw new SlackCredentialLifecycleError("slack_credential_state_invalid");
+  }
   if (token.refreshToken === undefined || token.expiresIn === undefined) {
     await secretStore.putSecret({ ref: secretRef, value: token.accessToken });
   } else {

@@ -1,6 +1,7 @@
 const SLACK_OAUTH_ACCESS_URL = "https://slack.com/api/oauth.v2.access";
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 65_536;
+const MAX_CREDENTIAL_BYTES = 7_500;
 
 export interface SlackTokenRefreshResult {
   accessToken: string;
@@ -40,7 +41,7 @@ export function createSlackTokenRefreshClient(configuration: {
   const timeoutMs = configuration.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return {
     refresh: async (refreshToken) => {
-      if (!isBoundedText(refreshToken, 16_384)) {
+      if (!isBoundedText(refreshToken, MAX_CREDENTIAL_BYTES)) {
         throw new SlackTokenRefreshError("slack_token_refresh_invalid_request");
       }
       const controller = new AbortController();
@@ -88,8 +89,8 @@ function parseSuccess(value: unknown): SlackTokenRefreshResult {
     ]) ||
     value.ok !== true ||
     value.token_type !== "bot" ||
-    !isBoundedText(value.access_token, 16_384) ||
-    !isBoundedText(value.refresh_token, 16_384) ||
+    !isBoundedText(value.access_token, MAX_CREDENTIAL_BYTES) ||
+    !isBoundedText(value.refresh_token, MAX_CREDENTIAL_BYTES) ||
     !isBoundedInteger(value.expires_in, 1, 604_800) ||
     (value.scope !== undefined && !isBoundedText(value.scope, 4_096, true))
   ) {

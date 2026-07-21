@@ -5,6 +5,7 @@ const STATE_VERSION = 1;
 const DEFAULT_REFRESH_SKEW_MS = 5 * 60_000;
 const DEFAULT_MAX_JITTER_MS = 30_000;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 60_000;
+const MAX_CREDENTIAL_BYTES = 7_500;
 
 interface SlackCredentialReadyStateV1 {
   version: 1;
@@ -74,6 +75,14 @@ export async function initializeSlackCredentialLifecycle(params: {
   expiresIn: number;
   issuedAt: Date;
 }): Promise<void> {
+  if (
+    !isCredential(params.accessToken) ||
+    !isCredential(params.refreshToken) ||
+    !isBoundedInteger(params.expiresIn, 1, 604_800) ||
+    !Number.isFinite(params.issuedAt.getTime())
+  ) {
+    throw invalidState();
+  }
   const state: SlackCredentialReadyStateV1 = {
     version: STATE_VERSION,
     status: "ready",
@@ -101,6 +110,12 @@ export function createSlackCredentialLifecycleManager(params: {
   const refreshSkewMs = params.refreshSkewMs ?? DEFAULT_REFRESH_SKEW_MS;
   const maxJitterMs = params.maxJitterMs ?? DEFAULT_MAX_JITTER_MS;
   const attemptTimeoutMs = params.attemptTimeoutMs ?? DEFAULT_ATTEMPT_TIMEOUT_MS;
+  if (
+    !isBoundedInteger(refreshSkewMs, 0, 3_600_000) ||
+    !isBoundedInteger(attemptTimeoutMs, 1_000, 600_000)
+  ) {
+    throw invalidState();
+  }
   const jitterMs = stableJitter(params.ref, maxJitterMs);
 
   return {
@@ -148,6 +163,13 @@ export function createSlackCredentialLifecycleManager(params: {
 
       try {
         const replacement = await params.refreshClient.refresh(refreshing.refreshToken);
+        if (
+          !isCredential(replacement.accessToken) ||
+          !isCredential(replacement.refreshToken) ||
+          !isBoundedInteger(replacement.expiresIn, 1, 604_800)
+        ) {
+          throw new Error("invalid Slack refresh credential replacement");
+        }
         const ready: SlackCredentialReadyStateV1 = {
           version: STATE_VERSION,
           status: "ready",
@@ -285,8 +307,12 @@ function isCredential(value: unknown): value is string {
   return (
     typeof value === "string" &&
     value.length > 0 &&
-    new TextEncoder().encode(value).byteLength <= 16_384
+    new TextEncoder().encode(value).byteLength <= MAX_CREDENTIAL_BYTES
   );
+}
+
+function isBoundedInteger(value: unknown, minimum: number, maximum: number): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= minimum && Number(value) <= maximum;
 }
 
 function isCanonicalDate(value: unknown): value is string {

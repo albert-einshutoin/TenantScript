@@ -19,6 +19,19 @@ const ref: SecretRef = {
 };
 
 describe("Slack credential lifecycle", () => {
+  it("rejects unsafe refresh timing configuration", async () => {
+    const secretStore = await initializedStore();
+
+    expect(() =>
+      createSlackCredentialLifecycleManager({
+        secretStore,
+        ref,
+        refreshClient: { refresh: vi.fn() },
+        refreshSkewMs: -1
+      })
+    ).toThrow(new SlackCredentialLifecycleError("slack_credential_state_invalid"));
+  });
+
   it("refreshes a due credential once and durably advances its generation", async () => {
     const secretStore = createInMemorySecretStore();
     await initializeSlackCredentialLifecycle({
@@ -169,6 +182,24 @@ describe("Slack credential lifecycle", () => {
       code: "slack_credential_intervention_required"
     });
     await expect(manager.inspect()).resolves.toMatchObject({ status: "intervention_required" });
+  });
+
+  it("rejects an invalid provider replacement and does not replay its refresh token", async () => {
+    const secretStore = await initializedStore();
+    const refresh = vi.fn().mockResolvedValue({
+      accessToken: "xoxe.xoxb-invalid-access",
+      refreshToken: "xoxe-invalid-refresh",
+      expiresIn: 0
+    });
+    const manager = dueManager(secretStore, refresh);
+
+    await expect(manager.refreshIfDue()).rejects.toMatchObject({
+      code: "slack_credential_intervention_required"
+    });
+    await expect(manager.refreshIfDue()).rejects.toMatchObject({
+      code: "slack_credential_intervention_required"
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("denies expired access credentials with a stable token-free error", async () => {
