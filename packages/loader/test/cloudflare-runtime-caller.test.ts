@@ -367,6 +367,48 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     });
   });
 
+  it("records a classified Dynamic Worker limit exception as budget exceeded", async () => {
+    const limitError = new Error("opaque platform limit");
+    const loader = createCachingLoader(() => {
+      throw limitError;
+    });
+    const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
+      Promise.resolve(request.execution)
+    );
+    const caller = createCloudflareDynamicWorkerCaller({
+      loader,
+      compatibilityDate: "2026-07-21",
+      loadArtifact: () => Promise.resolve("runtime-code"),
+      createScopeBindings: () => ({}),
+      classifyInvocationError: (error) => (error === limitError ? "budget_exceeded" : "error"),
+      readInvocationEvidence: () =>
+        Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
+      recorder: { record }
+    });
+
+    const thrown = await caller
+      .run({
+        executionId: "exec_budget",
+        tenantId: "tenant_1",
+        installationId: "installation_1",
+        pluginId: "plugin_1",
+        hookName: "invoice.created",
+        hookType: "event",
+        version: "1.0.0",
+        artifactSha256: sha256("runtime-code"),
+        grantRevision: "grant_1",
+        payload: {},
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
+      })
+      .catch((error: unknown) => error);
+
+    expect(thrown).toMatchObject({ code: "runtime_invocation_budget_exceeded" });
+    expect(record.mock.calls[0]?.[0].execution).toMatchObject({
+      status: "budget_exceeded",
+      error: "dynamic_worker_budget_exceeded"
+    });
+  });
+
   it("aborts a wall-clock timeout and records a stable timeout execution", async () => {
     vi.useFakeTimers();
     try {

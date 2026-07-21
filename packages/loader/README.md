@@ -37,6 +37,10 @@ asynchronously from Workers Trace Events Logpush before using CPU usage for cost
 Evidence diagnostics are best-effort and never delay execution persistence. A `reportFailure`
 implementation that needs delivery guarantees must schedule its own Cloudflare `waitUntil` work.
 
+Cloudflare documents that custom CPU/subrequest limits throw, but does not publish a stable thrown
+error shape. Provide `classifyInvocationError` in the host adapter to map verified platform limit
+exceptions to `budget_exceeded`; unclassified exceptions remain ordinary runtime errors.
+
 See the [SDK reference](https://github.com/albert-einshutoin/TenantScript/blob/main/docs/reference/sdk.md#tenantscriptloader)
 and [usage meter operations](https://github.com/albert-einshutoin/TenantScript/blob/main/docs/operations/usage-meter.md)
 for the full contract.

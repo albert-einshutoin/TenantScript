@@ -94,6 +94,7 @@ export type CloudflareDynamicWorkerCallerErrorCode =
   | "execution_recording_failed"
   | "invalid_configuration"
   | "invalid_request"
+  | "runtime_invocation_budget_exceeded"
   | "runtime_invocation_failed"
   | "runtime_invocation_timed_out";
 
@@ -124,6 +125,7 @@ export interface CloudflareDynamicWorkerCallerConfiguration {
     pluginId: string;
     grantRevision: string;
   }) => Record<string, unknown>;
+  classifyInvocationError?: (error: unknown) => "budget_exceeded" | "error";
   readInvocationEvidence: (request: {
     executionId: string;
     tenantId: string;
@@ -195,6 +197,7 @@ export function createCloudflareDynamicWorkerCaller(
       const startedAt = now();
       const started = monotonicNow();
       let value: unknown;
+      let invocationBudgetExceeded = false;
       let invocationFailed = false;
       let invocationTimedOut = false;
       try {
@@ -231,7 +234,15 @@ export function createCloudflareDynamicWorkerCaller(
         if (error instanceof DynamicWorkerInvocationTimeoutError) {
           invocationTimedOut = true;
         } else {
-          invocationFailed = true;
+          let classification: "budget_exceeded" | "error" = "error";
+          try {
+            const classified = configuration.classifyInvocationError?.(error);
+            if (classified === "budget_exceeded") classification = classified;
+          } catch {
+            // A classifier is an adapter hint, never a new failure or persistence authority.
+          }
+          if (classification === "budget_exceeded") invocationBudgetExceeded = true;
+          else invocationFailed = true;
         }
       }
       const durationMs = Math.max(0, monotonicNow() - started);
@@ -275,13 +286,21 @@ export function createCloudflareDynamicWorkerCaller(
             pluginId: request.pluginId,
             hookName: request.hookName,
             version: request.version,
-            status: invocationTimedOut ? "timeout" : invocationFailed ? "error" : "success",
+            status: invocationTimedOut
+              ? "timeout"
+              : invocationBudgetExceeded
+                ? "budget_exceeded"
+                : invocationFailed
+                  ? "error"
+                  : "success",
             durationMs,
             ...(invocationTimedOut
               ? { error: "dynamic_worker_timeout" }
-              : invocationFailed
-                ? { error: "dynamic_worker_invocation_failed" }
-                : {}),
+              : invocationBudgetExceeded
+                ? { error: "dynamic_worker_budget_exceeded" }
+                : invocationFailed
+                  ? { error: "dynamic_worker_invocation_failed" }
+                  : {}),
             capabilityCalls: evidence.capabilityCalls,
             createdAt: startedAt
           },
@@ -302,6 +321,9 @@ export function createCloudflareDynamicWorkerCaller(
       if (invocationTimedOut) {
         throw new CloudflareDynamicWorkerCallerError("runtime_invocation_timed_out");
       }
+      if (invocationBudgetExceeded) {
+        throw new CloudflareDynamicWorkerCallerError("runtime_invocation_budget_exceeded");
+      }
       if (invocationFailed) {
         throw new CloudflareDynamicWorkerCallerError("runtime_invocation_failed");
       }
@@ -320,6 +342,7 @@ function validateConfiguration(
       "compatibilityDate",
       "loadArtifact",
       "createScopeBindings",
+      "classifyInvocationError",
       "readInvocationEvidence",
       "recorder",
       "reportFailure",
@@ -331,6 +354,8 @@ function validateConfiguration(
     !isCompatibilityDate(value.compatibilityDate) ||
     typeof value.loadArtifact !== "function" ||
     typeof value.createScopeBindings !== "function" ||
+    (value.classifyInvocationError !== undefined &&
+      typeof value.classifyInvocationError !== "function") ||
     typeof value.readInvocationEvidence !== "function" ||
     !isRecord(value.recorder) ||
     typeof value.recorder.record !== "function" ||

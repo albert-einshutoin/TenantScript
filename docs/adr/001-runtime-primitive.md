@@ -64,7 +64,8 @@ WorkerCode configuration and tenant capability scope, disables global outbound a
 per-invocation limits, bounds the
 wire contract, adapts deployed CommonJS plugin bundles through a fixed ES module dispatch wrapper,
 passes the server-owned execution ID into every cached capability-binding RPC, enforces
-a host-side wall-clock abort in addition to Cloudflare CPU/subrequest limits, and records trusted
+a host-side wall-clock abort in addition to Cloudflare CPU/subrequest limits, classifies verified
+platform limit exceptions through an explicit host adapter, and records trusted
 execution evidence through the control-plane recorder. Its Tier 1 security tests do not substitute
 for the blocked live latency or isolation comparison.
 
