@@ -87,7 +87,8 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(runtimeModule).toContain("serializeJsonValue(value === undefined ? null : value)");
     expect(runtimeModule).toContain("commonJsExports?.plugin");
     expect(runtimeModule).toContain('safeObjectGetOwnPropertyDescriptor(value, "decision")');
-    expect(runtimeModule).toContain("await inFlightCapabilityCalls[index]");
+    expect(runtimeModule).toContain("Native Promise await can bypass an own then property");
+    expect(runtimeModule).toContain("!tracked.wasObserved()");
     const lossyRuntimeSource = runtimeModule.replace(
       'const pluginModule = await import("./tenant-plugin.cjs");',
       'const pluginModule = { default: { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } } };'
@@ -185,6 +186,45 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(capabilityFetchSettled).toBe(false);
     resolveCapability?.();
     await expect(capabilityFetch).resolves.toBeInstanceOf(Response);
+    const caughtCapabilityRuntimeSource = runtimeModule.replace(
+      'const pluginModule = await import("./tenant-plugin.cjs");',
+      'const pluginModule = { plugin: { dispatch: async ({ context }) => { try { await context.capability("optional.lookup", {}); } catch { return { ok: true, value: undefined }; } return { ok: false }; } } };'
+    );
+    const caughtCapabilityRuntimeNamespace = (await import(
+      `data:text/javascript;base64,${Buffer.from(caughtCapabilityRuntimeSource).toString("base64")}`
+    )) as unknown as {
+      default: { fetch: (request: Request, env: Record<string, unknown>) => Promise<Response> };
+    };
+    const caughtCapabilityFetch = caughtCapabilityRuntimeNamespace.default.fetch(
+      new Request("https://runtime.tenantscript.internal/v1/executions/exec_caught_capability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          executionId: "exec_caught_capability",
+          hookName: "invoice.created",
+          hookType: "event",
+          payload: {}
+        })
+      }),
+      { CAPABILITIES: { call: () => Promise.reject(new Error("optional service unavailable")) } }
+    );
+    await expect(caughtCapabilityFetch).resolves.toBeInstanceOf(Response);
+    const unhandledCapabilityFetch = capabilityRuntimeNamespace.default.fetch(
+      new Request("https://runtime.tenantscript.internal/v1/executions/exec_unhandled_capability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          executionId: "exec_unhandled_capability",
+          hookName: "invoice.created",
+          hookType: "event",
+          payload: {}
+        })
+      }),
+      { CAPABILITIES: { call: () => Promise.reject(new Error("capability failed")) } }
+    );
+    await expect(unhandledCapabilityFetch).rejects.toThrow(
+      "TenantScript unhandled capability call failed"
+    );
     expect(loader.entrypointLimits).toEqual([
       { cpuMs: 10, subRequests: 3 },
       { cpuMs: 10, subRequests: 3 }

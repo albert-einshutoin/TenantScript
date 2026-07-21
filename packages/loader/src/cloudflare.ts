@@ -721,6 +721,8 @@ const SafeResponse = Response;
 const SafeString = String;
 const safeJsonStringify = JSON.stringify.bind(JSON);
 const safePromiseResolve = Promise.resolve.bind(Promise);
+const safePromiseThen = Function.call.bind(Promise.prototype.then);
+const safePromiseFinally = Function.call.bind(Promise.prototype.finally);
 
 // Response.json is a serializer, not a lossless validator. Reject unsupported plugin values before
 // a successful execution can be recorded with output that differs from the plugin result.
@@ -861,8 +863,32 @@ export default {
         const call = safePromiseResolve(
           env.CAPABILITIES.call(input.executionId, name, capabilityInput)
         );
-        safeArrayPush(inFlightCapabilityCalls, call);
-        return call;
+        let observed = false;
+        const settlement = safePromiseThen(
+          call,
+          () => ({ status: "fulfilled" }),
+          () => ({ status: "rejected" })
+        );
+        safeArrayPush(inFlightCapabilityCalls, {
+          settlement,
+          wasObserved: () => observed
+        });
+        // Native Promise await can bypass an own then property. A thenable makes tenant
+        // consumption observable while the trusted promise remains available for draining.
+        return {
+          then(onFulfilled, onRejected) {
+            observed = true;
+            return safePromiseThen(call, onFulfilled, onRejected);
+          },
+          catch(onRejected) {
+            observed = true;
+            return safePromiseThen(call, undefined, onRejected);
+          },
+          finally(onFinally) {
+            observed = true;
+            return safePromiseFinally(call, onFinally);
+          }
+        };
       }
     };
     let value;
@@ -894,7 +920,11 @@ export default {
       value = validateHookReturn(input.hookType, await handler(input.payload, context));
     }
     for (let index = 0; index < inFlightCapabilityCalls.length; index += 1) {
-      await inFlightCapabilityCalls[index];
+      const tracked = inFlightCapabilityCalls[index];
+      const outcome = await tracked.settlement;
+      if (outcome.status === "rejected" && !tracked.wasObserved()) {
+        throw new Error("TenantScript unhandled capability call failed");
+      }
     }
     if (value !== undefined) assertJsonValue(value);
     return new SafeResponse('{"value":' + serializeJsonValue(value === undefined ? null : value) + "}", {
