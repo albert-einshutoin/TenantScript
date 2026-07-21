@@ -318,7 +318,8 @@ describe("plugin audit", () => {
     const sources = [
       'module.exports = { dispatch(request) { return request.context.capability("slack.send", {}); } };',
       'exports.plugin = { dispatch: async ({ context }) => context.capability("slack.send", {}) };',
-      'module.exports = { plugin: { dispatch(request) { return request.context.capability("slack.send", {}); } } };'
+      'module.exports = { plugin: { dispatch(request) { return request.context.capability("slack.send", {}); } } };',
+      'function dispatch(request) { return request.context.capability("slack.send", {}); } exports.plugin = { dispatch };'
     ];
 
     for (const bundleCode of sources) {

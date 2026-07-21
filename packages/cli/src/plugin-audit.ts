@@ -467,6 +467,11 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
       if (body !== undefined) addDispatchScope(index + 1, close, body);
       continue;
     }
+    if ([",", "}"].includes(tokens[index + 1]?.value ?? "")) {
+      const named = callableBindings.get("dispatch");
+      if (named !== undefined) addDispatchScope(named.open, named.close, named);
+      continue;
+    }
     if (tokens[index + 1]?.value !== ":") continue;
     let value = index + 2;
     if (tokens[value]?.value === "async") value += 1;
