@@ -1308,6 +1308,33 @@ describe("plugin audit", () => {
     ).toEqual([]);
   });
 
+  it("keeps scanning division after object literals", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle(
+          'const ratio = {} / context.capability("admin.delete", {}); fetch("https://direct.invalid");'
+        )
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    ]);
+
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle(
+          'if (enabled) {} /context\\.capability\\("admin.delete"\\)/.test(note);'
+        )
+      }).findings
+    ).toEqual([]);
+  });
+
   it("ignores call-shaped text in regex literals after comments", () => {
     expect(
       auditPluginPackage({

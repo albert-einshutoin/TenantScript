@@ -192,6 +192,7 @@ interface BundleToken {
   kind: "identifier" | "punctuation" | "string";
   value: string;
   literalValid?: boolean;
+  braceRole?: "block" | "expression";
 }
 
 interface BindingRange {
@@ -1754,6 +1755,7 @@ function tokenizeCode(
   const tokens: BundleToken[] = [];
   let index = start;
   let braceDepth = 0;
+  const braceRoles: Array<"block" | "expression"> = [];
   while (index < source.length) {
     const character = source[index];
     const next = source[index + 1];
@@ -1793,7 +1795,15 @@ function tokenizeCode(
         ".(),{}:[]=>;+-*%&|!<>?~^/".includes(character) &&
         !isOptionalChainMarker
       ) {
-        tokens.push({ kind: "punctuation", value: character });
+        const token: BundleToken = { kind: "punctuation", value: character };
+        if (character === "{") {
+          token.braceRole = openingBraceRole(tokens);
+          braceRoles.push(token.braceRole);
+        } else if (character === "}") {
+          const braceRole = braceRoles.pop();
+          if (braceRole !== undefined) token.braceRole = braceRole;
+        }
+        tokens.push(token);
       }
       if (character === "{") braceDepth += 1;
       else if (character === "}") braceDepth = Math.max(0, braceDepth - 1);
@@ -1988,10 +1998,28 @@ function skipBlockComment(source: string, start: number): number {
 function isRegexLiteralStart(tokens: readonly BundleToken[]): boolean {
   // Comments are not tokens, so decide regex-vs-division from the previous executable token. Raw
   // source characters can stop on a comment terminator and expose inert regex text to the audit.
-  const previousToken = tokens.at(-1)?.value;
-  if (previousToken === undefined || "=(:,[!&|?;{}>".includes(previousToken)) return true;
+  const previous = tokens.at(-1);
+  const previousToken = previous?.value;
+  if (previousToken === undefined || "=(:,[!&|?;{>".includes(previousToken)) return true;
+  if (previousToken === "}" && previous?.braceRole === "block") return true;
   if (closesControlFlowCondition(tokens)) return true;
   return ["return", "throw", "case"].includes(previousToken);
+}
+
+function openingBraceRole(tokens: readonly BundleToken[]): "block" | "expression" {
+  const previous = tokens.at(-1)?.value;
+  if (previous === undefined || ["{", "}", ";"].includes(previous)) return "block";
+  if (previous === ")") return "block";
+  if (previous === ">" && tokens.at(-2)?.value === "=") return "block";
+  if (["class", "do", "else", "finally", "try"].includes(previous)) return "block";
+  if (tokens.at(-1)?.kind === "identifier") {
+    for (let index = tokens.length - 2; index >= 0; index -= 1) {
+      const value = tokens[index]?.value;
+      if (value === "class") return "block";
+      if ([";", "{", "}"].includes(value ?? "")) break;
+    }
+  }
+  return "expression";
 }
 
 function closesControlFlowCondition(tokens: readonly BundleToken[]): boolean {
