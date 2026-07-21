@@ -5,3 +5,7 @@ guideには影響package、before/after、移行手順、互換期間、rollback
 
 対応するChangeset本文から相対linkし、影響packageを`major`として宣言してください。snapshot更新だけ、
 外部URLだけ、存在しないguide、`docs/migrations/`外へのlinkはTier 1で拒否されます。
+
+## Available guides
+
+- [App-scoped provider secret references](app-scoped-secret-refs.md)
