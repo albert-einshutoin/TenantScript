@@ -137,16 +137,18 @@ describe("D1 Admin approval decision adapter", () => {
   it("fails closed when an installation approval has no scoped proposal or D1 batch", async () => {
     const approval = { ...pending(), role: "admin", resume_hook: "installation.request" };
     await expect(
-      createD1AdminApprovalDecisionStore(database([approval, null])).decide({
-        ...request(),
-        actorRole: "admin"
-      })
+      createD1AdminApprovalDecisionStore(database([approval, null]), {
+        now: fixedNow
+      }).decide({ ...request(), actorRole: "admin" })
     ).rejects.toThrow("installation approval request unavailable");
 
     const db = database([approval, installationRequest()]);
     delete (db as Partial<typeof db>).batch;
     await expect(
-      createD1AdminApprovalDecisionStore(db).decide({ ...request(), actorRole: "admin" })
+      createD1AdminApprovalDecisionStore(db, { now: fixedNow }).decide({
+        ...request(),
+        actorRole: "admin"
+      })
     ).rejects.toThrow("D1 batch is unavailable");
   });
 
@@ -162,7 +164,8 @@ describe("D1 Admin approval decision adapter", () => {
   ])("rejects %s in a stored installation proposal", async (_label, mutation) => {
     const approval = { ...pending(), role: "admin", resume_hook: "installation.request" };
     const store = createD1AdminApprovalDecisionStore(
-      database([approval, { ...installationRequest(), ...mutation }])
+      database([approval, { ...installationRequest(), ...mutation }]),
+      { now: fixedNow }
     );
 
     await expect(store.decide({ ...request(), actorRole: "admin" })).rejects.toThrow(
@@ -170,6 +173,8 @@ describe("D1 Admin approval decision adapter", () => {
     );
   });
 });
+
+const fixedNow = () => new Date("2026-07-20T00:00:00.000Z");
 
 function request() {
   return {

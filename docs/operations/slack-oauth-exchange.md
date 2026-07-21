@@ -4,9 +4,10 @@
 authorization code. It implements the existing Control Plane `SlackOAuthClient` contract and returns
 only the bot access token plus workspace metadata needed by `connectSlackWorkspace`.
 
-This client does not expose a callback route, generate OAuth state, or claim a live Slack installation.
-Those composition steps remain separate so an adopter cannot mistake a successful accountless exchange
-test for CSRF-safe production OAuth.
+This client does not expose a callback route or claim a live Slack installation. TenantScript provides a
+separate repository-verified [OAuth state store](oauth-state-store.md), but the authenticated install-start
+route, browser session cookie, and callback composition remain unimplemented. Keeping these boundaries
+separate prevents an accountless exchange test from being mistaken for production OAuth.
 
 ## Fixed request contract
 
@@ -56,11 +57,11 @@ was created.
 
 ## Production composition still required
 
-A production callback must additionally provide all of the following:
+A production callback must compose all of the following:
 
-1. cryptographically strong OAuth state generated before redirect;
-2. app-, tenant-, actor-, redirect-, and expiry-bound one-time state verification;
-3. replay rejection before this exchange client is called;
+1. `createDurableObjectNamespaceOAuthStateStore` issuing 256-bit state before redirect;
+2. the same authenticated browser binding on issue and consume;
+3. app-, tenant-, actor-, redirect-, and expiry-bound one-time consume before this exchange client;
 4. Slack client credentials supplied through platform secret bindings;
 5. `createDurableObjectNamespaceSecretStore` for encrypted token persistence;
 6. encrypted refresh-token persistence and an expiry-aware refresh state machine before enabling Slack
@@ -85,4 +86,5 @@ pnpm test:security
 These commands verify fixed-origin request construction, exact redirect matching, complete documented
 success fixtures, fail-closed token-rotation responses, response bounds, timeout behavior, non-retry, and
 secret-free errors. They also verify enterprise-wide install rejection and transient provider-error
-classification. They do not contact Slack or validate OAuth state and are not live provider evidence.
+classification. The separate state-store suite verifies OAuth state; these client tests do not contact
+Slack and neither suite is live provider evidence.

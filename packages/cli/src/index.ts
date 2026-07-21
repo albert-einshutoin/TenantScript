@@ -178,7 +178,8 @@ export {
   type ProductionWranglerInputV1,
   type ProductionWranglerInputV2,
   type ProductionWranglerInputV3,
-  type ProductionWranglerInputV4
+  type ProductionWranglerInputV4,
+  type ProductionWranglerInputV5
 } from "./wrangler-template.js";
 
 export {

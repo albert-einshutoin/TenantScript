@@ -19,6 +19,7 @@ const OPERATION_DEPENDENCIES = [
   "create:artifact-r2",
   "create:execution-archive-r2",
   "declare:provider-secret-store-do-binding",
+  "declare:oauth-state-store-do-binding",
   "create:approval-workflow",
   "declare:usage-analytics-engine-binding",
   "create:runtime-worker",

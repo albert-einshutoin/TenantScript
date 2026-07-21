@@ -31,12 +31,12 @@ ownership-aware cleanup share stable targets without exposing the run ID or full
 Resource IDs are deployment metadata, but the repository still does not commit account-specific
 values.
 
-Use input schema version 4 for the complete accountless baseline. It adds the provider secret-store
-Durable Object declaration on top of the explicit
-`USAGE_ANALYTICS` dataset binding. Version 3 remains readable without enabling provider secret
-storage, version 2 does not enable Analytics Engine, and version 1 deliberately renders the earlier
-D1/Worker-only baseline without an R2 binding or scheduled trigger. Upgrading the schema never
-enables data movement or telemetry implicitly.
+Use input schema version 5 for the complete accountless baseline. It adds the OAuth state-store Durable
+Object on top of version 4's provider secret-store declaration and explicit `USAGE_ANALYTICS` dataset
+binding. Version 4 remains readable without enabling OAuth state storage, version 3 does not enable
+provider secret storage, version 2 does not enable Analytics Engine, and version 1 deliberately renders
+the earlier D1/Worker-only baseline without an R2 binding or scheduled trigger. Upgrading the schema never
+enables data movement, provider access, or telemetry implicitly.
 
 The renderer uses an exact input schema and emits only:
 
@@ -45,7 +45,8 @@ The renderer uses an exact input schema and emits only:
 - private R2 binding `EXECUTION_ARCHIVE`, the explicit hot-retention value, and a daily trigger;
 - Analytics Engine dataset binding `USAGE_ANALYTICS`;
 - SQLite Durable Object bindings `ADMIN_MUTATION_RATE_LIMITER_DO` and
-  `PROVIDER_SECRET_STORE_DO`, with declarative `exports` lifecycle.
+  `PROVIDER_SECRET_STORE_DO`, plus the sharded `OAUTH_STATE_STORE_DO`, with declarative `exports`
+  lifecycle.
 
 It writes an explicit `.jsonc` output only at the repository root and only when the target does not
 exist. Wrangler resolves entrypoint and migration paths from the config location, so nested or
@@ -78,7 +79,7 @@ the selected tenant runtime Worker. The accountless
 and ownership-verified cleanup. It is not yet composed into a credential-bearing `ext setup`
 command, and it is not live Cloudflare evidence.
 
-The rate-limiter and provider secret-store Durable Objects are not separately created setup
+The rate-limiter, provider secret-store, and OAuth state-store Durable Objects are not separately created setup
 resources. Their bindings and SQLite class lifecycle are reconciled atomically by the Control Plane
 Worker deploy through Wrangler `exports`. Automatic rollback never emits a destructive Durable
 Object tombstone, and deleting the Worker must not be reported as proof that Durable Object data

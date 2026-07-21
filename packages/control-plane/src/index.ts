@@ -256,6 +256,15 @@ export {
   type SlackOAuthExchangeErrorCode,
   type SlackOAuthClientConfiguration
 } from "./slack-oauth-client.js";
+export {
+  createDurableObjectNamespaceOAuthStateStore,
+  OAuthStateStoreDurableObject,
+  OAuthStateStoreError,
+  type OAuthStateBinding,
+  type OAuthStateProvider,
+  type OAuthStateStore,
+  type OAuthStateStoreErrorCode
+} from "./oauth-state-store.js";
 
 export {
   createProviderTokenRotationManager,

@@ -84,5 +84,8 @@ uses one storage transaction for ciphertext compare-and-swap. Provision the exac
 through `PROVIDER_SECRET_KEYRING_JSON`; Worker deletion and setup rollback are not evidence that the
 secret namespace or its encrypted records were deleted.
 
+Production Wrangler input V5 additionally declares `OAUTH_STATE_STORE_DO`; that namespace stores
+short-lived OAuth state digests and is independent from the provider-secret keyring and rotation flow.
+
 暗号境界の設計は[ADR-005](../adr/005-secret-envelope-encryption.md)、漏えい・record移動・鍵運用の
 脅威と検証証跡は[Threat model](../security/threat-model.md)を参照してください。

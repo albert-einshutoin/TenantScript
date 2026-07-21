@@ -38,6 +38,10 @@
       {
         "name": "PROVIDER_SECRET_STORE_DO",
         "class_name": "ProviderSecretStoreDurableObject"
+      },
+      {
+        "name": "OAUTH_STATE_STORE_DO",
+        "class_name": "OAuthStateStoreDurableObject"
       }
     ]
   },
@@ -47,6 +51,10 @@
       "storage": "sqlite"
     },
     "ProviderSecretStoreDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "OAuthStateStoreDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
     }

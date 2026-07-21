@@ -64,7 +64,8 @@ Cloudflare Dynamic Workers / Workers for Platforms / Workflowsをkernelとして
 - [Pinned Wrangler Worker deploy](docs/operations/wrangler-worker-deploy-process.md) — strict exact argv、autoconfig無効化、path/secret/process fail-closed境界
 - [Cloudflare Worker setup adapter](docs/operations/cloudflare-worker-setup-adapter.md) — deterministic target、atomic ownership marker、resume-safe reconcile、ownership-verified cleanup
 - [Setup provider router](docs/operations/setup-provider-router.md) — exact operation ownership、mutation前の全route coverage検証、shared cleanup routing
-- [Slack OAuth v2 exchange](docs/operations/slack-oauth-exchange.md) — fixed-origin code交換、exact redirect、bounded response、state/callback未実装境界
+- [OAuth state store](docs/operations/oauth-state-store.md) — tenant-bound state、browser binding、digest-only永続化、一回限りconsume
+- [Slack OAuth v2 exchange](docs/operations/slack-oauth-exchange.md) — fixed-origin code交換、exact redirect、bounded response、callback/session未実装境界
 
 ## ローカル検証とCI
 
