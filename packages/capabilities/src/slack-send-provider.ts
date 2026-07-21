@@ -94,7 +94,8 @@ export function createSlackSendProvider(options: SlackSendProviderOptions): Capa
 
 async function readBoundedJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get("Content-Type")?.toLowerCase();
-  if (contentType === undefined || !contentType.startsWith("application/json")) {
+  const mediaType = contentType?.split(";", 1)[0]?.trim();
+  if (mediaType !== "application/json") {
     throw deliveryAmbiguous();
   }
   const declaredLength = response.headers.get("Content-Length");

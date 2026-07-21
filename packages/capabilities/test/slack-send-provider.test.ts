@@ -151,6 +151,15 @@ describe("production Slack send provider", () => {
       "slack_send_delivery_ambiguous"
     ],
     [
+      "JSON-like content type",
+      () =>
+        new Response(JSON.stringify({ ok: true, channel: "C12345678", ts: "1712345678.123456" }), {
+          status: 200,
+          headers: { "Content-Type": "application/jsonp" }
+        }),
+      "slack_send_delivery_ambiguous"
+    ],
+    [
       "malformed JSON",
       () =>
         new Response("{provider-secret", {
