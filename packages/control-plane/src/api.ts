@@ -11,6 +11,7 @@ import { resolveApprovalDecisionTransition } from "./approval-state.js";
 import type { ApprovalDecision, ApprovalState } from "./approval-state.js";
 import type { SecretRef, SecretStore } from "./secret-store.js";
 import type { SlackConnectionRecord, SlackConnectionStore } from "./slack-connection-store.js";
+import { initializeSlackCredentialLifecycle } from "./slack-credential-lifecycle.js";
 import type {
   DailyUsageSummary,
   GetDailyUsageSummariesRequest,
@@ -96,6 +97,8 @@ export interface IdentityResolver {
 
 export interface SlackOAuthTokenResponse {
   accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
   workspaceId: string;
   workspaceName?: string;
   botUserId?: string;
@@ -529,10 +532,19 @@ async function connectSlackWorkspace(
     tenantId: request.tenantId,
     workspaceId: token.workspaceId
   });
-  await secretStore.putSecret({
-    ref: secretRef,
-    value: token.accessToken
-  });
+  const connectedAt = request.connectedAt ?? new Date();
+  if (token.refreshToken === undefined || token.expiresIn === undefined) {
+    await secretStore.putSecret({ ref: secretRef, value: token.accessToken });
+  } else {
+    await initializeSlackCredentialLifecycle({
+      secretStore,
+      ref: secretRef,
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken,
+      expiresIn: token.expiresIn,
+      issuedAt: connectedAt
+    });
+  }
 
   return slackConnections.upsertSlackConnection({
     id: slackConnectionId(request.tenantId, token.workspaceId),
@@ -541,7 +553,7 @@ async function connectSlackWorkspace(
     ...(token.workspaceName === undefined ? {} : { workspaceName: token.workspaceName }),
     ...(token.botUserId === undefined ? {} : { botUserId: token.botUserId }),
     secretRef,
-    connectedAt: request.connectedAt ?? new Date()
+    connectedAt
   });
 }
 

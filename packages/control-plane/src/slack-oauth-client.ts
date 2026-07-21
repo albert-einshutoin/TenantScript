@@ -145,6 +145,8 @@ function parseSuccess(value: unknown): SlackOAuthTokenResponse {
       "scope",
       "bot_user_id",
       "app_id",
+      "expires_in",
+      "refresh_token",
       "team",
       "enterprise",
       "authed_user",
@@ -155,6 +157,7 @@ function parseSuccess(value: unknown): SlackOAuthTokenResponse {
     !isBoundedText(value.access_token, 16_384) ||
     !isBoundedText(value.scope, 4_096, true) ||
     !isBoundedText(value.app_id, 128) ||
+    !isRotationCredentialPair(value) ||
     !isTeam(value.team) ||
     !isAuthedUser(value.authed_user) ||
     (value.bot_user_id !== undefined && !isBoundedText(value.bot_user_id, 128)) ||
@@ -171,6 +174,9 @@ function parseSuccess(value: unknown): SlackOAuthTokenResponse {
   }
   return {
     accessToken: value.access_token,
+    ...(value.refresh_token === undefined
+      ? {}
+      : { refreshToken: value.refresh_token, expiresIn: value.expires_in }),
     workspaceId: value.team.id,
     ...(value.team.name === undefined ? {} : { workspaceName: value.team.name }),
     ...(value.bot_user_id === undefined ? {} : { botUserId: value.bot_user_id })
@@ -198,11 +204,27 @@ function isEnterprise(value: unknown): boolean {
 function isAuthedUser(value: unknown): boolean {
   return (
     isRecord(value) &&
-    hasOnlyKeys(value, ["id", "scope", "access_token", "token_type"]) &&
+    hasOnlyKeys(value, [
+      "id",
+      "scope",
+      "access_token",
+      "token_type",
+      "expires_in",
+      "refresh_token"
+    ]) &&
     isBoundedText(value.id, 128) &&
     isBoundedText(value.scope, 4_096, true) &&
     (value.access_token === undefined || isBoundedText(value.access_token, 16_384)) &&
-    (value.token_type === undefined || value.token_type === "user")
+    (value.token_type === undefined || value.token_type === "user") &&
+    isRotationCredentialPair(value)
+  );
+}
+
+function isRotationCredentialPair(value: Record<string, unknown>): boolean {
+  if (value.refresh_token === undefined && value.expires_in === undefined) return true;
+  return (
+    isBoundedText(value.refresh_token, 16_384) &&
+    isBoundedInteger(value.expires_in, 1, 604_800)
   );
 }
 

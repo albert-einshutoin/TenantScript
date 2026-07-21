@@ -59,7 +59,7 @@ describe("Slack OAuth v2 exchange client", () => {
     );
   });
 
-  it("rejects token-rotation responses until refresh credentials can be persisted safely", async () => {
+  it("returns a closed bot token-rotation credential projection", async () => {
     const client = oauthClient(() =>
       Promise.resolve(
         Response.json({
@@ -85,12 +85,16 @@ describe("Slack OAuth v2 exchange client", () => {
       )
     );
 
-    const error = await captureExchangeError(
+    await expect(
       client.exchangeCode({ code: "synthetic-one-time-code", redirectUri })
-    );
-
-    expect(error.toJSON()).toEqual({ code: "slack_oauth_exchange_unavailable" });
-    expect(JSON.stringify(error)).not.toContain("synthetic-refresh-token");
+    ).resolves.toEqual({
+      accessToken: "xoxe.xoxb-1-synthetic-access-token",
+      refreshToken: "xoxe-1-synthetic-refresh-token",
+      expiresIn: 43_200,
+      workspaceId: "T12345678",
+      workspaceName: "Synthetic Workspace",
+      botUserId: "B12345678"
+    });
   });
 
   it("rejects enterprise-wide installs until connection scope is modeled", async () => {
