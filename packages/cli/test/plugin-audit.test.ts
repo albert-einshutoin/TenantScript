@@ -479,6 +479,17 @@ describe("plugin audit", () => {
     expect(JSON.stringify(report)).not.toContain("secret.sentinel");
   });
 
+  it("ignores regex statements after control-flow conditions", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle('if (ok) /context\\.capability\\("admin.delete"\\)/.test(note);')
+      }).findings
+    ).toEqual([]);
+  });
+
   it("detects global fetch while ignoring unrelated fetch methods and block comments", () => {
     const report = auditPluginPackage({
       manifest: validManifest(),

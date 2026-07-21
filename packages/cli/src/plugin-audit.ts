@@ -926,7 +926,23 @@ function isRegexLiteralStart(
   let index = slashIndex - 1;
   while (index >= 0 && /\s/u.test(source[index] ?? "")) index -= 1;
   if (index < 0 || "=(:,[!&|?;{}>".includes(source[index] ?? "")) return true;
+  if (closesControlFlowCondition(tokens)) return true;
   return ["return", "throw", "case"].includes(tokens.at(-1)?.value ?? "");
+}
+
+function closesControlFlowCondition(tokens: readonly BundleToken[]): boolean {
+  if (tokens.at(-1)?.value !== ")") return false;
+  let depth = 0;
+  for (let index = tokens.length - 1; index >= 0; index -= 1) {
+    if (tokens[index]?.value === ")") depth += 1;
+    else if (tokens[index]?.value === "(") {
+      depth -= 1;
+      if (depth === 0) {
+        return ["if", "while", "for", "with"].includes(tokens[index - 1]?.value ?? "");
+      }
+    }
+  }
+  return false;
 }
 
 function skipRegexLiteral(source: string, start: number): number {
