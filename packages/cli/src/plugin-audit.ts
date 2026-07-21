@@ -219,19 +219,20 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
   let hasDirectEgressCall = false;
 
   for (let index = 0; index < tokens.length; index += 1) {
+    const callOpen = capabilityCallOpen(tokens, index);
     const isMemberCapabilityCall =
       tokens[index]?.value === "capability" &&
       tokens[index - 1]?.value === "." &&
       tokens[index - 2]?.kind === "identifier" &&
       bindingAppliesAt(capabilityBindings.receivers, tokens[index - 2]?.value ?? "", index) &&
-      tokens[index + 1]?.value === "(";
+      callOpen !== -1;
     const isDirectCapabilityCall =
       tokens[index]?.kind === "identifier" &&
       bindingAppliesAt(capabilityBindings.direct, tokens[index]?.value ?? "", index) &&
       tokens[index - 1]?.value !== "." &&
-      tokens[index + 1]?.value === "(";
+      callOpen !== -1;
     if (isMemberCapabilityCall || isDirectCapabilityCall) {
-      const argument = tokens[index + 2];
+      const argument = tokens[callOpen + 1];
       if (argument?.kind === "string" && argument.literalValid === true) {
         staticCalls.add(argument.value);
       } else {
@@ -270,6 +271,13 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
     );
   }
   return findings;
+}
+
+function capabilityCallOpen(tokens: readonly BundleToken[], capabilityIndex: number): number {
+  if (tokens[capabilityIndex + 1]?.value === "(") return capabilityIndex + 1;
+  return tokens[capabilityIndex + 1]?.value === "." && tokens[capabilityIndex + 2]?.value === "("
+    ? capabilityIndex + 2
+    : -1;
 }
 
 function collectCapabilityBindings(tokens: readonly BundleToken[]): {

@@ -209,6 +209,26 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects optional member and destructured capability calls", () => {
+    const sources = [
+      'export const handlers = { event(_payload, ctx) { return ctx.capability?.("slack.send", {}); } };',
+      'export const handlers = { event(_payload, { capability }) { return capability?.("slack.send", {}); } };'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects renamed context bindings in referenced function-expression handlers", () => {
     expect(
       auditPluginPackage({
