@@ -666,6 +666,46 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     });
   });
 
+  it("does not record success when trusted evidence observes denied egress", async () => {
+    const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
+      Promise.resolve(request.execution)
+    );
+    const caller = createCloudflareDynamicWorkerCaller({
+      loader: createCachingLoader(() => Response.json({ value: "caught-denial" })),
+      compatibilityDate: "2026-07-21",
+      loadArtifact: () => Promise.resolve("runtime-code"),
+      createScopeBindings: () => ({}),
+      readInvocationEvidence: () =>
+        Promise.resolve({
+          capabilityCalls: [],
+          subrequests: 0,
+          workflowRuns: 0,
+          deniedEgressAttempts: 1
+        }),
+      recorder: { record }
+    });
+
+    await expect(
+      caller.run({
+        executionId: "exec_denied_egress",
+        tenantId: "tenant_1",
+        installationId: "installation_1",
+        pluginId: "plugin_1",
+        hookName: "invoice.created",
+        hookType: "event",
+        version: "1.0.0",
+        artifactSha256: sha256("runtime-code"),
+        grantRevision: "grant_1",
+        payload: {},
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
+      })
+    ).rejects.toMatchObject({ code: "runtime_invocation_failed" });
+    expect(record.mock.calls[0]?.[0].execution).toMatchObject({
+      status: "error",
+      error: "dynamic_worker_invocation_failed"
+    });
+  });
+
   it("keeps a successful execution when trusted evidence and failure reporting are unavailable", async () => {
     const loader = createCachingLoader(() => Response.json({ value: "completed" }));
     const record = vi.fn((request: ExecutionUsageRecordingRequest) =>

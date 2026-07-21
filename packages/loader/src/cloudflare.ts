@@ -48,6 +48,7 @@ export interface DynamicWorkerInvocationEvidence {
   capabilityCalls: readonly CapabilityCallRecord[];
   subrequests: number;
   workflowRuns: number;
+  deniedEgressAttempts?: number;
 }
 
 export interface DynamicWorkerCapabilityBinding {
@@ -249,7 +250,8 @@ export function createCloudflareDynamicWorkerCaller(
       let evidence: DynamicWorkerInvocationEvidence = {
         capabilityCalls: [],
         subrequests: 0,
-        workflowRuns: 0
+        workflowRuns: 0,
+        deniedEgressAttempts: 0
       };
       try {
         evidence = validateInvocationEvidence(
@@ -280,6 +282,7 @@ export function createCloudflareDynamicWorkerCaller(
           }
         }
       }
+      if ((evidence.deniedEgressAttempts ?? 0) > 0) invocationFailed = true;
       let execution: ControlPlaneExecutionRecord;
       try {
         execution = await configuration.recorder.record({
@@ -394,7 +397,15 @@ function validateScopeBindings(value: unknown): Record<string, unknown> {
 function validateInvocationEvidence(value: unknown): DynamicWorkerInvocationEvidence {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ["capabilityCalls", "subrequests", "workflowRuns"]) ||
+    !hasOnlyKeys(value, [
+      "capabilityCalls",
+      "subrequests",
+      "workflowRuns",
+      "deniedEgressAttempts"
+    ]) ||
+    !Object.hasOwn(value, "capabilityCalls") ||
+    !Object.hasOwn(value, "subrequests") ||
+    !Object.hasOwn(value, "workflowRuns") ||
     !Array.isArray(value.capabilityCalls) ||
     value.capabilityCalls.length > 256 ||
     !value.capabilityCalls.every(
@@ -407,11 +418,17 @@ function validateInvocationEvidence(value: unknown): DynamicWorkerInvocationEvid
     !Number.isSafeInteger(value.subrequests) ||
     (value.subrequests as number) < 0 ||
     !Number.isSafeInteger(value.workflowRuns) ||
-    (value.workflowRuns as number) < 0
+    (value.workflowRuns as number) < 0 ||
+    (value.deniedEgressAttempts !== undefined &&
+      (!Number.isSafeInteger(value.deniedEgressAttempts) ||
+        (value.deniedEgressAttempts as number) < 0))
   ) {
     throw new Error("invalid invocation evidence");
   }
-  return value as unknown as DynamicWorkerInvocationEvidence;
+  return {
+    ...(value as unknown as DynamicWorkerInvocationEvidence),
+    deniedEgressAttempts: (value.deniedEgressAttempts as number | undefined) ?? 0
+  };
 }
 
 function isCompatibilityDate(value: unknown): value is string {
