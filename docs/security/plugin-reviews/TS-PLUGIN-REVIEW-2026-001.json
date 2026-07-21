@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "id": "TS-PLUGIN-REVIEW-2026-001",
+  "baselineCommit": "f2140cfc18ee844c01745781af63d16a77c951d3",
+  "target": {
+    "name": "Built-in ext init plugin scaffold",
+    "scope": [
+      "packages/cli/src/plugin-scaffold.ts",
+      "packages/cli/test/init.test.ts",
+      "scripts/agent-plugin-scaffold-e2e.test.mjs"
+    ]
+  },
+  "reviewer": {
+    "identity": "TenantScript maintainers",
+    "relationship": "First-party self-review of the built-in scaffold"
+  },
+  "reviewedAt": "2026-07-21T11:08:25.000Z",
+  "domains": [
+    {
+      "name": "security",
+      "status": "pass",
+      "evidence": [
+        "packages/cli/src/plugin-scaffold.ts",
+        "packages/cli/test/init.test.ts",
+        "scripts/agent-plugin-scaffold-e2e.test.mjs"
+      ],
+      "notes": "The scaffold requests no capabilities, denies egress, uses bounded limits, rejects undeclared hooks, and is audited before its generated tests run."
+    },
+    {
+      "name": "compatibility",
+      "status": "pass",
+      "evidence": [
+        "packages/cli/src/plugin-scaffold.ts",
+        "scripts/agent-plugin-scaffold-e2e.test.mjs",
+        "docs/quickstarts/agent-plugin-authoring.md"
+      ],
+      "notes": "Generated manifest and package metadata use the CLI version exactly, then build and test against packed public package contents."
+    },
+    {
+      "name": "operations",
+      "status": "pass",
+      "evidence": [
+        "packages/cli/src/plugin-scaffold.ts",
+        "packages/cli/test/init.test.ts",
+        "scripts/agent-plugin-scaffold-e2e.test.mjs"
+      ],
+      "notes": "Generated CPU and timeout limits are bounded, network access is denied, and the accountless E2E exercises install, audit, build, and test failure boundaries."
+    },
+    {
+      "name": "documentation",
+      "status": "pass",
+      "evidence": [
+        "docs/quickstarts/agent-plugin-authoring.md",
+        "docs/security/plugin-review-checklist.md",
+        "scripts/agent-plugin-authoring-doc-contract.test.mjs"
+      ],
+      "notes": "The authoring quickstart states the generated files, verification commands, registry blocker, and security boundary; the human checklist states all non-guarantees."
+    },
+    {
+      "name": "license",
+      "status": "pass",
+      "evidence": ["LICENSE", "package.json", "packages/cli/package.json"],
+      "notes": "The repository and CLI declare Apache-2.0, and the scaffold generates source-only first-party content without vendored third-party assets."
+    }
+  ],
+  "decision": "approve",
+  "blockingFindings": [],
+  "unverified": [
+    {
+      "item": "Install generated dependencies from the public npm registry",
+      "required": false,
+      "reason": "The TenantScript npm scope is not yet activated; the E2E uses freshly packed public package contents instead."
+    },
+    {
+      "item": "Independent third-party review",
+      "required": false,
+      "reason": "This record is an explicitly first-party review of the repository-owned baseline."
+    }
+  ],
+  "limitations": [
+    "The decision covers only the listed scaffold source at the pinned baseline commit.",
+    "The scaffold is intentionally minimal and does not prove the safety of code added by a plugin author."
+  ],
+  "nonGuarantees": [
+    "This approval is not a security certification or an independent audit.",
+    "It does not claim live deployment, public registry installation, or compatibility with later commits and dependency resolutions."
+  ]
+}

@@ -104,6 +104,10 @@ commit change, including dependency-only or generated-bundle changes.
 
 ## Review record template
 
+Repository-owned reviews should also publish a machine-checked record under
+[`docs/security/plugin-reviews`](plugin-reviews/README.md). The record checker binds the five-domain
+decision to an immutable baseline and invalidates it when reviewed source drifts.
+
 Copy this into the pull request and replace every placeholder. Use only `checked`, `failed`, or
 `not-applicable` for checklist state; use `not verified` separately for blocked live evidence.
 
