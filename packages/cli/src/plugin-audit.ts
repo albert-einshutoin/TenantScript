@@ -208,6 +208,7 @@ interface CapabilityScope extends BindingRange {
 interface CallableBinding extends BindingRange {
   open: number;
   close: number;
+  singleParameter?: BundleToken;
 }
 
 const tokenPairCache = new WeakMap<readonly BundleToken[], ReadonlyMap<number, number>>();
@@ -246,9 +247,13 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
       tokens[index - 1]?.value !== "." &&
       callOpen !== -1;
     if (isMemberCapabilityCall || isDirectCapabilityCall) {
-      const argument = tokens[callOpen + 1];
-      if (argument?.kind === "string" && argument.literalValid === true) {
-        staticCalls.add(argument.value);
+      const callClose = findMatchingToken(tokens, callOpen, "(", ")");
+      const argument =
+        callClose === -1
+          ? []
+          : (splitTopLevel(tokens.slice(callOpen + 1, callClose), ",")[0] ?? []);
+      if (argument.length === 1 && argument[0]?.kind === "string" && argument[0].literalValid) {
+        staticCalls.add(argument[0].value);
       } else {
         hasDynamicCapabilityCall = true;
       }
@@ -418,6 +423,24 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
       continue;
     }
 
+    const singleParameter = tokens[callable];
+    if (
+      singleParameter?.kind === "identifier" &&
+      tokens[callable + 1]?.value === "=" &&
+      tokens[callable + 2]?.value === ">"
+    ) {
+      const body = arrowBodyRange(tokens, callable, tokens.length - 1);
+      if (body !== undefined) {
+        callableBindings.set(tokens[index]?.value ?? "", {
+          open: callable,
+          close: callable,
+          singleParameter,
+          ...body
+        });
+      }
+      continue;
+    }
+
     const open = callable;
     if (tokens[open]?.value !== "(") continue;
     const close = findMatchingToken(tokens, open, "(", ")");
@@ -442,6 +465,13 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     const parameter = tokens[parameterIndex];
     if (parameter !== undefined) {
       storeScope(createDispatchCapabilityScopeFromParameter([parameter], body));
+    }
+  };
+  const addNamedDispatchScope = (binding: CallableBinding): void => {
+    if (binding.singleParameter !== undefined) {
+      storeScope(createDispatchCapabilityScopeFromParameter([binding.singleParameter], binding));
+    } else {
+      addDispatchScope(binding.open, binding.close, binding);
     }
   };
 
@@ -469,7 +499,7 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
     }
     if ([",", "}"].includes(tokens[index + 1]?.value ?? "")) {
       const named = callableBindings.get("dispatch");
-      if (named !== undefined) addDispatchScope(named.open, named.close, named);
+      if (named !== undefined) addNamedDispatchScope(named);
       continue;
     }
     if (tokens[index + 1]?.value !== ":") continue;
@@ -494,7 +524,7 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
       if (body !== undefined) addSingleParameterDispatchScope(value, body);
     } else if (tokens[value]?.kind === "identifier") {
       const named = callableBindings.get(tokens[value]?.value ?? "");
-      if (named !== undefined) addDispatchScope(named.open, named.close, named);
+      if (named !== undefined) addNamedDispatchScope(named);
     }
   }
 

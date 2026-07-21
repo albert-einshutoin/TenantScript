@@ -319,7 +319,8 @@ describe("plugin audit", () => {
       'module.exports = { dispatch(request) { return request.context.capability("slack.send", {}); } };',
       'exports.plugin = { dispatch: async ({ context }) => context.capability("slack.send", {}) };',
       'module.exports = { plugin: { dispatch(request) { return request.context.capability("slack.send", {}); } } };',
-      'function dispatch(request) { return request.context.capability("slack.send", {}); } exports.plugin = { dispatch };'
+      'function dispatch(request) { return request.context.capability("slack.send", {}); } exports.plugin = { dispatch };',
+      'const dispatch = request => request.context.capability("slack.send", {}); exports.plugin = { dispatch };'
     ];
 
     for (const bundleCode of sources) {
@@ -400,6 +401,22 @@ describe("plugin audit", () => {
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
         bundleCode: handlerBundle('context.capability(`slack.${"send.message"}`, {});')
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
+    ]);
+  });
+
+  it("treats a capability argument with a literal prefix as dynamic", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle('context.capability("slack.send" + suffix, {});')
       }).findings
     ).toEqual([
       finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
