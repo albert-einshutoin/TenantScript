@@ -5,9 +5,10 @@ authorization code. It implements the existing Control Plane `SlackOAuthClient` 
 only the bot access token plus workspace metadata needed by `connectSlackWorkspace`.
 
 This client does not expose a callback route or claim a live Slack installation. TenantScript provides a
-separate repository-verified [OAuth state store](oauth-state-store.md), but the authenticated install-start
-route, browser session cookie, and callback composition remain unimplemented. Keeping these boundaries
-separate prevents an accountless exchange test from being mistaken for production OAuth.
+separate repository-verified [OAuth state store](oauth-state-store.md) and
+[callback composition service](slack-oauth-callback.md), but the authenticated install-start route,
+browser session cookie, HTTP callback, and live Worker composition remain unimplemented. Keeping these
+boundaries separate prevents an accountless exchange test from being mistaken for production OAuth.
 
 ## Fixed request contract
 
@@ -55,13 +56,14 @@ The client never retries. A timeout or connection loss after Slack accepted the 
 outcome; replaying the one-time code would hide that state and cannot safely prove whether an installation
 was created.
 
-## Production composition still required
+## Production HTTP composition still required
 
-A production callback must compose all of the following:
+A future HTTP flow must wrap the repository-verified callback service with all of the following:
 
 1. `createDurableObjectNamespaceOAuthStateStore` issuing 256-bit state before redirect;
 2. the same authenticated browser binding on issue and consume;
-3. app-, tenant-, actor-, redirect-, and expiry-bound one-time consume before this exchange client;
+3. `createSlackOAuthCallbackService` for app-, tenant-, actor-, redirect-, and expiry-bound one-time
+   consume before this exchange client;
 4. Slack client credentials supplied through platform secret bindings;
 5. `createDurableObjectNamespaceSecretStore` for encrypted token persistence;
 6. encrypted refresh-token persistence and an expiry-aware refresh state machine before enabling Slack
