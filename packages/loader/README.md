@@ -37,7 +37,7 @@ reader; never derive usage or capability calls from tenant-code output. The sync
 records `cpuMs: 0` because wall time is not CPU time. Reconcile exact Cloudflare `CPUTimeMs`
 asynchronously from Workers Trace Events Logpush before using CPU usage for cost reporting.
 The trusted tail/egress adapter should report `deniedEgressAttempts`; any observed denial prevents
-a caught outbound exception from being recorded as a successful execution.
+a caught outbound exception from being recorded as success and persists `egress_denied`.
 Evidence diagnostics are best-effort and never delay execution persistence. A `reportFailure`
 implementation that needs delivery guarantees must schedule its own Cloudflare `waitUntil` work.
 Evidence reads use the invocation wall-clock limit as a separate upper bound; a stalled backend is

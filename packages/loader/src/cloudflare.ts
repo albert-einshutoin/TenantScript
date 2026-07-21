@@ -96,6 +96,7 @@ export type CloudflareDynamicWorkerCallerErrorCode =
   | "invalid_configuration"
   | "invalid_request"
   | "runtime_invocation_budget_exceeded"
+  | "runtime_invocation_egress_denied"
   | "runtime_invocation_failed"
   | "runtime_invocation_timed_out";
 
@@ -199,6 +200,7 @@ export function createCloudflareDynamicWorkerCaller(
       const started = monotonicNow();
       let value: unknown;
       let invocationBudgetExceeded = false;
+      let invocationEgressDenied = false;
       let invocationFailed = false;
       let invocationTimedOut = false;
       try {
@@ -282,7 +284,7 @@ export function createCloudflareDynamicWorkerCaller(
           }
         }
       }
-      if ((evidence.deniedEgressAttempts ?? 0) > 0) invocationFailed = true;
+      if ((evidence.deniedEgressAttempts ?? 0) > 0) invocationEgressDenied = true;
       let execution: ControlPlaneExecutionRecord;
       try {
         execution = await configuration.recorder.record({
@@ -296,17 +298,21 @@ export function createCloudflareDynamicWorkerCaller(
               ? "timeout"
               : invocationBudgetExceeded
                 ? "budget_exceeded"
-                : invocationFailed
-                  ? "error"
-                  : "success",
+                : invocationEgressDenied
+                  ? "egress_denied"
+                  : invocationFailed
+                    ? "error"
+                    : "success",
             durationMs,
             ...(invocationTimedOut
               ? { error: "dynamic_worker_timeout" }
               : invocationBudgetExceeded
                 ? { error: "dynamic_worker_budget_exceeded" }
-                : invocationFailed
-                  ? { error: "dynamic_worker_invocation_failed" }
-                  : {}),
+                : invocationEgressDenied
+                  ? { error: "dynamic_worker_egress_denied" }
+                  : invocationFailed
+                    ? { error: "dynamic_worker_invocation_failed" }
+                    : {}),
             capabilityCalls: evidence.capabilityCalls,
             createdAt: startedAt
           },
@@ -329,6 +335,9 @@ export function createCloudflareDynamicWorkerCaller(
       }
       if (invocationBudgetExceeded) {
         throw new CloudflareDynamicWorkerCallerError("runtime_invocation_budget_exceeded");
+      }
+      if (invocationEgressDenied) {
+        throw new CloudflareDynamicWorkerCallerError("runtime_invocation_egress_denied");
       }
       if (invocationFailed) {
         throw new CloudflareDynamicWorkerCallerError("runtime_invocation_failed");
@@ -441,8 +450,17 @@ function isRecordedHookName(value: unknown): value is string {
   return (
     typeof value === "string" &&
     value.trim() !== "" &&
-    value.length <= MAX_RECORDED_HOOK_NAME_LENGTH
+    value.length <= MAX_RECORDED_HOOK_NAME_LENGTH &&
+    !hasControlCharacter(value)
   );
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
 }
 
 function validateRunRequest(value: unknown): string {

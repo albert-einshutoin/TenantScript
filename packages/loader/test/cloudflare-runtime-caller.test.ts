@@ -699,10 +699,10 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         payload: {},
         limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
       })
-    ).rejects.toMatchObject({ code: "runtime_invocation_failed" });
+    ).rejects.toMatchObject({ code: "runtime_invocation_egress_denied" });
     expect(record.mock.calls[0]?.[0].execution).toMatchObject({
-      status: "error",
-      error: "dynamic_worker_invocation_failed"
+      status: "egress_denied",
+      error: "dynamic_worker_egress_denied"
     });
   });
 
@@ -856,6 +856,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       { ...base, limits: { cpuMs: 10, timeoutMs: 0, subrequests: 2 } },
       { ...base, limits: { cpuMs: 10, timeoutMs: 250, subrequests: -1 } },
       { ...base, payload: circular },
+      { ...base, hookName: "invoice\ncreated" },
       { ...base, payload: new Map([["invoiceId", "inv_1"]]) },
       { ...base, payload: { invoiceId: undefined } },
       { ...base, payload: { amount: Number.NaN } },

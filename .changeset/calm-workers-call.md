@@ -19,3 +19,5 @@ own data properties.
 Legacy handler lookup accepts only own function-valued data properties.
 Unawaited capability RPCs are drained before the wrapper can emit a successful response.
 Trusted denied-egress evidence prevents caught outbound failures from being recorded as success.
+Denied egress remains a first-class execution status, and control characters in hook names are
+rejected before tenant invocation.
