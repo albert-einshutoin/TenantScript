@@ -673,6 +673,7 @@ const SafeSet = Set;
 const safeArrayIsArray = Array.isArray;
 const safeNumberIsFinite = Number.isFinite;
 const safeObjectHasOwn = Object.hasOwn;
+const safeObjectIs = Object.is;
 const safeObjectKeys = Object.keys;
 const safeObjectGetOwnPropertyNames = Object.getOwnPropertyNames;
 const safeObjectGetOwnPropertySymbols = Object.getOwnPropertySymbols;
@@ -680,7 +681,9 @@ const safeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const safeObjectGetPrototypeOf = Object.getPrototypeOf;
 const safeObjectPrototype = Object.prototype;
 const safeRequestJson = Function.call.bind(Request.prototype.json);
-const safeResponseJson = Response.json.bind(Response);
+const SafeResponse = Response;
+const SafeString = String;
+const safeJsonStringify = JSON.stringify.bind(JSON);
 
 // Response.json is a serializer, not a lossless validator. Reject unsupported plugin values before
 // a successful execution can be recorded with output that differs from the plugin result.
@@ -689,7 +692,7 @@ function assertJsonValue(value, ancestors = new SafeSet()) {
     value === null ||
     typeof value === "string" ||
     typeof value === "boolean" ||
-    (typeof value === "number" && safeNumberIsFinite(value) && !Object.is(value, -0))
+    (typeof value === "number" && safeNumberIsFinite(value) && !safeObjectIs(value, -0))
   ) {
     return;
   }
@@ -733,6 +736,28 @@ function assertJsonValue(value, ancestors = new SafeSet()) {
   } finally {
     ancestors.delete(value);
   }
+}
+
+function serializeJsonValue(value) {
+  if (value === null) return "null";
+  if (typeof value === "string") return safeJsonStringify(value);
+  if (typeof value === "boolean" || typeof value === "number") return SafeString(value);
+  if (safeArrayIsArray(value)) {
+    let serialized = "[";
+    for (let index = 0; index < value.length; index += 1) {
+      if (index !== 0) serialized += ",";
+      serialized += serializeJsonValue(value[index]);
+    }
+    return serialized + "]";
+  }
+  const keys = safeObjectKeys(value);
+  let serialized = "{";
+  for (let index = 0; index < keys.length; index += 1) {
+    if (index !== 0) serialized += ",";
+    const key = keys[index];
+    serialized += safeJsonStringify(key) + ":" + serializeJsonValue(value[key]);
+  }
+  return serialized + "}";
 }
 
 function validateHookReturn(hookType, value) {
@@ -812,7 +837,9 @@ export default {
       value = validateHookReturn(input.hookType, await handler(input.payload, context));
     }
     if (value !== undefined) assertJsonValue(value);
-    return safeResponseJson({ value: value === undefined ? null : value });
+    return new SafeResponse('{"value":' + serializeJsonValue(value === undefined ? null : value) + "}", {
+      headers: { "Content-Type": "application/json" }
+    });
   }
 };
 `;

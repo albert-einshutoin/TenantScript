@@ -84,6 +84,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(runtimeModule).toContain("assertJsonValue(value);");
     expect(runtimeModule).toContain("invalid TenantScript plugin return value");
     expect(runtimeModule).toContain("validateHookReturn(input.hookType, result.value)");
+    expect(runtimeModule).toContain("serializeJsonValue(value === undefined ? null : value)");
     const lossyRuntimeSource = runtimeModule.replace(
       'const pluginModule = await import("./tenant-plugin.cjs");',
       'const pluginModule = { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } };'
