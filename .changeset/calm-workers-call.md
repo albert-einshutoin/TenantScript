@@ -18,8 +18,8 @@ Generated CommonJS namespace shapes are unwrapped before dispatch, and policy de
 own data properties.
 Legacy handler lookup accepts only own function-valued data properties.
 Unawaited capability RPCs are drained before the wrapper can emit a successful response.
-Capability failures explicitly observed by tenant await/then/catch/finally remain catchable;
-unobserved failures still fail the invocation after draining.
+Capability failures handled by tenant await/catch or rejection callbacks remain catchable;
+calls with no rejection path still fail the invocation after draining.
 Trusted denied-egress evidence prevents caught outbound failures from being recorded as success.
 Denied egress remains a first-class execution status, and control characters in hook names are
 rejected before tenant invocation.

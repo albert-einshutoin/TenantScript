@@ -863,7 +863,7 @@ export default {
         const call = safePromiseResolve(
           env.CAPABILITIES.call(input.executionId, name, capabilityInput)
         );
-        let observed = false;
+        let rejectionHandled = false;
         const settlement = safePromiseThen(
           call,
           () => ({ status: "fulfilled" }),
@@ -871,24 +871,29 @@ export default {
         );
         safeArrayPush(inFlightCapabilityCalls, {
           settlement,
-          wasObserved: () => observed
+          isRejectionHandled: () => rejectionHandled
         });
         // Native Promise await can bypass an own then property. A thenable makes tenant
-        // consumption observable while the trusted promise remains available for draining.
-        return {
-          then(onFulfilled, onRejected) {
-            observed = true;
-            return safePromiseThen(call, onFulfilled, onRejected);
-          },
-          catch(onRejected) {
-            observed = true;
-            return safePromiseThen(call, undefined, onRejected);
-          },
-          finally(onFinally) {
-            observed = true;
-            return safePromiseFinally(call, onFinally);
-          }
-        };
+        // rejection handling observable while the trusted promise remains available for draining.
+        function trackCapabilityPromise(promise) {
+          // Tenant code may discard a derived chain. Its rejection is represented by the original
+          // call's settlement, so suppress the duplicate platform-level unhandled rejection.
+          safePromiseThen(promise, undefined, () => undefined);
+          return {
+            then(onFulfilled, onRejected) {
+              if (typeof onRejected === "function") rejectionHandled = true;
+              return trackCapabilityPromise(safePromiseThen(promise, onFulfilled, onRejected));
+            },
+            catch(onRejected) {
+              if (typeof onRejected === "function") rejectionHandled = true;
+              return trackCapabilityPromise(safePromiseThen(promise, undefined, onRejected));
+            },
+            finally(onFinally) {
+              return trackCapabilityPromise(safePromiseFinally(promise, onFinally));
+            }
+          };
+        }
+        return trackCapabilityPromise(call);
       }
     };
     let value;
@@ -922,7 +927,7 @@ export default {
     for (let index = 0; index < inFlightCapabilityCalls.length; index += 1) {
       const tracked = inFlightCapabilityCalls[index];
       const outcome = await tracked.settlement;
-      if (outcome.status === "rejected" && !tracked.wasObserved()) {
+      if (outcome.status === "rejected" && !tracked.isRejectionHandled()) {
         throw new Error("TenantScript unhandled capability call failed");
       }
     }

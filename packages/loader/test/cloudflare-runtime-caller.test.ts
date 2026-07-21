@@ -88,7 +88,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(runtimeModule).toContain("commonJsExports?.plugin");
     expect(runtimeModule).toContain('safeObjectGetOwnPropertyDescriptor(value, "decision")');
     expect(runtimeModule).toContain("Native Promise await can bypass an own then property");
-    expect(runtimeModule).toContain("!tracked.wasObserved()");
+    expect(runtimeModule).toContain("!tracked.isRejectionHandled()");
     const lossyRuntimeSource = runtimeModule.replace(
       'const pluginModule = await import("./tenant-plugin.cjs");',
       'const pluginModule = { default: { plugin: { dispatch: async () => ({ ok: true, value: new Map([["invoiceId", "inv_1"]]) }) } } };'
@@ -223,6 +223,31 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       { CAPABILITIES: { call: () => Promise.reject(new Error("capability failed")) } }
     );
     await expect(unhandledCapabilityFetch).rejects.toThrow(
+      "TenantScript unhandled capability call failed"
+    );
+    const fulfillmentOnlyCapabilityRuntimeSource = runtimeModule.replace(
+      'const pluginModule = await import("./tenant-plugin.cjs");',
+      'const pluginModule = { plugin: { dispatch: async ({ context }) => { void context.capability("slack.send", {}).then(() => undefined); return { ok: true, value: undefined }; } } };'
+    );
+    const fulfillmentOnlyCapabilityRuntimeNamespace = (await import(
+      `data:text/javascript;base64,${Buffer.from(fulfillmentOnlyCapabilityRuntimeSource).toString("base64")}`
+    )) as unknown as {
+      default: { fetch: (request: Request, env: Record<string, unknown>) => Promise<Response> };
+    };
+    const fulfillmentOnlyCapabilityFetch = fulfillmentOnlyCapabilityRuntimeNamespace.default.fetch(
+      new Request("https://runtime.tenantscript.internal/v1/executions/exec_fulfillment_only", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          executionId: "exec_fulfillment_only",
+          hookName: "invoice.created",
+          hookType: "event",
+          payload: {}
+        })
+      }),
+      { CAPABILITIES: { call: () => Promise.reject(new Error("capability failed")) } }
+    );
+    await expect(fulfillmentOnlyCapabilityFetch).rejects.toThrow(
       "TenantScript unhandled capability call failed"
     );
     expect(loader.entrypointLimits).toEqual([
