@@ -12,7 +12,7 @@
     ],
     "sourceDigests": {
       "packages/cli/src/index.ts": "6555a1290fe4308e179a25ae47eed6c51f386c21aad49fb807a2a9bf9c7bb422",
-      "packages/cli/src/plugin-audit.ts": "4c5966303f6b01eb4ffd1ea5630616fffede58c3fad9be1efdc8782be4515115",
+      "packages/cli/src/plugin-audit.ts": "63e706c4ed252d0cc96d9afbe92d161ca72eac644b0b99e021920633ad95c7a1",
       "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
       "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc"
     }
@@ -21,7 +21,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-07-21T19:44:31.000Z",
+  "reviewedAt": "2026-07-21T19:54:58.000Z",
   "domains": [
     {
       "name": "security",
@@ -74,7 +74,7 @@
   ],
   "evidenceDigests": {
     "packages/cli/src/index.ts": "6555a1290fe4308e179a25ae47eed6c51f386c21aad49fb807a2a9bf9c7bb422",
-    "packages/cli/src/plugin-audit.ts": "4c5966303f6b01eb4ffd1ea5630616fffede58c3fad9be1efdc8782be4515115",
+    "packages/cli/src/plugin-audit.ts": "63e706c4ed252d0cc96d9afbe92d161ca72eac644b0b99e021920633ad95c7a1",
     "packages/cli/src/plugin-scaffold.ts": "a428e0aff4b18bb587a135111c6f8b1448b4c77c47bee6999ab914a4d50c5caf",
     "packages/cli/test/init.test.ts": "2fcc1e497580ab5e18360831821851d4a1192b19528ea0212ee6ce8ad18144dc",
     "scripts/agent-plugin-scaffold-e2e.test.mjs": "35d5a53f8a5aa897ae8b5974c943ba201406b37ac65d3d53b126999cbf9a8ceb",

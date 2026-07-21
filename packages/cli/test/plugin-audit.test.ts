@@ -921,6 +921,8 @@ describe("plugin audit", () => {
     const bodies = [
       '{ const ctx = fake; ctx.capability("slack.send", {}); }',
       '{ let ctx = fake; ctx.capability("slack.send", {}); }',
+      '{ const { ctx } = fake; ctx.capability("slack.send", {}); }',
+      '{ let [ctx] = fake; ctx.capability("slack.send", {}); }',
       '{ class ctx { static capability() {} } ctx.capability("slack.send", {}); }',
       'try { throw fake; } catch (ctx) { ctx.capability("slack.send", {}); }'
     ];
@@ -932,6 +934,26 @@ describe("plugin audit", () => {
           packageJson: validPackageJson(),
           expectedSdkVersion: "1.2.3",
           bundleCode: `export const handlers = { event(_payload, ctx) { ${body} } };`
+        }).findings
+      ).toEqual([]);
+    }
+  });
+
+  it("does not treat broker property reads followed by operators as calls", () => {
+    const expressions = [
+      'context.capability + ("admin.delete");',
+      'context.capability && ("admin.delete");',
+      'context.capability / ("admin.delete");',
+      'context.capability ?? ("admin.delete");'
+    ];
+
+    for (const expression of expressions) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode: handlerBundle(expression)
         }).findings
       ).toEqual([]);
     }

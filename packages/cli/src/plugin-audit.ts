@@ -1231,6 +1231,30 @@ function collectNestedShadowRanges(
       continue;
     }
 
+    if (
+      ["const", "let", "var"].includes(tokens[index]?.value ?? "") &&
+      ["{", "["].includes(tokens[index + 1]?.value ?? "")
+    ) {
+      const patternOpen = index + 1;
+      const patternClose = findMatchingToken(
+        tokens,
+        patternOpen,
+        tokens[patternOpen]?.value ?? "",
+        tokens[patternOpen]?.value === "{" ? "}" : "]"
+      );
+      if (
+        patternClose !== -1 &&
+        bindingPatternDeclares(tokens.slice(patternOpen, patternClose + 1), name)
+      ) {
+        if (tokens[index]?.value === "var") {
+          const callableBody = enclosingNestedCallableBody(tokens, index, outer);
+          if (callableBody !== undefined) shadows.push(callableBody);
+        } else {
+          registerEnclosingBlock(patternOpen);
+        }
+      }
+    }
+
     if (tokens[index]?.kind === "identifier" && tokens[index]?.value === name) {
       const declaration = variableDeclarationKeyword(tokens, index);
       if (declaration === "var") {
@@ -1564,7 +1588,14 @@ function tokenizeCode(
       if (character === "}" && stopAtTemplateExpressionEnd && braceDepth === 0) {
         return { tokens, nextIndex: index + 1 };
       }
-      if (character !== undefined && ".(),{}:[]=>;".includes(character)) {
+      const isOptionalChainMarker = character === "?" && next === ".";
+      // Retain operators as call-boundary tokens. Dropping them would collapse a property read such
+      // as `context.capability + (...)` into the same token sequence as an actual invocation.
+      if (
+        character !== undefined &&
+        ".(),{}:[]=>;+-*%&|!<>?~^/".includes(character) &&
+        !isOptionalChainMarker
+      ) {
         tokens.push({ kind: "punctuation", value: character });
       }
       if (character === "{") braceDepth += 1;
