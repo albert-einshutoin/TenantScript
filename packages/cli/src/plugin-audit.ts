@@ -213,6 +213,7 @@ interface CallableBinding extends BindingRange {
 
 const tokenPairCache = new WeakMap<readonly BundleToken[], ReadonlyMap<number, number>>();
 const enclosingObjectCache = new WeakMap<readonly BundleToken[], Array<number | undefined>>();
+const nonCallablePrefixes = new Set(["if", "for", "while", "switch", "catch", "with"]);
 
 function auditBundle(bundleCode: string, grants: readonly string[]): PluginAuditFinding[] {
   const tokens = tokenizeBundle(bundleCode);
@@ -248,10 +249,11 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
       callOpen !== -1;
     if (isMemberCapabilityCall || isDirectCapabilityCall) {
       const callClose = findMatchingToken(tokens, callOpen, "(", ")");
-      const argument =
-        callClose === -1
-          ? []
-          : (splitTopLevel(tokens.slice(callOpen + 1, callClose), ",")[0] ?? []);
+      const argumentsList =
+        callClose === -1 ? [] : splitTopLevel(tokens.slice(callOpen + 1, callClose), ",");
+      const usesFunctionCall =
+        tokens[callOpen - 1]?.value === "call" && tokens[callOpen - 2]?.value === ".";
+      const argument = argumentsList[usesFunctionCall ? 1 : 0] ?? [];
       if (argument.length === 1 && argument[0]?.kind === "string" && argument[0].literalValid) {
         staticCalls.add(argument[0].value);
       } else {
@@ -305,8 +307,10 @@ function capabilityCallOpen(tokens: readonly BundleToken[], capabilityIndex: num
 
 function callOpenAfterMember(tokens: readonly BundleToken[], memberEnd: number): number {
   if (tokens[memberEnd + 1]?.value === "(") return memberEnd + 1;
-  return tokens[memberEnd + 1]?.value === "." && tokens[memberEnd + 2]?.value === "("
-    ? memberEnd + 2
+  if (tokens[memberEnd + 1]?.value !== ".") return -1;
+  if (tokens[memberEnd + 2]?.value === "(") return memberEnd + 2;
+  return tokens[memberEnd + 2]?.value === "call" && tokens[memberEnd + 3]?.value === "("
+    ? memberEnd + 3
     : -1;
 }
 
@@ -1129,7 +1133,10 @@ function collectNestedShadowRanges(
 
     if (tokens[index]?.kind === "identifier" && tokens[index]?.value === name) {
       const declaration = variableDeclarationKeyword(tokens, index);
-      if (
+      if (declaration === "var") {
+        const callableBody = enclosingNestedCallableBody(tokens, index, outer);
+        if (callableBody !== undefined) shadows.push(callableBody);
+      } else if (
         declaration === "const" ||
         declaration === "let" ||
         tokens[index - 1]?.value === "class" ||
@@ -1166,6 +1173,37 @@ function collectNestedShadowRanges(
     }
   }
   return shadows;
+}
+
+function enclosingNestedCallableBody(
+  tokens: readonly BundleToken[],
+  index: number,
+  outer: BindingRange
+): BindingRange | undefined {
+  const enclosing = collectEnclosingObjectOpens(tokens);
+  let open = enclosing[index];
+  while (open !== undefined && open >= outer.start) {
+    const close = findMatchingToken(tokens, open, "{", "}");
+    if (close !== -1 && isCallableBodyOpen(tokens, open)) {
+      // `var` belongs to the nearest callable, even when declared inside a nested block. Excluding
+      // that whole helper prevents its function-scoped local from impersonating the SDK receiver.
+      return { start: open + 1, end: close - 1 };
+    }
+    open = enclosing[open];
+  }
+  return undefined;
+}
+
+function isCallableBodyOpen(tokens: readonly BundleToken[], bodyOpen: number): boolean {
+  if (tokens[bodyOpen - 1]?.value === ">" && tokens[bodyOpen - 2]?.value === "=") return true;
+  if (tokens[bodyOpen - 1]?.value !== ")") return false;
+  const parametersOpen = pairedTokenIndex(tokens, bodyOpen - 1);
+  if (parametersOpen === undefined || tokens[parametersOpen]?.value !== "(") return false;
+  const prefix = tokens[parametersOpen - 1]?.value ?? "";
+  return (
+    prefix === "function" ||
+    (tokens[parametersOpen - 1]?.kind === "identifier" && !nonCallablePrefixes.has(prefix))
+  );
 }
 
 function parameterListDeclares(
@@ -1280,15 +1318,19 @@ function findMatchingToken(
   open: string,
   close: string
 ): number {
+  const closeIndex = pairedTokenIndex(tokens, openIndex);
+  return tokens[openIndex]?.value === open && tokens[closeIndex ?? -1]?.value === close
+    ? (closeIndex ?? -1)
+    : -1;
+}
+
+function pairedTokenIndex(tokens: readonly BundleToken[], index: number): number | undefined {
   let pairs = tokenPairCache.get(tokens);
   if (pairs === undefined) {
     pairs = buildTokenPairs(tokens);
     tokenPairCache.set(tokens, pairs);
   }
-  const closeIndex = pairs.get(openIndex);
-  return tokens[openIndex]?.value === open && tokens[closeIndex ?? -1]?.value === close
-    ? (closeIndex ?? -1)
-    : -1;
+  return pairs.get(index);
 }
 
 function buildTokenPairs(tokens: readonly BundleToken[]): ReadonlyMap<number, number> {
@@ -1303,7 +1345,10 @@ function buildTokenPairs(tokens: readonly BundleToken[]): ReadonlyMap<number, nu
       stack.push({ index, value });
     } else if (value in expectedOpen && stack.at(-1)?.value === expectedOpen[value]) {
       const opening = stack.pop();
-      if (opening !== undefined) pairs.set(opening.index, index);
+      if (opening !== undefined) {
+        pairs.set(opening.index, index);
+        pairs.set(index, opening.index);
+      }
     }
   }
   return pairs;

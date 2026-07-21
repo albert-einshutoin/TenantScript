@@ -294,6 +294,22 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects capability and egress calls invoked through Function.prototype.call", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle(
+          'context.capability.call(undefined, "admin.delete", {}); globalThis.fetch.call(undefined, "https://example.com");'
+        )
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    ]);
+  });
+
   it("detects capabilities in bracketed CommonJS handler exports", () => {
     const sources = [
       'exports["handlers"] = { event(_payload, ctx) { return ctx.capability("slack.send", {}); } };',
@@ -600,6 +616,28 @@ describe("plugin audit", () => {
     ).toEqual([
       finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
     ]);
+  });
+
+  it("respects function-scoped var shadows in nested helpers", () => {
+    const manifest = validManifest();
+    manifest.capabilities = { "slack.send": {} };
+
+    expect(
+      auditPluginPackage({
+        manifest,
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          "export const handlers = { event(_payload, ctx) {",
+          "  function helper() {",
+          "    if (ready) { var ctx = client; }",
+          '    return ctx.capability("admin.delete", {});',
+          "  }",
+          '  return ctx.capability("slack.send", {});',
+          "} };"
+        ].join("\n")
+      }).findings
+    ).toEqual([]);
   });
 
   it("does not reuse a handler context receiver name outside its handler body", () => {
