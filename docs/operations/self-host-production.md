@@ -38,6 +38,12 @@ provider secret storage, version 2 does not enable Analytics Engine, and version
 the earlier D1/Worker-only baseline without an R2 binding or scheduled trigger. Upgrading the schema never
 enables data movement, provider access, or telemetry implicitly.
 
+The Worker can expose authenticated Slack install-start after operators add
+`SLACK_OAUTH_CLIENT_ID`, `SLACK_OAUTH_SCOPES`, and `SLACK_OAUTH_REDIRECT_URI` alongside the generated
+`OAUTH_STATE_STORE_DO` binding. Provider-specific values are not yet part of the strict setup input,
+so add them through a reviewed Wrangler environment change and verify the
+[Slack OAuth install-start contract](slack-oauth-install-start.md). Partial configuration fails closed.
+
 The renderer uses an exact input schema and emits only:
 
 - the Control Plane Worker entrypoint;

@@ -6,8 +6,9 @@ only the bot access token plus workspace metadata needed by `connectSlackWorkspa
 
 This client does not expose a callback route or claim a live Slack installation. TenantScript provides a
 separate repository-verified [OAuth state store](oauth-state-store.md) and
-[callback composition service](slack-oauth-callback.md), but the authenticated install-start route,
-browser session cookie, HTTP callback, and live Worker composition remain unimplemented. Keeping these
+[callback composition service](slack-oauth-callback.md). The authenticated
+[install-start route](slack-oauth-install-start.md), hardened browser cookie, and state-store Worker
+composition are also verified; the HTTP callback and exchange/secret live composition remain unimplemented. Keeping these
 boundaries separate prevents an accountless exchange test from being mistaken for production OAuth.
 
 ## Fixed request contract
@@ -58,19 +59,18 @@ was created.
 
 ## Production HTTP composition still required
 
-A future HTTP flow must wrap the repository-verified callback service with all of the following:
+A future HTTP callback must finish the repository-verified browser flow with all of the following:
 
-1. `createDurableObjectNamespaceOAuthStateStore` issuing 256-bit state before redirect;
-2. the same authenticated browser binding on issue and consume;
-3. `createSlackOAuthCallbackService` for app-, tenant-, actor-, redirect-, and expiry-bound one-time
+1. the same authenticated browser binding on issue and consume, followed by explicit cookie deletion;
+2. `createSlackOAuthCallbackService` for app-, tenant-, actor-, redirect-, and expiry-bound one-time
    consume before this exchange client;
-4. Slack client credentials supplied through platform secret bindings;
-5. `createDurableObjectNamespaceSecretStore` for encrypted token persistence;
-6. encrypted refresh-token persistence and an expiry-aware refresh state machine before enabling Slack
+3. Slack client credentials supplied through platform secret bindings;
+4. `createDurableObjectNamespaceSecretStore` for encrypted token persistence;
+5. encrypted refresh-token persistence and an expiry-aware refresh state machine before enabling Slack
    token rotation;
-7. authenticated, tenant-scoped connection metadata persistence;
-8. enterprise-scope connection modeling and enforcement before enabling organization-wide installs;
-9. live Slack evidence in the credential-bearing Tier 2 lane.
+6. authenticated, tenant-scoped connection metadata persistence;
+7. enterprise-scope connection modeling and enforcement before enabling organization-wide installs;
+8. live Slack evidence in the credential-bearing Tier 2 lane.
 
 Do not call `exchangeCode` directly from an unauthenticated callback, browser bundle, plugin, or capability
 input. Never pass its raw token result to logs, diagnostics, audit fields, issues, or pull requests.

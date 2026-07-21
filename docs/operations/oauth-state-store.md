@@ -5,10 +5,10 @@ future provider OAuth callback. It issues a 256-bit opaque value, stores only di
 restores the server-owned provider, app, tenant, actor, redirect URI, issue time, and expiry binding
 exactly once.
 
-This is not an HTTP callback and does not create a Slack authorization URL. The repository-verified
-[Slack callback composition service](slack-oauth-callback.md) consumes state before provider access and
-uses only its returned scope. A production HTTP flow must still authenticate the initiating browser
-session and supply its server-managed binding to that service.
+This is not an HTTP callback. The repository-verified [Slack install-start](slack-oauth-install-start.md)
+authenticates the initiating administrator, creates the fixed-origin authorization URL, and supplies
+the server-managed browser binding. The [Slack callback composition service](slack-oauth-callback.md)
+consumes state before provider access and uses only its returned scope.
 
 ## State and browser binding contract
 
@@ -65,15 +65,15 @@ and [RFC 9700](https://datatracker.ietf.org/doc/html/rfc9700).
 
 ## Production composition still required
 
-Before exposing OAuth routes, add all of the following in a separate reviewed slice:
+The install-start route now completes the first two items. Before completing the OAuth browser flow,
+add all of the following in a separate reviewed slice:
 
-1. an authenticated install-start route that derives app, tenant, actor, and browser session server-side;
-2. a `Secure`, `HttpOnly`, `SameSite=Lax` or stricter session cookie lifecycle with explicit rotation;
-3. an HTTP callback that invokes `createSlackOAuthCallbackService` and compares returned authority to the
+1. an HTTP callback that invokes `createSlackOAuthCallbackService` and compares returned authority to the
    authenticated session;
-4. Worker composition of the fixed-origin Slack exchange client and encrypted provider secret store;
-5. stable user-facing callback responses without code, state, token, or provider-error reflection;
-6. live credential-bearing Tier 2 evidence.
+2. explicit callback deletion of the `Secure`, `HttpOnly`, `SameSite=Lax` binding cookie;
+3. Worker composition of the fixed-origin Slack exchange client and encrypted provider secret store;
+4. stable user-facing callback responses without code, state, token, or provider-error reflection;
+5. live credential-bearing Tier 2 evidence.
 
 Do not disable state verification for Enterprise Grid. TenantScript currently also rejects organization-wide
 Slack installs until enterprise scope is modeled and enforced.
