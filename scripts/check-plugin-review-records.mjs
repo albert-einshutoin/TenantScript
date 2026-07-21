@@ -93,8 +93,8 @@ function validateRecord(relativePath) {
     errors.push(`${relativePath}: id must match TS-PLUGIN-REVIEW-YYYY-NNN`);
   }
 
-  const validBaseline = validateBaseline(record.baselineCommit, relativePath);
-  validateTarget(record.target, record.baselineCommit, validBaseline, relativePath);
+  validateBaseline(record.baselineCommit, relativePath);
+  validateTarget(record.target, relativePath);
   validateReviewer(record.reviewer, relativePath);
   validateTimestamp(record.reviewedAt, `${relativePath}: reviewedAt`);
   const domainResults = validateDomains(record.domains, relativePath);
@@ -138,19 +138,19 @@ function validateBaseline(value, relativePath) {
   return true;
 }
 
-function validateTarget(value, baselineCommit, validBaseline, relativePath) {
+function validateTarget(value, relativePath) {
   if (!isRecord(value)) {
     errors.push(`${relativePath}: target must be an object`);
     return;
   }
-  validateAllowedFields(value, ["name", "scope"], `${relativePath}: target`);
+  validateAllowedFields(value, ["name", "scope", "sourceDigests"], `${relativePath}: target`);
   requireNonEmptyString(value.name, "target.name", relativePath);
   validateStringArray(value.scope, "target.scope", relativePath, { requireNonEmpty: true });
   if (!Array.isArray(value.scope)) {
     return;
   }
 
-  const validPaths = [];
+  const validPaths = new Set();
   for (const path of value.scope) {
     if (typeof path !== "string" || path.trim() === "") {
       continue;
@@ -159,19 +159,45 @@ function validateTarget(value, baselineCommit, validBaseline, relativePath) {
       errors.push(`${relativePath}: target.scope must stay inside the repository: ${path}`);
       continue;
     }
-    validPaths.push(path);
-    if (validBaseline && runGit(["cat-file", "-e", `${baselineCommit}:${path}`]).status !== 0) {
-      errors.push(`${relativePath}: target.scope does not exist at baselineCommit: ${path}`);
+    validPaths.add(path);
+  }
+  validateTargetSourceDigests(value.sourceDigests, validPaths, relativePath);
+}
+
+function validateTargetSourceDigests(value, targetPaths, relativePath) {
+  // Source hashes bind the reviewed tree itself, so a squash merge cannot discard the only commit
+  // that made an approval verifiable. The baseline remains a reachable repository-context anchor.
+  if (!isRecord(value)) {
+    errors.push(`${relativePath}: target.sourceDigests must be an object`);
+    return;
+  }
+  for (const path of targetPaths) {
+    if (!(path in value)) errors.push(`${relativePath}: missing digest for target source: ${path}`);
+  }
+  for (const path of Object.keys(value)) {
+    if (!targetPaths.has(path)) {
+      errors.push(`${relativePath}: target source digest has no matching path: ${path}`);
     }
   }
-
-  if (validBaseline && validPaths.length > 0) {
-    // Approval evidence is only reusable while the exact reviewed source remains unchanged.
-    const drift = runGit(["diff", "--quiet", baselineCommit, "--", ...validPaths]);
-    if (drift.status === 1) {
-      errors.push(`${relativePath}: reviewed scope has changed since baselineCommit`);
-    } else if (drift.status !== 0) {
-      errors.push(`${relativePath}: reviewed scope drift could not be verified`);
+  for (const path of targetPaths) {
+    const digest = value[path];
+    if (typeof digest !== "string" || !/^[0-9a-f]{64}$/.test(digest)) {
+      errors.push(`${relativePath}: target source digest must be lowercase SHA-256: ${path}`);
+      continue;
+    }
+    try {
+      if (hasSymlinkedParent(path) || !lstatSync(join(repoRoot, path)).isFile()) {
+        errors.push(`${relativePath}: target source must be a repository regular file: ${path}`);
+        continue;
+      }
+      const actual = createHash("sha256")
+        .update(readFileSync(join(repoRoot, path)))
+        .digest("hex");
+      if (actual !== digest) {
+        errors.push(`${relativePath}: target source digest does not match: ${path}`);
+      }
+    } catch {
+      errors.push(`${relativePath}: target source digest could not be verified: ${path}`);
     }
   }
 }
@@ -374,7 +400,11 @@ function findSensitiveContent(value, path) {
   if (isRecord(value)) {
     for (const [field, item] of Object.entries(value)) {
       const fieldPath = path.endsWith(".json") ? field : `${path}.${field}`;
-      if (path.endsWith(".json") && field === "evidenceDigests" && isRecord(item)) {
+      if (
+        ((path.endsWith(".json") && field === "evidenceDigests") ||
+          (path.endsWith(".target") && field === "sourceDigests")) &&
+        isRecord(item)
+      ) {
         // Digest keys are validated repository paths, not schema field names. Security-related
         // evidence may legitimately include words such as secret, token, or credential.
         for (const [evidence, digest] of Object.entries(item)) {

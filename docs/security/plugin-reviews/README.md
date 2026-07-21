@@ -6,13 +6,14 @@ immutable commit and an explicit source scope. It is evidence of a review, not a
 
 | Record                                                        | Target                       | Baseline                                   | Decision  | Boundary                 |
 | ------------------------------------------------------------- | ---------------------------- | ------------------------------------------ | --------- | ------------------------ |
-| [`TS-PLUGIN-REVIEW-2026-001`](TS-PLUGIN-REVIEW-2026-001.json) | Built-in `ext init` scaffold | `45a26e232fffa1a50c7973b976fe7a05bfc97a0a` | `approve` | First-party, accountless |
+| [`TS-PLUGIN-REVIEW-2026-001`](TS-PLUGIN-REVIEW-2026-001.json) | Built-in `ext init` scaffold | `5a23ffa5bdb49c1bbde19205cf62dc450d57c2dc` | `approve` | First-party, accountless |
 
 The checker fails closed when a record has unknown fields, omits one of the five review domains,
 references missing evidence, contains secret-like or machine-local data, or approves with a failed
-domain, blocker, or required unverified item. It compares reviewed source with the reachable pinned
-baseline and verifies the SHA-256 of every evidence file; later source or evidence changes invalidate
-the decision until a new review is recorded. This remains valid after either squash or merge commits.
+domain, blocker, or required unverified item. The baseline anchors repository context to reachable
+history, while complete SHA-256 maps bind every reviewed source and evidence file. Later source or
+evidence changes invalidate the decision until a new review is recorded. This remains valid after
+either squash or merge commits because the reviewed tree never depends on an intermediate commit.
 
 Run both the schema tests and repository records locally:
 

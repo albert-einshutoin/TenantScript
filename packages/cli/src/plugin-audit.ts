@@ -323,7 +323,7 @@ function isRegexLiteralStart(
 ): boolean {
   let index = slashIndex - 1;
   while (index >= 0 && /\s/u.test(source[index] ?? "")) index -= 1;
-  if (index < 0 || "=(:,[!&|?;{}".includes(source[index] ?? "")) return true;
+  if (index < 0 || "=(:,[!&|?;{}>".includes(source[index] ?? "")) return true;
   return ["return", "throw", "case"].includes(tokens.at(-1)?.value ?? "");
 }
 

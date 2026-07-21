@@ -94,6 +94,7 @@ describe("plugin audit", () => {
       '// fetch("https://example.invalid")',
       "const note = 'context.capability(\"secret.sentinel\", {})';",
       "const pattern = /fetch\\(/u;",
+      "const hasFetch = () => /fetch\\(/u.test(note);",
       'context.capability("secret.sentinel", {});'
     ].join("\n");
 

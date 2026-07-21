@@ -48,7 +48,7 @@ test("accepts an approved review pinned to unchanged source", () => {
   });
 });
 
-test("rejects mutable, missing, or drifted baselines", () => {
+test("rejects mutable or missing baselines and drifted reviewed source", () => {
   withRepo((repoRoot, baselineCommit) => {
     writeRecord(repoRoot, { ...validRecord(baselineCommit, repoRoot), baselineCommit: "main" });
     let result = runChecker(repoRoot);
@@ -70,7 +70,16 @@ test("rejects mutable, missing, or drifted baselines", () => {
     );
     result = runChecker(repoRoot);
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /reviewed scope has changed since baselineCommit/);
+    assert.match(result.stderr, /target source digest does not match/);
+
+    const incomplete = validRecord(baselineCommit, repoRoot);
+    delete incomplete.target.sourceDigests["packages/cli/src/plugin-scaffold.ts"];
+    incomplete.target.sourceDigests["packages/cli/src/unknown.ts"] = "a".repeat(64);
+    writeRecord(repoRoot, incomplete);
+    result = runChecker(repoRoot);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /missing digest for target source/);
+    assert.match(result.stderr, /target source digest has no matching path/);
   });
 });
 
@@ -226,7 +235,12 @@ function validRecord(baselineCommit, repoRoot) {
     baselineCommit,
     target: {
       name: "Built-in plugin scaffold",
-      scope: ["packages/cli/src/plugin-scaffold.ts"]
+      scope: ["packages/cli/src/plugin-scaffold.ts"],
+      sourceDigests: {
+        "packages/cli/src/plugin-scaffold.ts": createHash("sha256")
+          .update(readFileSync(join(repoRoot, "packages/cli/src/plugin-scaffold.ts")))
+          .digest("hex")
+      }
     },
     reviewer: {
       identity: "TenantScript maintainers",
