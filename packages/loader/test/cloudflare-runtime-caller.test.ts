@@ -638,6 +638,54 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     });
   });
 
+  it("bounds a stalled evidence read before persisting zero evidence", async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveEvidenceStarted: (() => void) | undefined;
+      const evidenceStarted = new Promise<void>((resolve) => {
+        resolveEvidenceStarted = resolve;
+      });
+      const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
+        Promise.resolve(request.execution)
+      );
+      const caller = createCloudflareDynamicWorkerCaller({
+        loader: createCachingLoader(() => Response.json({ value: "completed" })),
+        compatibilityDate: "2026-07-21",
+        loadArtifact: () => Promise.resolve("runtime-code"),
+        createScopeBindings: () => ({}),
+        readInvocationEvidence: () => {
+          resolveEvidenceStarted?.();
+          return new Promise(() => undefined);
+        },
+        recorder: { record }
+      });
+
+      const run = caller.run({
+        executionId: "exec_stalled_evidence",
+        tenantId: "tenant_1",
+        installationId: "installation_1",
+        pluginId: "plugin_1",
+        hookName: "invoice.created",
+        hookType: "event",
+        version: "1.0.0",
+        artifactSha256: sha256("runtime-code"),
+        grantRevision: "grant_1",
+        payload: {},
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
+      });
+      await evidenceStarted;
+      await vi.advanceTimersByTimeAsync(250);
+
+      await expect(run).resolves.toMatchObject({ execution: { status: "success" } });
+      expect(record.mock.calls[0]?.[0]).toMatchObject({
+        execution: { capabilityCalls: [] },
+        metrics: { subrequests: 0, workflowRuns: 0 }
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects closed, bounded request violations before touching the Loader binding", async () => {
     const loader = createCachingLoader(() => Response.json({ value: true }));
     const loadArtifact = vi.fn(() => Promise.resolve("runtime-code"));

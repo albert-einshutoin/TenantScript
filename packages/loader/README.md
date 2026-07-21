@@ -38,6 +38,8 @@ records `cpuMs: 0` because wall time is not CPU time. Reconcile exact Cloudflare
 asynchronously from Workers Trace Events Logpush before using CPU usage for cost reporting.
 Evidence diagnostics are best-effort and never delay execution persistence. A `reportFailure`
 implementation that needs delivery guarantees must schedule its own Cloudflare `waitUntil` work.
+Evidence reads use the invocation wall-clock limit as a separate upper bound; a stalled backend is
+treated as unavailable so zero evidence can still be persisted.
 
 Cloudflare documents that custom CPU/subrequest limits throw, but does not publish a stable thrown
 error shape. Provide `classifyInvocationError` in the host adapter to map verified platform limit

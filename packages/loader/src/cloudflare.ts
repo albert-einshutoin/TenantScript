@@ -253,11 +253,14 @@ export function createCloudflareDynamicWorkerCaller(
       };
       try {
         evidence = validateInvocationEvidence(
-          await configuration.readInvocationEvidence({
-            executionId: request.executionId,
-            tenantId: request.tenantId,
-            pluginId: request.pluginId
-          })
+          await withTrustedEvidenceTimeout(
+            configuration.readInvocationEvidence({
+              executionId: request.executionId,
+              tenantId: request.tenantId,
+              pluginId: request.pluginId
+            }),
+            request.limits.timeoutMs
+          )
         );
       } catch {
         if (configuration.reportFailure !== undefined) {
@@ -525,6 +528,21 @@ async function withWallClockTimeout<T>(
     }, timeoutMs);
   });
   try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
+async function withTrustedEvidenceTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error("trusted evidence read timed out"));
+    }, timeoutMs);
+  });
+  try {
+    // Evidence enriches the execution record but cannot be allowed to prevent that record itself.
     return await Promise.race([operation, timeout]);
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
