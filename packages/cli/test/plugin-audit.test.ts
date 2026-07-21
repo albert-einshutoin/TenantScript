@@ -202,6 +202,28 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects capabilities in mutated handler exports", () => {
+    const sources = [
+      'exports.handlers = {}; exports.handlers.event = (_payload, ctx) => ctx.capability("admin.delete", {});',
+      'module.exports.handlers = {}; module.exports.handlers.event = function (_payload, ctx) { return ctx.capability("admin.delete", {}); };',
+      'exports["handlers"] = {}; exports["handlers"]["event"] = (_payload, ctx) => ctx.capability("admin.delete", {});',
+      'const handlers = {}; exports.handlers = handlers; handlers.event = (_payload, ctx) => ctx.capability("admin.delete", {});'
+    ];
+
+    for (const bundleCode of sources) {
+      expect(
+        auditPluginPackage({
+          manifest: validManifest(),
+          packageJson: validPackageJson(),
+          expectedSdkVersion: "1.2.3",
+          bundleCode
+        }).findings
+      ).toEqual([
+        finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+      ]);
+    }
+  });
+
   it("detects handler maps referenced by definePlugin", () => {
     const sources = [
       [

@@ -651,6 +651,36 @@ function collectHandlerCapabilityScopes(tokens: readonly BundleToken[]): Capabil
   ]);
   for (let index = 0; index < tokens.length; index += 1) {
     const candidate = tokens[index];
+    const isComputed =
+      candidate?.kind === "string" &&
+      candidate.literalValid === true &&
+      tokens[index - 1]?.value === "[" &&
+      tokens[index + 1]?.value === "]";
+    if (candidate?.kind !== "identifier" && !isComputed) continue;
+    const propertyStart = isComputed ? index - 1 : index;
+    const propertyEnd = isComputed ? index + 1 : index;
+    if (!isExportedHandlerMutation(tokens, propertyStart, propertyEnd, referencedHandlerBindings)) {
+      continue;
+    }
+    let value = propertyEnd + 2;
+    if (tokens[value]?.value === "async") value += 1;
+    if (tokens[value]?.value === "function") {
+      if (tokens[value + 1]?.kind === "identifier") value += 1;
+      const open = value + 1;
+      const close = tokens[open]?.value === "(" ? findMatchingToken(tokens, open, "(", ")") : -1;
+      const body = close === -1 ? undefined : blockBodyRange(tokens, close + 1);
+      if (body !== undefined) addScope(open, close, body);
+    } else if (tokens[value]?.value === "(") {
+      const close = findMatchingToken(tokens, value, "(", ")");
+      const body = close === -1 ? undefined : arrowBodyRange(tokens, close, tokens.length - 1);
+      if (body !== undefined) addScope(value, close, body);
+    } else if (tokens[value]?.kind === "identifier") {
+      const named = callableBindings.get(tokens[value]?.value ?? "");
+      if (named !== undefined) addScope(named.open, named.close, named);
+    }
+  }
+  for (let index = 0; index < tokens.length; index += 1) {
+    const candidate = tokens[index];
     const isBracketedHandlersProperty =
       candidate?.kind === "string" &&
       candidate.literalValid === true &&
@@ -787,6 +817,31 @@ function isExportedPluginDispatchMutation(
   if (receiver?.value !== "]") return false;
   const pluginReceiver = bracketedPropertyReceiverIndex(tokens, receiverEnd - 1, "plugin");
   return isCommonJsExportsIdentifier(tokens, pluginReceiver);
+}
+
+function isExportedHandlerMutation(
+  tokens: readonly BundleToken[],
+  propertyStart: number,
+  propertyEnd: number,
+  exportedHandlerBindings: ReadonlySet<string>
+): boolean {
+  if (tokens[propertyEnd + 1]?.value !== "=") return false;
+  const isComputed = tokens[propertyStart]?.value === "[";
+  if (!isComputed && tokens[propertyStart - 1]?.value !== ".") return false;
+  const receiverEnd =
+    tokens[propertyStart - 1]?.value === "." ? propertyStart - 2 : propertyStart - 1;
+  const receiver = tokens[receiverEnd];
+  if (receiver?.kind === "identifier") {
+    if (exportedHandlerBindings.has(receiver.value)) return true;
+    return (
+      receiver.value === "handlers" &&
+      tokens[receiverEnd - 1]?.value === "." &&
+      isCommonJsExportsIdentifier(tokens, receiverEnd - 2)
+    );
+  }
+  if (receiver?.value !== "]") return false;
+  const handlersReceiver = bracketedPropertyReceiverIndex(tokens, receiverEnd - 1, "handlers");
+  return isCommonJsExportsIdentifier(tokens, handlersReceiver);
 }
 
 function isCommonJsExportsIdentifier(tokens: readonly BundleToken[], index: number): boolean {
