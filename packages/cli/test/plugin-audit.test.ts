@@ -63,6 +63,26 @@ describe("plugin audit", () => {
     expect(JSON.stringify(report)).not.toContain(secretSentinel);
   });
 
+  it("redacts user-controlled keys even when they match structural path names", () => {
+    const report = auditPluginPackage({
+      manifest: {
+        ...validManifest(),
+        capabilities: { version: {} },
+        configSchema: {
+          properties: { version: { type: "boolean", default: "invalid" } },
+          required: []
+        }
+      },
+      packageJson: validPackageJson(),
+      expectedSdkVersion: "1.2.3"
+    });
+
+    expect(report.findings).toEqual([
+      finding("manifest_invalid", "error", "manifest.capabilities.*"),
+      finding("manifest_invalid", "error", "manifest.configSchema.properties.*.default")
+    ]);
+  });
+
   it.each(["latest", "^1.2.3", "workspace:*", "1.2.3 || 2.0.0"])(
     "rejects the unpinned SDK declaration %s",
     (version) => {

@@ -177,9 +177,15 @@ function compareText(left: string, right: string): number {
 }
 
 function sanitizeManifestPath(path: string): string {
-  return path
-    .split(".")
-    .map((segment) => (/^\d+$/u.test(segment) || manifestPathSegments.has(segment) ? segment : "*"))
+  const segments = path.split(".");
+  return segments
+    .map((segment, index) => {
+      const parentPath = segments.slice(0, index).join(".");
+      // Record keys are tenant-controlled, so schema context must win over a segment allowlist.
+      // Otherwise a key such as "version" can masquerade as a stable structural path segment.
+      if (parentPath === "capabilities" || parentPath === "configSchema.properties") return "*";
+      return /^\d+$/u.test(segment) || manifestPathSegments.has(segment) ? segment : "*";
+    })
     .join(".");
 }
 
