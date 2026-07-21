@@ -260,6 +260,19 @@ describe("plugin audit", () => {
     }
   });
 
+  it("detects bracketed capability calls on the handler context", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle('context["capability"]("slack.send", {});')
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("detects renamed context bindings in referenced function-expression handlers", () => {
     expect(
       auditPluginPackage({
@@ -554,6 +567,19 @@ describe("plugin audit", () => {
     });
 
     expect(report.findings).toEqual([
+      finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
+    ]);
+  });
+
+  it("detects bracketed global fetch calls", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: 'globalThis["fetch"]("https://direct.invalid");'
+      }).findings
+    ).toEqual([
       finding("bundle_direct_egress_detected", "warning", "bundle.egressCalls.*", "heuristic")
     ]);
   });

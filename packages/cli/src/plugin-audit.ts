@@ -220,11 +220,16 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
 
   for (let index = 0; index < tokens.length; index += 1) {
     const callOpen = capabilityCallOpen(tokens, index);
+    const bracketReceiver = bracketedPropertyReceiverIndex(tokens, index, "capability");
     const isMemberCapabilityCall =
       tokens[index]?.value === "capability" &&
-      tokens[index - 1]?.value === "." &&
-      tokens[index - 2]?.kind === "identifier" &&
-      bindingAppliesAt(capabilityBindings.receivers, tokens[index - 2]?.value ?? "", index) &&
+      ((tokens[index - 1]?.value === "." && tokens[index - 2]?.kind === "identifier") ||
+        bracketReceiver !== -1) &&
+      bindingAppliesAt(
+        capabilityBindings.receivers,
+        tokens[bracketReceiver === -1 ? index - 2 : bracketReceiver]?.value ?? "",
+        index
+      ) &&
       callOpen !== -1;
     const isDirectCapabilityCall =
       tokens[index]?.kind === "identifier" &&
@@ -241,6 +246,8 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
     }
     if (
       matchesTokenSequence(tokens, index, ["globalThis", ".", "fetch", "("]) ||
+      (tokens[bracketedPropertyReceiverIndex(tokens, index, "fetch")]?.value === "globalThis" &&
+        callOpenAfterMember(tokens, index + 1) !== -1) ||
       (tokens[index]?.value === "fetch" &&
         tokens[index + 1]?.value === "(" &&
         tokens[index - 1]?.value !== ".")
@@ -274,9 +281,40 @@ function auditBundle(bundleCode: string, grants: readonly string[]): PluginAudit
 }
 
 function capabilityCallOpen(tokens: readonly BundleToken[], capabilityIndex: number): number {
-  if (tokens[capabilityIndex + 1]?.value === "(") return capabilityIndex + 1;
-  return tokens[capabilityIndex + 1]?.value === "." && tokens[capabilityIndex + 2]?.value === "("
-    ? capabilityIndex + 2
+  const memberEnd =
+    bracketedPropertyReceiverIndex(tokens, capabilityIndex, "capability") === -1
+      ? capabilityIndex
+      : capabilityIndex + 1;
+  return callOpenAfterMember(tokens, memberEnd);
+}
+
+function callOpenAfterMember(tokens: readonly BundleToken[], memberEnd: number): number {
+  if (tokens[memberEnd + 1]?.value === "(") return memberEnd + 1;
+  return tokens[memberEnd + 1]?.value === "." && tokens[memberEnd + 2]?.value === "("
+    ? memberEnd + 2
+    : -1;
+}
+
+function bracketedPropertyReceiverIndex(
+  tokens: readonly BundleToken[],
+  propertyIndex: number,
+  propertyName: string
+): number {
+  if (
+    tokens[propertyIndex]?.kind !== "string" ||
+    tokens[propertyIndex].literalValid !== true ||
+    tokens[propertyIndex].value !== propertyName ||
+    tokens[propertyIndex - 1]?.value !== "[" ||
+    tokens[propertyIndex + 1]?.value !== "]"
+  ) {
+    return -1;
+  }
+  // The tokenizer intentionally drops `?`, so optional bracket access is represented as `x . [`.
+  // Accepting both shapes closes the bypass while still requiring a decoded static property name.
+  if (tokens[propertyIndex - 2]?.kind === "identifier") return propertyIndex - 2;
+  return tokens[propertyIndex - 2]?.value === "." &&
+    tokens[propertyIndex - 3]?.kind === "identifier"
+    ? propertyIndex - 3
     : -1;
 }
 
