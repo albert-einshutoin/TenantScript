@@ -53,7 +53,10 @@ import {
   type AnalyticsEngineDatasetLike
 } from "./usage-meter.js";
 import { createDurableObjectNamespaceOAuthStateStore } from "./oauth-state-store.js";
-import { createDurableObjectNamespaceSecretStore } from "./provider-secret-store-do.js";
+import {
+  createDurableObjectNamespaceSecretStore,
+  validateProviderSecretKeyringConfiguration
+} from "./provider-secret-store-do.js";
 import { createSlackOAuthCallbackService } from "./slack-oauth-callback.js";
 import {
   SLACK_OAUTH_CALLBACK_PATH,
@@ -240,7 +243,7 @@ export default {
                 : { sink: createAnalyticsEngineUsageSink(env.USAGE_ANALYTICS) })
             });
       const slackOAuthInstallStartService = createWorkerSlackOAuthInstallStartService(env);
-      const slackOAuthCallback = createWorkerSlackOAuthCallbackConfiguration(
+      const slackOAuthCallback = await createWorkerSlackOAuthCallbackConfiguration(
         env,
         resolveAppDatabase
       );
@@ -311,10 +314,12 @@ function createWorkerSlackOAuthInstallStartService(env: ControlPlaneWorkerEnv) {
   });
 }
 
-function createWorkerSlackOAuthCallbackConfiguration(
+const validatedCallbackKeyringEnvironments = new WeakSet();
+
+async function createWorkerSlackOAuthCallbackConfiguration(
   env: ControlPlaneWorkerEnv,
   resolveAppDatabase: (appId: string) => D1DatabaseLike | null
-): SlackOAuthCallbackHttpConfiguration | undefined {
+): Promise<SlackOAuthCallbackHttpConfiguration | undefined> {
   const callbackValues = [
     env.SLACK_OAUTH_CLIENT_SECRET,
     env.SLACK_OAUTH_SUCCESS_REDIRECT_URI,
@@ -331,6 +336,13 @@ function createWorkerSlackOAuthCallbackConfiguration(
     (env.DB === undefined && env.APP_DATABASE_ROUTES_JSON === undefined)
   ) {
     throw new Error("Slack OAuth callback configuration is incomplete");
+  }
+  if (!validatedCallbackKeyringEnvironments.has(env)) {
+    // Import the configured non-extractable keys before any one-shot code can be exchanged. The
+    // Worker environment is deployment-immutable, so a WeakSet avoids repeating crypto imports
+    // without retaining the secret configuration string as a cache key.
+    await validateProviderSecretKeyringConfiguration(env.PROVIDER_SECRET_KEYRING_JSON);
+    validatedCallbackKeyringEnvironments.add(env);
   }
   const slackOAuth = createSlackOAuthClient({
     clientId: env.SLACK_OAUTH_CLIENT_ID,

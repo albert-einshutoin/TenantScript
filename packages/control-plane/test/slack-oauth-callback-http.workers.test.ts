@@ -82,9 +82,7 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
 
     const callbackRequest = () =>
       new Request(`${callbackUri}?state=${state as string}&code=temporary-worker-code`, {
-        headers: {
-          Cookie: `${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${browserBinding as string}`
-        }
+        headers: callbackNavigationHeaders(browserBinding as string)
       });
     const callback = await worker.fetch(callbackRequest(), runtimeEnv);
     const replay = await worker.fetch(callbackRequest(), runtimeEnv);
@@ -142,6 +140,56 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
     expect(await response.text()).not.toContain(secret);
   });
 
+  it("validates the provider keyring before consuming state or exchanging the Slack code", async () => {
+    const slackFetch = vi.fn().mockResolvedValue(
+      Response.json({
+        ok: true,
+        access_token: rawToken,
+        token_type: "bot",
+        scope: "commands",
+        app_id: "A_WORKER",
+        team: { id: "T_KEYRING" },
+        authed_user: { id: "U_WORKER", scope: "" },
+        is_enterprise_install: false
+      })
+    );
+    vi.stubGlobal("fetch", slackFetch);
+    const validEnvironment = callbackEnvironment();
+    const start = await worker.fetch(
+      new Request(`${controlOrigin}/v1/admin/provider-connections/slack/oauth/start`, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer manager-token",
+          Origin: "https://admin.example.test"
+        }
+      }),
+      validEnvironment
+    );
+    const startBody: { authorizationUrl: string } = await start.json();
+    const state = new URL(startBody.authorizationUrl).searchParams.get("state");
+    const binding = start.headers
+      .get("Set-Cookie")
+      ?.match(new RegExp(`^${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=([A-Za-z0-9_-]{43});`, "u"))?.[1];
+    const callbackRequest = () =>
+      new Request(`${callbackUri}?state=${state as string}&code=keyring-code`, {
+        headers: callbackNavigationHeaders(binding as string)
+      });
+
+    const invalid = await worker.fetch(callbackRequest(), {
+      ...validEnvironment,
+      PROVIDER_SECRET_KEYRING_JSON: "{"
+    });
+
+    expect(invalid.status).toBe(503);
+    expect(invalid.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(slackFetch).not.toHaveBeenCalled();
+
+    const retry = await worker.fetch(callbackRequest(), validEnvironment);
+    expect(retry.status).toBe(303);
+    expect(retry.headers.get("Location")).toBe(successRedirectUri);
+    expect(slackFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("selects the sharded D1 database only from the app restored by one-time state", async () => {
     vi.stubGlobal(
       "fetch",
@@ -183,7 +231,7 @@ describe("production Slack OAuth callback HTTP Worker composition", () => {
 
     const callback = await worker.fetch(
       new Request(`${callbackUri}?state=${state as string}&code=sharded-code`, {
-        headers: { Cookie: `${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${binding as string}` }
+        headers: callbackNavigationHeaders(binding as string)
       }),
       runtimeEnv
     );
@@ -221,5 +269,13 @@ function callbackEnvironment() {
     SLACK_OAUTH_REDIRECT_URI: callbackUri,
     SLACK_OAUTH_SCOPES: "chat:write,commands",
     SLACK_OAUTH_SUCCESS_REDIRECT_URI: successRedirectUri
+  };
+}
+
+function callbackNavigationHeaders(binding: string): HeadersInit {
+  return {
+    Cookie: `${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${binding}`,
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate"
   };
 }

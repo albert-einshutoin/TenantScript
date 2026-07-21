@@ -45,9 +45,11 @@ the code. A new authenticated install-start flow must issue fresh state and obta
 
 ## HTTP and Worker contract
 
-The public route accepts only `GET`, an exact `state`/`code` query, a single exact binding cookie, and
-no `Origin` header. Query and cookie headers are bounded. Every exact callback response deletes the
-binding cookie and sends `no-store`, a deny-all CSP, `no-referrer`, and `nosniff` headers.
+The public route accepts only `GET`, an exact `state`/`code` query, a single exact binding cookie, no
+`Origin` header, and browser fetch metadata for a top-level document navigation (`navigate` /
+`document`). Query and cookie headers are bounded. This rejects both credentialed fetches and no-CORS
+image/script subresources before state consumption. Every exact callback response deletes the binding
+cookie and sends `no-store`, a deny-all CSP, `no-referrer`, and `nosniff` headers.
 
 Success and all handled failures use `303` redirects to distinct, canonical HTTPS destinations fixed
 in Worker configuration. Neither destination is derived from the callback. An unconfigured or partially
@@ -70,6 +72,10 @@ shipped Worker evaluates install-start and callback composition together, so cal
 requires the configured scope set even though the callback does not accept or modify it. Partial
 configuration fails closed. The setup renderer does not yet emit provider-specific values, so operators
 must review and provision them explicitly.
+
+The Worker parses and imports the provider keyring before registering the callback handler. A malformed,
+missing-current, or invalid-length key therefore fails with `503` before one-time state or Slack code is
+consumed, allowing the operator to repair configuration and restart the same still-valid callback.
 
 ## Remaining production evidence
 

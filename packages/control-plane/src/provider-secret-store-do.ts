@@ -93,6 +93,10 @@ export class ProviderSecretStoreDurableObject {
   }
 }
 
+export async function validateProviderSecretKeyringConfiguration(value: string): Promise<void> {
+  await createAesGcmSecretEncryptionKeyring(parseKeyringConfiguration(value));
+}
+
 function invalidRequestResponse(): Response {
   return Response.json(
     { error: { code: "provider_secret_store_invalid_request" } },

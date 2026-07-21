@@ -66,7 +66,9 @@ describe("Slack OAuth callback HTTP boundary", () => {
     const complete = vi.fn<SlackOAuthCallbackService["complete"]>();
     const response = await createHandler({ complete })(
       new Request(`${callbackOrigin}${callbackPath}?${query}`, {
-        headers: { Cookie: `${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${browserBinding}` }
+        headers: callbackNavigationHeaders(
+          `${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${browserBinding}`
+        )
       })
     );
 
@@ -86,8 +88,7 @@ describe("Slack OAuth callback HTTP boundary", () => {
     ["oversized cookie header", `unrelated=${"x".repeat(8_193)}`]
   ])("rejects %s and clears the binding cookie", async (_label, cookie) => {
     const complete = vi.fn<SlackOAuthCallbackService["complete"]>();
-    const headers = new Headers();
-    if (cookie !== undefined) headers.set("Cookie", cookie);
+    const headers = callbackNavigationHeaders(cookie);
     const response = await createHandler({ complete })(
       new Request(`${callbackOrigin}${callbackPath}?state=${state}&code=${code}`, { headers })
     );
@@ -117,6 +118,22 @@ describe("Slack OAuth callback HTTP boundary", () => {
     const complete = vi.fn<SlackOAuthCallbackService["complete"]>();
     const request = callbackRequest();
     request.headers.set("Origin", "https://attacker.example");
+
+    const response = await createHandler({ complete })(request);
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe(failureRedirectUri);
+    expect(response.headers.get("Set-Cookie")).toBe(clearCookie);
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("rejects a no-CORS image subresource without an Origin before consuming state", async () => {
+    const complete = vi.fn<SlackOAuthCallbackService["complete"]>();
+    const request = callbackRequest();
+    request.headers.delete("Sec-Fetch-Mode");
+    request.headers.delete("Sec-Fetch-Dest");
+    request.headers.set("Sec-Fetch-Mode", "no-cors");
+    request.headers.set("Sec-Fetch-Dest", "image");
 
     const response = await createHandler({ complete })(request);
 
@@ -175,8 +192,17 @@ function callbackOptions(
 
 function callbackRequest(): Request {
   return new Request(`${callbackOrigin}${callbackPath}?state=${state}&code=${code}`, {
-    headers: { Cookie: `${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${browserBinding}` }
+    headers: callbackNavigationHeaders(`${SLACK_OAUTH_BROWSER_BINDING_COOKIE}=${browserBinding}`)
   });
+}
+
+function callbackNavigationHeaders(cookie?: string): Headers {
+  const headers = new Headers({
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate"
+  });
+  if (cookie !== undefined) headers.set("Cookie", cookie);
+  return headers;
 }
 
 function connection() {

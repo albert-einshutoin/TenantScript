@@ -33,9 +33,9 @@ export function createSlackOAuthCallbackHttpHandler(
     if (request.method !== "GET") {
       return callbackResponse(405, { Allow: "GET" });
     }
-    // Slack returns through a top-level redirect, which has no Origin header. Rejecting Origin
-    // requests keeps credentialed cross-site fetches from consuming a stolen state as a subresource.
-    if (request.headers.get("Origin") !== null) {
+    // Slack returns through a top-level document navigation. Requiring browser fetch metadata as
+    // well as no Origin keeps no-CORS image/script requests from spending state with ambient cookies.
+    if (!isTopLevelNavigation(request)) {
       return redirectResponse(configuration.failureRedirectUri);
     }
     const input = parseCallbackInput(request, url);
@@ -49,6 +49,14 @@ export function createSlackOAuthCallbackHttpHandler(
       return redirectResponse(configuration.failureRedirectUri);
     }
   };
+}
+
+function isTopLevelNavigation(request: Request): boolean {
+  return (
+    request.headers.get("Origin") === null &&
+    request.headers.get("Sec-Fetch-Mode") === "navigate" &&
+    request.headers.get("Sec-Fetch-Dest") === "document"
+  );
 }
 
 export function slackOAuthCallbackUnavailableResponse(): Response {
