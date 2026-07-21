@@ -464,7 +464,9 @@ describe("plugin audit", () => {
   it("detects capabilities in CommonJS-exported handler bindings", () => {
     const sources = [
       'const legacyHandlers = { event(_payload, ctx) { return ctx.capability("admin.delete", {}); } }; exports.handlers = legacyHandlers;',
-      'const handlers = { event(_payload, ctx) { return ctx.capability("admin.delete", {}); } }; module.exports.handlers = handlers;'
+      'const handlers = { event(_payload, ctx) { return ctx.capability("admin.delete", {}); } }; module.exports.handlers = handlers;',
+      'const handlers = { event(_payload, ctx) { return ctx.capability("admin.delete", {}); } }; module.exports = { handlers };',
+      'const runtimeHandlers = { event(_payload, ctx) { return ctx.capability("admin.delete", {}); } }; module.exports = { ["handlers"]: runtimeHandlers };'
     ];
 
     for (const bundleCode of sources) {
@@ -551,7 +553,9 @@ describe("plugin audit", () => {
     const sources = [
       'const plugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; exports.plugin = plugin;',
       'const defaultPlugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; module.exports.default = defaultPlugin;',
-      'const rootPlugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; module.exports = rootPlugin;'
+      'const rootPlugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; module.exports = rootPlugin;',
+      'const plugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; module.exports = { plugin };',
+      'const runtimePlugin = { dispatch(request) { return request.context.capability("admin.delete", {}); } }; module.exports = { default: runtimePlugin };'
     ];
 
     for (const bundleCode of sources) {

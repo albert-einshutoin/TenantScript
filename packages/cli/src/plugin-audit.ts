@@ -880,6 +880,20 @@ function collectCommonJsObjectExportBindings(
   const braceDepths = collectBraceDepths(tokens);
   for (let index = 0; index < tokens.length; index += 1) {
     if (
+      braceDepths[index] === 0 &&
+      matchesTokenSequence(tokens, index - 3, ["module", ".", "exports", "="]) &&
+      tokens[index + 1]?.value === "{"
+    ) {
+      const objectOpen = index + 1;
+      const objectClose = findMatchingToken(tokens, objectOpen, "{", "}");
+      if (objectClose !== -1) {
+        for (const entry of splitTopLevel(tokens.slice(objectOpen + 1, objectClose), ",")) {
+          const binding = commonJsObjectReExportBinding(entry, properties);
+          if (binding !== undefined) bindings.add(binding);
+        }
+      }
+    }
+    if (
       braceDepths[index] !== 0 ||
       tokens[index]?.value !== "=" ||
       tokens[index + 1]?.kind !== "identifier"
@@ -941,6 +955,27 @@ function collectCommonJsObjectExportBindings(
     }
   }
   return bindings;
+}
+
+function commonJsObjectReExportBinding(
+  entry: readonly BundleToken[],
+  properties: ReadonlySet<string>
+): string | undefined {
+  if (entry.length === 1 && entry[0]?.kind === "identifier") {
+    return properties.has(entry[0].value) ? entry[0].value : undefined;
+  }
+  const colon = topLevelTokenIndex(entry, ":");
+  if (colon === -1 || entry[colon + 1]?.kind !== "identifier") return undefined;
+  const property =
+    entry[0]?.value === "[" &&
+    entry[1]?.kind === "string" &&
+    entry[1].literalValid === true &&
+    entry[2]?.value === "]"
+      ? entry[1].value
+      : ["identifier", "string"].includes(entry[0]?.kind ?? "") && entry[0]?.literalValid !== false
+        ? entry[0]?.value
+        : undefined;
+  return properties.has(property ?? "") ? entry[colon + 1]?.value : undefined;
 }
 
 function collectBraceDepths(tokens: readonly BundleToken[]): number[] {
