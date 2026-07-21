@@ -264,7 +264,7 @@ function collectCapabilityBindings(tokens: readonly BundleToken[]): {
   // PluginContext is a structural SDK type, so neither bundlers nor authors must preserve the
   // local name `context`. Deriving bindings from handler parameters avoids classifying unrelated
   // dependency methods named `capability` as exact SDK broker calls.
-  const receivers = new Set(["context"]);
+  const receivers = new Set<string>();
   const direct = new Set<string>();
   registerHandlerContextParameters(tokens, receivers, direct);
 
@@ -337,7 +337,8 @@ function registerHandlerContextParameters(
         const startsObjectField = ["{", ","].includes(tokens[field - 1]?.value ?? "");
         if (
           startsObjectField &&
-          tokens[field]?.kind === "identifier" &&
+          ["identifier", "string"].includes(tokens[field]?.kind ?? "") &&
+          tokens[field]?.literalValid !== false &&
           tokens[field + 1]?.value === "("
         ) {
           methodOpen = field + 1;

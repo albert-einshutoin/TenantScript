@@ -32,7 +32,7 @@ describe("plugin audit", () => {
         manifest,
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
-        bundleCode: 'async function run(context) { await context.capability("slack.send", {}); }'
+        bundleCode: handlerBundle('await context.capability("slack.send", {});')
       })
     ).toEqual({ version: 1, passed: true, findings: [] });
   });
@@ -103,6 +103,20 @@ describe("plugin audit", () => {
     ]);
   });
 
+  it("detects renamed context bindings in quoted object-method handlers", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode:
+          'exports.handlers = { "invoice.created"(_payload, ctx) { return ctx.capability("slack.send", {}); } };'
+      }).findings
+    ).toEqual([
+      finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
+    ]);
+  });
+
   it("detects renamed context bindings in referenced arrow handlers", () => {
     expect(
       auditPluginPackage({
@@ -117,6 +131,21 @@ describe("plugin audit", () => {
     ).toEqual([
       finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact")
     ]);
+  });
+
+  it("does not treat an unrelated binding named context as the SDK broker", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: [
+          'const context = { capability: () => "not-the-sdk" };',
+          'context.capability("slack.send", {});',
+          "export const handlers = { event(_payload, runtime) { return runtime; } };"
+        ].join("\n")
+      }).findings
+    ).toEqual([]);
   });
 
   it("keeps malformed delimiter analysis within a bounded CPU budget", () => {
@@ -141,7 +170,9 @@ describe("plugin audit", () => {
         manifest,
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
-        bundleCode: String.raw`context.capability("\u0067ithub\x2eissue\u{2e}create", {});`
+        bundleCode: handlerBundle(
+          String.raw`context.capability("\u0067ithub\x2eissue\u{2e}create", {});`
+        )
       }).findings
     ).toEqual([
       finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
@@ -158,7 +189,7 @@ describe("plugin audit", () => {
         manifest,
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
-        bundleCode: 'context.capability("Slack", {});'
+        bundleCode: handlerBundle('context.capability("Slack", {});')
       }).findings
     ).toEqual([
       finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
@@ -175,7 +206,7 @@ describe("plugin audit", () => {
         manifest,
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
-        bundleCode: String.raw`context.capability("slack\xZZsend", {});`
+        bundleCode: handlerBundle(String.raw`context.capability("slack\xZZsend", {});`)
       }).findings
     ).toEqual([
       finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
@@ -191,8 +222,9 @@ describe("plugin audit", () => {
         manifest,
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
-        bundleCode:
+        bundleCode: handlerBundle(
           'context.capability("slack.send", {}); context.capability("github.issue.create", {}); fetch("https://example.invalid");'
+        )
       }).findings
     ).toEqual([
       finding("bundle_capability_undeclared", "error", "bundle.capabilityCalls.*", "exact"),
@@ -205,7 +237,7 @@ describe("plugin audit", () => {
         manifest,
         packageJson: validPackageJson(),
         expectedSdkVersion: "1.2.3",
-        bundleCode: "context.capability(capabilityName, {});"
+        bundleCode: handlerBundle("context.capability(capabilityName, {});")
       }).findings
     ).toEqual([
       finding("bundle_capability_usage_dynamic", "warning", "bundle.capabilityCalls.*", "heuristic")
@@ -222,11 +254,15 @@ describe("plugin audit", () => {
     };
     const first = auditPluginPackage({
       ...request,
-      bundleCode: 'fetch("https://example.invalid"); context.capability("slack.send", {});'
+      bundleCode: handlerBundle(
+        'fetch("https://example.invalid"); context.capability("slack.send", {});'
+      )
     });
     const second = auditPluginPackage({
       ...request,
-      bundleCode: 'context.capability("slack.send", {}); fetch("https://example.invalid");'
+      bundleCode: handlerBundle(
+        'context.capability("slack.send", {}); fetch("https://example.invalid");'
+      )
     });
 
     expect(first).toEqual(second);
@@ -235,13 +271,15 @@ describe("plugin audit", () => {
   it("ignores call-shaped text in comments and strings without reflecting capability names", () => {
     const manifest = validManifest();
     manifest.capabilities = { "secret.sentinel": {} };
-    const bundleCode = [
-      '// fetch("https://example.invalid")',
-      "const note = 'context.capability(\"secret.sentinel\", {})';",
-      "const pattern = /fetch\\(/u;",
-      "const hasFetch = () => /fetch\\(/u.test(note);",
-      'context.capability("secret.sentinel", {});'
-    ].join("\n");
+    const bundleCode = handlerBundle(
+      [
+        '// fetch("https://example.invalid")',
+        "const note = 'context.capability(\"secret.sentinel\", {})';",
+        "const pattern = /fetch\\(/u;",
+        "const hasFetch = () => /fetch\\(/u.test(note);",
+        'context.capability("secret.sentinel", {});'
+      ].join("\n")
+    );
 
     const report = auditPluginPackage({
       manifest,
@@ -446,7 +484,7 @@ describe("plugin audit", () => {
     const cliVersion = await readCliPackageVersion();
     await writeFile(manifest, JSON.stringify(validManifest()));
     await writeFile(packageJson, JSON.stringify(validPackageJson(cliVersion)));
-    await writeFile(bundle, 'context.capability("slack.send", {});');
+    await writeFile(bundle, handlerBundle('context.capability("slack.send", {});'));
     const stdout: string[] = [];
     const stderr: string[] = [];
 
@@ -568,6 +606,10 @@ describe("plugin audit", () => {
     expect(stderr).toEqual(["plugin audit input is invalid"]);
   });
 });
+
+function handlerBundle(body: string): string {
+  return `export const handlers = { event(_payload, context) { ${body} } };`;
+}
 
 function validManifest(): Record<string, unknown> {
   return {
