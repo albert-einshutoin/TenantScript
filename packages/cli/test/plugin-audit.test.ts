@@ -1281,6 +1281,19 @@ describe("plugin audit", () => {
     ).toEqual([]);
   });
 
+  it("ignores call-shaped text in regex literals after comments", () => {
+    expect(
+      auditPluginPackage({
+        manifest: validManifest(),
+        packageJson: validPackageJson(),
+        expectedSdkVersion: "1.2.3",
+        bundleCode: handlerBundle(
+          'const capabilityPattern = /* audit note */ /context\\.capability\\("admin.delete"\\)/; const fetchPattern = // audit note\n/fetch\\("https:\\/\\/direct.invalid"\\)/;'
+        )
+      }).findings
+    ).toEqual([]);
+  });
+
   it("detects global fetch while ignoring unrelated fetch methods and block comments", () => {
     const report = auditPluginPackage({
       manifest: validManifest(),

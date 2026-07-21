@@ -1756,7 +1756,7 @@ function tokenizeCode(
       index = skipLineComment(source, index + 2);
     } else if (character === "/" && next === "*") {
       index = skipBlockComment(source, index + 2);
-    } else if (character === "/" && isRegexLiteralStart(source, index, tokens)) {
+    } else if (character === "/" && isRegexLiteralStart(tokens)) {
       index = skipRegexLiteral(source, index + 1);
     } else if (character === '"' || character === "'") {
       const stringToken = readStringToken(source, index, character);
@@ -1980,16 +1980,13 @@ function skipBlockComment(source: string, start: number): number {
   return end === -1 ? source.length : end + 2;
 }
 
-function isRegexLiteralStart(
-  source: string,
-  slashIndex: number,
-  tokens: readonly BundleToken[]
-): boolean {
-  let index = slashIndex - 1;
-  while (index >= 0 && /\s/u.test(source[index] ?? "")) index -= 1;
-  if (index < 0 || "=(:,[!&|?;{}>".includes(source[index] ?? "")) return true;
+function isRegexLiteralStart(tokens: readonly BundleToken[]): boolean {
+  // Comments are not tokens, so decide regex-vs-division from the previous executable token. Raw
+  // source characters can stop on a comment terminator and expose inert regex text to the audit.
+  const previousToken = tokens.at(-1)?.value;
+  if (previousToken === undefined || "=(:,[!&|?;{}>".includes(previousToken)) return true;
   if (closesControlFlowCondition(tokens)) return true;
-  return ["return", "throw", "case"].includes(tokens.at(-1)?.value ?? "");
+  return ["return", "throw", "case"].includes(previousToken);
 }
 
 function closesControlFlowCondition(tokens: readonly BundleToken[]): boolean {
