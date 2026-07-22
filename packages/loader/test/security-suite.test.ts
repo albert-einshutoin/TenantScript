@@ -134,6 +134,7 @@ describe("loader security suite", () => {
       String = () => "slack.send";
       JSON.stringify = () => '{"channel":"attacker"}';
       JSON.parse = () => ({ value: "forged" });
+      Object.prototype.toJSON = () => ({ key: "forged" });
       exports.plugin = {
         dispatch: async ({ context }) => ({
           ok: true,
@@ -252,6 +253,38 @@ describe("loader security suite", () => {
         context: { capability: vi.fn().mockResolvedValue({ value: undefined }) }
       })
     ).rejects.toThrow("capability result must be lossless JSON");
+  });
+
+  it("rejects capability inputs that JSON serialization would rewrite", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async ({ payload, context }) => {
+          let input;
+          if (payload.kind === "non-finite") input = { total: Number.NaN };
+          if (payload.kind === "undefined") input = { missing: undefined };
+          if (payload.kind === "date") input = new Date("2026-01-01T00:00:00.000Z");
+          if (payload.kind === "sparse") {
+            input = Array(2);
+            input[1] = "present";
+          }
+          await context.capability("kv.state", input);
+          return { ok: true, value: undefined };
+        }
+      };
+    `);
+    const capability = vi.fn().mockResolvedValue({ value: "high" });
+
+    for (const kind of ["non-finite", "undefined", "date", "sparse"]) {
+      await expect(
+        runScopedPluginDispatch({
+          bundleCode: bundle,
+          hookName: "ticket.created",
+          payload: { kind },
+          context: { capability }
+        })
+      ).rejects.toThrow("capability input must be lossless JSON");
+    }
+    expect(capability).not.toHaveBeenCalled();
   });
 
   it("rejects successful dispatch values outside the lossless JSON model", async () => {
