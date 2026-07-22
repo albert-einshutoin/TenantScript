@@ -2,10 +2,13 @@ import {
   PLUGIN_AUTHORING_FAILURE_BY_JUDGE,
   PLUGIN_AUTHORING_REQUIRED_JUDGES,
   PLUGIN_AUTHORING_TASK_IDS,
+  computePluginAuthoringCorpusDigest,
   parsePluginAuthoringCorpus
 } from "./plugin-authoring-eval.mjs";
 
 const MAX_DURATION_MS = 3_600_000;
+export const PLUGIN_AUTHORING_JUDGE_CORPUS_DIGEST =
+  "9bf86c36f4bf79e1a9c659f92e88dfd619c83ab5db196d89bc46f6f0b87441f9";
 
 export async function runPluginAuthoringJudgeCore({
   corpus: corpusInput,
@@ -21,7 +24,8 @@ export async function runPluginAuthoringJudgeCore({
     const taskIds = corpus.tasks.map((task) => task.id);
     if (
       taskIds.length !== PLUGIN_AUTHORING_TASK_IDS.length ||
-      taskIds.some((taskId, index) => taskId !== PLUGIN_AUTHORING_TASK_IDS[index])
+      taskIds.some((taskId, index) => taskId !== PLUGIN_AUTHORING_TASK_IDS[index]) ||
+      computePluginAuthoringCorpusDigest(corpus) !== PLUGIN_AUTHORING_JUDGE_CORPUS_DIGEST
     ) {
       throw new Error("task contract drifted");
     }

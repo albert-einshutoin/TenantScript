@@ -152,6 +152,19 @@ test("judge core rejects corpus task drift without reflecting task metadata", as
   );
 });
 
+test("judge core rejects canonical corpus content drift with unchanged task IDs", async () => {
+  const driftedCorpus = structuredClone(corpus);
+  driftedCorpus.tasks[0].requirement = `${driftedCorpus.tasks[0].requirement} Changed.`;
+
+  await assert.rejects(
+    runPluginAuthoringJudgeCore({
+      corpus: driftedCorpus,
+      runJudge: async () => true
+    }),
+    new Error("plugin authoring judge core configuration is invalid")
+  );
+});
+
 function steppedClock(step) {
   let value = 0;
   return () => {
