@@ -25,13 +25,15 @@ function withTempRepo(run) {
   }
 }
 
-function writeManifest(dir, workspacePath, dependencies = {}) {
+function writeManifest(
+  dir,
+  workspacePath,
+  dependencies = {},
+  name = `@tenantscript/${workspacePath.split("/").at(-1)}`
+) {
   const path = join(dir, workspacePath, "package.json");
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(
-    path,
-    `${JSON.stringify({ name: `@tenantscript/${workspacePath.split("/").at(-1)}`, dependencies })}\n`
-  );
+  writeFileSync(path, `${JSON.stringify({ name, dependencies })}\n`);
 }
 
 test("rejects a low-level manifest dependency on the control plane", () => {
@@ -81,6 +83,26 @@ test("rejects app-to-app dependencies so composition roots cannot form cycles", 
   });
 });
 
+test("rejects an unreviewed deploy-image dependency", () => {
+  withTempRepo((dir) => {
+    writeManifest(dir, "packages/plugin-sdk");
+    writeManifest(
+      dir,
+      "deploy/plugin-authoring-judge",
+      { "@tenantscript/plugin-sdk": "workspace:*" },
+      "@tenantscript/plugin-authoring-judge-image"
+    );
+
+    const result = runChecker(dir);
+
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /deploy\/plugin-authoring-judge\/package\.json: @tenantscript\/plugin-authoring-judge-image must not depend on @tenantscript\/plugin-sdk/
+    );
+  });
+});
+
 test("accepts the documented runtime graph and app composition roots", () => {
   withTempRepo((dir) => {
     writeManifest(dir, "packages/manifest");
@@ -93,10 +115,21 @@ test("accepts the documented runtime graph and app composition roots", () => {
     writeManifest(dir, "packages/loader", {
       "@tenantscript/control-plane": "workspace:*"
     });
+    writeManifest(dir, "packages/cli");
     writeManifest(dir, "apps/example-saas", {
       "@tenantscript/control-plane": "workspace:*",
       "@tenantscript/loader": "workspace:*"
     });
+    writeManifest(
+      dir,
+      "deploy/plugin-authoring-judge",
+      {
+        "@tenantscript/cli": "workspace:*",
+        "@tenantscript/loader": "workspace:*",
+        "@tenantscript/manifest": "workspace:*"
+      },
+      "@tenantscript/plugin-authoring-judge-image"
+    );
 
     const result = runChecker(dir);
 

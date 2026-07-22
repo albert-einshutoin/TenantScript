@@ -262,6 +262,7 @@ export function buildIsolatedJudgeDockerInvocation({
   const sandbox = request.sandbox;
   const args = [
     "run",
+    "--platform=linux/amd64",
     `--name=${containerName}`,
     "--pull=never",
     "--init",
@@ -279,8 +280,10 @@ export function buildIsolatedJudgeDockerInvocation({
     "--user=65532:65532",
     "--env=CI=1",
     "--env=HOME=/tmp",
-    `--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=${String(sandbox.tmpfsMb)}m`,
-    `--tmpfs=/work:rw,nosuid,nodev,size=${String(sandbox.tmpfsMb)}m`,
+    // Docker creates tmpfs mounts as root unless ownership is explicit. Bind both writable mounts
+    // to the forced sandbox UID so the judge can write without broad world-writable permissions.
+    `--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=${String(sandbox.tmpfsMb)}m,uid=65532,gid=65532,mode=0700`,
+    `--tmpfs=/work:rw,nosuid,nodev,size=${String(sandbox.tmpfsMb)}m,uid=65532,gid=65532,mode=0700`,
     `--mount=type=bind,src=${baselineRoot},dst=/baseline,readonly`,
     `--mount=type=bind,src=${candidateRoot},dst=/candidate,readonly`,
     `--mount=type=bind,src=${requestPath},dst=/input/request.json,readonly`,

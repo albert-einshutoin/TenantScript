@@ -22,12 +22,18 @@ const allowedRuntimeDependencies = new Map([
   [
     "@tenantscript/cli",
     new Set(["@tenantscript/control-plane", "@tenantscript/loader", "@tenantscript/manifest"])
+  ],
+  [
+    "@tenantscript/plugin-authoring-judge-image",
+    new Set(["@tenantscript/cli", "@tenantscript/loader", "@tenantscript/manifest"])
   ]
 ]);
 
 function discoverManifests(repoRoot) {
   const manifests = [];
-  for (const workspaceDir of ["packages", "apps"]) {
+  // Deployment workspaces are executable composition roots, so their internal edges need the
+  // same review gate as published packages instead of bypassing the architecture allowlist.
+  for (const workspaceDir of ["packages", "apps", "deploy"]) {
     const root = join(repoRoot, workspaceDir);
     if (!existsSync(root)) continue;
     for (const entry of readdirSync(root).sort()) {

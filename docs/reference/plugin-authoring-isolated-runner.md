@@ -54,8 +54,8 @@ candidate全体を再度inspectするのは、direct image invocationやmount dr
 control、oversized treeを渡さないためです。検証時に保持したbytesからtaskごとのread-only
 `/work/<task-id>/source` snapshotをmaterializeし、後からlive candidate mountが変化してもadapterへ渡しません。adapterの
 writable stateは`/work/<task-id>`へ分離します。stdoutはclosed judge JSON 1行、entrypoint failureは固定stderrだけに
-閉じます。このrepository module自体はまだreview済みimageの
-`/opt/tenantscript/bin/plugin-authoring-judge`へinstallされていません。
+閉じます。repositoryには`/opt/tenantscript/bin/plugin-authoring-judge`へinstallするlocal image sourceがありますが、
+GHCRへ未publish・未attestであり、review済みdigestとしてrunner requestへ設定できる段階ではありません。
 
 `build` judgeにはbounded offline compile-check adapterがあります。adapterはcandidateの`package.json` scripts、
 `tsconfig.json`、lockfile、install hookを実行・継承せず、judge codeと同じ固定Node executableから固定workerを
@@ -175,12 +175,33 @@ symlinkや既存artifactを上書きしません。
 - judge failureは`warning`とfailure code別の次アクションを返す
 - sandbox、execution、output、cleanup failureはnon-reflective errorで停止する
 
+## Local judge image contract
+
+`deploy/plugin-authoring-judge/Dockerfile`はlinux/amd64のNode baseをplatform manifest digestで固定し、
+multi-stage buildでlockfileから依存を`--ignore-scripts` installします。build contextは
+`plugin-authoring-judge-image-context.mjs`のallowlistで作り、`.git`、`.devloop`、`.tmp`、candidate、test source、
+local build artifactをdaemonへ渡しません。final imageはroot所有artifactをnon-rootの`node` userで読み、固定entrypointだけを
+起動します。
+
+actual image contract testは`--network=none`、read-only root、全capability drop、no-new-privileges、PID/memory/CPU上限、
+read-only input mount、node所有のbounded `/work` tmpfsを使い、known-good 10 task x 6 judgeと固定failureを実行します。
+
+```sh
+# cwd: repository root
+# expected-exit: 0
+pnpm test:judge-image
+```
+
+これはlocal source/build/runtime境界のrepository evidenceです。imageは未publish・未attestで、正式なsecurity review、
+SBOM、GHCR digest、provenance、real-agent品質の証拠ではありません。linux/amd64以外も検証済みとは主張しません。
+
 ## Verification and current limitation
 
 ```sh
 # cwd: repository root
 # expected-exit: 0
 pnpm test:agent-evals
+pnpm test:judge-image
 pnpm test:security
 ```
 

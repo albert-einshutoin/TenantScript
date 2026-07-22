@@ -35,6 +35,7 @@ jobs:
       - run: pnpm test:release-automation
       - run: pnpm test:agent-scaffold
       - run: pnpm test:agent-evals
+      - run: pnpm test:judge-image
       - run: pnpm test:template-submissions
       - run: pnpm test:template-catalog
       - id: template-gallery

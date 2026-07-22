@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-001",
-  "baselineCommit": "38c7894d769a7d26870b605a57862c72a860e2d2",
+  "baselineCommit": "245d6628cdb824ce3b78e1520f55be0204e2ddd8",
   "target": {
     "name": "Built-in ext init plugin scaffold and first-party templates",
     "scope": [
@@ -21,7 +21,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-07-22T21:57:01.000Z",
+  "reviewedAt": "2026-07-22T22:31:46.000Z",
   "domains": [
     {
       "name": "security",
@@ -84,7 +84,7 @@
     "docs/security/plugin-review-checklist.md": "1bee7b0bebadfd44b9cf86e288af48d3a8f9f42c0883d39823809dd1857f54f5",
     "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "package.json": "f140976acbd9aefa16c5731da301b22fd09f70bc66d7ddce8ac6023f85e85ea5",
+    "package.json": "e799f326f07400006f27aa92186f042b69e0e7966326deb224f0cedd9bdefcc9",
     "packages/cli/package.json": "3fc19043fe7b7fd7cc2fae985cc5be60785063d884c798f2e3a23c5425c43123"
   },
   "decision": "approve",
