@@ -119,6 +119,7 @@ function validateSubmission(directoryName) {
     errors.push(`${displayPath}: invalid or missing JSON`);
     return;
   }
+  validatePacketFiles(directoryName, displayPath);
   if (!isRecord(submission)) {
     errors.push(`${displayPath}: submission must be a JSON object`);
     return;
@@ -175,6 +176,25 @@ function validateSubmission(directoryName) {
   }
   validateSafeReference(submission.securityNote, "securityNote", displayPath);
   validateNonGuarantees(submission.nonGuarantees, displayPath);
+}
+
+function validatePacketFiles(directoryName, displayPath) {
+  const packetDirectory = `templates/submissions/${directoryName}`;
+  const packetFiles = listRegularSourceFiles(packetDirectory);
+  if (packetFiles === undefined) {
+    errors.push(`${displayPath}: packet must contain only bounded regular files`);
+    return;
+  }
+  // Scan the closed packet tree, not only declared evidence. Otherwise an unreferenced artifact can
+  // carry credentials or machine-local data while every declared digest and reference stays clean.
+  for (const path of packetFiles) {
+    const content = readRegularRepositoryFile(path);
+    if (content === undefined) {
+      errors.push(`${displayPath}: packet must contain only bounded regular files`);
+    } else if (containsSensitiveFileContent(content)) {
+      errors.push(`${displayPath}: packet file contains sensitive or private content`);
+    }
+  }
 }
 
 function validateSource(value, sdk, license, directoryName, displayPath) {

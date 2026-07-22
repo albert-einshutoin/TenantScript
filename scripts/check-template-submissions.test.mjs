@@ -490,6 +490,26 @@ test("rejects sensitive content in referenced evidence and security notes", () =
   });
 });
 
+test("rejects sensitive content in unreferenced packet files", () => {
+  withRepository(({ root, submission }) => {
+    const credential = `Bearer ${"U".repeat(24)}`;
+    writeFileSync(
+      join(root, "templates/submissions/example-template/unreferenced.txt"),
+      `Accidental artifact ${credential}\n`
+    );
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(
+      result.stderr,
+      /submission\.json: packet file contains sensitive or private content/
+    );
+    assert.doesNotMatch(result.stderr, /U{8}|unreferenced/);
+  });
+});
+
 test("rejects local Unix paths embedded in file URLs", () => {
   for (const localUrl of ["file:///home/alice/review.log", "file:///tmp/output"]) {
     withRepository(({ root, submission }) => {
