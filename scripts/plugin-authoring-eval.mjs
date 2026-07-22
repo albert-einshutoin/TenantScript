@@ -136,7 +136,7 @@ function validateRun(run) {
     "completedAt",
     "costUsd"
   ]);
-  assertString(run.id, 1, 100, ID_PATTERN);
+  assertSafeText(run.id, 1, 100, ID_PATTERN);
   assertSafeText(run.agent, 1, 80, NAME_PATTERN);
   assertSafeText(run.model, 1, 120, NAME_PATTERN);
   assert(["repository-simulation", "isolated-agent-run"].includes(run.provenance));
@@ -207,25 +207,33 @@ export function buildPluginAuthoringEvalReport(corpusInput, resultInputs) {
   if (new Set(runIds).size !== runIds.length) {
     throw new Error("plugin authoring results contain duplicate runs");
   }
+  // Repository simulations verify the scoring contract but must never inflate external-agent
+  // metrics. Once isolated evidence exists, it becomes the sole metric population.
+  const metricProvenance = results.some((result) => result.run.provenance === "isolated-agent-run")
+    ? "isolated-agent-run"
+    : "repository-simulation";
 
   const failureCounts = new Map();
   const categoryCounts = new Map(CATEGORIES.map((category) => [category, { passed: 0, total: 0 }]));
   const taskCounts = new Map(corpus.tasks.map((task) => [task.id, { passed: 0, total: 0 }]));
   const taskById = new Map(corpus.tasks.map((task) => [task.id, task]));
   const runs = results.map((result) => {
+    const contributesMetrics = result.run.provenance === metricProvenance;
     let passed = 0;
     for (const taskResult of result.taskResults) {
       const taskPassed = taskResult.judges.every((judge) => judge.status === "pass");
       if (taskPassed) passed += 1;
-      const taskCount = taskCounts.get(taskResult.taskId);
-      taskCount.total += 1;
-      if (taskPassed) taskCount.passed += 1;
-      const categoryCount = categoryCounts.get(taskById.get(taskResult.taskId).category);
-      categoryCount.total += 1;
-      if (taskPassed) categoryCount.passed += 1;
-      for (const judge of taskResult.judges) {
-        if (judge.failureCode !== null) {
-          failureCounts.set(judge.failureCode, (failureCounts.get(judge.failureCode) ?? 0) + 1);
+      if (contributesMetrics) {
+        const taskCount = taskCounts.get(taskResult.taskId);
+        taskCount.total += 1;
+        if (taskPassed) taskCount.passed += 1;
+        const categoryCount = categoryCounts.get(taskById.get(taskResult.taskId).category);
+        categoryCount.total += 1;
+        if (taskPassed) categoryCount.passed += 1;
+        for (const judge of taskResult.judges) {
+          if (judge.failureCode !== null) {
+            failureCounts.set(judge.failureCode, (failureCounts.get(judge.failureCode) ?? 0) + 1);
+          }
         }
       }
     }
@@ -245,8 +253,9 @@ export function buildPluginAuthoringEvalReport(corpusInput, resultInputs) {
     };
   });
 
+  const metricRuns = runs.filter((run) => run.provenance === metricProvenance);
   const agentGroups = new Map();
-  for (const run of runs) {
+  for (const run of metricRuns) {
     const key = `${run.agent}\u0000${run.model}`;
     const group = agentGroups.get(key) ?? {
       agent: run.agent,
@@ -271,7 +280,9 @@ export function buildPluginAuthoringEvalReport(corpusInput, resultInputs) {
       corpusDigest: computePluginAuthoringCorpusDigest(corpus),
       baselineRevision: corpus.baselineRevision,
       tasks: corpus.tasks.length,
-      runs: runs.length
+      runs: runs.length,
+      metricProvenance,
+      metricRuns: metricRuns.length
     },
     runs,
     agents: [...agentGroups.values()]
@@ -306,13 +317,17 @@ export function buildPluginAuthoringEvalReport(corpusInput, resultInputs) {
 }
 
 export function renderPluginAuthoringEvalDashboard(report) {
+  const scope =
+    report.source.metricProvenance === "isolated-agent-run"
+      ? "> Isolated agent runs only. Repository simulations remain listed as evidence but are excluded from metrics; isolated execution does not establish production safety."
+      : "> Repository simulation only. These fixtures validate the scoring contract; they do not compare real agents or establish production safety.";
   const lines = [
     "# Plugin authoring eval dashboard",
     "",
-    "> Repository simulation only. These fixtures validate the scoring contract; they do not compare real agents or establish production safety.",
+    scope,
     "",
     `Baseline revision: \`${report.source.baselineRevision.slice(0, 12)}\``,
-    `Corpus: ${String(report.source.tasks)} tasks / ${String(report.source.runs)} runs`,
+    `Corpus: ${String(report.source.tasks)} tasks / ${String(report.source.metricRuns)} metric runs / ${String(report.source.runs)} evidence runs`,
     "",
     "## Agent results",
     ""

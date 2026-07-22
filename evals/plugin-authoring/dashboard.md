@@ -3,7 +3,7 @@
 > Repository simulation only. These fixtures validate the scoring contract; they do not compare real agents or establish production safety.
 
 Baseline revision: `441ae870ac58`
-Corpus: 10 tasks / 1 runs
+Corpus: 10 tasks / 1 metric runs / 1 evidence runs
 
 ## Agent results
 

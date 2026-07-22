@@ -171,6 +171,10 @@ test("rejects task omission, duplicate task evidence, corpus drift, and unsafe m
   localPath.run.agent = "/Volumes/private/agent";
   cases.push(localPath);
 
+  const credentialRunId = clone(source);
+  credentialRunId.run.id = `sk-${"a".repeat(24)}`;
+  cases.push(credentialRunId);
+
   for (const input of cases) {
     assert.throws(
       () => parsePluginAuthoringResult(input, corpus),
@@ -235,6 +239,40 @@ test("canonicalizes report ordering independently of input result order", () => 
     buildPluginAuthoringEvalReport(corpus, [second, first]),
     buildPluginAuthoringEvalReport(corpus, [first, second])
   );
+});
+
+test("excludes repository simulations from isolated-agent metrics and dashboard scope", () => {
+  const corpus = parsePluginAuthoringCorpus(loadJson(corpusPath));
+  const simulation = parsePluginAuthoringResult(loadJson(resultPath), corpus);
+  const isolatedSource = loadJson(resultPath);
+  isolatedSource.run.id = "isolated-agent-001";
+  isolatedSource.run.agent = "external-agent";
+  isolatedSource.run.provenance = "isolated-agent-run";
+  isolatedSource.run.evidenceBundleDigest = "a".repeat(64);
+  const failedJudge = isolatedSource.taskResults[0].judges.find(
+    (judge) => judge.name === "security-test"
+  );
+  failedJudge.status = "fail";
+  failedJudge.failureCode = "security-test-failed";
+  const isolated = parsePluginAuthoringResult(isolatedSource, corpus);
+
+  const report = buildPluginAuthoringEvalReport(corpus, [simulation, isolated]);
+  const dashboard = renderPluginAuthoringEvalDashboard(report);
+
+  assert.equal(report.source.runs, 2);
+  assert.equal(report.source.metricRuns, 1);
+  assert.equal(report.source.metricProvenance, "isolated-agent-run");
+  assert.deepEqual(
+    report.agents.map((agent) => agent.agent),
+    ["external-agent"]
+  );
+  assert.equal(
+    report.tasks.reduce((total, task) => total + task.total, 0),
+    corpus.tasks.length
+  );
+  assert.equal(report.failures[0].count, 1);
+  assert.match(dashboard, /Isolated agent runs only/);
+  assert.doesNotMatch(dashboard, /Repository simulation only/);
 });
 
 test("renders an honest dashboard with scope, metrics, and recovery guidance", () => {

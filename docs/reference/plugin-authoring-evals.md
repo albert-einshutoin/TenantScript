@@ -39,6 +39,9 @@ pnpm lint:agent-evals
 `report.json`はautomation向け、`dashboard.md`は人間向けです。fixtureのpass@1が100%でも、採点器の
 known-good repository simulationが通ったという意味だけです。実agentの比較では、agent/model/run ID、
 cost、開始・終了時刻をresultへ記録し、失敗resultも削除せず同じcorpusに対して集計します。
+`isolated-agent-run`が1件でも存在する場合、agent/category/task/failureのmetricsはisolated runだけを
+集計し、repository simulationはevidence一覧に残してmetricsから除外します。dashboardのscope、
+`metricProvenance`、`metricRuns`で、どのprovenanceを集計した値かを明示します。
 
 ## Failure and recovery contract
 

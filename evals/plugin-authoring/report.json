@@ -4,7 +4,9 @@
     "corpusDigest": "9bf86c36f4bf79e1a9c659f92e88dfd619c83ab5db196d89bc46f6f0b87441f9",
     "baselineRevision": "441ae870ac58d6693f8576fd6b081323611d1739",
     "tasks": 10,
-    "runs": 1
+    "runs": 1,
+    "metricProvenance": "repository-simulation",
+    "metricRuns": 1
   },
   "runs": [
     {
