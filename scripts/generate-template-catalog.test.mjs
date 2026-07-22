@@ -143,6 +143,26 @@ test("sorts every discovered submission by slug", () => {
   });
 });
 
+test("normalizes an accepted source URL before publishing it", () => {
+  withFixture(({ root }) => {
+    const submissionPath = join(
+      root,
+      "templates/submissions/ticket-priority-normalizer/submission.json"
+    );
+    const submission = JSON.parse(readFileSync(submissionPath, "utf8"));
+    submission.source.repository = "HTTPS://GITHUB.COM/community/template-example";
+    writeFileSync(submissionPath, `${JSON.stringify(submission, null, 2)}\n`);
+
+    const result = runGenerator(root, "--write");
+    assert.equal(result.status, 0, result.stderr);
+    const catalog = JSON.parse(readFileSync(join(root, "templates", "catalog.json"), "utf8"));
+    assert.equal(
+      catalog.templates[0].source.repository,
+      "https://github.com/community/template-example"
+    );
+  });
+});
+
 test("rejects a submission whose review no longer approves the exact source", () => {
   withFixture(({ root, submission }) => {
     const reviewPath = join(root, submission.reviewRecord);

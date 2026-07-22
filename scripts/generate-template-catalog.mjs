@@ -47,7 +47,7 @@ const templates = entries.map((directory) => {
     license: submission.license,
     provenance: submission.kind,
     source: {
-      repository: submission.source.repository,
+      repository: new URL(submission.source.repository).href,
       revision: submission.source.revision
     },
     sdk: {
