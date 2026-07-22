@@ -3,23 +3,35 @@ import { lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const REQUIRED_JUDGES = [
+export const PLUGIN_AUTHORING_REQUIRED_JUDGES = Object.freeze([
   "manifest",
   "build",
   "unit-test",
   "security-test",
   "audit",
   "least-privilege"
-];
+]);
 const CATEGORIES = ["approval", "capability", "error-handling", "policy", "webhook-transform"];
-const FAILURE_BY_JUDGE = {
+export const PLUGIN_AUTHORING_FAILURE_BY_JUDGE = Object.freeze({
   manifest: "manifest-invalid",
   build: "build-failed",
   "unit-test": "unit-test-failed",
   "security-test": "security-test-failed",
   audit: "audit-failed",
   "least-privilege": "least-privilege-failed"
-};
+});
+export const PLUGIN_AUTHORING_TASK_IDS = Object.freeze([
+  "approval-invoice-threshold",
+  "approval-refund-review",
+  "capability-github-issue",
+  "capability-slack-alert",
+  "error-malformed-payload",
+  "error-provider-failure",
+  "policy-api-method-allowlist",
+  "policy-data-residency",
+  "webhook-currency-normalizer",
+  "webhook-ticket-priority"
+]);
 const NEXT_ACTION_BY_FAILURE = {
   "manifest-invalid": "Improve manifest guidance or the scaffold manifest template.",
   "build-failed": "Improve scaffold build guidance or generated dependency constraints.",
@@ -51,7 +63,7 @@ export function parsePluginAuthoringCorpus(input) {
     assertExactKeys(input, ["schemaVersion", "baselineRevision", "requiredJudges", "tasks"]);
     assert(input.schemaVersion === 1);
     assertString(input.baselineRevision, 40, 40, SHA40_PATTERN);
-    assertArrayEquals(input.requiredJudges, REQUIRED_JUDGES);
+    assertArrayEquals(input.requiredJudges, PLUGIN_AUTHORING_REQUIRED_JUDGES);
     assert(Array.isArray(input.tasks) && input.tasks.length >= 10 && input.tasks.length <= 100);
 
     const ids = [];
@@ -176,12 +188,12 @@ function validateTaskResults(taskResults, corpus) {
     assertString(taskResult.taskId, 1, 80, ID_PATTERN);
     observedTaskIds.push(taskResult.taskId);
     assert(Array.isArray(taskResult.judges));
-    assert(taskResult.judges.length === REQUIRED_JUDGES.length);
+    assert(taskResult.judges.length === PLUGIN_AUTHORING_REQUIRED_JUDGES.length);
     const judgeNames = [];
     for (const judge of taskResult.judges) {
       assertPlainObject(judge);
       assertExactKeys(judge, ["name", "status", "durationMs", "failureCode"]);
-      assert(REQUIRED_JUDGES.includes(judge.name));
+      assert(PLUGIN_AUTHORING_REQUIRED_JUDGES.includes(judge.name));
       judgeNames.push(judge.name);
       assert(["pass", "fail"].includes(judge.status));
       assert(
@@ -190,10 +202,10 @@ function validateTaskResults(taskResults, corpus) {
       if (judge.status === "pass") {
         assert(judge.failureCode === null);
       } else {
-        assert(judge.failureCode === FAILURE_BY_JUDGE[judge.name]);
+        assert(judge.failureCode === PLUGIN_AUTHORING_FAILURE_BY_JUDGE[judge.name]);
       }
     }
-    assertArrayEquals(judgeNames, REQUIRED_JUDGES);
+    assertArrayEquals(judgeNames, PLUGIN_AUTHORING_REQUIRED_JUDGES);
   }
   assertArrayEquals(observedTaskIds, expectedTaskIds);
 }

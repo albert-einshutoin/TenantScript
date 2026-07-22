@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
+import "./plugin-authoring-judge-core.test.mjs";
+
 import {
   generatePluginAuthoringEvalArtifacts,
   parsePluginAuthoringCorpus,
