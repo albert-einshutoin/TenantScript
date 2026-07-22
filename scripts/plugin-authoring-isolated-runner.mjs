@@ -22,6 +22,10 @@ import {
   parsePluginAuthoringCorpus,
   parsePluginAuthoringResult
 } from "./plugin-authoring-eval.mjs";
+import {
+  PLUGIN_AUTHORING_JUDGE_ARGV,
+  PLUGIN_AUTHORING_JUDGE_ENTRYPOINT
+} from "./plugin-authoring-judge-contract.mjs";
 
 const SHA40_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA64_PATTERN = /^[0-9a-f]{64}$/u;
@@ -37,6 +41,7 @@ const MAX_CANDIDATE_FILE_BYTES = 256 * 1024;
 const MAX_CANDIDATE_TOTAL_BYTES = 16 * 1024 * 1024;
 const MAX_CANDIDATE_DEPTH = 8;
 const MAX_CANDIDATE_PATH_BYTES = 240;
+const MIN_TMPFS_MB = 32;
 const PROHIBITED_NAMES = new Set([
   ".git",
   ".gitattributes",
@@ -124,7 +129,9 @@ export function parseIsolatedRunnerRequest(input, corpusInput) {
         input.sandbox.cpuCount <= 4
     );
     assertIntegerBetween(input.sandbox.pidsLimit, 16, 256);
-    assertIntegerBetween(input.sandbox.tmpfsMb, 16, 256);
+    // A maximum 16 MiB candidate is snapshotted into /work before adapters run. Requiring at
+    // least twice that raw capacity reserves headroom for filesystem metadata and adapter state.
+    assertIntegerBetween(input.sandbox.tmpfsMb, MIN_TMPFS_MB, 256);
     return structuredClone(input);
   } catch {
     throw new Error("isolated runner request is invalid");
@@ -278,12 +285,9 @@ export function buildIsolatedJudgeDockerInvocation({
     `--mount=type=bind,src=${candidateRoot},dst=/candidate,readonly`,
     `--mount=type=bind,src=${requestPath},dst=/input/request.json,readonly`,
     "--workdir=/work",
-    "--entrypoint=/opt/tenantscript/bin/plugin-authoring-judge",
+    `--entrypoint=${PLUGIN_AUTHORING_JUDGE_ENTRYPOINT}`,
     request.sandbox.image,
-    "--request=/input/request.json",
-    "--baseline=/baseline",
-    "--candidate=/candidate",
-    "--workspace=/work"
+    ...PLUGIN_AUTHORING_JUDGE_ARGV
   ];
   return {
     command: "docker",

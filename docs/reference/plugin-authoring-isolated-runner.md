@@ -23,6 +23,8 @@ runnerは次をrepositoryで検証します。
 - Docker invocationが`--pull=never`、`--network=none`、`--read-only`、capability drop、
   no-new-privileges、PID/memory/CPU/tmpfs/time limitを強制する
 - candidate入力をread-only mountし、build/testの書き込み先を容量制限付き`/work` tmpfsに限定する
+- `/work` tmpfsを最低32 MiBとし、最大16 MiBのcandidate snapshotに対してfilesystem metadataとadapter state用の
+  raw headroomを最低16 MiB確保する。より大きなbuild stateが必要なrunは上限内で明示的に増やす
 - judge imageのentrypointを`/opt/tenantscript/bin/plugin-authoring-judge`へ固定する
 - success、judge failure、timeout、malformed outputの全経路で名前付きcontainerを明示削除する
 - stdoutを1 MiB以下のclosed JSONとして検証し、stderrやcandidate内容を公開errorへ反射しない
@@ -44,8 +46,16 @@ runnerはstderrを保持も反射もしません。
 
 repositoryには、固定corpusを10 task x 6 judgeの順序で評価し、adapterのfalse、例外、不正な戻り値を
 judge固有のfailure codeへ閉じるorchestration coreがあります。このcoreはcandidate codeを実行せず、
-review済みimage、production judge adapter、sandboxの証拠ではありません。manifest抽出やbuildを行うadapterは
-後続のimage実装でcontainer内だけに接続し、scaffold正本の`src/manifest.ts`を扱います。
+review済みimage、production execution adapter、sandboxの証拠ではありません。
+
+`scripts/plugin-authoring-judge-entrypoint.mjs`はrunnerと共有する固定entrypoint/argv contractを持ち、request、
+digest固定corpus、空workspace、candidate bundleをcontainer内でも再検証してからcoreを呼びます。host側で検証済みでも
+candidate全体を再度inspectするのは、direct image invocationやmount driftから後続adapterへsymlink、hard link、hidden
+control、oversized treeを渡さないためです。検証時に保持したbytesからtaskごとのread-only
+`/work/<task-id>/source` snapshotをmaterializeし、後からlive candidate mountが変化してもadapterへ渡しません。adapterの
+writable stateは`/work/<task-id>`へ分離します。stdoutはclosed judge JSON 1行、entrypoint failureは固定stderrだけに
+閉じます。このrepository module自体はまだreview済みimageの
+`/opt/tenantscript/bin/plugin-authoring-judge`へinstallされていません。
 
 抽出済みmanifest valueに対しては、canonical manifest parserの成功と、task固有の単一hook、capability keyの
 exact set、egress denyを判定するpure policyがあります。parserの例外や不正な戻り値はdiagnosticを反射せず
@@ -58,6 +68,10 @@ top-levelはscaffoldが生成するtype-only `TenantScriptManifest` importと
 duplicate/prototype-sensitive keyを拒否します。source byte、AST node、nesting depthにも上限があります。抽出失敗や
 parser diagnosticはcandidate内容を反射せず両judgeのfailureへ閉じます。この静的adapterはunknown sourceの非実行境界を
 提供しますが、build/test/audit sandboxやreview済みimageの完成を証明しません。
+
+build、unit-test、security-test、auditの4 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
+boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskをskipしません。test doubleの全成功はimageや
+real-agent qualityの証拠ではなく、4 execution adapterがreview済みimageへ接続されるまで実runの全judge成功を主張しません。
 
 reviewed judge imageがない場合のstop conditionは明確です。runnerは
 `isolated judge sandbox is unavailable`で停止し、host実行やrepository simulationへfallbackしません。

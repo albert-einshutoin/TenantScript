@@ -102,6 +102,10 @@ test("accepts a closed pinned runner request and rejects mutable or drifted inpu
   widened.sandbox.extraArgument = "--privileged";
   cases.push(widened);
 
+  const noSnapshotHeadroom = structuredClone(requestFixture());
+  noSnapshotHeadroom.sandbox.tmpfsMb = 31;
+  cases.push(noSnapshotHeadroom);
+
   const credentialId = structuredClone(requestFixture());
   credentialId.run.id = `sk-${"c".repeat(24)}`;
   cases.push(credentialId);
@@ -348,6 +352,8 @@ test("publishes closed and bounded request, judge output, and evidence schemas",
   assert.match(requestSchema.properties.sandbox.properties.image.pattern, /sha256/);
   assert.ok(requestSchema.properties.sandbox.properties.timeoutMs.maximum <= 600_000);
   assert.ok(requestSchema.properties.sandbox.properties.memoryMb.maximum <= 2_048);
+  assert.equal(requestSchema.properties.sandbox.properties.tmpfsMb.minimum, 32);
+  assert.equal(evidenceSchema.properties.sandbox.properties.tmpfsMb.minimum, 32);
   assert.equal(judgeOutputSchema.additionalProperties, false);
   assert.equal(judgeOutputSchema.properties.taskResults.items, false);
   assert.deepEqual(
