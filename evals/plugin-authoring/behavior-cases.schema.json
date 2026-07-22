@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tenantscript.dev/schemas/plugin-authoring-behavior-cases.schema.json",
+  "title": "TenantScript plugin authoring judge-owned behavior cases",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tasks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "tasks": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/task" }
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId", "cases"],
+      "properties": {
+        "taskId": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 80 },
+        "cases": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/case" }
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "hookName", "payload", "capabilityPlan", "expected"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 64 },
+        "hookName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)+$",
+          "maxLength": 120
+        },
+        "payload": { "$ref": "#/$defs/jsonValue" },
+        "capabilityPlan": {
+          "type": "array",
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/capabilityStep" }
+        },
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["result", "capabilityCalls"],
+          "properties": {
+            "result": { "$ref": "#/$defs/jsonValue" },
+            "capabilityCalls": {
+              "type": "array",
+              "maxItems": 4,
+              "items": { "$ref": "#/$defs/capabilityCall" }
+            }
+          }
+        }
+      }
+    },
+    "capabilityStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "input", "outcome"],
+      "properties": {
+        "name": { "type": "string", "maxLength": 120 },
+        "input": { "$ref": "#/$defs/jsonValue" },
+        "outcome": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value"],
+              "properties": {
+                "status": { "const": "resolve" },
+                "value": { "$ref": "#/$defs/jsonValue" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status"],
+              "properties": { "status": { "const": "reject" } }
+            }
+          ]
+        }
+      }
+    },
+    "capabilityCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "input"],
+      "properties": {
+        "name": { "type": "string", "maxLength": 120 },
+        "input": { "$ref": "#/$defs/jsonValue" }
+      }
+    },
+    "jsonValue": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string", "maxLength": 512 },
+        { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/jsonValue" } },
+        {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": { "minLength": 1, "maxLength": 80 },
+          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
+        }
+      ]
+    }
+  }
+}

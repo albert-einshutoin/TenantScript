@@ -104,10 +104,18 @@ test("uses one fixed worker with a bounded shell-free and sanitized process cont
     assert.equal("GITHUB_TOKEN" in options.env, false);
 
     const request = JSON.parse(readFileSync(args[1], "utf8"));
-    assert.deepEqual(Object.keys(request).sort(), ["buildRoot", "schemaVersion", "taskRoot"]);
+    assert.deepEqual(Object.keys(request).sort(), [
+      "buildRoot",
+      "reviewedManifest",
+      "schemaVersion",
+      "taskId",
+      "taskRoot"
+    ]);
     assert.equal(request.schemaVersion, 1);
+    assert.equal(request.taskId, context.task.id);
     assert.equal(request.taskRoot, context.taskRoot);
     assert.equal(request.buildRoot, join(context.taskWorkspace, "build"));
+    assert.deepEqual(request.reviewedManifest, {});
   });
 });
 

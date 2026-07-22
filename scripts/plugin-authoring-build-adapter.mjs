@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { lstatSync, mkdirSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
+
+import { extractPluginAuthoringManifest } from "./plugin-authoring-manifest-extractor.mjs";
 
 const workerPath = resolve(import.meta.dirname, "plugin-authoring-build-worker.mjs");
 
@@ -19,14 +21,20 @@ export function createPluginAuthoringBuildAdapter({
     let child;
     try {
       const paths = validateContext(context);
+      const extractedManifest = extractPluginAuthoringManifest(
+        readFileSync(join(paths.taskRoot, "src", "manifest.ts"), "utf8")
+      );
+      assert(extractedManifest.ok === true);
       mkdirSync(paths.buildRoot, { mode: 0o700 });
       const requestPath = join(paths.buildRoot, "request.json");
       writeFileSync(
         requestPath,
         `${JSON.stringify({
           schemaVersion: 1,
+          taskId: context.task.id,
           taskRoot: paths.taskRoot,
-          buildRoot: paths.buildRoot
+          buildRoot: paths.buildRoot,
+          reviewedManifest: extractedManifest.value
         })}\n`,
         { encoding: "utf8", flag: "wx", mode: 0o600 }
       );

@@ -65,6 +65,19 @@ APIはsanitized environment、10秒timeout、stdout/stderr各32 KiB、合計64 K
 制限内で実行され、成功時は固定JSONだけを返します。candidate diagnostic、source、absolute pathはjudge outputへ
 反射しません。candidateの型定義やcompiler pluginを読み込まないため、このbuild判定はreview済みの最小authoring
 contractに対するcompile-checkであり、candidate独自dependencyや任意build pipelineの成功を証明しません。
+成功時には、materialize済みsource全体のSHA-256と生成した`bundle.cjs`のSHA-256・byte数を結ぶ
+judge-owned build receiptを`/work/<task-id>/build`へ保存します。後続adapterはsourceまたはbundleが変化したreceiptを
+拒否し、candidateが用意したprebuilt artifactを実行しません。
+bundle entrypointは静的抽出済みのreviewed manifestを`definePlugin`由来のhandlerへ再bindingするため、candidateが
+別のhook、capability、egressを持つmanifestを渡して実行時だけ権限契約を差し替えることもできません。
+
+`unit-test` judgeにはjudge-owned behavior matrixを使うbounded adapterがあります。
+`behavior-cases.json`は固定10 taskごとに正常系、境界、malformed payload、provider failureをclosed dataとして保持し、
+candidateのtest scriptやfixtureを読みません。matrixはbaseline mountではなくdigest固定judge image内のreview済みsourceから
+読み、古いbaselineやdirect image invocationによる欠落・差し替えを許しません。各caseは新しい固定Node childで`bundle.cjs`をproduction loaderの
+`runScopedPluginDispatch`へ渡し、250ms、128 MiB、case固有subrequest上限で実行します。childはsanitized environmentを使い、
+stdoutのclosed observationをrunごとの32-byte keyでHMAC認証します。親adapterはbuild receipt、result、capability call、
+runtime log、未完了capabilityをすべて照合し、1 caseが失敗しても残りのcaseを実行します。
 
 抽出済みmanifest valueに対しては、canonical manifest parserの成功と、task固有の単一hook、capability keyの
 exact set、egress denyを判定するpure policyがあります。parserの例外や不正な戻り値はdiagnosticを反射せず
@@ -78,9 +91,9 @@ duplicate/prototype-sensitive keyを拒否します。source byte、AST node、n
 parser diagnosticはcandidate内容を反射せず両judgeのfailureへ閉じます。この静的adapterはunknown sourceの非実行境界を
 提供しますが、build/test/audit sandboxやreview済みimageの完成を証明しません。
 
-unit-test、security-test、auditの3 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
-boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskをskipしません。build adapterの成功やtest
-doubleの全成功はimageやreal-agent qualityの証拠ではなく、残る3 execution adapterがreview済みimageへ接続されるまで
+security-test、auditの2 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
+boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskをskipしません。build / unit-test adapterの成功やtest
+doubleの全成功はimageやreal-agent qualityの証拠ではなく、残る2 execution adapterがreview済みimageへ接続されるまで
 実runの全judge成功を主張しません。
 
 reviewed judge imageがない場合のstop conditionは明確です。runnerは
