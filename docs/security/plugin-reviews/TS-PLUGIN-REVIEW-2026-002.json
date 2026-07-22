@@ -15,9 +15,9 @@
     "sourceDigests": {
       "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
       "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
-      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "a43645a8794dffd136c05cb8147a39d797aa390fceab728176deb4ea17b32b87",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "9d06632386b910154323e866d358da7d4c6656b36d01819dd67ecce01123ad1e",
       "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
-      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "556b6c11179fe6801660fae51e8f2548822b9d5137ddd299298032551c5848ec",
+      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "9470e9dd5d23f5127fcb7bff0ae7e26689da37bdc682b413d6fbe81ac8853b06",
       "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4"
     }
   },
@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T03:21:00.000Z",
+  "reviewedAt": "2026-07-22T03:34:00.000Z",
   "domains": [
     {
       "name": "security",
@@ -39,7 +39,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs and Markdown-wrapped local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, package-manager control files, package-manager settings, and install lifecycle scripts, non-public repository and egress hosts, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks while requiring offline installation."
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, collapses malformed values and hostile accessor or Proxy failures to one fixed non-reflective message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs and Markdown-wrapped local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, package-manager control files, package-manager settings, and install lifecycle scripts, non-public repository and egress hosts, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks while requiring offline installation."
     },
     {
       "name": "compatibility",
@@ -94,9 +94,9 @@
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
     "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
-    "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "a43645a8794dffd136c05cb8147a39d797aa390fceab728176deb4ea17b32b87",
+    "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "9d06632386b910154323e866d358da7d4c6656b36d01819dd67ecce01123ad1e",
     "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
-    "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "556b6c11179fe6801660fae51e8f2548822b9d5137ddd299298032551c5848ec",
+    "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "9470e9dd5d23f5127fcb7bff0ae7e26689da37bdc682b413d6fbe81ac8853b06",
     "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4",
     "templates/submissions/ticket-priority-normalizer/verification.md": "f64d10561e2f6ca1a7c14bf6404cfc4b554f9f6dcd27d0e91dc772769d2e8f76"
   },
