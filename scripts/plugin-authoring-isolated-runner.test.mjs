@@ -217,6 +217,12 @@ test("wraps closed judge output in digest-bound isolated evidence and always cle
     assert.deepEqual(output.artifacts, ["evidence.json", "result.json"]);
     assert.equal(output.result.run.provenance, "isolated-agent-run");
     assert.equal(output.result.run.evidenceBundleDigest, output.evidence.digest);
+    assert.deepEqual(output.evidence.run, {
+      id: output.result.run.id,
+      agent: output.result.run.agent,
+      model: output.result.run.model,
+      costUsd: output.result.run.costUsd
+    });
     assert.equal(output.evidence.sandbox.network, "none");
     assert.equal(output.evidence.sandbox.workspace, "bounded-tmpfs");
     assert.equal(output.evidence.sandbox.cleanup, "confirmed");
@@ -327,6 +333,8 @@ test("publishes closed and bounded request, judge output, and evidence schemas",
     "https://tenantscript.dev/schemas/plugin-authoring-eval-result.schema.json#/properties/taskResults"
   );
   assert.equal(evidenceSchema.additionalProperties, false);
+  assert.equal(evidenceSchema.properties.run.additionalProperties, false);
+  assert.deepEqual(evidenceSchema.properties.run.required, ["id", "agent", "model", "costUsd"]);
   assert.equal(evidenceSchema.properties.candidate.additionalProperties, false);
   assert.equal(evidenceSchema.properties.sandbox.additionalProperties, false);
   assert.equal(evidenceSchema.properties.sandbox.properties.network.const, "none");

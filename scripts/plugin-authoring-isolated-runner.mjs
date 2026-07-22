@@ -368,7 +368,12 @@ export async function executeIsolatedJudgeRun({
     const completedAt = now().toISOString();
     const evidencePayload = {
       schemaVersion: 1,
-      runId: request.run.id,
+      run: {
+        id: request.run.id,
+        agent: request.run.agent,
+        model: request.run.model,
+        costUsd: request.run.costUsd
+      },
       repositoryRevision: request.repositoryRevision,
       corpusDigest: request.corpusDigest,
       candidate: {

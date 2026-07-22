@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
-    "runId",
+    "run",
     "repositoryRevision",
     "corpusDigest",
     "candidate",
@@ -18,10 +18,20 @@
   ],
   "properties": {
     "schemaVersion": { "const": 1 },
-    "runId": {
-      "type": "string",
-      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-      "maxLength": 100
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "agent", "model", "costUsd"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "maxLength": 100
+        },
+        "agent": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "maxLength": 80 },
+        "model": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "maxLength": 120 },
+        "costUsd": { "type": ["number", "null"], "minimum": 0, "maximum": 100000 }
+      }
     },
     "repositoryRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "corpusDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
