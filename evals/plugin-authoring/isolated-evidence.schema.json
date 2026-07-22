@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tenantscript.dev/schemas/plugin-authoring-isolated-evidence-v1.json",
+  "title": "TenantScript isolated plugin authoring evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "run",
+    "repositoryRevision",
+    "corpusDigest",
+    "candidate",
+    "sandbox",
+    "startedAt",
+    "completedAt",
+    "taskResults",
+    "digest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "agent", "model", "costUsd"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "maxLength": 100
+        },
+        "agent": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "maxLength": 80 },
+        "model": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "maxLength": 120 },
+        "costUsd": { "type": ["number", "null"], "minimum": 0, "maximum": 100000 }
+      }
+    },
+    "repositoryRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "corpusDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "tasks", "files", "totalBytes"],
+      "properties": {
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "tasks": { "const": 10 },
+        "files": { "type": "integer", "minimum": 10, "maximum": 2000 },
+        "totalBytes": { "type": "integer", "minimum": 1, "maximum": 16777216 }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "image",
+        "network",
+        "readOnlyRoot",
+        "capabilities",
+        "noNewPrivileges",
+        "timeoutMs",
+        "memoryMb",
+        "cpuCount",
+        "pidsLimit",
+        "tmpfsMb",
+        "workspace",
+        "cleanup"
+      ],
+      "properties": {
+        "image": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+          "maxLength": 300
+        },
+        "network": { "const": "none" },
+        "readOnlyRoot": { "const": true },
+        "capabilities": { "const": "none" },
+        "noNewPrivileges": { "const": true },
+        "timeoutMs": { "type": "integer", "minimum": 1000, "maximum": 600000 },
+        "memoryMb": { "type": "integer", "minimum": 128, "maximum": 2048 },
+        "cpuCount": { "type": "number", "minimum": 0.25, "maximum": 4 },
+        "pidsLimit": { "type": "integer", "minimum": 16, "maximum": 256 },
+        "tmpfsMb": { "type": "integer", "minimum": 16, "maximum": 256 },
+        "workspace": { "const": "bounded-tmpfs" },
+        "cleanup": { "const": "confirmed" }
+      }
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "taskResults": {
+      "$ref": "https://tenantscript.dev/schemas/plugin-authoring-judge-output-v1.json#/properties/taskResults",
+      "minItems": 10,
+      "maxItems": 10
+    },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

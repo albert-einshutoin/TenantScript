@@ -58,7 +58,7 @@
   - RED: 「自然言語要件 → 生成 plugin」が (1) manifest valid (2) テスト green (3) security suite 通過 (4) `ext audit` 通過、を自動判定するハーネスを先に作る
   - GREEN: 要件コーパス(10件〜)で合格率を計測し、docs/scaffold の改善にフィードバック
   - DoD: 合格率がダッシュボード化され、四半期 KPI になる
-  - Progress: Issue #310で固定revision・corpus digest・全6 deterministic judgeを必須にするclosed result contract、known-bad fail-closed test、pass@1/task/category/failure集計、machine reportとMarkdown dashboardをTier 1へ追加。現時点はrepository simulationのみで、unknown生成codeを実行するisolated runnerと実agent結果は未実装
+  - Progress: Issue #310で固定revision・corpus digest・全6 deterministic judgeを必須にするclosed result contract、known-bad fail-closed test、pass@1/task/category/failure集計、machine reportとMarkdown dashboardをTier 1へ追加。Issue #313で固定baseline copy、digest固定judge image、network deny、PID/memory/CPU/time limit、明示cleanup、closed evidence/result生成を持つisolated judge runnerを追加。現時点の公開dashboardはrepository simulationのみで、review済みjudge imageの公開と実agent結果は未実施
 
 - [ ] **P4-T09**(S)llms.txt / docs の継続改善
   - 内容: eval harness の失敗パターンから docs を改訂するループを月次化
