@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "tasks": [
+    {
+      "taskId": "approval-invoice-threshold",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "invoice.created",
+          "payload": {
+            "totalCents": 99999,
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": []
+        }
+      ]
+    },
+    {
+      "taskId": "approval-refund-review",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "refund.requested",
+          "payload": {
+            "purchaseAgeDays": 29,
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": []
+        }
+      ]
+    },
+    {
+      "taskId": "capability-github-issue",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "deployment.failed",
+          "payload": {
+            "deploymentId": "dep-123",
+            "reason": "health check failed",
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": [
+            {
+              "name": "github.issue.create",
+              "input": { "title": "Deployment dep-123 failed", "body": "health check failed" },
+              "outcome": { "status": "resolve", "value": { "issueId": "issue-1" } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "capability-slack-alert",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "order.blocked",
+          "payload": {
+            "orderId": "ord-42",
+            "reason": "payment review",
+            "channel": "ops-alerts",
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": [
+            {
+              "name": "slack.send",
+              "input": {
+                "channel": "ops-alerts",
+                "message": "Order ord-42 blocked: payment review"
+              },
+              "outcome": { "status": "resolve", "value": { "messageId": "msg-1" } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "error-malformed-payload",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "customer.updated",
+          "payload": {
+            "customerId": "cus-1",
+            "displayName": "Ada",
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": []
+        }
+      ]
+    },
+    {
+      "taskId": "error-provider-failure",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "incident.opened",
+          "payload": {
+            "incidentId": "inc-9",
+            "channel": "incidents",
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": [
+            {
+              "name": "slack.send",
+              "input": { "channel": "incidents", "message": "Incident inc-9 opened" },
+              "outcome": { "status": "resolve", "value": { "messageId": "msg-9" } }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "policy-api-method-allowlist",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "api.requested",
+          "payload": {
+            "method": "GET",
+            "url": "https://api.example.com/v1/items",
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": []
+        }
+      ]
+    },
+    {
+      "taskId": "policy-data-residency",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "record.export-requested",
+          "payload": {
+            "region": "eu-west",
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": []
+        }
+      ]
+    },
+    {
+      "taskId": "webhook-currency-normalizer",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "payment.received",
+          "payload": {
+            "currency": "usd",
+            "amount": 1250,
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": []
+        }
+      ]
+    },
+    {
+      "taskId": "webhook-ticket-priority",
+      "cases": [
+        {
+          "name": "prototype-shaped-input",
+          "hookName": "ticket.created",
+          "payload": {
+            "priority": "low",
+            "__proto__": { "polluted": true },
+            "constructor": "constructor",
+            "prototype": "prototype"
+          },
+          "capabilityPlan": []
+        }
+      ]
+    }
+  ]
+}
