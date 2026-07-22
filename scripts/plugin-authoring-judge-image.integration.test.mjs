@@ -10,10 +10,16 @@ import {
   computePluginAuthoringCorpusDigest,
   parsePluginAuthoringCorpus
 } from "./plugin-authoring-eval.mjs";
-import { parseJudgeOutput } from "./plugin-authoring-isolated-runner.mjs";
+import {
+  buildIsolatedJudgeDockerInvocation,
+  parseIsolatedRunnerRequest,
+  parseJudgeOutput
+} from "./plugin-authoring-isolated-runner.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const image = "tenantscript/plugin-authoring-judge:contract-test";
+const successContainer = "tenantscript-agent-eval-1111111111111111";
+const failureContainer = "tenantscript-agent-eval-2222222222222222";
 const corpus = parsePluginAuthoringCorpus(
   JSON.parse(readFileSync(join(repoRoot, "evals", "plugin-authoring", "corpus.json"), "utf8"))
 );
@@ -51,8 +57,19 @@ test(
       assert.equal(inspected.Config.Labels["org.opencontainers.image.revision"], revision);
 
       writeCandidateFixture({ baselineRoot, candidateRoot, requestPath });
-      const execution = run("docker", containerArgs({ baselineRoot, candidateRoot, requestPath }), {
-        timeout: 120_000
+      const request = parseIsolatedRunnerRequest(
+        JSON.parse(readFileSync(requestPath, "utf8")),
+        corpus
+      );
+      const executionInvocation = productionInvocation({
+        request,
+        containerName: successContainer,
+        baselineRoot,
+        candidateRoot,
+        requestPath
+      });
+      const execution = run(executionInvocation.command, executionInvocation.args, {
+        timeout: executionInvocation.timeoutMs
       });
       assert.equal(execution.stderr, "");
       const taskResults = parseJudgeOutput(execution.stdout, corpus);
@@ -62,31 +79,31 @@ test(
           .map((judge) => `${taskResult.taskId}:${judge.name}`)
       );
       assert.deepEqual(failures, []);
+      run("docker", ["container", "rm", successContainer]);
 
-      const failure = spawnSync(
-        "docker",
-        [
-          "run",
-          "--rm",
-          "--platform=linux/amd64",
-          "--network=none",
-          "--read-only",
-          "--cap-drop=ALL",
-          "--security-opt=no-new-privileges",
-          "--tmpfs=/work:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0700",
-          image,
-          "--request=/input/request.json",
-          "--baseline=/baseline",
-          "--candidate=/candidate",
-          "--workspace=/work"
-        ],
-        { encoding: "utf8", timeout: 30_000 }
-      );
+      const failureInvocation = productionInvocation({
+        request,
+        containerName: failureContainer,
+        baselineRoot,
+        candidateRoot,
+        requestPath,
+        omitMounts: true
+      });
+      const failure = spawnSync(failureInvocation.command, failureInvocation.args, {
+        encoding: "utf8",
+        timeout: 30_000
+      });
       assert.equal(failure.status, 1);
       assert.equal(failure.stdout, "");
       assert.equal(failure.stderr, "plugin authoring judge failed\n");
     } finally {
       rmSync(root, { recursive: true, force: true });
+      spawnSync("docker", ["container", "rm", "--force", successContainer], {
+        encoding: "utf8"
+      });
+      spawnSync("docker", ["container", "rm", "--force", failureContainer], {
+        encoding: "utf8"
+      });
       spawnSync("docker", ["image", "rm", "--force", image], { encoding: "utf8" });
     }
   }
@@ -128,28 +145,29 @@ function writeCandidateFixture({ baselineRoot, candidateRoot, requestPath }) {
   }
 }
 
-function containerArgs({ baselineRoot, candidateRoot, requestPath }) {
-  return [
-    "run",
-    "--rm",
-    "--platform=linux/amd64",
-    "--network=none",
-    "--read-only",
-    "--cap-drop=ALL",
-    "--security-opt=no-new-privileges",
-    "--pids-limit=64",
-    "--memory=512m",
-    "--cpus=1",
-    "--tmpfs=/work:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0700",
-    `--mount=type=bind,src=${requestPath},dst=/input/request.json,readonly`,
-    `--mount=type=bind,src=${baselineRoot},dst=/baseline,readonly`,
-    `--mount=type=bind,src=${candidateRoot},dst=/candidate,readonly`,
-    image,
-    "--request=/input/request.json",
-    "--baseline=/baseline",
-    "--candidate=/candidate",
-    "--workspace=/work"
-  ];
+function productionInvocation({
+  request,
+  containerName,
+  baselineRoot,
+  candidateRoot,
+  requestPath,
+  omitMounts = false
+}) {
+  const invocation = buildIsolatedJudgeDockerInvocation({
+    request,
+    containerName,
+    baselineRoot,
+    candidateRoot,
+    requestPath
+  });
+  return {
+    ...invocation,
+    // The production parser requires a GHCR digest. The contract test substitutes only that
+    // reviewed image reference after deriving every runtime flag from the production builder.
+    args: invocation.args
+      .filter((argument) => !omitMounts || !argument.startsWith("--mount="))
+      .map((argument) => (argument === request.sandbox.image ? image : argument))
+  };
 }
 
 function manifestSource(task) {

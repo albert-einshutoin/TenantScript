@@ -139,6 +139,7 @@ test("builds a fixed least-authority Docker invocation", () => {
 
   assert.equal(invocation.command, "docker");
   for (const required of [
+    "--platform=linux/amd64",
     "--pull=never",
     "--network=none",
     "--read-only",
@@ -151,7 +152,8 @@ test("builds a fixed least-authority Docker invocation", () => {
     "--user=65532:65532",
     "--ipc=none",
     "--init",
-    "--tmpfs=/work:rw,nosuid,nodev,size=64m",
+    "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m,uid=65532,gid=65532,mode=0700",
+    "--tmpfs=/work:rw,nosuid,nodev,size=64m,uid=65532,gid=65532,mode=0700",
     "--workdir=/work",
     "--entrypoint=/opt/tenantscript/bin/plugin-authoring-judge"
   ]) {
