@@ -254,6 +254,76 @@ describe("loader security suite", () => {
     ).rejects.toThrow("capability result must be lossless JSON");
   });
 
+  it("rejects successful dispatch values outside the lossless JSON model", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: ({ payload }) => {
+          let value;
+          if (payload.kind === "non-finite") value = { total: Number.NaN };
+          if (payload.kind === "undefined") value = { missing: undefined };
+          if (payload.kind === "date") value = new Date("2026-01-01T00:00:00.000Z");
+          if (payload.kind === "sparse") {
+            value = Array(2);
+            value[1] = "present";
+          }
+          if (payload.kind === "prototype") value = new (class Result { total = 1; })();
+          if (payload.kind === "accessor") {
+            value = Object.defineProperty({}, "total", {
+              enumerable: true,
+              get: () => 1
+            });
+          }
+          return { ok: true, value };
+        }
+      };
+    `);
+
+    for (const kind of ["non-finite", "undefined", "date", "sparse", "prototype", "accessor"]) {
+      await expect(
+        runScopedPluginDispatch({
+          bundleCode: bundle,
+          hookName: "ticket.created",
+          payload: { kind },
+          context: { capability: vi.fn() }
+        })
+      ).rejects.toThrow("invalid TenantScript plugin return value");
+    }
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: { kind: "allowed-undefined" },
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({ value: { ok: true, value: undefined }, logs: [] });
+  });
+
+  it("rejects dispatch that returns while a capability call is unfinished", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: ({ context }) => {
+          Promise.resolve().then(() => context.capability("kv.state", { key: "priority" }));
+          return { ok: true, value: undefined };
+        }
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: {
+          capability: async () => {
+            await new Promise((resolve) => setImmediate(resolve));
+            return { value: "high" };
+          }
+        }
+      })
+    ).rejects.toThrow("handler returned with outstanding capability calls");
+  });
+
   it("does not expose process, raw secret bindings, or global namespaces", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {

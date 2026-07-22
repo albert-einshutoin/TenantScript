@@ -529,7 +529,13 @@ async function run() {
     workerData.entrypoint,
     runtimeBindings.promiseResolveName
   );
-  return await withWallClockTimeout(result, limits.timeoutMs, workerData.handlerName);
+  const value = await withWallClockTimeout(result, limits.timeoutMs, workerData.handlerName);
+  // A completed handler must not leave capability effects in flight. Checking at settlement keeps
+  // local replay from blessing fire-and-forget behavior whose outcome production cannot record.
+  if (pendingCapabilities.size !== 0) {
+    throw new Error("handler returned with outstanding capability calls");
+  }
+  return runtimeBindings.validateResult(value, workerData.entrypoint);
 }
 
 function initializeSandbox(sandbox, limits) {
@@ -537,6 +543,9 @@ function initializeSandbox(sandbox, limits) {
   // evaluated code while retaining them inside the VM realm until invocation.
   const installerName = "__tenant_install_" + randomBytes(16).toString("hex");
   const promiseResolveName = "__tenant_resolve_" + randomBytes(16).toString("hex");
+  // Return values must be checked in their native realm before Worker structured clone can flatten
+  // prototypes or invoke accessors, using intrinsics captured before submitted code can replace them.
+  const resultValidatorName = "__tenant_validate_" + randomBytes(16).toString("hex");
   const HostURL = URL;
   const operateUrl = hardenBridge((requestJson) => {
     try {
@@ -604,6 +613,77 @@ function initializeSandbox(sandbox, limits) {
   const initialization = new vm.Script(
     [
       "const " + promiseResolveName + " = Promise.resolve.bind(Promise);",
+      "const " + resultValidatorName + " = (() => {",
+      "  const SafeError = Error;",
+      "  const SafeSet = Set;",
+      "  const safeSetAdd = Function.prototype.call.bind(Set.prototype.add);",
+      "  const safeSetDelete = Function.prototype.call.bind(Set.prototype.delete);",
+      "  const safeSetHas = Function.prototype.call.bind(Set.prototype.has);",
+      "  const safeArrayIsArray = Array.isArray;",
+      "  const safeNumberIsFinite = Number.isFinite;",
+      "  const safeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;",
+      "  const safeObjectGetOwnPropertyNames = Object.getOwnPropertyNames;",
+      "  const safeObjectGetOwnPropertySymbols = Object.getOwnPropertySymbols;",
+      "  const safeObjectGetPrototypeOf = Object.getPrototypeOf;",
+      "  const safeObjectHasOwn = Object.hasOwn;",
+      "  const safeObjectIs = Object.is;",
+      "  const safeObjectKeys = Object.keys;",
+      "  const safeObjectPrototype = Object.prototype;",
+      "  const invalid = () => new SafeError('invalid TenantScript plugin return value');",
+      "  const assertJsonValue = (value, ancestors, allowedUndefinedKey) => {",
+      "    if (",
+      "      value === null ||",
+      "      typeof value === 'string' ||",
+      "      typeof value === 'boolean' ||",
+      "      (typeof value === 'number' && safeNumberIsFinite(value) && !safeObjectIs(value, -0))",
+      "    ) return;",
+      "    if (typeof value !== 'object' || safeSetHas(ancestors, value)) throw invalid();",
+      "    safeSetAdd(ancestors, value);",
+      "    try {",
+      "      if (safeArrayIsArray(value)) {",
+      "        if (",
+      "          safeObjectKeys(value).length !== value.length ||",
+      "          safeObjectGetOwnPropertyNames(value).length !== value.length + 1 ||",
+      "          safeObjectGetOwnPropertySymbols(value).length !== 0",
+      "        ) throw invalid();",
+      "        for (let index = 0; index < value.length; index += 1) {",
+      "          if (!safeObjectHasOwn(value, index)) throw invalid();",
+      "          assertJsonValue(value[index], ancestors);",
+      "        }",
+      "        return;",
+      "      }",
+      "      const prototype = safeObjectGetPrototypeOf(value);",
+      "      const keys = safeObjectKeys(value);",
+      "      if (",
+      "        (prototype !== safeObjectPrototype && prototype !== null) ||",
+      "        safeObjectGetOwnPropertyNames(value).length !== keys.length ||",
+      "        safeObjectGetOwnPropertySymbols(value).length !== 0",
+      "      ) throw invalid();",
+      "      for (const key of keys) {",
+      "        const descriptor = safeObjectGetOwnPropertyDescriptor(value, key);",
+      "        if (descriptor === undefined || !('value' in descriptor)) throw invalid();",
+      "        if (key === allowedUndefinedKey && descriptor.value === undefined) continue;",
+      "        assertJsonValue(descriptor.value, ancestors);",
+      "      }",
+      "    } finally {",
+      "      safeSetDelete(ancestors, value);",
+      "    }",
+      "  };",
+      "  return (value, entrypoint) => {",
+      "    if (value === undefined && entrypoint === 'handler') return value;",
+      "    let allowedUndefinedKey;",
+      "    if (entrypoint === 'pluginDispatch' && value !== null && typeof value === 'object') {",
+      "      const ok = safeObjectGetOwnPropertyDescriptor(value, 'ok');",
+      "      const result = safeObjectGetOwnPropertyDescriptor(value, 'value');",
+      "      if (",
+      "        ok !== undefined && 'value' in ok && ok.value === true &&",
+      "        result !== undefined && 'value' in result && result.value === undefined",
+      "      ) allowedUndefinedKey = 'value';",
+      "    }",
+      "    assertJsonValue(value, new SafeSet(), allowedUndefinedKey);",
+      "    return value;",
+      "  };",
+      "})();",
       "const " + installerName + " = (() => {",
       "  const urlBridge = __tenant_url_bridge;",
       "  const fetchBridge = __tenant_fetch_bridge;",
@@ -760,7 +840,10 @@ function initializeSandbox(sandbox, limits) {
     { filename: "tenant-sandbox-init.cjs" }
   );
   initialization.runInContext(sandbox, { timeout: limits.timeoutMs });
-  return { installerName, promiseResolveName };
+  const validateResult = new vm.Script(resultValidatorName, {
+    filename: "tenant-sandbox-result-validator.cjs"
+  }).runInContext(sandbox, { timeout: limits.timeoutMs });
+  return { installerName, promiseResolveName, validateResult };
 }
 
 function installInvocationState(sandbox, limits, installerName) {
@@ -905,12 +988,12 @@ function invokeEntrypointInSandbox(sandbox, limits, entrypoint, promiseResolveNa
           "    payload: __tenant_payload,",
           "    context: __tenant_context",
           "  }));",
-          "})();"
+          "})()"
         ]
       : [
           promiseResolveName + "(",
           "  module.exports.handlers[__tenant_handler_name](__tenant_payload, __tenant_context)",
-          ");"
+          ")"
         ];
   const invocation = new vm.Script(
     invocationSource.join("\n"),
