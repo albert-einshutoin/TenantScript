@@ -699,7 +699,14 @@ test("rejects loopback, private-address, and local-only repository hosts", () =>
 });
 
 test("rejects private hosts in egress allowlists", () => {
-  for (const host of ["localhost", "10.0.0.1", "service.internal"]) {
+  for (const host of [
+    "localhost",
+    "10.0.0.1",
+    "127.1",
+    "0177.0.0.1",
+    "0x7f000001",
+    "service.internal"
+  ]) {
     withRepository(({ root, submission }) => {
       submission.egress = { mode: "allowlist", allowHosts: [host] };
       writeSubmission(root, "example-template", submission);
@@ -708,7 +715,10 @@ test("rejects private hosts in egress allowlists", () => {
 
       assert.equal(result.status, 1, host);
       assert.match(result.stderr, /egress\.allowHosts must contain only public DNS hosts/);
-      assert.doesNotMatch(result.stderr, /localhost|10\.0\.0\.1|service\.internal/);
+      assert.doesNotMatch(
+        result.stderr,
+        /localhost|10\.0\.0\.1|127\.1|0177\.0\.0\.1|0x7f000001|service\.internal/
+      );
     });
   }
 });

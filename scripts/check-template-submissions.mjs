@@ -623,6 +623,14 @@ function isPublicHostname(hostname) {
     // avoids loopback, private, link-local, documentation, and IPv6-mapped address edge cases.
     return false;
   }
+  try {
+    const canonicalHostname = new URL(`https://${hostname}/`).hostname.toLowerCase();
+    // WHATWG URL parsing expands legacy decimal, octal, hexadecimal, and shortened IPv4 forms.
+    // Requiring an unchanged hostname prevents values such as 127.1 from becoming loopback later.
+    if (canonicalHostname !== hostname) return false;
+  } catch {
+    return false;
+  }
   if (
     !hostname.includes(".") ||
     hostname.endsWith(".") ||
