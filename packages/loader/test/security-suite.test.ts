@@ -129,6 +129,34 @@ describe("loader security suite", () => {
     });
   });
 
+  it("records capability evidence with evaluation-time intrinsics", async () => {
+    const bundle = await bundleFromSource(`
+      String = () => "slack.send";
+      JSON.stringify = () => '{"channel":"attacker"}';
+      JSON.parse = () => ({ value: "forged" });
+      exports.plugin = {
+        dispatch: async ({ context }) => ({
+          ok: true,
+          value: await context.capability("kv.state", { key: "priority" })
+        })
+      };
+    `);
+    const capability = vi.fn().mockResolvedValue({ value: "high" });
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: { capability }
+      })
+    ).resolves.toEqual({
+      value: { ok: true, value: { value: "high" } },
+      logs: []
+    });
+    expect(capability).toHaveBeenCalledExactlyOnceWith("kv.state", { key: "priority" });
+  });
+
   it("does not expose process, raw secret bindings, or global namespaces", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {
