@@ -7,6 +7,7 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  opendirSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -31,6 +32,7 @@ const PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_JUDGE_OUTPUT_BYTES = 1024 * 1024;
 const MAX_CANDIDATE_FILES = 2_000;
+const MAX_CANDIDATE_ENTRIES = 2_000;
 const MAX_CANDIDATE_FILE_BYTES = 256 * 1024;
 const MAX_CANDIDATE_TOTAL_BYTES = 16 * 1024 * 1024;
 const MAX_CANDIDATE_DEPTH = 8;
@@ -141,16 +143,14 @@ export function inspectIsolatedCandidateBundle(
     const rootMetadata = lstatSync(candidateRoot);
     assert(rootMetadata.isDirectory() && !rootMetadata.isSymbolicLink());
     const expectedTasks = corpus.tasks.map((task) => task.id);
-    const rootEntries = readdirSync(candidateRoot, { withFileTypes: true }).sort((left, right) =>
-      compareText(left.name, right.name)
-    );
+    const collection = { records: [], totalBytes: 0, totalEntries: 0, readFile };
+    const rootEntries = readBoundedDirectoryEntries(candidateRoot, collection);
     assertArrayEquals(
       rootEntries.map((entry) => entry.name),
       expectedTasks
     );
     assert(rootEntries.every((entry) => entry.isDirectory() && !entry.isSymbolicLink()));
 
-    const collection = { records: [], totalBytes: 0, readFile };
     const taskFileCounts = new Map(expectedTasks.map((taskId) => [taskId, 0]));
     for (const taskId of expectedTasks) {
       collectCandidateFiles(candidateRoot, join(candidateRoot, taskId), taskId, collection, 1);
@@ -189,9 +189,7 @@ export function inspectIsolatedCandidateBundle(
 
 function collectCandidateFiles(root, current, taskId, collection, depth) {
   assert(depth <= MAX_CANDIDATE_DEPTH);
-  const entries = readdirSync(current, { withFileTypes: true }).sort((left, right) =>
-    compareText(left.name, right.name)
-  );
+  const entries = readBoundedDirectoryEntries(current, collection);
   for (const entry of entries) {
     assert(PATH_SEGMENT_PATTERN.test(entry.name));
     assert(!entry.name.startsWith(".") && !PROHIBITED_NAMES.has(entry.name));
@@ -227,6 +225,23 @@ function collectCandidateFiles(root, current, taskId, collection, depth) {
     collection.records.push({ taskId, path: relativePath, bytes });
     assert(collection.records.length <= MAX_CANDIDATE_FILES);
   }
+}
+
+function readBoundedDirectoryEntries(path, collection) {
+  const directory = opendirSync(path);
+  const entries = [];
+  try {
+    let entry;
+    while ((entry = directory.readSync()) !== null) {
+      collection.totalEntries += 1;
+      // Count directories as well as files so empty-directory fan-out cannot bypass the file cap.
+      assert(collection.totalEntries <= MAX_CANDIDATE_ENTRIES);
+      entries.push(entry);
+    }
+  } finally {
+    directory.closeSync();
+  }
+  return entries.sort((left, right) => compareText(left.name, right.name));
 }
 
 export function buildIsolatedJudgeDockerInvocation({

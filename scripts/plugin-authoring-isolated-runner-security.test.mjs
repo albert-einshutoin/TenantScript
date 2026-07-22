@@ -153,6 +153,19 @@ test("stops reading candidate bytes when the aggregate bundle cap is reached", a
   });
 });
 
+test("bounds directory fan-out before sorting attacker-controlled entries", async () => {
+  await withCandidateBundle((root) => {
+    const taskRoot = join(root, corpus.tasks[0].id);
+    for (let index = 0; index < 2_001; index += 1) {
+      mkdirSync(join(taskRoot, `empty-${String(index).padStart(4, "0")}`));
+    }
+    assert.throws(
+      () => inspectIsolatedCandidateBundle(root, corpus),
+      /isolated candidate bundle is invalid/
+    );
+  });
+});
+
 test("does not delete a temporary root before establishing ownership", async () => {
   await withCandidateBundle(async (candidateRoot) => {
     const tempRoot = mkdtempSync(join(tmpdir(), "tenantscript-unowned-root-"));
