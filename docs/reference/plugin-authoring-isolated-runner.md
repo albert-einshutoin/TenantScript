@@ -76,10 +76,12 @@ candidate/
 ```sh
 # cwd: repository root
 # expected-exit: 0
+mkdir -p .tmp/plugin-authoring-isolated
 pnpm isolated-agent-eval:run -- request.json candidate .tmp/plugin-authoring-isolated/output
 ```
 
-runnerはoutput directoryが存在しないか空であることを要求し、symlinkや既存artifactを上書きしません。
+operatorが管理する親directoryは先に作成します。runnerはoutput directory自体が存在しないか空であることを要求し、
+symlinkや既存artifactを上書きしません。
 成功時はstdoutへ次のbounded observationを返します。
 
 ```json

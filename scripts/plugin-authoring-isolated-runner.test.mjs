@@ -455,5 +455,6 @@ test("wires the isolated runner into repository gates and honest public document
   ]) {
     assert.ok(guide.includes(required), `isolated runner guide must include ${required}`);
   }
+  assert.match(guide, /mkdir -p \.tmp\/plugin-authoring-isolated/);
   assert.doesNotMatch(guide, /(?:\/Users\/|\/Volumes\/|ghp_|sk-proj-)/u);
 });
