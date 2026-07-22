@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tenantscript.dev/schemas/plugin-authoring-eval-result.schema.json",
+  "title": "TenantScript plugin authoring evaluation result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "corpusDigest", "repositoryRevision", "run", "taskResults"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "corpusDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "repositoryRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "agent",
+        "model",
+        "provenance",
+        "evidenceBundleDigest",
+        "startedAt",
+        "completedAt",
+        "costUsd"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 100 },
+        "agent": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "maxLength": 80 },
+        "model": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "maxLength": 120 },
+        "provenance": { "enum": ["repository-simulation", "isolated-agent-run"] },
+        "evidenceBundleDigest": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "startedAt": { "type": "string", "format": "date-time", "maxLength": 30 },
+        "completedAt": { "type": "string", "format": "date-time", "maxLength": 30 },
+        "costUsd": { "type": ["number", "null"], "minimum": 0, "maximum": 100000 }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "provenance": { "const": "repository-simulation" },
+            "evidenceBundleDigest": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "provenance": { "const": "isolated-agent-run" },
+            "evidenceBundleDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        }
+      ]
+    },
+    "taskResults": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["taskId", "judges"],
+        "properties": {
+          "taskId": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 80 },
+          "judges": {
+            "type": "array",
+            "minItems": 6,
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "status", "durationMs", "failureCode"],
+              "properties": {
+                "name": {
+                  "enum": [
+                    "manifest",
+                    "build",
+                    "unit-test",
+                    "security-test",
+                    "audit",
+                    "least-privilege"
+                  ]
+                },
+                "status": { "enum": ["pass", "fail"] },
+                "durationMs": { "type": "integer", "minimum": 0, "maximum": 3600000 },
+                "failureCode": {
+                  "type": ["string", "null"],
+                  "enum": [
+                    null,
+                    "manifest-invalid",
+                    "build-failed",
+                    "unit-test-failed",
+                    "security-test-failed",
+                    "audit-failed",
+                    "least-privilege-failed"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

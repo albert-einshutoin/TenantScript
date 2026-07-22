@@ -52,15 +52,18 @@
 - [ ] **P4-T07**(M)scaffold プロンプト & レシピ集
   - 内容: coding agent 向けの「plugin 作成レシピ」(要件 → manifest → テスト → handler の TDD 手順をプロンプト化)
   - DoD: 代表3ユースケースで agent が一発で green な plugin を生成
+  - Progress: Issue #310で10件の実務要件をversioned corpus化し、失敗分類からmanifest/build/TDD/security/audit/least-privilegeの改善先へ戻す契約を追加。実agentによる一発green検証は未実施
 
 - [ ] **P4-T08**(L→分割)AI 生成 plugin の eval harness
   - RED: 「自然言語要件 → 生成 plugin」が (1) manifest valid (2) テスト green (3) security suite 通過 (4) `ext audit` 通過、を自動判定するハーネスを先に作る
   - GREEN: 要件コーパス(10件〜)で合格率を計測し、docs/scaffold の改善にフィードバック
   - DoD: 合格率がダッシュボード化され、四半期 KPI になる
+  - Progress: Issue #310で固定revision・corpus digest・全6 deterministic judgeを必須にするclosed result contract、known-bad fail-closed test、pass@1/task/category/failure集計、machine reportとMarkdown dashboardをTier 1へ追加。現時点はrepository simulationのみで、unknown生成codeを実行するisolated runnerと実agent結果は未実装
 
 - [ ] **P4-T09**(S)llms.txt / docs の継続改善
   - 内容: eval harness の失敗パターンから docs を改訂するループを月次化
   - DoD: 改訂が eval 合格率の改善として計測される
+  - Progress: Issue #310でfailure codeごとのdocs/scaffold改善先とdrift gateを追加。月次運用と実agentのbefore/after測定は未実施
 
 ## チャンク D: portability 研究(T10–T12)
 
