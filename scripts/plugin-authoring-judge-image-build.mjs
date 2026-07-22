@@ -23,6 +23,7 @@ export function buildPluginAuthoringJudgeImage({
 }) {
   let temporaryRoot;
   let temporaryRootOwned = false;
+  let phase = "preflight";
   try {
     const root = resolve(repositoryRoot);
     assert(imagePattern.test(image));
@@ -36,6 +37,7 @@ export function buildPluginAuthoringJudgeImage({
       outputRoot: contextRoot
     });
     const contextSha256 = digestContext(contextRoot, staged.paths);
+    phase = "Docker build";
     run(
       spawnSyncImpl,
       "docker",
@@ -49,6 +51,7 @@ export function buildPluginAuthoringJudgeImage({
       ],
       { cwd: contextRoot, timeout: 180_000 }
     );
+    phase = "image inspection";
     const inspection = JSON.parse(
       run(spawnSyncImpl, "docker", ["image", "inspect", image], { timeout: 30_000 }).stdout
     );
@@ -71,7 +74,7 @@ export function buildPluginAuthoringJudgeImage({
       platform: PLUGIN_AUTHORING_JUDGE_IMAGE_PLATFORM
     });
   } catch {
-    throw new Error("plugin authoring judge image build failed");
+    throw new Error(`plugin authoring judge image ${phase} failed`);
   } finally {
     if (temporaryRootOwned) rmSync(temporaryRoot, { recursive: true, force: true });
   }

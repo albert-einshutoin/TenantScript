@@ -79,6 +79,7 @@ test("wires the actual image contract into Tier 1 and documents its evidence bou
   assert.match(tier1, /pnpm test:judge-image/u);
   assert.match(tier1, /pnpm judge-image:evidence/u);
   assert.match(tier1, /plugin-authoring-judge-image-evidence-\$\{\{ github\.sha \}\}/u);
+  assert.match(tier1, /include-hidden-files: true/u);
   for (const required of [
     "linux/amd64",
     "allowlist",

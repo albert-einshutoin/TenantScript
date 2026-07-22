@@ -210,6 +210,30 @@ export async function buildAndGeneratePluginAuthoringJudgeImageEvidence({
   }
 }
 
+export function preparePluginAuthoringJudgeEvidenceCliOutput({ repositoryRoot, outputDirectory }) {
+  const root = resolve(repositoryRoot);
+  const output = resolve(outputDirectory);
+  const temporaryRoot = resolve(root, ".tmp");
+  assert(output.startsWith(`${temporaryRoot}${sep}`));
+  try {
+    const metadata = lstatSync(temporaryRoot);
+    assert(metadata.isDirectory() && !metadata.isSymbolicLink());
+  } catch (error) {
+    assert(error?.code === "ENOENT");
+    mkdirSync(temporaryRoot, { mode: 0o700 });
+  }
+  let cursor = dirname(output);
+  while (cursor !== root) {
+    try {
+      assert(!lstatSync(cursor).isSymbolicLink());
+    } catch (error) {
+      assert(error?.code === "ENOENT");
+    }
+    if (cursor === temporaryRoot) break;
+    cursor = dirname(cursor);
+  }
+}
+
 export function assertPluginAuthoringJudgeEvidenceSource({
   repositoryRoot,
   spawnSyncImpl = spawnSync
@@ -261,21 +285,6 @@ function assertSafeTemporaryRoot(path) {
   assert(readdirSync(path).length === 0);
 }
 
-function assertSafeCliOutput(root, output) {
-  const temporaryRoot = resolve(root, ".tmp");
-  assert(output.startsWith(`${temporaryRoot}${sep}`));
-  let cursor = dirname(output);
-  while (cursor !== root) {
-    try {
-      assert(!lstatSync(cursor).isSymbolicLink());
-    } catch (error) {
-      assert(error?.code === "ENOENT");
-    }
-    if (cursor === temporaryRoot) break;
-    cursor = dirname(cursor);
-  }
-}
-
 function run(spawnSyncImpl, command, args, options = {}) {
   const result = spawnSyncImpl(command, args, {
     encoding: "utf8",
@@ -301,7 +310,10 @@ async function main() {
   try {
     assert(process.argv.length === 4 && process.argv[2] === "generate");
     const output = resolve(defaultRoot, process.argv[3]);
-    assertSafeCliOutput(defaultRoot, output);
+    preparePluginAuthoringJudgeEvidenceCliOutput({
+      repositoryRoot: defaultRoot,
+      outputDirectory: output
+    });
     assertMissing(output);
     // The OCI revision label must describe the exact reviewed source. User-owned `.devloop` and
     // generated `.tmp` state are outside the allowlisted context and therefore do not block it.

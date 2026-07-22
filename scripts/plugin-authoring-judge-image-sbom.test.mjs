@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -8,7 +8,8 @@ import { buildPluginAuthoringJudgeImage } from "./plugin-authoring-judge-image-b
 import {
   assertPluginAuthoringJudgeEvidenceSource,
   buildPluginAuthoringJudgeSbomInvocation,
-  generatePluginAuthoringJudgeImageEvidence
+  generatePluginAuthoringJudgeImageEvidence,
+  preparePluginAuthoringJudgeEvidenceCliOutput
 } from "./plugin-authoring-judge-image-evidence.mjs";
 import {
   PLUGIN_AUTHORING_JUDGE_SBOM_MAX_COMPONENTS,
@@ -82,7 +83,7 @@ test("does not delete a factory-provided directory before establishing ownership
             assert.fail("Docker must not run for an unowned temporary root");
           }
         }),
-      /plugin authoring judge image build failed/u
+      /plugin authoring judge image preflight failed/u
     );
     assert.equal(existsSync(marker), true);
   } finally {
@@ -152,6 +153,23 @@ test("binds CLI evidence to a clean revision while excluding user-owned runtime 
       }),
     { name: "AssertionError" }
   );
+});
+
+test("creates a missing safe CLI evidence root on a fresh checkout", () => {
+  const root = mkdtempSync(join(tmpdir(), "judge-evidence-fresh-checkout-"));
+  try {
+    const output = join(root, ".tmp", "plugin-authoring-judge-image-evidence");
+    preparePluginAuthoringJudgeEvidenceCliOutput({
+      repositoryRoot: root,
+      outputDirectory: output
+    });
+    const metadata = lstatSync(join(root, ".tmp"));
+    assert.equal(metadata.isDirectory(), true);
+    assert.equal(metadata.isSymbolicLink(), false);
+    assert.equal(existsSync(output), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("uses a fixed offline read-only scanner invocation without Docker socket access", () => {

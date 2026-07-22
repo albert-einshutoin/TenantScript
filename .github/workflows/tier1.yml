@@ -42,6 +42,7 @@ jobs:
           name: plugin-authoring-judge-image-evidence-${{ github.sha }}
           path: .tmp/plugin-authoring-judge-image-evidence
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
       - run: pnpm test:template-submissions
       - run: pnpm test:template-catalog
