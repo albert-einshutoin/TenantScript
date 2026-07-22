@@ -47,6 +47,11 @@ judge固有のfailure codeへ閉じるorchestration coreがあります。この
 review済みimage、production judge adapter、sandboxの証拠ではありません。manifest抽出やbuildを行うadapterは
 後続のimage実装でcontainer内だけに接続し、scaffold正本の`src/manifest.ts`を扱います。
 
+抽出済みmanifest valueに対しては、canonical manifest parserの成功と、task固有の単一hook、capability keyの
+exact set、egress denyを判定するpure policyがあります。parserの例外や不正な戻り値はdiagnosticを反射せず
+`manifest`と`least-privilege`のfailureへ閉じます。このpolicy自体は`src/manifest.ts`を読み込まず、unknown sourceの
+安全な抽出やreview済みimageを証明しません。
+
 reviewed judge imageがない場合のstop conditionは明確です。runnerは
 `isolated judge sandbox is unavailable`で停止し、host実行やrepository simulationへfallbackしません。
 
