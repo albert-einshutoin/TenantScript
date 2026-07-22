@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-002",
-  "baselineCommit": "dc04cd6a3916f31417eb0ec664df90ccedb6d725",
+  "baselineCommit": "0f9b95fb0f348ddde51c640933f9ca8deea44f3f",
   "target": {
     "name": "Simulated ticket priority normalizer template submission",
     "scope": [
@@ -23,7 +23,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T00:28:21.000Z",
+  "reviewedAt": "2026-07-22T00:43:00.000Z",
   "domains": [
     {
       "name": "security",
@@ -36,7 +36,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform validates bounded untrusted input before returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive content, mutable provenance, source drift, path escape, symlinks, non-public repository hosts, and unsafe guarantee language without reflecting submitted values. Equivalent canonical repository URLs cannot bypass immutable revision checks."
+      "notes": "The transform validates bounded untrusted input before returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive content, null provenance revisions, source drift, path escape, symlinks, non-public repository hosts, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check."
     },
     {
       "name": "compatibility",
@@ -48,7 +48,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet pins exact tested package versions, records a bounded SDK range and hook contract, uses strict ESM TypeScript, and is exercised against freshly packed public package contents."
+      "notes": "The packet pins exact tested package versions, records a bounded SDK range and hook contract, uses strict ESM TypeScript, and is exercised against freshly packed public package contents. The E2E discovers every submission directory rather than naming one packet."
     },
     {
       "name": "operations",
@@ -83,9 +83,9 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "0fe161699d92cdb49a95626bd98cc1bb415a14525fe4461bea4c913036a3dfba",
-    "scripts/check-template-submissions.test.mjs": "15a8e3e58ab4f96d7b8deab17a5a5a349b8ec99e546a5867466bc02220ec7548",
-    "scripts/template-submission-e2e.test.mjs": "23217c601850b73ff193d2921a5ab7a2ac7a2328f19ef45509b825c3184e7f9f",
+    "scripts/check-template-submissions.mjs": "cbcfb6c467329c433bdc6eba3e5b7671e40af0be73e7d46710dba92c75f1f684",
+    "scripts/check-template-submissions.test.mjs": "1ac4a42dca40f260a3601d4b4e3d061c19f347a1e81762a79ca26165d070057d",
+    "scripts/template-submission-e2e.test.mjs": "b1a59fa820b34a7412cbc0affeb7fb50d8fec456bb25fb0adf97cf0c2382588c",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
@@ -110,7 +110,7 @@
     }
   ],
   "limitations": [
-    "The decision covers only the listed source and evidence digests at the immutable baseline.",
+    "The decision covers only the listed source and evidence digests; the baseline commit is a reachable repository-context anchor.",
     "The simulation proves the repository workflow can accept one bounded packet; it is not evidence of community adoption or independent review.",
     "The example ticket contract is synthetic and must not be treated as a production support schema or data-handling policy."
   ],

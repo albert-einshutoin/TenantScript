@@ -1,21 +1,36 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const submissionRoot = join(repoRoot, "templates", "submissions", "ticket-priority-normalizer");
+const submissionsRoot = join(repoRoot, "templates", "submissions");
 
-test("simulated community submission builds, tests, and audits packed public packages", async () => {
+test("every template submission builds, tests, and audits packed public packages", async (t) => {
   run(process.execPath, [join(repoRoot, "scripts", "check-template-submissions.mjs")]);
+  const entries = await readdir(submissionsRoot, { withFileTypes: true });
+  const submissions = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  assert.ok(submissions.length > 0);
+
+  for (const submission of submissions) {
+    await t.test(submission, async () => exerciseSubmission(submission));
+  }
+});
+
+async function exerciseSubmission(submission) {
   await mkdir(join(repoRoot, ".tmp"), { recursive: true });
-  const tempRoot = await mkdtemp(join(repoRoot, ".tmp", "template-submission-"));
+  const tempRoot = await mkdtemp(join(repoRoot, ".tmp", `template-submission-${submission}-`));
+  const packetRoot = join(submissionsRoot, submission);
+  const metadata = JSON.parse(await readFile(join(packetRoot, "submission.json"), "utf8"));
   const pluginDirectory = join(tempRoot, "plugin");
 
   try {
-    await cp(join(submissionRoot, "plugin"), pluginDirectory, { recursive: true });
+    await cp(join(repoRoot, metadata.source.directory), pluginDirectory, { recursive: true });
     const manifestTarball = packPublicPackage("packages/manifest", tempRoot);
     const pluginSdkTarball = packPublicPackage("packages/plugin-sdk", tempRoot);
     const packageJsonPath = join(pluginDirectory, "package.json");
@@ -94,7 +109,7 @@ test("simulated community submission builds, tests, and audits packed public pac
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
-});
+}
 
 function packPublicPackage(packageDirectory, destination) {
   const output = run("pnpm", [

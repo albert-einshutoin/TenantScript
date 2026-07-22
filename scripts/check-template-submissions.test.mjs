@@ -24,10 +24,6 @@ function withRepository(run) {
     writeFileSync(join(pluginRoot, "test", "plugin.test.ts"), "export {};\n");
     writeFileSync(join(packetRoot, "SECURITY.md"), "Not a certification. Synthetic input only.\n");
     writeFileSync(join(packetRoot, "verification.md"), "Accountless checks passed.\n");
-    writeFileSync(
-      join(root, "docs", "security", "plugin-reviews", "TS-PLUGIN-REVIEW-2026-999.json"),
-      '{"id":"TS-PLUGIN-REVIEW-2026-999","decision":"approve"}\n'
-    );
     execFileSync("git", ["init", "-q"], { cwd: root });
     execFileSync("git", ["config", "user.email", "template-test@example.invalid"], {
       cwd: root
@@ -40,11 +36,30 @@ function withRepository(run) {
       encoding: "utf8"
     }).trim();
     const submission = validSubmission(root, revision);
+    writeReviewRecord(root, submission);
     writeSubmission(root, "example-template", submission);
     run({ root, submission, revision });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+}
+
+function writeReviewRecord(root, submission, overrides = {}) {
+  const record = {
+    id: "TS-PLUGIN-REVIEW-2026-999",
+    baselineCommit: submission.source.revision,
+    target: {
+      name: "Example template",
+      scope: Object.keys(submission.source.files),
+      sourceDigests: submission.source.files
+    },
+    decision: "approve",
+    ...overrides
+  };
+  writeFileSync(
+    join(root, "docs", "security", "plugin-reviews", "TS-PLUGIN-REVIEW-2026-999.json"),
+    `${JSON.stringify(record, null, 2)}\n`
+  );
 }
 
 function validSubmission(root, revision) {
@@ -221,19 +236,51 @@ test("rejects oversized packets and unsafe semver components with bounded errors
   });
 });
 
-test("normalizes equivalent TenantScript repository URLs before verifying revision contents", () => {
+test("normalizes equivalent TenantScript repository URLs and rejects the null revision", () => {
   withRepository(({ root, submission }) => {
     submission.source.repository = "https://github.com/albert-einshutoin/TenantScript.git/";
     submission.source.revision = "0".repeat(40);
+    writeReviewRecord(root, submission);
     writeSubmission(root, "example-template", submission);
 
     const result = runChecker(root);
 
     assert.equal(result.status, 1);
-    assert.match(
-      result.stderr,
-      /submission\.json: source revision does not contain the reviewed file digest/
-    );
+    assert.match(result.stderr, /submission\.json: source\.revision must be a full commit SHA/);
+  });
+});
+
+test("accepts digest provenance when a squash removes the source commit object", () => {
+  withRepository(({ root, submission }) => {
+    submission.source.revision = "1".repeat(40);
+    writeReviewRecord(root, submission);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 0, result.stderr);
+  });
+});
+
+test("binds an approved review record to the exact submitted source", () => {
+  withRepository(({ root, submission }) => {
+    submission.reviewRecord = "unreviewed.json";
+    writeFileSync(join(root, "unreviewed.json"), '{"decision":"approve"}\n');
+    writeSubmission(root, "example-template", submission);
+
+    let result = runChecker(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /reviewRecord must use the canonical review directory/);
+
+    submission.reviewRecord = "docs/security/plugin-reviews/TS-PLUGIN-REVIEW-2026-999.json";
+    writeReviewRecord(root, submission, {
+      target: { name: "Unrelated review", scope: [], sourceDigests: {} }
+    });
+    writeSubmission(root, "example-template", submission);
+
+    result = runChecker(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /reviewRecord source scope and digests must match submission\.source/);
   });
 });
 

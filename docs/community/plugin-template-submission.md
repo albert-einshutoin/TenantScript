@@ -9,7 +9,7 @@ gallery publication decision, community endorsement, or proof of live deployment
 
 - **Repository verified** — Tier 1 validates every packet, binds repository-owned source to a full
   commit SHA and SHA-256 map, installs freshly packed TenantScript packages, then builds, tests,
-  bundles, and audits the simulated submission.
+  bundles, and audits every submitted plugin snapshot.
 - **Repository verified / first-party** — the `simulation` packet proves that the public workflow can
   be completed without credentials. It does not claim an external contributor or independent review.
 - **Blocked** — public npm installation, live Cloudflare behavior, actual community adoption, and an
@@ -70,10 +70,12 @@ git rev-parse HEAD
 shasum -a 256 templates/submissions/<slug>/plugin/package.json
 ```
 
-For repository-owned source, the validator checks both the current regular file and the exact file at
-the recorded revision. External repositories are not fetched during accountless CI: their full SHA and
-vendored digest map are syntactically checked, while provenance remains a blocking human-review item
-until durable external evidence is inspected.
+For repository-owned source, the validator always checks the current regular file against the digest
+map and also checks the recorded revision when that Git object is available. The digest map remains
+the enforceable source identity after a squash merge removes PR-local commits from public ancestry.
+External repositories are not fetched during accountless CI: their full SHA and vendored digest map
+are syntactically checked, while provenance remains a blocking human-review item until durable
+external evidence is inspected.
 
 ## 3. Complete submission metadata
 
@@ -95,7 +97,9 @@ ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/pl
 ```
 
 The validator never executes submitted commands or downloads submitted repositories. Execution occurs
-only in the repository-controlled E2E after metadata, paths, digests, and review references pass.
+only in the repository-controlled E2E after metadata, paths, digests, and a review record bound to the
+same source scope and digest map pass. The E2E discovers every submission directory so a new packet
+cannot silently receive static validation alone.
 
 ## 4. Run the submission gates
 

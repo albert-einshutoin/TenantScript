@@ -13,7 +13,7 @@ const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const hookNamePattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const exactSemverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const caretRangePattern = /^\^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const shaPattern = /^[0-9a-f]{40}$/;
+const shaPattern = /^(?!0{40}$)[0-9a-f]{40}$/;
 const digestPattern = /^[0-9a-f]{64}$/;
 const capabilityPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const configKeyPattern = /^[A-Za-z][A-Za-z0-9]*$/;
@@ -154,7 +154,7 @@ function validateSubmission(directoryName) {
   validateEgress(submission.egress, displayPath);
   validateSortedStrings(submission.configKeys, "configKeys", displayPath, configKeyPattern);
   validateVerification(submission.verification, displayPath);
-  validateReviewRecord(submission.reviewRecord, displayPath);
+  validateReviewRecord(submission.reviewRecord, submission.source, displayPath);
   validateRegularReference(submission.securityNote, "securityNote", displayPath);
   validateNonGuarantees(submission.nonGuarantees, displayPath);
 }
@@ -211,11 +211,11 @@ function validateSource(value, license, displayPath) {
       errors.push(`${displayPath}: source file digest does not match`);
       continue;
     }
-    if (
-      revisionIsValid &&
-      repositoryIdentity(value.repository) === canonicalRepositoryIdentity &&
-      !matchesGitRevision(value.revision, path, digest)
-    ) {
+    const revisionMatch =
+      revisionIsValid && repositoryIdentity(value.repository) === canonicalRepositoryIdentity
+        ? matchesGitRevision(value.revision, path, digest)
+        : undefined;
+    if (revisionMatch === false) {
       errors.push(`${displayPath}: source revision does not contain the reviewed file digest`);
     }
   }
@@ -339,13 +339,29 @@ function validateVerification(value, displayPath) {
   }
 }
 
-function validateReviewRecord(value, displayPath) {
+function validateReviewRecord(value, source, displayPath) {
+  if (
+    typeof value !== "string" ||
+    !/^docs\/security\/plugin-reviews\/TS-PLUGIN-REVIEW-\d{4}-\d{3}\.json$/u.test(value)
+  ) {
+    errors.push(`${displayPath}: reviewRecord must use the canonical review directory`);
+  }
   const content = validateRegularReference(value, "reviewRecord", displayPath);
   if (content === undefined) return;
   try {
     const record = JSON.parse(content.toString("utf8"));
     if (!isRecord(record) || record.decision !== "approve") {
       errors.push(`${displayPath}: reviewRecord must contain an approve decision`);
+      return;
+    }
+    if (
+      !isRecord(source) ||
+      !isRecord(source.files) ||
+      !isRecord(record.target) ||
+      !sameStringArray(record.target.scope, Object.keys(source.files)) ||
+      !sameDigestMap(record.target.sourceDigests, source.files)
+    ) {
+      errors.push(`${displayPath}: reviewRecord source scope and digests must match submission.source`);
     }
   } catch {
     errors.push(`${displayPath}: reviewRecord must contain valid JSON`);
@@ -412,6 +428,23 @@ function validateSortedStrings(value, field, displayPath, pattern) {
 
 function isSortedUnique(value) {
   return value.every((item, index) => index === 0 || value[index - 1] < item);
+}
+
+function sameStringArray(left, right) {
+  return (
+    Array.isArray(left) &&
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+function sameDigestMap(left, right) {
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const paths = Object.keys(right);
+  return (
+    Object.keys(left).length === paths.length &&
+    paths.every((path) => left[path] === right[path])
+  );
 }
 
 function isPublicRepositoryUrl(value) {
@@ -505,7 +538,9 @@ function hasSymlinkedParent(path) {
 
 function matchesGitRevision(revision, path, digest) {
   const commitCheck = runGit(["cat-file", "-e", `${revision}^{commit}`]);
-  if (commitCheck.status !== 0) return false;
+  // A squash merge intentionally removes PR-local commits from the public ancestry. The digest map
+  // remains the enforceable provenance boundary, while an available object receives an extra check.
+  if (commitCheck.status !== 0) return undefined;
   const result = runGit(["show", `${revision}:${path}`], { encoding: "buffer" });
   return result.status === 0 && sha256(result.stdout) === digest;
 }
