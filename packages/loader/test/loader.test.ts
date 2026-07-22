@@ -7,7 +7,8 @@ import {
   ScopedRuntimeTimeoutError,
   bundlePlugin,
   createApprovalContinuationRunner,
-  runScopedHandler
+  runScopedHandler,
+  runScopedPluginDispatch
 } from "../src/index.js";
 
 describe("bundlePlugin", () => {
@@ -201,6 +202,76 @@ describe("runScopedHandler", () => {
     });
   });
 
+  it("preserves standard URL parsing and search parameter behavior", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": () => {
+          const url = new URL("https://user:pass@example.com:8443/path?tag=a&tag=b#section");
+          url.hostname = "api.example.com";
+          url.searchParams.set("tag", "c");
+          url.searchParams.append("page", "2");
+          return {
+            href: url.href,
+            origin: url.origin,
+            protocol: url.protocol,
+            hostname: url.hostname,
+            pathname: url.pathname,
+            hash: url.hash,
+            tag: url.searchParams.get("tag"),
+            entries: [...url.searchParams]
+          };
+        }
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({
+      value: {
+        href: "https://user:pass@api.example.com:8443/path?tag=c&page=2#section",
+        origin: "https://api.example.com:8443",
+        protocol: "https:",
+        hostname: "api.example.com",
+        pathname: "/path",
+        hash: "#section",
+        tag: "c",
+        entries: [
+          ["tag", "c"],
+          ["page", "2"]
+        ]
+      },
+      logs: []
+    });
+  });
+
+  it("preserves hashes in raw URLSearchParams input", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": () => ({
+          value: new URLSearchParams("a=1#b=2").get("a"),
+          serialized: new URLSearchParams("a=1#b=2").toString()
+        })
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({
+      value: { value: "1#b=2", serialized: "a=1%23b%3D2" },
+      logs: []
+    });
+  });
+
   it("terminates async handlers that starve the microtask queue", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {
@@ -344,6 +415,46 @@ describe("runScopedHandler", () => {
         context: { capability: vi.fn() }
       })
     ).rejects.toThrow("plugin bundle does not export handler invoice.created");
+  });
+});
+
+describe("runScopedPluginDispatch", () => {
+  it("runs the standard plugin dispatch export without ambient Node globals", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async ({ hookName, payload, context }) => ({
+          ok: true,
+          value: {
+            hookName,
+            payload,
+            capability: await context.capability("kv.state", { key: "priority" }),
+            processVisible: typeof process !== "undefined",
+            requireVisible: typeof require !== "undefined"
+          }
+        })
+      };
+    `);
+
+    const result = await runScopedPluginDispatch({
+      bundleCode: bundle,
+      hookName: "ticket.created",
+      payload: { subject: "Database unavailable" },
+      context: { capability: vi.fn().mockResolvedValue({ value: "high" }) }
+    });
+
+    expect(result).toEqual({
+      value: {
+        ok: true,
+        value: {
+          hookName: "ticket.created",
+          payload: { subject: "Database unavailable" },
+          capability: { value: "high" },
+          processVisible: false,
+          requireVisible: false
+        }
+      },
+      logs: []
+    });
   });
 });
 

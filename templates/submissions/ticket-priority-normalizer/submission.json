@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "kind": "simulation",
+  "slug": "ticket-priority-normalizer",
+  "displayName": "Ticket priority normalizer",
+  "summary": "Normalizes a bounded support ticket subject and priority without capabilities or egress.",
+  "license": "Apache-2.0",
+  "source": {
+    "repository": "https://github.com/albert-einshutoin/TenantScript",
+    "revision": "45aa61f68204f82bebe7e98ebfb6ab930d70fc0e",
+    "directory": "templates/submissions/ticket-priority-normalizer/plugin",
+    "files": {
+      "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
+      "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "9d06632386b910154323e866d358da7d4c6656b36d01819dd67ecce01123ad1e",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
+      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "9470e9dd5d23f5127fcb7bff0ae7e26689da37bdc682b413d6fbe81ac8853b06",
+      "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4"
+    }
+  },
+  "sdk": {
+    "range": "^0.0.0",
+    "lastTestedVersion": "0.0.0"
+  },
+  "hook": {
+    "name": "ticket.created",
+    "type": "transform"
+  },
+  "capabilities": [],
+  "egress": {
+    "mode": "deny",
+    "allowHosts": []
+  },
+  "configKeys": [],
+  "verification": {
+    "commands": {
+      "build": "pnpm build",
+      "test": "pnpm test",
+      "audit": "ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/plugin.cjs"
+    },
+    "evidence": ["templates/submissions/ticket-priority-normalizer/verification.md"],
+    "behaviorCases": [
+      {
+        "name": "normalizes-bounded-ticket",
+        "payload": {
+          "priority": "high",
+          "subject": "  Database unavailable  "
+        },
+        "expected": {
+          "ok": true,
+          "value": {
+            "priority": "high",
+            "subject": "Database unavailable"
+          }
+        },
+        "capabilityCalls": []
+      },
+      {
+        "name": "rejects-unsupported-priority",
+        "payload": {
+          "priority": "urgent",
+          "subject": "Refund requested"
+        },
+        "expected": {
+          "ok": false,
+          "error": {
+            "name": "PluginHandlerError",
+            "hookName": "ticket.created",
+            "message": "invalid ticket payload"
+          }
+        },
+        "capabilityCalls": []
+      }
+    ]
+  },
+  "reviewRecord": "docs/security/plugin-reviews/TS-PLUGIN-REVIEW-2026-002.json",
+  "securityNote": "templates/submissions/ticket-priority-normalizer/SECURITY.md",
+  "nonGuarantees": [
+    "This first-party simulation is not an independent review or community endorsement.",
+    "This repository check is not a certification, live deployment proof, or public npm installation."
+  ]
+}

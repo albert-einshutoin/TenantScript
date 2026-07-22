@@ -52,6 +52,7 @@ Return contract:
 ## `@tenantscript/loader`
 
 `runScopedHandler`はlocal development/replay向けにbundleをterminable Worker内の`node:vm`で実行する。productionのuntrusted multi-tenant実行はCloudflare Dynamic Workers境界を使い、このlocal isolateをproduction保証として扱わない。
+標準scaffoldの`plugin.dispatch`を同じ境界で検証する場合は`runScopedPluginDispatch`を使い、SDKのstructured dispatch resultを`ScopedRuntimeResult.value`として受け取る。bundleを通常のNode `require`で読み込んではならない。
 
 `ScopedRuntimeLimits`の既定値と入力契約:
 

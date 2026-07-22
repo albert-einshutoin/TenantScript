@@ -1,0 +1,19 @@
+{
+  "name": "@tenantscript-template/ticket-priority-normalizer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tenantscript/manifest": "0.0.0",
+    "@tenantscript/plugin-sdk": "0.0.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "id": "TS-PLUGIN-REVIEW-2026-002",
+  "baselineCommit": "0f9b95fb0f348ddde51c640933f9ca8deea44f3f",
+  "target": {
+    "name": "Simulated ticket priority normalizer template submission",
+    "scope": [
+      "templates/submissions/ticket-priority-normalizer/plugin/package.json",
+      "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
+      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts",
+      "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
+    ],
+    "sourceDigests": {
+      "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
+      "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "9d06632386b910154323e866d358da7d4c6656b36d01819dd67ecce01123ad1e",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
+      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "9470e9dd5d23f5127fcb7bff0ae7e26689da37bdc682b413d6fbe81ac8853b06",
+      "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4"
+    }
+  },
+  "reviewer": {
+    "identity": "TenantScript maintainers",
+    "relationship": "First-party review of a repository-owned simulated community submission"
+  },
+  "reviewedAt": "2026-07-22T11:14:59.000Z",
+  "domains": [
+    {
+      "name": "security",
+      "status": "pass",
+      "evidence": [
+        "packages/loader/src/index.ts",
+        "packages/loader/test/loader.test.ts",
+        "packages/loader/test/security-suite.test.ts",
+        "scripts/check-template-submissions.mjs",
+        "scripts/check-template-submissions.test.mjs",
+        "scripts/template-submission-bundle-runner.mjs",
+        "templates/submissions/ticket-priority-normalizer/SECURITY.md",
+        "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs",
+        "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts",
+        "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
+        "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
+      ],
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, collapses malformed values and hostile accessor or Proxy failures to one fixed non-reflective message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker scans every bounded regular file in the closed packet tree, including unreferenced artifacts, and rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs, Unix and Windows machine-local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, prebuilt audit artifacts, package-manager control files including lockfiles, package-manager settings, install lifecycle scripts, non-canonical build or test entrypoints, and pre/post wrappers, non-public repository and egress hosts including legacy numeric IPv4 forms, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks, ignores lockfiles, requires offline installation, gives submitted processes only an allowlisted accountless environment, and runs submitted install, typecheck, build, audit, and test commands inside a fail-closed OS network namespace or sandbox profile. Linux also uses a kill-on-exit PID namespace, while every platform terminates the submitted process group after completion or timeout so descendants cannot outlive the evidence command. It runs the copied build outside the checkout, dispatches the generated bundle through the scoped loader without ambient Node globals or raw egress, authenticates child evidence with a per-dispatch key, and proves canonical audit outputs are absent before build. The local worker starts with an empty environment, rejects host payloads, sandbox capability inputs, and capability results that JSON serialization would rewrite, reconstructs accepted values inside the sandbox realm, exposes only realm-native URL, fetch, module, and capability wrappers, and removes prototype-less host bridges before submitted code runs. Invocation data remains inside an unguessable VM lexical closure throughout module evaluation and is installed as non-writable, non-configurable globals only after the exported entrypoint is validated, preventing top-level code from observing or invoking scoped inputs. Capability inputs use a captured custom serializer after validation, while URL, fetch, result, and bridge-error wrappers capture realm-native intrinsics before evaluation so submitted code cannot falsify boundary evidence through replaced globals or inherited toJSON methods. Entrypoint settlement and return-value validation use separate unguessable lexical bindings to evaluation-time Promise and JSON-model intrinsics, preventing top-level replacement from forging completion or returning values that production would rewrite or reject. The local worker and bundle runner both reject dispatch that returns with unfinished capability side effects, while the runner keeps synthetic results pending for one event-loop turn as independent evidence."
+    },
+    {
+      "name": "compatibility",
+      "status": "pass",
+      "evidence": [
+        "packages/loader/src/index.ts",
+        "packages/loader/test/loader.test.ts",
+        "packages/loader/test/security-suite.test.ts",
+        "scripts/template-submission-bundle-runner.mjs",
+        "scripts/template-submission-e2e.test.mjs",
+        "templates/submission.schema.json",
+        "templates/submissions/ticket-priority-normalizer/plugin/package.json",
+        "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
+        "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
+      ],
+      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, preserves every reviewed exact third-party dependency while replacing only TenantScript SDK packages with fresh tarballs, resolves relative pack filenames against their trusted destination, and exercises the plugin against those public package contents. Its ext command resolves only to a temporary copy of the root frozen install's exact CLI runtime closure; generated package-manager shims and nested node_modules are excluded, all symlinks are dereferenced, every copied file is checked for the checkout path, and the readable shim contains only a temp-relative entrypoint. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then dispatches the generated CommonJS plugin export through the scoped loader with authenticated exact-result assertions and ordered input/result plans for declared capability calls. The realm-native URL wrapper retains standard parsing, mutation, URLSearchParams iteration, and literal hash characters in raw URLSearchParams strings while exchanging only serialized snapshots with the hardened host bridge. Successful event hooks omit the SDK-only undefined value from JSON evidence, while blocking-hook success retains its exact caller-visible value."
+    },
+    {
+      "name": "operations",
+      "status": "pass",
+      "evidence": [
+        "packages/loader/src/index.ts",
+        "packages/loader/test/loader.test.ts",
+        "scripts/template-submission-bundle-runner.mjs",
+        "scripts/template-submission-e2e.test.mjs",
+        "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs",
+        "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
+        "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts",
+        "templates/submissions/ticket-priority-normalizer/verification.md"
+      ],
+      "notes": "The handler is side-effect free, bounded by fixed input length and manifest limits, has no retry or external service behavior, and is continuously built, tested, bundled, dispatched, and audited in an accountless lane. Its canonical digest-bound build runs outside the checkout under an external 30-second command deadline and emits the manifest and bundle that the documented audit command and packet-owned, independently kill-bounded scoped-loader behavior cases consume; sandbox time, memory, subrequest, and raw-egress boundaries fail closed."
+    },
+    {
+      "name": "documentation",
+      "status": "pass",
+      "evidence": [
+        "templates/submission.schema.json",
+        "templates/submissions/ticket-priority-normalizer/SECURITY.md",
+        "templates/submissions/ticket-priority-normalizer/verification.md"
+      ],
+      "notes": "The packet records its purpose, immutable source, hook, capability and egress boundary, canonical verification commands, bounded generated-bundle behavior cases, evidence, security note, review record, and explicit non-guarantees. Repository-owned provenance is machine-bound to the simulation kind and cannot be represented as community adoption."
+    },
+    {
+      "name": "license",
+      "status": "pass",
+      "evidence": [
+        "LICENSE",
+        "templates/submissions/ticket-priority-normalizer/plugin/package.json"
+      ],
+      "notes": "The simulated source is repository-owned, declares Apache-2.0 consistently with the repository, and contains no vendored code, assets, runtime dependencies, or generated binary artifacts."
+    }
+  ],
+  "evidenceDigests": {
+    "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
+    "packages/loader/src/index.ts": "824beac6ff8b43e6b528f5ee7360498ced09ccae29a3d5ec5d0309e7093aa886",
+    "packages/loader/test/loader.test.ts": "6e7fb14d0b97d6930adc63aa777f6502c02785918c2533a77454d725155b1e48",
+    "packages/loader/test/security-suite.test.ts": "694857dec630be7c27794faa1f79f4aeeac2c57abcb31162ed7709e0a7102359",
+    "scripts/check-template-submissions.mjs": "4874d1a8fa0bcf923cda2c2947f4779cd19519d616429f031249cd44e1e06126",
+    "scripts/check-template-submissions.test.mjs": "a05c9900e9b4e5164b6001af91c4a5a0f305ef4cae0f2427c571f25e5652c936",
+    "scripts/template-submission-bundle-runner.mjs": "f55b8aa1616c8fdab4c4873c4a2fbe8567f5aefe0f0da86f89e9b3a419289670",
+    "scripts/template-submission-e2e.test.mjs": "7ec2ff48a8b0c39f24fb2a0b361e2358f2706bf463210e6d19a065ce749fbfac",
+    "templates/submission.schema.json": "d9fba423319ec7364f72e852580bb5a75caf295ebc6587d037cb52fa467e6700",
+    "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
+    "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
+    "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
+    "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "9d06632386b910154323e866d358da7d4c6656b36d01819dd67ecce01123ad1e",
+    "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
+    "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "9470e9dd5d23f5127fcb7bff0ae7e26689da37bdc682b413d6fbe81ac8853b06",
+    "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4",
+    "templates/submissions/ticket-priority-normalizer/verification.md": "973b6b6ba159c0e383a46ddeaa06c75cc287662e61159fcb11e89848d9728181"
+  },
+  "decision": "approve",
+  "blockingFindings": [],
+  "unverified": [
+    {
+      "item": "Independent review by a community contributor",
+      "required": false,
+      "reason": "This is an explicitly first-party simulation; no external contributor identity or endorsement is claimed."
+    },
+    {
+      "item": "Public npm installation and live Cloudflare execution",
+      "required": false,
+      "reason": "The accountless E2E uses packed repository packages and does not access credentials or a live provider environment."
+    }
+  ],
+  "limitations": [
+    "The decision covers only the listed source and evidence digests; the baseline commit is a reachable repository-context anchor.",
+    "The simulation proves the repository workflow can accept one bounded packet; it is not evidence of community adoption or independent review.",
+    "The example ticket contract is synthetic and must not be treated as a production support schema or data-handling policy."
+  ],
+  "nonGuarantees": [
+    "This approval is not a security certification, vulnerability-free claim, community endorsement, or independent audit.",
+    "It does not claim public registry installation, live deployment, future compatibility, or suitability for a production tenant."
+  ]
+}

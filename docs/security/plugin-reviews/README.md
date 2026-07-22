@@ -7,6 +7,7 @@ immutable commit and an explicit source scope. It is evidence of a review, not a
 | Record                                                        | Target                                     | Baseline                                   | Decision  | Boundary                 |
 | ------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------ | --------- | ------------------------ |
 | [`TS-PLUGIN-REVIEW-2026-001`](TS-PLUGIN-REVIEW-2026-001.json) | Built-in `ext init` scaffold and templates | `5c08252f3eb53d0bbdcf5b3b2cff84c038b06831` | `approve` | First-party, accountless |
+| [`TS-PLUGIN-REVIEW-2026-002`](TS-PLUGIN-REVIEW-2026-002.json) | Simulated community template submission    | `0f9b95fb0f348ddde51c640933f9ca8deea44f3f` | `approve` | First-party, simulated   |
 
 The checker fails closed when a record has unknown fields, omits one of the five review domains,
 references missing evidence, contains secret-like or machine-local data, or approves with a failed
@@ -24,5 +25,5 @@ pnpm test:plugin-reviews
 pnpm lint:plugin-reviews
 ```
 
-Public registry installation and independent review remain separate evidence. Do not change their
-status based on this first-party record or on CI success.
+Public registry installation, an actual community submission, and independent review remain separate
+evidence. Do not change their status based on either first-party record or on CI success.

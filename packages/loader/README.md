@@ -8,8 +8,10 @@ and security suite before changing isolation, timeout, capability, or continuati
 
 ## Runtime entrypoints
 
-- `@tenantscript/loader` provides `runScopedHandler` for local development and replay. Its
-  terminable Node worker is not the production multi-tenant isolation boundary.
+- `@tenantscript/loader` provides `runScopedHandler` for legacy top-level handlers and
+  `runScopedPluginDispatch` for the standard scaffold `plugin.dispatch` export in local development,
+  replay, and accountless verification. Its terminable Node worker is not the production
+  multi-tenant isolation boundary.
 - `@tenantscript/loader/cloudflare` provides `createCloudflareDynamicWorkerCaller` for a trusted
   Cloudflare Worker host using a Dynamic Worker Loader binding.
 

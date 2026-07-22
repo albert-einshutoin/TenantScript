@@ -2,9 +2,361 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { ScopedRuntimeLimitError, bundlePlugin, runScopedHandler } from "../src/index.js";
+import {
+  ScopedRuntimeLimitError,
+  bundlePlugin,
+  runScopedHandler,
+  runScopedPluginDispatch
+} from "../src/index.js";
 
 describe("loader security suite", () => {
+  it("isolates the standard plugin dispatch export from Node globals", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: () => ({
+          ok: true,
+          value: {
+            processVisible: typeof process !== "undefined",
+            requireVisible: typeof require !== "undefined"
+          }
+        })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({
+      value: {
+        ok: true,
+        value: { processVisible: false, requireVisible: false }
+      },
+      logs: []
+    });
+  });
+
+  it("does not expose host constructors through sandbox inputs or bridges", async () => {
+    const bundle = await bundleFromSource(`
+      const recoversProcess = (value) => {
+        try {
+          return Boolean(value.constructor.constructor("return process")());
+        } catch (_error) {
+          return false;
+        }
+      };
+      exports.plugin = {
+        dispatch: async ({ payload, context }) => {
+          const capabilityResult = await context.capability("kv.state", { key: "priority" });
+          return {
+            ok: true,
+            value: {
+              url: recoversProcess(URL),
+              fetch: recoversProcess(fetch),
+              module: recoversProcess(module),
+              payload: recoversProcess(payload),
+              capability: recoversProcess(context.capability),
+              capabilityResult: recoversProcess(capabilityResult)
+            }
+          };
+        }
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: { subject: "Database unavailable" },
+        context: { capability: vi.fn().mockResolvedValue({ value: "high" }) }
+      })
+    ).resolves.toEqual({
+      value: {
+        ok: true,
+        value: {
+          url: false,
+          fetch: false,
+          module: false,
+          payload: false,
+          capability: false,
+          capabilityResult: false
+        }
+      },
+      logs: []
+    });
+  });
+
+  it("keeps invocation payload and capability context immutable during bundle evaluation", async () => {
+    const bundle = await bundleFromSource(`
+      const payloadVisibleDuringEvaluation = typeof __tenant_payload !== "undefined";
+      const contextVisibleDuringEvaluation = typeof __tenant_context !== "undefined";
+      __tenant_payload = { subject: "tampered" };
+      __tenant_context = { capability: async () => ({ value: "tampered" }) };
+      exports.plugin = {
+        dispatch: async ({ payload, context }) => ({
+          ok: true,
+          value: {
+            payloadVisibleDuringEvaluation,
+            contextVisibleDuringEvaluation,
+            payload,
+            capability: await context.capability("kv.state", { key: "priority" })
+          }
+        })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: { subject: "original" },
+        context: { capability: vi.fn().mockResolvedValue({ value: "high" }) }
+      })
+    ).resolves.toEqual({
+      value: {
+        ok: true,
+        value: {
+          payloadVisibleDuringEvaluation: false,
+          contextVisibleDuringEvaluation: false,
+          payload: { subject: "original" },
+          capability: { value: "high" }
+        }
+      },
+      logs: []
+    });
+  });
+
+  it("records capability evidence with evaluation-time intrinsics", async () => {
+    const bundle = await bundleFromSource(`
+      String = () => "slack.send";
+      JSON.stringify = () => '{"channel":"attacker"}';
+      JSON.parse = () => ({ value: "forged" });
+      Object.prototype.toJSON = () => ({ key: "forged" });
+      exports.plugin = {
+        dispatch: async ({ context }) => ({
+          ok: true,
+          value: await context.capability("kv.state", { key: "priority" })
+        })
+      };
+    `);
+    const capability = vi.fn().mockResolvedValue({ value: "high" });
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: { capability }
+      })
+    ).resolves.toEqual({
+      value: { ok: true, value: { value: "high" } },
+      logs: []
+    });
+    expect(capability).toHaveBeenCalledExactlyOnceWith("kv.state", { key: "priority" });
+  });
+
+  it("uses an evaluation-time Promise intrinsic for dispatch settlement", async () => {
+    const bundle = await bundleFromSource(`
+      Promise.resolve = () => ({ ok: true, value: "forged" });
+      exports.plugin = {
+        dispatch: () => new Promise(() => {})
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: { capability: vi.fn() },
+        limits: { timeoutMs: 25 }
+      })
+    ).rejects.toMatchObject({ executionStatus: "timeout" });
+  });
+
+  it("rejects host payloads that JSON serialization would rewrite", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: ({ payload }) => ({ ok: true, value: payload })
+      };
+    `);
+    const sparsePayload = Array(2);
+    sparsePayload[1] = "present";
+    class InheritedPayload {
+      readonly visible = "value";
+    }
+    const invalidPayloads = [
+      undefined,
+      { amount: Number.NaN },
+      new Date("2026-01-01T00:00:00.000Z"),
+      sparsePayload,
+      new InheritedPayload(),
+      { missing: undefined }
+    ];
+
+    for (const payload of invalidPayloads) {
+      await expect(
+        runScopedPluginDispatch({
+          bundleCode: bundle,
+          hookName: "ticket.created",
+          payload,
+          context: { capability: vi.fn() }
+        })
+      ).rejects.toThrow("handler payload must be lossless JSON");
+    }
+  });
+
+  it("rejects host accessors without evaluating them during worker transfer", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: ({ payload }) => ({ ok: true, value: payload })
+      };
+    `);
+    let getterWasEvaluated = false;
+    const payload = Object.defineProperty({}, "secret", {
+      enumerable: true,
+      get: () => {
+        getterWasEvaluated = true;
+        return "value";
+      }
+    });
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload,
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toThrow("handler payload must be lossless JSON");
+    expect(getterWasEvaluated).toBe(false);
+  });
+
+  it("rejects capability results that JSON serialization would rewrite", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async ({ context }) => ({
+          ok: true,
+          value: await context.capability("kv.state", { key: "priority" })
+        })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: { capability: vi.fn().mockResolvedValue({ value: undefined }) }
+      })
+    ).rejects.toThrow("capability result must be lossless JSON");
+  });
+
+  it("rejects capability inputs that JSON serialization would rewrite", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async ({ payload, context }) => {
+          let input;
+          if (payload.kind === "non-finite") input = { total: Number.NaN };
+          if (payload.kind === "undefined") input = { missing: undefined };
+          if (payload.kind === "date") input = new Date("2026-01-01T00:00:00.000Z");
+          if (payload.kind === "sparse") {
+            input = Array(2);
+            input[1] = "present";
+          }
+          await context.capability("kv.state", input);
+          return { ok: true, value: undefined };
+        }
+      };
+    `);
+    const capability = vi.fn().mockResolvedValue({ value: "high" });
+
+    for (const kind of ["non-finite", "undefined", "date", "sparse"]) {
+      await expect(
+        runScopedPluginDispatch({
+          bundleCode: bundle,
+          hookName: "ticket.created",
+          payload: { kind },
+          context: { capability }
+        })
+      ).rejects.toThrow("capability input must be lossless JSON");
+    }
+    expect(capability).not.toHaveBeenCalled();
+  });
+
+  it("rejects successful dispatch values outside the lossless JSON model", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: ({ payload }) => {
+          let value;
+          if (payload.kind === "non-finite") value = { total: Number.NaN };
+          if (payload.kind === "undefined") value = { missing: undefined };
+          if (payload.kind === "date") value = new Date("2026-01-01T00:00:00.000Z");
+          if (payload.kind === "sparse") {
+            value = Array(2);
+            value[1] = "present";
+          }
+          if (payload.kind === "prototype") value = new (class Result { total = 1; })();
+          if (payload.kind === "accessor") {
+            value = Object.defineProperty({}, "total", {
+              enumerable: true,
+              get: () => 1
+            });
+          }
+          return { ok: true, value };
+        }
+      };
+    `);
+
+    for (const kind of ["non-finite", "undefined", "date", "sparse", "prototype", "accessor"]) {
+      await expect(
+        runScopedPluginDispatch({
+          bundleCode: bundle,
+          hookName: "ticket.created",
+          payload: { kind },
+          context: { capability: vi.fn() }
+        })
+      ).rejects.toThrow("invalid TenantScript plugin return value");
+    }
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: { kind: "allowed-undefined" },
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({ value: { ok: true, value: undefined }, logs: [] });
+  });
+
+  it("rejects dispatch that returns while a capability call is unfinished", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: ({ context }) => {
+          Promise.resolve().then(() => context.capability("kv.state", { key: "priority" }));
+          return { ok: true, value: undefined };
+        }
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: {
+          capability: async () => {
+            await new Promise((resolve) => setImmediate(resolve));
+            return { value: "high" };
+          }
+        }
+      })
+    ).rejects.toThrow("handler returned with outstanding capability calls");
+  });
+
   it("does not expose process, raw secret bindings, or global namespaces", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {
