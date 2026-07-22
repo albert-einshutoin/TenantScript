@@ -7,7 +7,10 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 import "./plugin-authoring-judge-core.test.mjs";
+import "./plugin-authoring-behavior-cases.test.mjs";
 import "./plugin-authoring-build-adapter.test.mjs";
+import "./plugin-authoring-build-receipt.test.mjs";
+import "./plugin-authoring-unit-adapter.test.mjs";
 import "./plugin-authoring-judge-entrypoint.test.mjs";
 import "./plugin-authoring-manifest-extractor.test.mjs";
 import "./plugin-authoring-manifest-judges.test.mjs";

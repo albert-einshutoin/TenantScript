@@ -20,6 +20,7 @@ import {
   PLUGIN_AUTHORING_JUDGE_PATHS
 } from "./plugin-authoring-judge-contract.mjs";
 import { createPluginAuthoringBuildAdapter } from "./plugin-authoring-build-adapter.mjs";
+import { createPluginAuthoringUnitTestAdapter } from "./plugin-authoring-unit-adapter.mjs";
 import {
   executePluginAuthoringJudge,
   parsePluginAuthoringJudgeArgs,
@@ -54,6 +55,10 @@ async function withFixture(run) {
   writeFileSync(
     join(baselineRoot, "evals", "plugin-authoring", "corpus.json"),
     `${JSON.stringify(corpus)}\n`
+  );
+  writeFileSync(
+    join(baselineRoot, "evals", "plugin-authoring", "behavior-cases.json"),
+    readFileSync(join(repoRoot, "evals", "plugin-authoring", "behavior-cases.json"))
   );
   writeFileSync(requestPath, `${JSON.stringify(validRequest())}\n`);
   for (const task of corpus.tasks) {
@@ -145,6 +150,68 @@ function allPassingAdapters(calls = []) {
       }
     ])
   );
+}
+
+function knownGoodBehaviorSource(taskId) {
+  const handlers = {
+    "approval-invoice-threshold": `const value = record(payload)?.totalCents;
+      if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error("invalid_invoice_total");
+      return value >= 100000 ? { decision: "deny", reason: "approval_required" } : { decision: "allow" };`,
+    "approval-refund-review": `const value = record(payload)?.purchaseAgeDays;
+      return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 30
+        ? { decision: "allow" } : { decision: "deny", reason: "approval_required" };`,
+    "capability-github-issue": `const value = record(payload);
+      const id = bounded(value?.deploymentId, 64); const reason = bounded(value?.reason, 160);
+      if (id === undefined || reason === undefined) throw new Error("invalid_deployment");
+      try { await context.capability("github.issue.create", { title: \`Deployment \${id} failed\`, body: reason }); }
+      catch { throw new Error("issue_creation_failed"); }`,
+    "capability-slack-alert": `const value = record(payload);
+      const id = bounded(value?.orderId, 64); const reason = bounded(value?.reason, 160);
+      const channel = bounded(value?.channel, 80);
+      if (id === undefined || reason === undefined || channel === undefined) throw new Error("invalid_blocked_order");
+      try { await context.capability("slack.send", { channel, message: \`Order \${id} blocked: \${reason}\` }); }
+      catch { throw new Error("alert_failed"); }`,
+    "error-malformed-payload": `const value = record(payload); const customerId = bounded(value?.customerId, 64);
+      const displayName = bounded(value?.displayName, 100);
+      if (customerId === undefined || displayName === undefined) throw new Error("invalid_customer");
+      return { customerId, displayName };`,
+    "error-provider-failure": `const value = record(payload); const id = bounded(value?.incidentId, 64);
+      const channel = bounded(value?.channel, 80);
+      if (id === undefined || channel === undefined) throw new Error("invalid_incident");
+      try { const result = record(await context.capability("slack.send", { channel, message: \`Incident \${id} opened\` }));
+        if (bounded(result?.messageId, 80) === undefined) throw new Error("bad result");
+      } catch { throw new Error("notification_failed"); }`,
+    "policy-api-method-allowlist": `const value = record(payload); const keys = value === undefined ? [] : Object.keys(value);
+      const allowed = keys.length === 2 && keys.includes("method") && keys.includes("url") &&
+        (value?.method === "GET" || value?.method === "POST") && typeof value?.url === "string" &&
+        (value.url === "https://api.example.com" || value.url.startsWith("https://api.example.com/"));
+      return allowed ? { decision: "allow" } : { decision: "deny", reason: "request_not_allowed" };`,
+    "policy-data-residency": `return record(payload)?.region === "eu-west"
+      ? { decision: "allow" } : { decision: "deny", reason: "region_not_allowed" };`,
+    "webhook-currency-normalizer": `const value = record(payload); const currency = value?.currency; const amount = value?.amount;
+      if (typeof currency !== "string" || !/^[A-Za-z]{3}$/.test(currency) || typeof amount !== "number" ||
+          !Number.isSafeInteger(amount) || amount < 0) throw new Error("invalid_payment");
+      return { currency: currency.toUpperCase(), amount };`,
+    "webhook-ticket-priority": `const value = record(payload)?.priority;
+      const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
+      return { priority: typeof value === "string" ? priorities[value] ?? 2 : 2 };`
+  };
+  const body = handlers[taskId];
+  assert.notEqual(body, undefined);
+  return `import { definePlugin } from "@tenantscript/plugin-sdk";
+import { manifest } from "./manifest.js";
+function record(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown> : undefined;
+}
+function bounded(value: unknown, maximum: number): string | undefined {
+  return typeof value === "string" && value.length >= 1 && value.length <= maximum ? value : undefined;
+}
+export const plugin = definePlugin({ manifest, handlers: {
+  ${JSON.stringify(corpus.tasks.find((task) => task.id === taskId).hook.name)}: async (payload, context) => { ${body} }
+} });
+export default plugin;
+`;
 }
 
 function snapshotCandidate(root) {
@@ -256,6 +323,34 @@ test("runs the bounded build adapter against every materialized task snapshot", 
       ),
       true
     );
+  });
+});
+
+test("passes every fixed behavior case through build and the real loader sandbox", async () => {
+  await withFixture(async (paths) => {
+    for (const task of corpus.tasks) {
+      writeFileSync(
+        join(paths.candidateRoot, task.id, "src", "index.ts"),
+        knownGoodBehaviorSource(task.id)
+      );
+    }
+    const adapters = allPassingAdapters();
+    adapters.build = createPluginAuthoringBuildAdapter();
+    adapters["unit-test"] = createPluginAuthoringUnitTestAdapter();
+    const result = await executePluginAuthoringJudge({
+      ...paths,
+      adapters,
+      parseManifest: acceptingParser
+    });
+    const failures = result.taskResults.flatMap((task) =>
+      task.judges
+        .filter(
+          (judge) =>
+            (judge.name === "build" || judge.name === "unit-test") && judge.status !== "pass"
+        )
+        .map((judge) => `${task.taskId}:${judge.name}`)
+    );
+    assert.deepEqual(failures, []);
   });
 });
 
@@ -425,7 +520,7 @@ test("writes exactly one JSON line on success and one fixed error on failure", a
     loadParseManifest: async () => acceptingParser,
     execute: async ({ adapters }) => {
       assert.equal(typeof adapters.build, "function");
-      assert.equal(adapters["unit-test"], undefined);
+      assert.equal(typeof adapters["unit-test"], "function");
       assert.equal(adapters["security-test"], undefined);
       assert.equal(adapters.audit, undefined);
       return expected;
@@ -452,7 +547,7 @@ test("writes exactly one JSON line on success and one fixed error on failure", a
   assert.equal(writes.stderr.includes(marker), false);
 });
 
-test("documents the bounded build adapter and the three unavailable execution adapters", () => {
+test("documents the bounded build and unit adapters and the two unavailable execution adapters", () => {
   const guide = readFileSync(
     join(repoRoot, "docs", "reference", "plugin-authoring-isolated-runner.md"),
     "utf8"
@@ -461,7 +556,8 @@ test("documents the bounded build adapter and the three unavailable execution ad
     "plugin-authoring-judge-entrypoint.mjs",
     "container内でも再検証",
     "bounded offline compile-check",
-    "3 execution adapter",
+    "judge-owned behavior",
+    "2 execution adapter",
     "package.json",
     "32 MiB",
     "fail closed"
