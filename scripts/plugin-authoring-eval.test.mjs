@@ -192,6 +192,10 @@ test("rejects invalid durations, timestamps, cost, and result widening", () => {
   reversedTime.run.completedAt = "2026-07-22T00:00:00.000Z";
   cases.push(reversedTime);
 
+  const impossibleTime = clone(source);
+  impossibleTime.run.startedAt = "2026-02-30T00:00:00.000Z";
+  cases.push(impossibleTime);
+
   const guessedCost = clone(source);
   guessedCost.run.costUsd = -0.01;
   cases.push(guessedCost);

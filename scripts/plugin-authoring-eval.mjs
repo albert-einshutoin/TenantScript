@@ -142,7 +142,12 @@ function validateRun(run) {
   assertString(run.completedAt, 24, 24, ISO_DATE_PATTERN);
   const startedAt = Date.parse(run.startedAt);
   const completedAt = Date.parse(run.completedAt);
-  assert(Number.isFinite(startedAt) && Number.isFinite(completedAt) && completedAt > startedAt);
+  assert(Number.isFinite(startedAt) && Number.isFinite(completedAt));
+  // Date.parse normalizes impossible calendar dates, so round-trip before using timestamps as
+  // durable evidence or deriving wall-clock metrics from a different instant than the input names.
+  assert(new Date(startedAt).toISOString() === run.startedAt);
+  assert(new Date(completedAt).toISOString() === run.completedAt);
+  assert(completedAt > startedAt);
   assert(
     run.costUsd === null ||
       (typeof run.costUsd === "number" &&
