@@ -155,7 +155,7 @@ export async function runPluginAuthoringJudgeCli({
 }
 
 async function loadCanonicalManifestParser() {
-  const manifestModule = await import("@tenantscript/manifest");
+  const manifestModule = await import("../packages/manifest/dist/index.js");
   if (typeof manifestModule.parseManifest !== "function") {
     throw new Error("canonical manifest parser is unavailable");
   }

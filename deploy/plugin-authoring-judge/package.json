@@ -1,0 +1,13 @@
+{
+  "name": "@tenantscript/plugin-authoring-judge-image",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@tenantscript/cli": "workspace:*",
+    "@tenantscript/loader": "workspace:*",
+    "@tenantscript/manifest": "workspace:*",
+    "esbuild": "0.28.1",
+    "typescript": "5.9.3"
+  }
+}
