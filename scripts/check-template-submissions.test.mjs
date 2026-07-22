@@ -500,6 +500,24 @@ test("rejects raw account identifiers in referenced packet files", () => {
   });
 });
 
+test("rejects unlabelled account identifiers and private URLs in evidence", () => {
+  for (const privateValue of ["a".repeat(32), "https://deploy.internal/review"]) {
+    withRepository(({ root, submission }) => {
+      writeFileSync(
+        join(root, "templates/submissions/example-template/verification.md"),
+        `Private reference: ${privateValue}\n`
+      );
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /verification\.evidence contains sensitive or private content/);
+      assert.doesNotMatch(result.stderr, /a{8}|deploy|internal/);
+    });
+  }
+});
+
 test("rejects sensitive content in digest-matched submitted source", () => {
   withRepository(({ root, submission }) => {
     const sourcePath = "templates/submissions/example-template/plugin/src/index.ts";

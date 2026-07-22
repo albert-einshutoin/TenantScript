@@ -18,6 +18,7 @@ const digestPattern = /^[0-9a-f]{64}$/;
 const capabilityPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const configKeyPattern = /^[A-Za-z][A-Za-z0-9]*$/;
 const hostPattern = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+const httpUrlPattern = /https?:\/\/[^\s<>"'`]+/giu;
 const requiredSourceSuffixes = [
   "package.json",
   "src/index.ts",
@@ -61,6 +62,7 @@ const secretLikePatterns = [
   /\bsk-[A-Za-z0-9]{20,}\b/,
   /\bBearer\s+[A-Za-z0-9._~+/-]{12,}/i,
   /\b(?:cloudflare[_ -]?)?account[_-]?id\s*[:=]\s*["']?[0-9a-f]{32}\b/i,
+  /\b[0-9a-f]{32}\b/i,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /\b(?:tenant|customer)_[A-Za-z0-9_-]{4,}\b/i,
   /dash\.cloudflare\.com\/[0-9a-f]{16,}/i,
@@ -705,7 +707,12 @@ function containsSensitiveContent(value) {
     if (current === undefined) break;
     if (!current.skipFieldCheck && sensitiveFieldPattern.test(current.field)) return true;
     if (typeof current.value === "string") {
-      if (secretLikePatterns.some((pattern) => pattern.test(current.value))) return true;
+      if (
+        secretLikePatterns.some((pattern) => pattern.test(current.value)) ||
+        containsPrivateUrl(current.value)
+      ) {
+        return true;
+      }
       continue;
     }
     if (Array.isArray(current.value)) {
@@ -740,7 +747,22 @@ function containsSensitiveContent(value) {
 
 function containsSensitiveFileContent(content) {
   const text = content.toString("utf8");
-  return secretLikePatterns.some((pattern) => pattern.test(text));
+  return secretLikePatterns.some((pattern) => pattern.test(text)) || containsPrivateUrl(text);
+}
+
+function containsPrivateUrl(text) {
+  for (const match of text.matchAll(httpUrlPattern)) {
+    try {
+      const url = new URL(match[0]);
+      const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+      // Evidence must use durable public hosts. Credentials, local DNS, and IP literals are private
+      // provenance even when embedded in otherwise harmless Markdown prose.
+      if (url.username !== "" || url.password !== "" || !isPublicHostname(hostname)) return true;
+    } catch {
+      // Invalid URL-like text is handled by the surrounding field/path validation where applicable.
+    }
+  }
+  return false;
 }
 
 function isRecord(value) {

@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T02:40:06.000Z",
+  "reviewedAt": "2026-07-22T02:50:55.000Z",
   "domains": [
     {
       "name": "security",
@@ -39,7 +39,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata, digest-bound source, and evidence including raw account identifiers, local file URLs and Markdown-wrapped local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, package-manager control files, package-manager settings, and install lifecycle scripts, non-public repository hosts, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks while requiring offline installation."
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs, local file URLs and Markdown-wrapped local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, package-manager control files, package-manager settings, and install lifecycle scripts, non-public repository hosts, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks while requiring offline installation."
     },
     {
       "name": "compatibility",
@@ -87,8 +87,8 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "342bf37d6a89320e23331701222480575c0c2d4ba753cfad1b903f4cc533249e",
-    "scripts/check-template-submissions.test.mjs": "9f6b6fa0ab2b7f7d9299bdfffac10a2f8b4e09ddb29ae523a0bb572350a9a6c4",
+    "scripts/check-template-submissions.mjs": "bb71e1fffe1d027bdee34c551e1a2cb63415c5d3288de0891f156dff44569468",
+    "scripts/check-template-submissions.test.mjs": "b68a2ca2cbdab3a87e25fbb02ca819bed421e8d8d23e65e8eb8228116fed55aa",
     "scripts/template-submission-e2e.test.mjs": "76140700a3312af5de347824d1662b5074c9653134f858bd99d3af3a8c774138",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
