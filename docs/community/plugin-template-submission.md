@@ -133,8 +133,10 @@ exact result and capability-call sequence. Each planned call names a declared ca
 input, and supplies the synthetic result returned to the handler; undeclared, missing, additional, or
 reordered calls fail. The copied build runs outside the repository checkout, and each bundle dispatch
 runs in a SIGKILL-bounded child process, so relative build inputs and synchronous loops cannot escape
-the reviewed source or occupy the CI lane indefinitely. Keep these fixtures synthetic, individually
-bounded, and independent from network, credentials, time, randomness, or tenant data.
+the reviewed source or occupy the CI lane indefinitely. The parent accepts only a per-dispatch
+HMAC-authenticated result, and rejects timers, immediates, or capability calls that remain after the
+handler returns. Keep these fixtures synthetic, individually bounded, and independent from network,
+credentials, time, randomness, or tenant data.
 
 ## 4. Run the submission gates
 

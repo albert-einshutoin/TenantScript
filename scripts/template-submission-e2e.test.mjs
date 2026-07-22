@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { deserialize } from "node:v8";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const submissionsRoot = join(repoRoot, "templates", "submissions");
@@ -107,6 +109,107 @@ test("generated bundle dispatch returns and records a declared capability call",
       result: { ok: true, value: { value: "high" } },
       capabilityCalls: [{ name: "kv.state", input: { key: "ticket-priority" } }]
     });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("generated bundle cannot forge the authenticated result channel", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-output-"));
+  try {
+    const bundlePath = join(tempRoot, "plugin.cjs");
+    await writeFile(
+      bundlePath,
+      `const write = process.stdout.write.bind(process.stdout);
+      module.exports.plugin = {
+        dispatch() {
+          write("TENANTSCRIPT_BUNDLE_RESULT:ZmFrZQ:" + "0".repeat(64) + "\\n");
+          process.stdout.write = () => true;
+          JSON.stringify = () => "forged";
+          Buffer.prototype.toString = () => "Zm9yZ2Vk";
+          const hmac = require("node:crypto").createHmac("sha256", "forged");
+          Object.getPrototypeOf(hmac).update = function () { return this; };
+          Object.getPrototypeOf(hmac).digest = () => "0".repeat(64);
+          return { ok: true, value: "actual" };
+        }
+      };\n`
+    );
+
+    const outcome = dispatchBundleInChild(
+      bundlePath,
+      { hookName: "ticket.created", payload: {}, capabilityCalls: [] },
+      "authenticated-output"
+    );
+
+    assert.deepEqual(outcome.result, { ok: true, value: "actual" });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("generated bundle fails when capability work remains after dispatch", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-late-call-"));
+  try {
+    const bundlePath = join(tempRoot, "plugin.cjs");
+    await writeFile(
+      bundlePath,
+      `module.exports.plugin = {
+        dispatch({ context }) {
+          setTimeout(() => context.capability("kv.state", { key: "late" }), 1_000).unref();
+          return { ok: true, value: "returned" };
+        }
+      };\n`
+    );
+
+    assert.throws(
+      () =>
+        dispatchBundleInChild(
+          bundlePath,
+          {
+            hookName: "ticket.created",
+            payload: {},
+            capabilityCalls: [
+              { name: "kv.state", input: { key: "late" }, result: { value: "ignored" } }
+            ]
+          },
+          "late-capability"
+        ),
+      /left asynchronous work pending/
+    );
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("generated bundle fails on a capability call after dispatch returns", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-post-return-call-"));
+  try {
+    const bundlePath = join(tempRoot, "plugin.cjs");
+    await writeFile(
+      bundlePath,
+      `module.exports.plugin = {
+        dispatch({ context }) {
+          setImmediate(() => context.capability("kv.state", { key: "late" }));
+          return { ok: true, value: "returned" };
+        }
+      };\n`
+    );
+
+    assert.throws(
+      () =>
+        dispatchBundleInChild(
+          bundlePath,
+          {
+            hookName: "ticket.created",
+            payload: {},
+            capabilityCalls: [
+              { name: "kv.state", input: { key: "late" }, result: { value: "ignored" } }
+            ]
+          },
+          "post-return-capability"
+        ),
+      /invoked a capability after dispatch returned/
+    );
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
@@ -217,12 +320,17 @@ async function exerciseSubmission(submission) {
 }
 
 function dispatchBundleInChild(bundlePath, request, caseName) {
-  const encodedRequest = Buffer.from(JSON.stringify(request), "utf8").toString("base64url");
+  const authenticationKey = randomBytes(32);
+  const input = JSON.stringify({
+    authenticationKey: authenticationKey.toString("base64url"),
+    request
+  });
   // spawnSync enforces its timeout outside the submitted JavaScript event loop. SIGKILL cannot be
   // intercepted by a synchronous loop, so the per-case limit remains real for hostile CPU behavior.
-  const child = spawnSync(process.execPath, [bundleRunnerPath, bundlePath, encodedRequest], {
+  const child = spawnSync(process.execPath, [bundleRunnerPath, bundlePath], {
     encoding: "utf8",
     env: { ...process.env, CI: "1" },
+    input,
     killSignal: "SIGKILL",
     maxBuffer: 64 * 1024,
     timeout: 2_000
@@ -232,14 +340,27 @@ function dispatchBundleInChild(bundlePath, request, caseName) {
   }
   assert.equal(child.signal, null, `${caseName} bundle runner exited by signal`);
   assert.equal(child.status, 0, `${caseName} bundle runner failed`);
-  const marker = "TENANTSCRIPT_BUNDLE_RESULT:";
-  const markerIndex = child.stdout.lastIndexOf(marker);
-  assert.notEqual(markerIndex, -1, `${caseName} bundle runner returned no result`);
-  const encodedResult = child.stdout
-    .slice(markerIndex + marker.length)
-    .trim()
-    .split(/\s/u)[0];
-  return JSON.parse(Buffer.from(encodedResult, "base64url").toString("utf8"));
+  let authenticatedResult;
+  for (const match of child.stdout.matchAll(
+    /TENANTSCRIPT_BUNDLE_RESULT:([A-Za-z0-9_-]+):([0-9a-f]{64})/gu
+  )) {
+    const [, encodedResult, signature] = match;
+    const expectedSignature = createHmac("sha256", authenticationKey)
+      .update(encodedResult)
+      .digest();
+    if (timingSafeEqual(Buffer.from(signature, "hex"), expectedSignature)) {
+      authenticatedResult = deserialize(Buffer.from(encodedResult, "base64url"));
+    }
+  }
+  assert.notEqual(authenticatedResult, undefined, `${caseName} bundle runner returned no result`);
+  const { pendingAsyncWork, postReturnCapabilityCall, ...outcome } = authenticatedResult;
+  assert.equal(pendingAsyncWork, false, `${caseName} left asynchronous work pending`);
+  assert.equal(
+    postReturnCapabilityCall,
+    false,
+    `${caseName} invoked a capability after dispatch returned`
+  );
+  return outcome;
 }
 
 async function createCliShim(tempRoot) {

@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T06:18:06.000Z",
+  "reviewedAt": "2026-07-22T06:38:25.000Z",
   "domains": [
     {
       "name": "security",
@@ -40,7 +40,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, collapses malformed values and hostile accessor or Proxy failures to one fixed non-reflective message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker scans every bounded regular file in the closed packet tree, including unreferenced artifacts, and rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs, Unix and Windows machine-local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, prebuilt audit artifacts, package-manager control files, package-manager settings, install lifecycle scripts, non-canonical build or test entrypoints, and pre/post wrappers, non-public repository and egress hosts including legacy numeric IPv4 forms, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks, requires offline installation, runs the copied build outside the checkout, isolates dispatch in a kill-bounded child process, and proves canonical audit outputs are absent before build."
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, collapses malformed values and hostile accessor or Proxy failures to one fixed non-reflective message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker scans every bounded regular file in the closed packet tree, including unreferenced artifacts, and rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs, Unix and Windows machine-local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, prebuilt audit artifacts, package-manager control files, package-manager settings, install lifecycle scripts, non-canonical build or test entrypoints, and pre/post wrappers, non-public repository and egress hosts including legacy numeric IPv4 forms, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks, requires offline installation, runs the copied build outside the checkout, isolates dispatch in a kill-bounded child process, authenticates child evidence with a per-dispatch key, rejects pending or post-return work, and proves canonical audit outputs are absent before build."
     },
     {
       "name": "compatibility",
@@ -53,7 +53,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, and exercises the plugin against freshly packed public package contents. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then loads the generated CommonJS bundle in a child process and dispatches the packet's bounded success and failure cases with exact-result assertions and ordered input/result plans for declared capability calls."
+      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, and exercises the plugin against freshly packed public package contents. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then loads the generated CommonJS bundle in a child process and dispatches the packet's bounded success and failure cases with authenticated exact-result assertions and ordered input/result plans for declared capability calls."
     },
     {
       "name": "operations",
@@ -66,7 +66,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts",
         "templates/submissions/ticket-priority-normalizer/verification.md"
       ],
-      "notes": "The handler is side-effect free, bounded by fixed input length and manifest limits, has no retry or external service behavior, and is continuously built, tested, bundled, dispatched, and audited in an accountless lane. Its canonical digest-bound build runs outside the checkout and emits the manifest and bundle that the documented audit command and packet-owned, independently kill-bounded behavior cases consume."
+      "notes": "The handler is side-effect free, bounded by fixed input length and manifest limits, has no retry or external service behavior, and is continuously built, tested, bundled, dispatched, and audited in an accountless lane. Its canonical digest-bound build runs outside the checkout and emits the manifest and bundle that the documented audit command and packet-owned, independently kill-bounded behavior cases consume; pending timers, immediates, and post-return capability calls fail verification."
     },
     {
       "name": "documentation",
@@ -92,8 +92,8 @@
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
     "scripts/check-template-submissions.mjs": "cb5ea68194d6f7427fa7fc2854162867c99d7efe8cc907fb3dde391883a1bd77",
     "scripts/check-template-submissions.test.mjs": "4c298c1d08418adb76d41d7dc0b5f79bcc9d9fbfab72403d1d537e82678c6696",
-    "scripts/template-submission-bundle-runner.mjs": "0b16742578dd08751abcc989ab2891b790064db06664eb057d9906456c6d9b5d",
-    "scripts/template-submission-e2e.test.mjs": "8257f6cb8a18eb9eb0d254ed03c31c335699f176953ec103ef3d7c212ee2194d",
+    "scripts/template-submission-bundle-runner.mjs": "fe784e0aa2a8b623fc63d3e610d35f3037459f9677bcff6a3776d40e09323530",
+    "scripts/template-submission-e2e.test.mjs": "421430f78a3b29839eb2ef29bed3ff3124d349507845bd825db2f309025a1269",
     "templates/submission.schema.json": "b5ecd58fd7bdb54ad23a2d8e124dad710894c4ba4f8e38572130bf70c8b6bd32",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
@@ -102,7 +102,7 @@
     "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
     "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "9470e9dd5d23f5127fcb7bff0ae7e26689da37bdc682b413d6fbe81ac8853b06",
     "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4",
-    "templates/submissions/ticket-priority-normalizer/verification.md": "0e2b3a4abd09436f6fe665393f1fdb292b9f8e3c085bf3008f5d39f810f9a22c"
+    "templates/submissions/ticket-priority-normalizer/verification.md": "b317be094cb8618855570f56ad1589cd10c824a5be9e9db4ddd81f5b87968c6d"
   },
   "decision": "approve",
   "blockingFindings": [],
