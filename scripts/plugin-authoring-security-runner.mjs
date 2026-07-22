@@ -6,6 +6,7 @@ import { isAbsolute, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import { runScopedPluginDispatch } from "../packages/loader/dist/index.js";
+import { runAfterPluginAuthoringBoundaryProbes } from "./plugin-authoring-security-boundary.mjs";
 
 const MAX_INPUT_BYTES = 256 * 1024;
 const MAX_BUNDLE_BYTES = 1024 * 1024;
@@ -41,49 +42,54 @@ try {
 
   const canary = process.env.TENANTSCRIPT_SECURITY_CANARY;
   assert(typeof canary === "string" && /^[0-9a-f]{64}$/u.test(canary));
-  const boundaryProbesPassed = await runBoundaryProbes();
-  const capabilityCalls = [];
-  let pendingCapabilityCalls = 0;
-  const runtimeResult = await runScopedPluginDispatch({
-    bundleCode: readFileSync(bundlePath, "utf8"),
-    hookName: envelope.securityCase.hookName,
-    payload: envelope.securityCase.payload,
-    context: {
-      capability: async (name, capabilityInput) => {
-        const planned = envelope.securityCase.capabilityPlan[capabilityCalls.length];
-        capabilityCalls.push({ name, input: structuredClone(capabilityInput) });
-        pendingCapabilityCalls += 1;
-        try {
-          await new Promise((complete) => setImmediate(complete));
-          assert(planned !== undefined && planned.name === name);
-          assert(isDeepStrictEqual(planned.input, capabilityInput));
-          if (planned.outcome.status === "reject") throw new Error("planned capability failure");
-          return structuredClone(planned.outcome.value);
-        } finally {
-          pendingCapabilityCalls -= 1;
+  const candidateObservation = await runAfterPluginAuthoringBoundaryProbes({
+    runBoundaryProbes,
+    dispatchCandidate: async () => {
+      const capabilityCalls = [];
+      let pendingCapabilityCalls = 0;
+      const runtimeResult = await runScopedPluginDispatch({
+        bundleCode: readFileSync(bundlePath, "utf8"),
+        hookName: envelope.securityCase.hookName,
+        payload: envelope.securityCase.payload,
+        context: {
+          capability: async (name, capabilityInput) => {
+            const planned = envelope.securityCase.capabilityPlan[capabilityCalls.length];
+            capabilityCalls.push({ name, input: structuredClone(capabilityInput) });
+            pendingCapabilityCalls += 1;
+            try {
+              await new Promise((complete) => setImmediate(complete));
+              assert(planned !== undefined && planned.name === name);
+              assert(isDeepStrictEqual(planned.input, capabilityInput));
+              if (planned.outcome.status === "reject") {
+                throw new Error("planned capability failure");
+              }
+              return structuredClone(planned.outcome.value);
+            } finally {
+              pendingCapabilityCalls -= 1;
+            }
+          }
+        },
+        limits: {
+          timeoutMs: 250,
+          maxSubrequests: envelope.securityCase.capabilityPlan.length,
+          memoryMb: 128
         }
-      }
-    },
-    limits: {
-      timeoutMs: 250,
-      maxSubrequests: envelope.securityCase.capabilityPlan.length,
-      memoryMb: 128
+      });
+      return {
+        result: structuredClone(runtimeResult.value),
+        capabilityCalls: structuredClone(capabilityCalls),
+        runtimeLogs: structuredClone(runtimeResult.logs),
+        pendingCapabilityCalls
+      };
     }
   });
-
-  const candidateObservation = {
-    result: structuredClone(runtimeResult.value),
-    capabilityCalls: structuredClone(capabilityCalls),
-    runtimeLogs: structuredClone(runtimeResult.logs),
-    pendingCapabilityCalls
-  };
   const canaryVisible = JSON.stringify(candidateObservation).includes(canary);
   const response = {
     schemaVersion: 1,
-    boundaryProbesPassed,
+    boundaryProbesPassed: true,
     capabilityCalls: candidateObservation.capabilityCalls,
     runtimeLogs: candidateObservation.runtimeLogs,
-    pendingCapabilityCalls,
+    pendingCapabilityCalls: candidateObservation.pendingCapabilityCalls,
     canaryVisible
   };
   const encoded = Buffer.from(JSON.stringify(response)).toString("base64url");

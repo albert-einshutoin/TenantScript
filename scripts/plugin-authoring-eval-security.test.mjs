@@ -12,6 +12,7 @@ import "./plugin-authoring-build-adapter.test.mjs";
 import "./plugin-authoring-build-receipt.test.mjs";
 import "./plugin-authoring-unit-adapter.test.mjs";
 import "./plugin-authoring-security-cases.test.mjs";
+import "./plugin-authoring-security-boundary.test.mjs";
 import "./plugin-authoring-security-adapter.test.mjs";
 import "./plugin-authoring-judge-entrypoint.test.mjs";
 import "./plugin-authoring-manifest-extractor.test.mjs";
