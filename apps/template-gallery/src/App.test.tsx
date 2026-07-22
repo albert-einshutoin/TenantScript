@@ -47,9 +47,15 @@ describe("Template gallery", () => {
     expect(within(invoice).getByText("approvals.request")).toBeInTheDocument();
     expect(within(invoice).getByText("No outbound egress")).toBeInTheDocument();
     expect(within(invoice).getByText("Reviewed: approved")).toBeInTheDocument();
-    expect(
-      within(invoice).getByRole("link", { name: "View source for Invoice approval" })
-    ).toHaveAttribute("rel", "noopener noreferrer");
+    const source = within(invoice).getByRole("link", {
+      name: "View reviewed source for Invoice approval"
+    });
+    expect(source).toHaveAttribute(
+      "href",
+      `https://github.com/example/invoice/tree/${"a".repeat(40)}`
+    );
+    expect(source).toHaveAttribute("rel", "noopener noreferrer");
+    expect(within(invoice).getByText("aaaaaaaaaaaa")).toBeInTheDocument();
   });
 
   it("searches names, summaries, tags, hooks, and capabilities", () => {

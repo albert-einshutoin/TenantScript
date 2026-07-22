@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   collectFilterOptions,
   filterTemplates,
+  getReviewedRevisionUrl,
   getTemplateTags,
   NO_CAPABILITIES,
   type TemplateCatalog,
@@ -158,6 +159,7 @@ export function App({ catalog }: AppProps) {
 
 function TemplateCard({ template }: { template: TemplateCatalogItem }) {
   const headingId = `template-${template.slug}`;
+  const reviewedRevisionUrl = getReviewedRevisionUrl(template.source);
 
   return (
     <article className="template-card" aria-labelledby={headingId}>
@@ -211,14 +213,21 @@ function TemplateCard({ template }: { template: TemplateCatalogItem }) {
       </div>
 
       <div className="card-footer">
-        <span>{template.license}</span>
+        <span>
+          {template.license} · Reviewed revision{" "}
+          <code>{template.source.revision.slice(0, 12)}</code>
+        </span>
         <a
-          href={template.source.repository}
+          href={reviewedRevisionUrl ?? template.source.repository}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`View source for ${template.displayName}`}
+          aria-label={
+            reviewedRevisionUrl === undefined
+              ? `View source repository for ${template.displayName}; reviewed revision ${template.source.revision}`
+              : `View reviewed source for ${template.displayName}`
+          }
         >
-          View source
+          {reviewedRevisionUrl === undefined ? "View repository" : "View reviewed source"}
         </a>
       </div>
     </article>

@@ -68,3 +68,12 @@ export function collectFilterOptions(templates: readonly TemplateCatalogItem[]):
     capabilities: [...new Set(templates.flatMap((template) => template.capabilities))].sort()
   };
 }
+
+export function getReviewedRevisionUrl(source: TemplateCatalogItem["source"]): string | undefined {
+  const repository = new URL(source.repository);
+  if (repository.hostname.toLowerCase() !== "github.com") return undefined;
+
+  const pathname = repository.pathname.replace(/\/+$/u, "");
+  repository.pathname = `${pathname}/tree/${source.revision}`;
+  return repository.href;
+}

@@ -27,9 +27,11 @@ pnpm --filter @tenantscript/template-gallery dev
 ## Data and security boundary
 
 The browser bundle imports only the public catalog projection. It does not read submission packets,
-reviewer identity, evidence paths, behavior fixtures, or source file maps. Source links are
-catalog-validated HTTPS URLs opened with `noopener noreferrer`. The app includes no runtime API,
-credentials, analytics, external images, or remote fonts.
+reviewer identity, evidence paths, behavior fixtures, or source file maps. GitHub source links open
+the exact reviewed tree identified by `source.revision` with `noopener noreferrer`. For a provider
+without a known immutable URL pattern, the UI names the destination as a repository and displays the
+reviewed revision instead of inventing a pinned link. The app includes no runtime API, credentials,
+analytics, external images, or remote fonts.
 
 Provenance and hook type are exposed as deterministic tags because the current catalog does not
 claim editorial categories. Capability filters include an explicit “No capabilities” option so

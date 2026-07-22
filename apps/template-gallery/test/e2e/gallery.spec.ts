@@ -1,6 +1,7 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import catalog from "../../../../templates/catalog.json" with { type: "json" };
+import { getReviewedRevisionUrl } from "../../src/catalog.js";
 
 const firstTemplate = catalog.templates[0];
 
@@ -21,12 +22,15 @@ test("renders approved catalog compatibility and safe source links", async ({ pa
   await expect(card).toContainText("No outbound egress");
   await expect(card).toContainText("Reviewed: approved");
 
+  const reviewedRevisionUrl = getReviewedRevisionUrl(firstTemplate.source);
+  expect(reviewedRevisionUrl).toBeDefined();
   const source = card.getByRole("link", {
-    name: `View source for ${firstTemplate.displayName}`
+    name: `View reviewed source for ${firstTemplate.displayName}`
   });
-  await expect(source).toHaveAttribute("href", firstTemplate.source.repository);
+  await expect(source).toHaveAttribute("href", reviewedRevisionUrl ?? "");
   await expect(source).toHaveAttribute("target", "_blank");
   await expect(source).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(card.getByText(firstTemplate.source.revision.slice(0, 12))).toBeVisible();
 });
 
 test("filters the static catalog and restores the empty state", async ({ page }) => {

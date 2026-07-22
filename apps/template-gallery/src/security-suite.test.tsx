@@ -27,8 +27,11 @@ describe("Template gallery security boundary", () => {
   it("renders only the public catalog projection with a safe external source link", () => {
     render(<App catalog={catalog} />);
 
-    const source = screen.getByRole("link", { name: "View source for Safe template" });
-    expect(source).toHaveAttribute("href", "https://github.com/example/safe");
+    const source = screen.getByRole("link", { name: "View reviewed source for Safe template" });
+    expect(source).toHaveAttribute(
+      "href",
+      `https://github.com/example/safe/tree/${"c".repeat(40)}`
+    );
     expect(source).toHaveAttribute("target", "_blank");
     expect(source).toHaveAttribute("rel", "noopener noreferrer");
     expect(document.body.textContent).not.toContain("reviewRecord");
