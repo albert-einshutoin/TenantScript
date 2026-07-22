@@ -224,6 +224,10 @@ function validateSource(value, license, directoryName, displayPath) {
       errors.push(`${displayPath}: source file digest does not match`);
       continue;
     }
+    if (containsSensitiveFileContent(current)) {
+      errors.push(`${displayPath}: source file contains sensitive or private content`);
+      continue;
+    }
     const revisionMatch =
       revisionIsValid && repositoryIdentity(value.repository) === canonicalRepositoryIdentity
         ? matchesGitRevision(value.revision, path, digest)

@@ -349,6 +349,26 @@ test("rejects raw account identifiers in referenced packet files", () => {
   });
 });
 
+test("rejects sensitive content in digest-matched submitted source", () => {
+  withRepository(({ root, submission }) => {
+    const sourcePath = "templates/submissions/example-template/plugin/src/index.ts";
+    const credential = `ghp_${"B".repeat(24)}`;
+    writeFileSync(join(root, sourcePath), `export const credential = "${credential}";\n`);
+    submission.source.files[sourcePath] = createHash("sha256")
+      .update(readFileSync(join(root, sourcePath)))
+      .digest("hex");
+    submission.source.revision = "1".repeat(40);
+    writeReviewRecord(root, submission);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /source file contains sensitive or private content/);
+    assert.doesNotMatch(result.stderr, /ghp_|B{8}/);
+  });
+});
+
 test("rejects loopback, private-address, and local-only repository hosts", () => {
   withRepository(({ root, submission }) => {
     for (const repository of [

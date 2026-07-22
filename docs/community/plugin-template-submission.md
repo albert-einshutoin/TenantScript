@@ -99,11 +99,11 @@ ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/pl
 ```
 
 The validator never executes submitted commands or downloads submitted repositories. It scans packet
-metadata, verification evidence, and the security note for credential-like or private content without
-reflecting submitted values in findings. Execution occurs only in the repository-controlled E2E after
-metadata, paths, complete source digests, and a review record bound to the same source scope and digest
-map pass. The E2E discovers every submission directory so a new packet cannot silently receive static
-validation alone.
+metadata, every digest-bound source file, verification evidence, and the security note for
+credential-like or private content without reflecting submitted values in findings. Execution occurs
+only in the repository-controlled E2E after metadata, paths, complete source digests, and a review
+record bound to the same source scope and digest map pass. The E2E discovers every submission
+directory so a new packet cannot silently receive static validation alone.
 
 ## 4. Run the submission gates
 

@@ -23,7 +23,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T01:20:00.000Z",
+  "reviewedAt": "2026-07-22T01:30:00.000Z",
   "domains": [
     {
       "name": "security",
@@ -36,7 +36,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata and evidence including raw account identifiers, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, non-public repository hosts, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check."
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata, digest-bound source, and evidence including raw account identifiers, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, non-public repository hosts, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check."
     },
     {
       "name": "compatibility",
@@ -83,8 +83,8 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "21e82fe488affa14ba38ad3f820576b610683de0076be4b4e209aa92cb02afdb",
-    "scripts/check-template-submissions.test.mjs": "14988ea1c87209c4d5ee689b2d321d14cf2fb0f5958709355bad8c8e80329dee",
+    "scripts/check-template-submissions.mjs": "1a26ff9b0e7506cb249bfbe3eba8c0e227c37c3fa5ee1debd7270c8a202add65",
+    "scripts/check-template-submissions.test.mjs": "630dec7e97493a769891f2f2451d66c837c02bf6e8832bc7b16ca53ebdd46809",
     "scripts/template-submission-e2e.test.mjs": "78700dae7676b50b59e0ea4b80ceef3a7a032f009db6e07248b124a9433b206c",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
