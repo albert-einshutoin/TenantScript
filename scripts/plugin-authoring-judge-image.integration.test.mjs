@@ -86,10 +86,8 @@ test(
       assert.equal(failure.stdout, "");
       assert.equal(failure.stderr, "plugin authoring judge failed\n");
     } finally {
-      if (process.env.KEEP_JUDGE_IMAGE_FIXTURE !== "1") {
-        rmSync(root, { recursive: true, force: true });
-        spawnSync("docker", ["image", "rm", "--force", image], { encoding: "utf8" });
-      }
+      rmSync(root, { recursive: true, force: true });
+      spawnSync("docker", ["image", "rm", "--force", image], { encoding: "utf8" });
     }
   }
 );

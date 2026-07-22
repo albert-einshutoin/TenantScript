@@ -20,6 +20,7 @@ test("pins a linux amd64 non-root image with the fixed judge entrypoint", () => 
     PLUGIN_AUTHORING_JUDGE_IMAGE_BASE,
     "node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9"
   );
+  assert.match(dockerfile, /^# syntax=docker\/dockerfile:1\.7@sha256:[0-9a-f]{64}$/mu);
   assert.match(dockerfile, /^FROM --platform=linux\/amd64 node@sha256:[0-9a-f]{64} AS build$/mu);
   assert.match(dockerfile, /^FROM --platform=linux\/amd64 node@sha256:[0-9a-f]{64}$/mu);
   assert.match(dockerfile, /^USER node$/mu);

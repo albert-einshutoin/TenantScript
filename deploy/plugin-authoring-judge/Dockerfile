@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 FROM --platform=linux/amd64 node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9 AS build
 
 WORKDIR /build
