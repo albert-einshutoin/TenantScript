@@ -198,7 +198,7 @@ test("wraps closed judge output in digest-bound isolated evidence and always cle
         writeFileSync(join(destination, "BASELINE"), `${revision}\n`);
       }
     };
-    const times = [new Date("2026-07-22T00:00:00.000Z"), new Date("2026-07-22T00:01:00.000Z")];
+    const times = [new Date("2026-07-22T00:00:00.000Z"), new Date("2026-07-22T00:00:00.000Z")];
 
     const output = await executeIsolatedJudgeRun({
       repositoryRoot: repoRoot,
@@ -217,6 +217,7 @@ test("wraps closed judge output in digest-bound isolated evidence and always cle
     assert.deepEqual(output.artifacts, ["evidence.json", "result.json"]);
     assert.equal(output.result.run.provenance, "isolated-agent-run");
     assert.equal(output.result.run.evidenceBundleDigest, output.evidence.digest);
+    assert.equal(output.result.run.completedAt, "2026-07-22T00:00:00.001Z");
     assert.deepEqual(output.evidence.run, {
       id: output.result.run.id,
       agent: output.result.run.agent,

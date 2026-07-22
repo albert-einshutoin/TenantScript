@@ -32,7 +32,7 @@ const PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_JUDGE_OUTPUT_BYTES = 1024 * 1024;
 const MAX_CANDIDATE_FILES = 2_000;
-const MAX_CANDIDATE_ENTRIES = 2_000;
+const MAX_CANDIDATE_ENTRIES = 4_000;
 const MAX_CANDIDATE_FILE_BYTES = 256 * 1024;
 const MAX_CANDIDATE_TOTAL_BYTES = 16 * 1024 * 1024;
 const MAX_CANDIDATE_DEPTH = 8;
@@ -349,7 +349,8 @@ export async function executeIsolatedJudgeRun({
       throw new Error("isolated judge sandbox is unavailable");
     }
 
-    const startedAt = now().toISOString();
+    const startedAtInstant = now();
+    const startedAt = startedAtInstant.toISOString();
     const invocation = buildIsolatedJudgeDockerInvocation({
       request,
       containerName,
@@ -380,7 +381,12 @@ export async function executeIsolatedJudgeRun({
     }
 
     const taskResults = parseJudgeOutput(rawOutput, corpus);
-    const completedAt = now().toISOString();
+    const completedAtInstant = now();
+    // Wall clocks may have millisecond resolution or move backwards. Published result contracts
+    // require a strictly positive duration, so preserve ordering without trusting clock progress.
+    const completedAt = new Date(
+      Math.max(completedAtInstant.getTime(), startedAtInstant.getTime() + 1)
+    ).toISOString();
     const evidencePayload = {
       schemaVersion: 1,
       run: {

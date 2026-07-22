@@ -156,7 +156,7 @@ test("stops reading candidate bytes when the aggregate bundle cap is reached", a
 test("bounds directory fan-out before sorting attacker-controlled entries", async () => {
   await withCandidateBundle((root) => {
     const taskRoot = join(root, corpus.tasks[0].id);
-    for (let index = 0; index < 2_001; index += 1) {
+    for (let index = 0; index < 4_001; index += 1) {
       mkdirSync(join(taskRoot, `empty-${String(index).padStart(4, "0")}`));
     }
     assert.throws(
