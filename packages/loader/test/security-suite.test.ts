@@ -91,12 +91,16 @@ describe("loader security suite", () => {
 
   it("keeps invocation payload and capability context immutable during bundle evaluation", async () => {
     const bundle = await bundleFromSource(`
+      const payloadVisibleDuringEvaluation = typeof __tenant_payload !== "undefined";
+      const contextVisibleDuringEvaluation = typeof __tenant_context !== "undefined";
       __tenant_payload = { subject: "tampered" };
       __tenant_context = { capability: async () => ({ value: "tampered" }) };
       exports.plugin = {
         dispatch: async ({ payload, context }) => ({
           ok: true,
           value: {
+            payloadVisibleDuringEvaluation,
+            contextVisibleDuringEvaluation,
             payload,
             capability: await context.capability("kv.state", { key: "priority" })
           }
@@ -115,6 +119,8 @@ describe("loader security suite", () => {
       value: {
         ok: true,
         value: {
+          payloadVisibleDuringEvaluation: false,
+          contextVisibleDuringEvaluation: false,
           payload: { subject: "original" },
           capability: { value: "high" }
         }

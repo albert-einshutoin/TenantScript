@@ -383,6 +383,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const RUNTIME_WORKER_SOURCE = String.raw`
+const { randomBytes } = require("node:crypto");
 const vm = require("node:vm");
 const { parentPort, workerData } = require("node:worker_threads");
 
@@ -447,10 +448,11 @@ async function run() {
     }
   });
 
-  initializeSandbox(sandbox, limits);
+  const invocationInstaller = initializeSandbox(sandbox, limits);
 
   evaluateBundle(workerData.bundleCode, sandbox, limits);
   assertEntrypointExists(sandbox.module.exports, workerData.handlerName, workerData.entrypoint);
+  installInvocationState(sandbox, limits, invocationInstaller);
 
   parentPort.postMessage({ type: "started" });
   const result = invokeEntrypointInSandbox(sandbox, limits, workerData.entrypoint);
@@ -458,6 +460,9 @@ async function run() {
 }
 
 function initializeSandbox(sandbox, limits) {
+  // A random lexical binding keeps the installer unreachable to evaluated code while
+  // retaining invocation data inside the VM realm until export validation succeeds.
+  const installerName = "__tenant_install_" + randomBytes(16).toString("hex");
   const HostURL = URL;
   const operateUrl = hardenBridge((requestJson) => {
     try {
@@ -524,12 +529,13 @@ function initializeSandbox(sandbox, limits) {
 
   const initialization = new vm.Script(
     [
-      "(() => {",
+      "const " + installerName + " = (() => {",
       "  const urlBridge = __tenant_url_bridge;",
       "  const fetchBridge = __tenant_fetch_bridge;",
       "  const capabilityBridge = __tenant_capability_bridge;",
       "  const payloadJson = __tenant_payload_json;",
       "  const handlerName = __tenant_handler_name_value;",
+      "  const defineProperties = Object.defineProperties.bind(Object);",
       "  delete globalThis.__tenant_url_bridge;",
       "  delete globalThis.__tenant_fetch_bridge;",
       "  delete globalThis.__tenant_capability_bridge;",
@@ -656,16 +662,30 @@ function initializeSandbox(sandbox, limits) {
       "      }",
       "    }",
       "  });",
-      "  Object.defineProperties(globalThis, {",
-      "    __tenant_handler_name: { value: handlerName, writable: false, configurable: false },",
-      "    __tenant_payload: { value: JSON.parse(payloadJson), writable: false, configurable: false },",
-      "    __tenant_context: { value: invocationContext, writable: false, configurable: false }",
-      "  });",
+      "  const invocationPayload = JSON.parse(payloadJson);",
+      "  let installed = false;",
+      "  return () => {",
+      "    if (installed) throw new Error('invocation state is already installed');",
+      "    installed = true;",
+      "    defineProperties(globalThis, {",
+      "      __tenant_handler_name: { value: handlerName, writable: false, configurable: false },",
+      "      __tenant_payload: { value: invocationPayload, writable: false, configurable: false },",
+      "      __tenant_context: { value: invocationContext, writable: false, configurable: false }",
+      "    });",
+      "  };",
       "})();"
     ].join("\n"),
     { filename: "tenant-sandbox-init.cjs" }
   );
   initialization.runInContext(sandbox, { timeout: limits.timeoutMs });
+  return installerName;
+}
+
+function installInvocationState(sandbox, limits, installerName) {
+  const installer = new vm.Script(installerName + "();", {
+    filename: "tenant-sandbox-invocation.cjs"
+  });
+  installer.runInContext(sandbox, { timeout: limits.timeoutMs });
 }
 
 function hardenBridge(bridge) {
