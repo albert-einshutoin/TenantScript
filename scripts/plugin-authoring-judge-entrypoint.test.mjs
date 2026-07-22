@@ -436,6 +436,7 @@ test("documents the implemented entrypoint and the four unavailable execution ad
     "plugin-authoring-judge-entrypoint.mjs",
     "container内でも再検証",
     "4 execution adapter",
+    "32 MiB",
     "fail closed"
   ]) {
     assert.ok(guide.includes(required), `entrypoint guide must include ${required}`);

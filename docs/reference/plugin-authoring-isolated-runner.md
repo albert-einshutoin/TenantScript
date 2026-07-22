@@ -23,6 +23,8 @@ runnerは次をrepositoryで検証します。
 - Docker invocationが`--pull=never`、`--network=none`、`--read-only`、capability drop、
   no-new-privileges、PID/memory/CPU/tmpfs/time limitを強制する
 - candidate入力をread-only mountし、build/testの書き込み先を容量制限付き`/work` tmpfsに限定する
+- `/work` tmpfsを最低32 MiBとし、最大16 MiBのcandidate snapshotに対してfilesystem metadataとadapter state用の
+  raw headroomを最低16 MiB確保する。より大きなbuild stateが必要なrunは上限内で明示的に増やす
 - judge imageのentrypointを`/opt/tenantscript/bin/plugin-authoring-judge`へ固定する
 - success、judge failure、timeout、malformed outputの全経路で名前付きcontainerを明示削除する
 - stdoutを1 MiB以下のclosed JSONとして検証し、stderrやcandidate内容を公開errorへ反射しない

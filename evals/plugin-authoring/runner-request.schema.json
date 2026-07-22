@@ -53,7 +53,7 @@
         "memoryMb": { "type": "integer", "minimum": 128, "maximum": 2048 },
         "cpuCount": { "type": "number", "minimum": 0.25, "maximum": 4 },
         "pidsLimit": { "type": "integer", "minimum": 16, "maximum": 256 },
-        "tmpfsMb": { "type": "integer", "minimum": 16, "maximum": 256 }
+        "tmpfsMb": { "type": "integer", "minimum": 32, "maximum": 256 }
       }
     }
   }

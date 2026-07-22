@@ -41,6 +41,7 @@ const MAX_CANDIDATE_FILE_BYTES = 256 * 1024;
 const MAX_CANDIDATE_TOTAL_BYTES = 16 * 1024 * 1024;
 const MAX_CANDIDATE_DEPTH = 8;
 const MAX_CANDIDATE_PATH_BYTES = 240;
+const MIN_TMPFS_MB = 32;
 const PROHIBITED_NAMES = new Set([
   ".git",
   ".gitattributes",
@@ -128,7 +129,9 @@ export function parseIsolatedRunnerRequest(input, corpusInput) {
         input.sandbox.cpuCount <= 4
     );
     assertIntegerBetween(input.sandbox.pidsLimit, 16, 256);
-    assertIntegerBetween(input.sandbox.tmpfsMb, 16, 256);
+    // A maximum 16 MiB candidate is snapshotted into /work before adapters run. Requiring at
+    // least twice that raw capacity reserves headroom for filesystem metadata and adapter state.
+    assertIntegerBetween(input.sandbox.tmpfsMb, MIN_TMPFS_MB, 256);
     return structuredClone(input);
   } catch {
     throw new Error("isolated runner request is invalid");
