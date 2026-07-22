@@ -416,33 +416,38 @@ test("requires the package test script to run Vitest", () => {
   });
 });
 
-test("rejects package scripts that wrap the canonical test command", () => {
-  withRepository(({ root, submission }) => {
-    const packagePath = "templates/submissions/example-template/plugin/package.json";
-    writeFileSync(
-      join(root, packagePath),
-      `${JSON.stringify({
-        license: "Apache-2.0",
-        scripts: { pretest: "node before.js", test: "vitest run", posttest: "node after.js" },
-        dependencies: {
-          "@tenantscript/manifest": "0.0.0",
-          "@tenantscript/plugin-sdk": "0.0.0"
-        }
-      })}\n`
-    );
-    submission.source.files[packagePath] = createHash("sha256")
-      .update(readFileSync(join(root, packagePath)))
-      .digest("hex");
-    submission.source.revision = "1".repeat(40);
-    writeReviewRecord(root, submission);
-    writeSubmission(root, "example-template", submission);
+test("rejects package scripts that wrap canonical build or test commands", () => {
+  for (const wrappers of [
+    { prebuild: "node before.js", postbuild: "node after.js" },
+    { pretest: "node before.js", posttest: "node after.js" }
+  ]) {
+    withRepository(({ root, submission }) => {
+      const packagePath = "templates/submissions/example-template/plugin/package.json";
+      writeFileSync(
+        join(root, packagePath),
+        `${JSON.stringify({
+          license: "Apache-2.0",
+          scripts: { ...wrappers, build: "node scripts/build.mjs", test: "vitest run" },
+          dependencies: {
+            "@tenantscript/manifest": "0.0.0",
+            "@tenantscript/plugin-sdk": "0.0.0"
+          }
+        })}\n`
+      );
+      submission.source.files[packagePath] = createHash("sha256")
+        .update(readFileSync(join(root, packagePath)))
+        .digest("hex");
+      submission.source.revision = "1".repeat(40);
+      writeReviewRecord(root, submission);
+      writeSubmission(root, "example-template", submission);
 
-    const result = runChecker(root);
+      const result = runChecker(root);
 
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /source package must not wrap the canonical test command/);
-    assert.doesNotMatch(result.stderr, /pretest|posttest|before|after/);
-  });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /source package must not wrap canonical build or test commands/);
+      assert.doesNotMatch(result.stderr, /pretest|posttest|prebuild|postbuild|before|after/);
+    });
+  }
 });
 
 test("rejects package-manager settings embedded in package metadata", () => {

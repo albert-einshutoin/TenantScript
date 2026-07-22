@@ -33,7 +33,7 @@ const unsafePackageManagerControlNames = new Set([
   "pnpm-workspace.yml"
 ]);
 const installLifecycleScripts = new Set(["preinstall", "install", "postinstall", "prepare"]);
-const testWrapperScripts = new Set(["pretest", "posttest"]);
+const commandWrapperScripts = new Set(["prebuild", "postbuild", "pretest", "posttest"]);
 const topLevelFields = [
   "schemaVersion",
   "kind",
@@ -303,11 +303,13 @@ function validateSource(value, sdk, license, directoryName, displayPath) {
         if (
           isRecord(packageJson) &&
           isRecord(packageJson.scripts) &&
-          Object.keys(packageJson.scripts).some((name) => testWrapperScripts.has(name))
+          Object.keys(packageJson.scripts).some((name) => commandWrapperScripts.has(name))
         ) {
-          // pnpm runs pre/post wrappers around `pnpm test`; disallow them so the digest-bound
-          // canonical command cannot gain side effects that the explicit Vitest check does not show.
-          errors.push(`${displayPath}: source package must not wrap the canonical test command`);
+          // pnpm runs pre/post wrappers around build and test; disallow them so the digest-bound
+          // canonical commands cannot gain side effects that their explicit implementations omit.
+          errors.push(
+            `${displayPath}: source package must not wrap canonical build or test commands`
+          );
         }
         if (
           !isRecord(packageJson) ||
