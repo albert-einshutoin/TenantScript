@@ -64,8 +64,8 @@ const secretLikePatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /\b(?:tenant|customer)_[A-Za-z0-9_-]{4,}\b/i,
   /dash\.cloudflare\.com\/[0-9a-f]{16,}/i,
-  // File URLs name the same machine-local artifacts as absolute paths and must not bypass redaction.
-  /(?:file:\/\/(?:localhost)?\/(?:Users|Volumes|home|workspace|root|tmp)\/|\/Users\/|\/Volumes\/|(?:^|\s)\/(?:home|workspace|root|tmp)\/|[A-Za-z]:\\Users\\)/i
+  // File URLs and Markdown punctuation can prefix absolute paths and must not bypass redaction.
+  /(?:file:\/\/(?:localhost)?\/|(?:^|[^A-Za-z0-9])\/)(?:Users|Volumes|home|workspace|root|tmp)\/|[A-Za-z]:\\Users\\/i
 ];
 const sensitiveFieldPattern = /(?:token|secret|credential|password|account.?id)/i;
 const prohibitedGuaranteePattern =

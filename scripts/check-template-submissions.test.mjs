@@ -464,6 +464,25 @@ test("rejects local Unix paths embedded in file URLs", () => {
   }
 });
 
+test("rejects local Unix paths after Markdown punctuation", () => {
+  for (const evidence of [
+    "Artifact: (`/tmp/output`)\n",
+    "Artifact: `/workspace/log`\n",
+    'Artifact: "/home/alice/result"\n'
+  ]) {
+    withRepository(({ root, submission }) => {
+      writeFileSync(join(root, "templates/submissions/example-template/verification.md"), evidence);
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /verification\.evidence contains sensitive or private content/);
+      assert.doesNotMatch(result.stderr, /tmp|workspace|alice|result/);
+    });
+  }
+});
+
 test("rejects raw account identifiers in referenced packet files", () => {
   withRepository(({ root, submission }) => {
     const accountIdentifier = "a".repeat(32);

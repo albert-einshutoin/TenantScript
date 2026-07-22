@@ -49,7 +49,7 @@ The manifest and packet must agree exactly on hook name/type, capability names, 
 and egress mode/hosts; Tier 1 compares them before build and audit. Keep capabilities empty and egress
 denied unless the reviewed behavior needs narrower declared access. Never include tokens, credentials,
 raw account identifiers, customer/tenant data, private URLs, production logs, or machine-local paths
-(including `file:///home/...` and `file:///tmp/...` URLs).
+(including `file:///home/...`, `file:///tmp/...`, and Markdown-wrapped `` `/workspace/...` `` paths).
 Repository paths may use legitimate security vocabulary such as `token-refresh.ts`; the checker scans
 the digest-bound file contents instead of treating path segments as secret fields.
 The exact `@tenantscript/manifest` and `@tenantscript/plugin-sdk` dependency versions must equal
