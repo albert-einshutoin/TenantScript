@@ -82,7 +82,8 @@ map and also checks the recorded revision when that Git object is available. The
 the enforceable source identity after a squash merge removes PR-local commits from public ancestry.
 External repositories are not fetched during accountless CI: their full SHA and vendored digest map
 are syntactically checked, while provenance remains a blocking human-review item until durable
-external evidence is inspected.
+external evidence is inspected. Submission installation also runs fully offline; missing package
+metadata fails the gate instead of reaching a registry.
 
 ## 3. Complete submission metadata
 

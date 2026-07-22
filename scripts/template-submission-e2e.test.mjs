@@ -39,10 +39,12 @@ test("manifest security metadata must match its submission packet", () => {
   assert.throws(() => assertManifestMatchesSubmission(manifest, packet));
 });
 
-test("package-manager hooks stay disabled during submission installation", () => {
+test("submission installation disables hooks and registry access", () => {
   const arguments_ = submissionInstallArguments("/tmp/plugin");
   assert.ok(arguments_.includes("--ignore-scripts"));
   assert.ok(arguments_.includes("--ignore-pnpmfile"));
+  assert.ok(arguments_.includes("--offline"));
+  assert.ok(!arguments_.includes("--prefer-offline"));
 });
 
 async function exerciseSubmission(submission) {
@@ -135,7 +137,8 @@ function submissionInstallArguments(pluginDirectory) {
     pluginDirectory,
     "install",
     "--ignore-workspace",
-    "--prefer-offline",
+    // Missing cache entries must fail closed instead of letting unreviewed package metadata reach npm.
+    "--offline",
     "--ignore-scripts",
     // --ignore-scripts does not disable pnpmfile hooks, which can mutate the copied source pre-audit.
     "--ignore-pnpmfile"
