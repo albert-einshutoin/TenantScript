@@ -22,6 +22,7 @@ const hostPattern = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
 const urlLikePattern = /[a-z][a-z0-9+.-]*:\/\/[^\s<>"'`]+/giu;
 const requiredSourceSuffixes = [
   "package.json",
+  "scripts/build.mjs",
   "src/index.ts",
   "src/manifest.ts",
   "test/plugin.test.ts",
@@ -356,6 +357,13 @@ function validateSource(value, sdk, license, kind, directoryName, displayPath) {
           errors.push(
             `${displayPath}: source package must not wrap canonical build or test commands`
           );
+        }
+        if (
+          !isRecord(packageJson) ||
+          !isRecord(packageJson.scripts) ||
+          packageJson.scripts.build !== "node ./scripts/build.mjs"
+        ) {
+          errors.push(`${displayPath}: source package build script must use the canonical command`);
         }
         if (
           !isRecord(packageJson) ||

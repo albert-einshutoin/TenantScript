@@ -15,13 +15,15 @@ function withRepository(run) {
   try {
     const packetRoot = join(root, "templates", "submissions", "example-template");
     const pluginRoot = join(packetRoot, "plugin");
+    mkdirSync(join(pluginRoot, "scripts"), { recursive: true });
     mkdirSync(join(pluginRoot, "src"), { recursive: true });
     mkdirSync(join(pluginRoot, "test"), { recursive: true });
     mkdirSync(join(root, "docs", "security", "plugin-reviews"), { recursive: true });
     writeFileSync(
       join(pluginRoot, "package.json"),
-      '{"license":"Apache-2.0","scripts":{"test":"vitest run"},"dependencies":{"@tenantscript/manifest":"0.0.0","@tenantscript/plugin-sdk":"0.0.0"}}\n'
+      '{"license":"Apache-2.0","scripts":{"build":"node ./scripts/build.mjs","test":"vitest run"},"dependencies":{"@tenantscript/manifest":"0.0.0","@tenantscript/plugin-sdk":"0.0.0"}}\n'
     );
+    writeFileSync(join(pluginRoot, "scripts", "build.mjs"), "export {};\n");
     writeFileSync(join(pluginRoot, "src", "index.ts"), "export const plugin = {};\n");
     writeFileSync(join(pluginRoot, "src", "manifest.ts"), "export const manifest = {};\n");
     writeFileSync(join(pluginRoot, "test", "plugin.test.ts"), "export {};\n");
@@ -87,6 +89,7 @@ function validSubmission(root, revision) {
   const files = {};
   for (const path of [
     "templates/submissions/example-template/plugin/package.json",
+    "templates/submissions/example-template/plugin/scripts/build.mjs",
     "templates/submissions/example-template/plugin/src/index.ts",
     "templates/submissions/example-template/plugin/src/manifest.ts",
     "templates/submissions/example-template/plugin/test/plugin.test.ts",
@@ -183,6 +186,24 @@ test("requires bounded success and failure cases for generated bundle behavior",
     assert.equal(result.status, 1);
     assert.match(result.stderr, /verification\.behaviorCases must contain between 2 and 16 cases/);
   });
+});
+
+test("requires the canonical digest-bound build entrypoint", () => {
+  for (const buildCommand of [undefined, "node ../../../unreviewed-build.mjs"]) {
+    withRepository(({ root, submission }) => {
+      const packagePath = join(root, "templates/submissions/example-template/plugin/package.json");
+      const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+      if (buildCommand === undefined) delete packageJson.scripts.build;
+      else packageJson.scripts.build = buildCommand;
+      writeFileSync(packagePath, `${JSON.stringify(packageJson)}\n`);
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /package build script must use the canonical command/);
+    });
+  }
 });
 
 test("rejects unbounded, unordered, or open generated bundle behavior cases", () => {

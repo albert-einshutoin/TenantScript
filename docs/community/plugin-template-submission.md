@@ -44,8 +44,10 @@ Start from a built-in `ext init --template` template or a minimal plugin. Add th
 security-boundary tests first. The final source must include a manifest, handler, test, exact
 TenantScript package versions, explicit license, strict TypeScript configuration, and bounded
 `SECURITY.md` guidance.
-The package `test` script must be exactly `vitest run`; Tier 1 additionally invokes the required
-`test/plugin.test.ts` directly so the digest-bound behavior test cannot be hidden behind a no-op.
+The package `build` script must be exactly `node ./scripts/build.mjs`, and the `test` script must be
+exactly `vitest run`; both entrypoints and `scripts/build.mjs` are digest-bound. Tier 1 additionally
+invokes the required `test/plugin.test.ts` directly so the behavior test cannot be hidden behind a
+no-op.
 
 The manifest and packet must agree exactly on hook name/type, capability names, configuration keys,
 and egress mode/hosts; Tier 1 compares them before build and audit. Keep capabilities empty and egress
@@ -126,8 +128,11 @@ only in the repository-controlled E2E after metadata, paths, complete source dig
 record bound to the same source scope and digest map pass. The E2E discovers every submission
 directory so a new packet cannot silently receive static validation alone. It loads the generated
 `dist/plugin.cjs` and dispatches every packet-owned behavior case against that bundle, comparing the
-exact result and rejecting any capability call. Keep these fixtures synthetic, individually bounded,
-and independent from network, credentials, time, randomness, or tenant data.
+exact result and rejecting any capability call. The copied build runs outside the repository checkout,
+and each bundle dispatch runs in a SIGKILL-bounded child process, so relative build inputs and
+synchronous loops cannot escape the reviewed source or occupy the CI lane indefinitely. Keep these
+fixtures synthetic, individually bounded, and independent from network, credentials, time, randomness,
+or tenant data.
 
 ## 4. Run the submission gates
 
