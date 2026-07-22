@@ -52,6 +52,34 @@ describe("ticket-priority-normalizer", () => {
     expect(JSON.stringify(result)).not.toContain("private subject");
   });
 
+  it("does not reflect failures from hostile payload accessors", async () => {
+    const capability = vi.fn();
+    const payload = Object.create(null) as Record<string, unknown>;
+    Object.defineProperty(payload, "subject", {
+      enumerable: true,
+      get() {
+        throw new Error("private accessor detail");
+      }
+    });
+
+    const result = await plugin.dispatch({
+      hookName: "ticket.created",
+      payload,
+      context: { capability }
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        name: "PluginHandlerError",
+        hookName: "ticket.created",
+        message: "invalid ticket payload"
+      }
+    });
+    expect(capability).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("private accessor detail");
+  });
+
   it("rejects an undeclared hook", async () => {
     const result = await plugin.dispatch({
       hookName: "ticket.deleted",

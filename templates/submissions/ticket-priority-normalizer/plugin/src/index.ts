@@ -10,24 +10,31 @@ interface TicketPayload {
 }
 
 function normalizeTicketPayload(payload: unknown): Required<TicketPayload> {
-  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+  try {
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      throw new Error("invalid ticket payload");
+    }
+    const rawSubject =
+      "subject" in payload && typeof payload.subject === "string" ? payload.subject : "";
+    // Bound the untrusted representation before trim allocates a normalized copy. Otherwise
+    // whitespace padding can bypass the documented input limit while still consuming arbitrary
+    // memory and CPU.
+    const subject = rawSubject.length <= MAX_SUBJECT_LENGTH ? rawSubject.trim() : "";
+    const priority = "priority" in payload ? payload.priority : "normal";
+    if (
+      subject.length === 0 ||
+      subject.length > MAX_SUBJECT_LENGTH ||
+      typeof priority !== "string" ||
+      !priorities.has(priority)
+    ) {
+      throw new Error("invalid ticket payload");
+    }
+    return { subject, priority: (priority as TicketPayload["priority"]) ?? "normal" };
+  } catch {
+    // Accessor and Proxy traps are untrusted too; collapse every read failure to the same bounded
+    // message so definePlugin cannot reflect attacker-controlled exception details.
     throw new Error("invalid ticket payload");
   }
-  const rawSubject =
-    "subject" in payload && typeof payload.subject === "string" ? payload.subject : "";
-  // Bound the untrusted representation before trim allocates a normalized copy. Otherwise whitespace
-  // padding can bypass the documented input limit while still consuming arbitrary memory and CPU.
-  const subject = rawSubject.length <= MAX_SUBJECT_LENGTH ? rawSubject.trim() : "";
-  const priority = "priority" in payload ? payload.priority : "normal";
-  if (
-    subject.length === 0 ||
-    subject.length > MAX_SUBJECT_LENGTH ||
-    typeof priority !== "string" ||
-    !priorities.has(priority)
-  ) {
-    throw new Error("invalid ticket payload");
-  }
-  return { subject, priority: (priority as TicketPayload["priority"]) ?? "normal" };
 }
 
 export const plugin = definePlugin({
