@@ -49,7 +49,16 @@ test("does not reflect secret-shaped result metadata in parser errors", () => {
 test("rejects machine-local paths and secret-shaped corpus prose without reflection", () => {
   const corpus = loadJson(join(evalRoot, "corpus.json"));
   const marker = ["pass", "word", "=", "fixture-marker"].join("");
-  for (const unsafe of ["Inspect /Volumes/private/work", `Use ${marker}`]) {
+  const githubCredential = ["ghp_", "A".repeat(24)].join("");
+  const providerCredential = ["sk-", "B".repeat(24)].join("");
+  for (const unsafe of [
+    "Inspect /Volumes/private/work",
+    "Inspect /workspace/private/work",
+    String.raw`Inspect C:\Users\private\work`,
+    `Use ${marker}`,
+    `Use ${githubCredential}`,
+    `Use ${providerCredential}`
+  ]) {
     const input = structuredClone(corpus);
     input.tasks[0].requirement = unsafe.padEnd(40, ".");
     assert.throws(
@@ -57,7 +66,7 @@ test("rejects machine-local paths and secret-shaped corpus prose without reflect
       (error) => {
         assert.equal(error.message, "plugin authoring corpus is invalid");
         assert.equal(error.message.includes(marker), false);
-        assert.doesNotMatch(error.message, /Volumes/);
+        assert.doesNotMatch(error.message, /Volumes|workspace|Users|ghp_|sk-/);
         return true;
       }
     );

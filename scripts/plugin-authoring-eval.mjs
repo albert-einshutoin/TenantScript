@@ -35,8 +35,15 @@ const HOOK_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const SHA40_PATTERN = /^[0-9a-f]{40}$/;
 const SHA64_PATTERN = /^[0-9a-f]{64}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-const UNSAFE_TEXT_PATTERN =
-  /(?:\/Users\/|\/Volumes\/|file:\/\/|(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|secret)\s*[:=])/i;
+const UNSAFE_TEXT_PATTERNS = [
+  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/,
+  /\bsk-[A-Za-z0-9]{20,}\b/,
+  /\bBearer\s+[A-Za-z0-9._~+/-]{12,}/i,
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+  /(?:file:\/\/(?:localhost)?\/|(?:^|[^A-Za-z0-9])\/)(?:Users|Volumes|home|workspace|root|tmp)\/|[A-Za-z]:\\(?:Users|Volumes|home|workspace|root|tmp)\\/i,
+  /(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|secret)\s*[:=]/i
+];
 
 export function parsePluginAuthoringCorpus(input) {
   try {
@@ -433,7 +440,9 @@ function assertString(value, minLength, maxLength, pattern) {
 
 function assertSafeText(value, minLength, maxLength, pattern) {
   assertString(value, minLength, maxLength, pattern);
-  assert(!UNSAFE_TEXT_PATTERN.test(value));
+  // Eval prose is copied into durable public artifacts, so use the repository's broader
+  // credential and machine-path shapes even when a secret is not preceded by a field label.
+  assert(!UNSAFE_TEXT_PATTERNS.some((unsafePattern) => unsafePattern.test(value)));
 }
 
 function assertSortedUnique(values) {
