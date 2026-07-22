@@ -10,6 +10,7 @@ import {
   PLUGIN_AUTHORING_JUDGE_PATHS
 } from "./plugin-authoring-judge-contract.mjs";
 import { createPluginAuthoringBuildAdapter } from "./plugin-authoring-build-adapter.mjs";
+import { createPluginAuthoringSecurityTestAdapter } from "./plugin-authoring-security-adapter.mjs";
 import { createPluginAuthoringUnitTestAdapter } from "./plugin-authoring-unit-adapter.mjs";
 import { runPluginAuthoringJudgeCore } from "./plugin-authoring-judge-core.mjs";
 import { parsePluginAuthoringCorpus } from "./plugin-authoring-eval.mjs";
@@ -132,7 +133,8 @@ export async function runPluginAuthoringJudgeCli({
   execute = executePluginAuthoringJudge,
   adapters = {
     build: createPluginAuthoringBuildAdapter(),
-    "unit-test": createPluginAuthoringUnitTestAdapter()
+    "unit-test": createPluginAuthoringUnitTestAdapter(),
+    "security-test": createPluginAuthoringSecurityTestAdapter()
   }
 } = {}) {
   try {

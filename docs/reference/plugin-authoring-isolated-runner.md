@@ -79,6 +79,15 @@ candidateのtest scriptやfixtureを読みません。matrixはbaseline mountで
 stdoutのclosed observationをrunごとの32-byte keyでHMAC認証します。親adapterはbuild receipt、result、capability call、
 runtime log、未完了capabilityをすべて照合し、1 caseが失敗しても残りのcaseを実行します。
 
+`security-test` judgeには二層のjudge-owned adversarial adapterがあります。最初の層はcandidateと独立した固定probe
+bundleをproduction loaderへ渡し、Node global / ambient secret / constructor recoveryの隔離、raw fetchの
+`egress_denied`記録、capability subrequest budget、infinite loop timeoutを毎caseで確認します。次の層は
+`security-cases.json`のtask別prototype-shaped payloadをcandidate bundleへ渡し、runごとのambient canaryが結果や
+capability evidenceへ反射されないこと、corpus allowlist外のcapability、raw egress log、未完了call、task-scoped
+escape marker、timeout、出力超過がないことを検証します。case matrixはbaseline mountではなくdigest固定judge sourceから
+読み、build receiptで再検証したbundleだけをfresh childで実行します。candidateのtest script、fixture、config、prebuilt
+artifactは使用しません。
+
 抽出済みmanifest valueに対しては、canonical manifest parserの成功と、task固有の単一hook、capability keyの
 exact set、egress denyを判定するpure policyがあります。parserの例外や不正な戻り値はdiagnosticを反射せず
 `manifest`と`least-privilege`のfailureへ閉じます。
@@ -91,10 +100,14 @@ duplicate/prototype-sensitive keyを拒否します。source byte、AST node、n
 parser diagnosticはcandidate内容を反射せず両judgeのfailureへ閉じます。この静的adapterはunknown sourceの非実行境界を
 提供しますが、build/test/audit sandboxやreview済みimageの完成を証明しません。
 
-security-test、auditの2 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
+auditの1 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
 boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskをskipしません。build / unit-test adapterの成功やtest
-doubleの全成功はimageやreal-agent qualityの証拠ではなく、残る2 execution adapterがreview済みimageへ接続されるまで
+doubleの全成功はimageやreal-agent qualityの証拠ではなく、残るaudit adapterがreview済みimageへ接続されるまで
 実runの全judge成功を主張しません。
+
+security-test成功は固定probeと入力で観測した実行境界だけを証明します。未実行の隠し分岐、危険APIの静的存在、dependency
+provenance、未知のsandbox脆弱性、container image supply chainは保証しません。前二者は後続audit、image自体は
+SBOM・digest・review recordのgateで扱います。
 
 reviewed judge imageがない場合のstop conditionは明確です。runnerは
 `isolated judge sandbox is unavailable`で停止し、host実行やrepository simulationへfallbackしません。

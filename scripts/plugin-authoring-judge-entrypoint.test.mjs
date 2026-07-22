@@ -20,6 +20,7 @@ import {
   PLUGIN_AUTHORING_JUDGE_PATHS
 } from "./plugin-authoring-judge-contract.mjs";
 import { createPluginAuthoringBuildAdapter } from "./plugin-authoring-build-adapter.mjs";
+import { createPluginAuthoringSecurityTestAdapter } from "./plugin-authoring-security-adapter.mjs";
 import { createPluginAuthoringUnitTestAdapter } from "./plugin-authoring-unit-adapter.mjs";
 import {
   executePluginAuthoringJudge,
@@ -322,7 +323,7 @@ test("runs the bounded build adapter against every materialized task snapshot", 
   });
 });
 
-test("passes every fixed behavior case through build and the real loader sandbox", async () => {
+test("passes every fixed behavior and security case through build and the real loader sandbox", async () => {
   await withFixture(async (paths) => {
     for (const task of corpus.tasks) {
       writeFileSync(
@@ -333,6 +334,7 @@ test("passes every fixed behavior case through build and the real loader sandbox
     const adapters = allPassingAdapters();
     adapters.build = createPluginAuthoringBuildAdapter();
     adapters["unit-test"] = createPluginAuthoringUnitTestAdapter();
+    adapters["security-test"] = createPluginAuthoringSecurityTestAdapter();
     const result = await executePluginAuthoringJudge({
       ...paths,
       adapters,
@@ -342,7 +344,10 @@ test("passes every fixed behavior case through build and the real loader sandbox
       task.judges
         .filter(
           (judge) =>
-            (judge.name === "build" || judge.name === "unit-test") && judge.status !== "pass"
+            (judge.name === "build" ||
+              judge.name === "unit-test" ||
+              judge.name === "security-test") &&
+            judge.status !== "pass"
         )
         .map((judge) => `${task.taskId}:${judge.name}`)
     );
@@ -517,7 +522,7 @@ test("writes exactly one JSON line on success and one fixed error on failure", a
     execute: async ({ adapters }) => {
       assert.equal(typeof adapters.build, "function");
       assert.equal(typeof adapters["unit-test"], "function");
-      assert.equal(adapters["security-test"], undefined);
+      assert.equal(typeof adapters["security-test"], "function");
       assert.equal(adapters.audit, undefined);
       return expected;
     }
@@ -543,7 +548,7 @@ test("writes exactly one JSON line on success and one fixed error on failure", a
   assert.equal(writes.stderr.includes(marker), false);
 });
 
-test("documents the bounded build and unit adapters and the two unavailable execution adapters", () => {
+test("documents the bounded build, unit, and security adapters and the unavailable audit adapter", () => {
   const guide = readFileSync(
     join(repoRoot, "docs", "reference", "plugin-authoring-isolated-runner.md"),
     "utf8"
@@ -553,7 +558,8 @@ test("documents the bounded build and unit adapters and the two unavailable exec
     "container内でも再検証",
     "bounded offline compile-check",
     "judge-owned behavior",
-    "2 execution adapter",
+    "judge-owned adversarial",
+    "1 execution adapter",
     "package.json",
     "32 MiB",
     "fail closed"
