@@ -51,13 +51,15 @@ test("rejects machine-local paths and secret-shaped corpus prose without reflect
   const marker = ["pass", "word", "=", "fixture-marker"].join("");
   const githubCredential = ["ghp_", "A".repeat(24)].join("");
   const providerCredential = ["sk-", "B".repeat(24)].join("");
+  const scopedProviderCredential = ["sk-proj-", "C".repeat(24)].join("");
   for (const unsafe of [
     "Inspect /Volumes/private/work",
     "Inspect /workspace/private/work",
     String.raw`Inspect C:\Users\private\work`,
     `Use ${marker}`,
     `Use ${githubCredential}`,
-    `Use ${providerCredential}`
+    `Use ${providerCredential}`,
+    `Use ${scopedProviderCredential}`
   ]) {
     const input = structuredClone(corpus);
     input.tasks[0].requirement = unsafe.padEnd(40, ".");

@@ -38,7 +38,7 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const UNSAFE_TEXT_PATTERNS = [
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/,
-  /\bsk-[A-Za-z0-9]{20,}\b/,
+  /\bsk-[A-Za-z0-9_-]{20,}\b/,
   /\bBearer\s+[A-Za-z0-9._~+/-]{12,}/i,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /(?:file:\/\/(?:localhost)?\/|(?:^|[^A-Za-z0-9])\/)(?:Users|Volumes|home|workspace|root|tmp)\/|[A-Za-z]:\\(?:Users|Volumes|home|workspace|root|tmp)\\/i,
