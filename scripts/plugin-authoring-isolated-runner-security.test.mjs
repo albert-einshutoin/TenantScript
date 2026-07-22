@@ -267,6 +267,28 @@ test("cleans up after a bounded backend timeout without exposing backend diagnos
   });
 });
 
+test("reports unconfirmed cleanup before execution failure when both operations fail", async () => {
+  await withCandidateBundle(async (candidateRoot) => {
+    await assert.rejects(
+      executeIsolatedJudgeRun({
+        repositoryRoot: repoRoot,
+        candidateRoot,
+        request: requestFixture(),
+        corpus,
+        workspace: workspaceFixture(),
+        backend: {
+          probe: async () => {},
+          run: async () => {
+            throw new Error("timed out");
+          },
+          remove: async () => false
+        }
+      }),
+      /isolated judge cleanup was not confirmed/
+    );
+  });
+});
+
 test("will not follow an output-directory symlink or overwrite existing evidence", () => {
   const root = mkdtempSync(join(tmpdir(), "tenantscript-isolated-output-"));
   try {

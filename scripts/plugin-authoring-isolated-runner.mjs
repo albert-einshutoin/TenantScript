@@ -341,11 +341,11 @@ export async function executeIsolatedJudgeRun({
         }
       }
     }
-    if (executionFailure) {
-      throw new Error("isolated judge execution failed");
-    }
     if (!cleanupConfirmed) {
       throw new Error("isolated judge cleanup was not confirmed");
+    }
+    if (executionFailure) {
+      throw new Error("isolated judge execution failed");
     }
 
     const taskResults = parseJudgeOutput(rawOutput, corpus);
