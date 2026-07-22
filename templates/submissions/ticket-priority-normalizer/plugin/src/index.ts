@@ -13,8 +13,11 @@ function normalizeTicketPayload(payload: unknown): Required<TicketPayload> {
   if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
     throw new Error("invalid ticket payload");
   }
-  const subject =
-    "subject" in payload && typeof payload.subject === "string" ? payload.subject.trim() : "";
+  const rawSubject =
+    "subject" in payload && typeof payload.subject === "string" ? payload.subject : "";
+  // Bound the untrusted representation before trim allocates a normalized copy. Otherwise whitespace
+  // padding can bypass the documented input limit while still consuming arbitrary memory and CPU.
+  const subject = rawSubject.length <= MAX_SUBJECT_LENGTH ? rawSubject.trim() : "";
   const priority = "priority" in payload ? payload.priority : "normal";
   if (
     subject.length === 0 ||

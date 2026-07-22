@@ -29,6 +29,7 @@ describe("ticket-priority-normalizer", () => {
     [],
     { subject: "   " },
     { subject: "x".repeat(201) },
+    { subject: `${"x".repeat(200)}${" ".repeat(1_000)}` },
     { subject: "private subject", priority: "urgent" }
   ])("rejects malformed input with a fixed non-reflective error for %#", async (payload) => {
     const capability = vi.fn();
