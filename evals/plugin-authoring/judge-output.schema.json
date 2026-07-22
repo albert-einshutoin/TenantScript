@@ -8,9 +8,197 @@
   "properties": {
     "schemaVersion": { "const": 1 },
     "taskResults": {
-      "$ref": "https://tenantscript.dev/schemas/plugin-authoring-eval-result.schema.json#/properties/taskResults",
+      "type": "array",
       "minItems": 10,
-      "maxItems": 10
+      "maxItems": 10,
+      "items": false,
+      "prefixItems": [
+        { "$ref": "#/$defs/approval-invoice-threshold" },
+        { "$ref": "#/$defs/approval-refund-review" },
+        { "$ref": "#/$defs/capability-github-issue" },
+        { "$ref": "#/$defs/capability-slack-alert" },
+        { "$ref": "#/$defs/error-malformed-payload" },
+        { "$ref": "#/$defs/error-provider-failure" },
+        { "$ref": "#/$defs/policy-api-method-allowlist" },
+        { "$ref": "#/$defs/policy-data-residency" },
+        { "$ref": "#/$defs/webhook-currency-normalizer" },
+        { "$ref": "#/$defs/webhook-ticket-priority" }
+      ]
+    }
+  },
+  "$defs": {
+    "judge-result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "durationMs", "failureCode"],
+      "properties": {
+        "name": {
+          "enum": ["manifest", "build", "unit-test", "security-test", "audit", "least-privilege"]
+        },
+        "status": { "enum": ["pass", "fail"] },
+        "durationMs": { "type": "integer", "minimum": 0, "maximum": 3600000 },
+        "failureCode": {
+          "type": ["string", "null"],
+          "enum": [
+            null,
+            "manifest-invalid",
+            "build-failed",
+            "unit-test-failed",
+            "security-test-failed",
+            "audit-failed",
+            "least-privilege-failed"
+          ]
+        }
+      }
+    },
+    "manifest": {
+      "allOf": [
+        { "$ref": "#/$defs/judge-result" },
+        {
+          "properties": { "name": { "const": "manifest" } },
+          "if": { "properties": { "status": { "const": "pass" } }, "required": ["status"] },
+          "then": { "properties": { "failureCode": { "type": "null" } } },
+          "else": { "properties": { "failureCode": { "const": "manifest-invalid" } } }
+        }
+      ]
+    },
+    "build": {
+      "allOf": [
+        { "$ref": "#/$defs/judge-result" },
+        {
+          "properties": { "name": { "const": "build" } },
+          "if": { "properties": { "status": { "const": "pass" } }, "required": ["status"] },
+          "then": { "properties": { "failureCode": { "type": "null" } } },
+          "else": { "properties": { "failureCode": { "const": "build-failed" } } }
+        }
+      ]
+    },
+    "unit-test": {
+      "allOf": [
+        { "$ref": "#/$defs/judge-result" },
+        {
+          "properties": { "name": { "const": "unit-test" } },
+          "if": { "properties": { "status": { "const": "pass" } }, "required": ["status"] },
+          "then": { "properties": { "failureCode": { "type": "null" } } },
+          "else": { "properties": { "failureCode": { "const": "unit-test-failed" } } }
+        }
+      ]
+    },
+    "security-test": {
+      "allOf": [
+        { "$ref": "#/$defs/judge-result" },
+        {
+          "properties": { "name": { "const": "security-test" } },
+          "if": { "properties": { "status": { "const": "pass" } }, "required": ["status"] },
+          "then": { "properties": { "failureCode": { "type": "null" } } },
+          "else": { "properties": { "failureCode": { "const": "security-test-failed" } } }
+        }
+      ]
+    },
+    "audit": {
+      "allOf": [
+        { "$ref": "#/$defs/judge-result" },
+        {
+          "properties": { "name": { "const": "audit" } },
+          "if": { "properties": { "status": { "const": "pass" } }, "required": ["status"] },
+          "then": { "properties": { "failureCode": { "type": "null" } } },
+          "else": { "properties": { "failureCode": { "const": "audit-failed" } } }
+        }
+      ]
+    },
+    "least-privilege": {
+      "allOf": [
+        { "$ref": "#/$defs/judge-result" },
+        {
+          "properties": { "name": { "const": "least-privilege" } },
+          "if": { "properties": { "status": { "const": "pass" } }, "required": ["status"] },
+          "then": { "properties": { "failureCode": { "type": "null" } } },
+          "else": { "properties": { "failureCode": { "const": "least-privilege-failed" } } }
+        }
+      ]
+    },
+    "judges": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": false,
+      "prefixItems": [
+        { "$ref": "#/$defs/manifest" },
+        { "$ref": "#/$defs/build" },
+        { "$ref": "#/$defs/unit-test" },
+        { "$ref": "#/$defs/security-test" },
+        { "$ref": "#/$defs/audit" },
+        { "$ref": "#/$defs/least-privilege" }
+      ]
+    },
+    "task-result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskId", "judges"],
+      "properties": {
+        "taskId": { "type": "string" },
+        "judges": { "$ref": "#/$defs/judges" }
+      }
+    },
+    "approval-invoice-threshold": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "approval-invoice-threshold" } } }
+      ]
+    },
+    "approval-refund-review": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "approval-refund-review" } } }
+      ]
+    },
+    "capability-github-issue": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "capability-github-issue" } } }
+      ]
+    },
+    "capability-slack-alert": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "capability-slack-alert" } } }
+      ]
+    },
+    "error-malformed-payload": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "error-malformed-payload" } } }
+      ]
+    },
+    "error-provider-failure": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "error-provider-failure" } } }
+      ]
+    },
+    "policy-api-method-allowlist": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "policy-api-method-allowlist" } } }
+      ]
+    },
+    "policy-data-residency": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "policy-data-residency" } } }
+      ]
+    },
+    "webhook-currency-normalizer": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "webhook-currency-normalizer" } } }
+      ]
+    },
+    "webhook-ticket-priority": {
+      "allOf": [
+        { "$ref": "#/$defs/task-result" },
+        { "properties": { "taskId": { "const": "webhook-ticket-priority" } } }
+      ]
     }
   }
 }

@@ -16,6 +16,7 @@ import { test } from "node:test";
 
 import {
   buildIsolatedJudgeDockerInvocation,
+  createDockerBackend,
   createGitWorkspaceAdapter,
   executeIsolatedJudgeRun,
   inspectIsolatedCandidateBundle,
@@ -162,6 +163,25 @@ test("builds a fixed least-authority Docker invocation", () => {
     false
   );
   assert.deepEqual(invocation.environmentKeys, ["PATH"]);
+});
+
+test("bounds every synchronous Docker control-plane call", async () => {
+  const calls = [];
+  const image = requestFixture().sandbox.image;
+  const backend = createDockerBackend({
+    spawnSyncImpl(command, args, options) {
+      calls.push({ command, args, options });
+      if (args[0] === "image") return { status: 0, stdout: JSON.stringify([image]) };
+      return { status: null, stdout: "", error: { code: "ETIMEDOUT" } };
+    }
+  });
+
+  await backend.probe(image, 1_234);
+  assert.equal(await backend.remove("bounded-container", 2_345), false);
+  assert.deepEqual(
+    calls.map(({ options }) => options.timeout),
+    [1_234, 2_345]
+  );
 });
 
 test("wraps closed judge output in digest-bound isolated evidence and always cleans up", async () => {
@@ -329,9 +349,28 @@ test("publishes closed and bounded request, judge output, and evidence schemas",
   assert.ok(requestSchema.properties.sandbox.properties.timeoutMs.maximum <= 600_000);
   assert.ok(requestSchema.properties.sandbox.properties.memoryMb.maximum <= 2_048);
   assert.equal(judgeOutputSchema.additionalProperties, false);
-  assert.equal(
-    judgeOutputSchema.properties.taskResults.$ref,
-    "https://tenantscript.dev/schemas/plugin-authoring-eval-result.schema.json#/properties/taskResults"
+  assert.equal(judgeOutputSchema.properties.taskResults.items, false);
+  assert.deepEqual(
+    judgeOutputSchema.properties.taskResults.prefixItems.map(({ $ref }) => $ref),
+    corpus.tasks.map((task) => `#/$defs/${task.id}`)
+  );
+  assert.equal(judgeOutputSchema.$defs.judges.items, false);
+  assert.deepEqual(
+    judgeOutputSchema.$defs.judges.prefixItems.map(({ $ref }) => $ref),
+    corpus.requiredJudges.map((judge) => `#/$defs/${judge}`)
+  );
+  assert.deepEqual(
+    corpus.requiredJudges.map(
+      (judge) => judgeOutputSchema.$defs[judge].allOf[1].else.properties.failureCode.const
+    ),
+    [
+      "manifest-invalid",
+      "build-failed",
+      "unit-test-failed",
+      "security-test-failed",
+      "audit-failed",
+      "least-privilege-failed"
+    ]
   );
   assert.equal(evidenceSchema.additionalProperties, false);
   assert.equal(evidenceSchema.properties.run.additionalProperties, false);
@@ -343,7 +382,7 @@ test("publishes closed and bounded request, judge output, and evidence schemas",
   assert.equal(evidenceSchema.properties.sandbox.properties.cleanup.const, "confirmed");
   assert.equal(
     evidenceSchema.properties.taskResults.$ref,
-    "https://tenantscript.dev/schemas/plugin-authoring-eval-result.schema.json#/properties/taskResults"
+    "https://tenantscript.dev/schemas/plugin-authoring-judge-output-v1.json#/properties/taskResults"
   );
 });
 

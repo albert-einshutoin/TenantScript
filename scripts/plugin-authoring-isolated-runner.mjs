@@ -344,7 +344,7 @@ export async function executeIsolatedJudgeRun({
     chmodSync(requestPath, 0o444);
 
     try {
-      await backend.probe(request.sandbox.image);
+      await backend.probe(request.sandbox.image, Math.min(request.sandbox.timeoutMs, 30_000));
     } catch {
       throw new Error("isolated judge sandbox is unavailable");
     }
@@ -367,7 +367,9 @@ export async function executeIsolatedJudgeRun({
     } finally {
       if (runAttempted) {
         try {
-          cleanupConfirmed = (await backend.remove(containerName)) === true;
+          cleanupConfirmed =
+            (await backend.remove(containerName, Math.min(request.sandbox.timeoutMs, 30_000))) ===
+            true;
         } catch {
           cleanupConfirmed = false;
         }
@@ -573,16 +575,17 @@ export function createGitWorkspaceAdapter() {
   };
 }
 
-export function createDockerBackend() {
+export function createDockerBackend({ spawnSyncImpl = spawnSync } = {}) {
   return {
-    async probe(image) {
-      const result = spawnSync(
+    async probe(image, timeoutMs = 30_000) {
+      const result = spawnSyncImpl(
         "docker",
         ["image", "inspect", image, "--format={{json .RepoDigests}}"],
         {
           encoding: "utf8",
           env: commandEnvironment(),
           maxBuffer: 64 * 1024,
+          timeout: timeoutMs,
           stdio: ["ignore", "pipe", "pipe"]
         }
       );
@@ -594,11 +597,12 @@ export function createDockerBackend() {
     run(invocation) {
       return runDockerInvocation(invocation);
     },
-    async remove(containerName) {
-      const result = spawnSync("docker", ["rm", "--force", containerName], {
+    async remove(containerName, timeoutMs = 30_000) {
+      const result = spawnSyncImpl("docker", ["rm", "--force", containerName], {
         encoding: "utf8",
         env: commandEnvironment(),
         maxBuffer: 64 * 1024,
+        timeout: timeoutMs,
         stdio: ["ignore", "pipe", "pipe"]
       });
       return result.status === 0 && result.error === undefined;
