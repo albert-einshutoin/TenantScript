@@ -1,20 +1,30 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import catalog from "../../../../templates/catalog.json" with { type: "json" };
+
+const firstTemplate = catalog.templates[0];
+
+if (firstTemplate === undefined) {
+  throw new Error("template gallery E2E requires at least one approved catalog item");
+}
 
 test("renders approved catalog compatibility and safe source links", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText("permission surface");
-  await expect(page.getByText("1 template found")).toBeVisible();
+  const countLabel = `${String(catalog.templates.length)} ${catalog.templates.length === 1 ? "template" : "templates"} found`;
+  await expect(page.getByText(countLabel)).toBeVisible();
 
-  const card = page.getByRole("article", { name: "Ticket priority normalizer" });
-  await expect(card).toContainText("ticket.created");
-  await expect(card).toContainText("^0.0.0");
+  const card = page.getByRole("article", { name: firstTemplate.displayName });
+  await expect(card).toContainText(firstTemplate.hook.name);
+  await expect(card).toContainText(firstTemplate.sdk.range);
   await expect(card).toContainText("No outbound egress");
   await expect(card).toContainText("Reviewed: approved");
 
-  const source = card.getByRole("link", { name: "View source for Ticket priority normalizer" });
-  await expect(source).toHaveAttribute("href", /^https:\/\//u);
+  const source = card.getByRole("link", {
+    name: `View source for ${firstTemplate.displayName}`
+  });
+  await expect(source).toHaveAttribute("href", firstTemplate.source.repository);
   await expect(source).toHaveAttribute("target", "_blank");
   await expect(source).toHaveAttribute("rel", "noopener noreferrer");
 });
@@ -25,7 +35,7 @@ test("filters the static catalog and restores the empty state", async ({ page })
   await page.getByRole("searchbox", { name: "Search templates" }).fill("does-not-exist");
   await expect(page.getByText("No templates match these filters.")).toBeVisible();
   await page.getByRole("button", { name: "Reset and show all templates" }).click();
-  await expect(page.getByRole("article", { name: "Ticket priority normalizer" })).toBeVisible();
+  await expect(page.getByRole("article", { name: firstTemplate.displayName })).toBeVisible();
 });
 
 test("has no serious accessibility violations", async ({ page }) => {
@@ -47,5 +57,5 @@ test("keeps the catalog within the mobile viewport", async ({ page }) => {
     () => document.documentElement.scrollWidth - window.innerWidth
   );
   expect(overflow).toBeLessThanOrEqual(1);
-  await expect(page.getByRole("article", { name: "Ticket priority normalizer" })).toBeVisible();
+  await expect(page.getByRole("article", { name: firstTemplate.displayName })).toBeVisible();
 });
