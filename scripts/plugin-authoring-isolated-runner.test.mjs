@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -213,6 +214,45 @@ test("wraps closed judge output in digest-bound isolated evidence and always cle
       ["prepare", "probe", "run", "remove"]
     );
     assert.equal(existsSync(tempRoot), false);
+  });
+});
+
+test("keeps the read-only request mount readable by the unprivileged judge under a restrictive umask", async () => {
+  await withCandidateBundle(async (candidateRoot) => {
+    const previousUmask = process.umask(0o077);
+    try {
+      const backend = {
+        probe: async () => {},
+        run: async (invocation) => {
+          const requestMount = invocation.args.find((argument) =>
+            argument.endsWith(",dst=/input/request.json,readonly")
+          );
+          assert.ok(requestMount);
+          const requestPath = requestMount.slice("--mount=type=bind,src=".length).split(",dst=")[0];
+          assert.equal(statSync(requestPath).mode & 0o444, 0o444);
+          return JSON.stringify({ schemaVersion: 1, taskResults: passingTaskResults() });
+        },
+        remove: async () => true
+      };
+      const workspace = {
+        prepare: ({ destination }) => mkdirSync(destination, { recursive: true })
+      };
+      const times = [new Date("2026-07-22T00:00:00.000Z"), new Date("2026-07-22T00:00:01.000Z")];
+
+      const output = await executeIsolatedJudgeRun({
+        repositoryRoot: repoRoot,
+        candidateRoot,
+        request: requestFixture(),
+        corpus,
+        backend,
+        workspace,
+        now: () => times.shift()
+      });
+
+      assert.equal(output.status, "success");
+    } finally {
+      process.umask(previousUmask);
+    }
   });
 });
 

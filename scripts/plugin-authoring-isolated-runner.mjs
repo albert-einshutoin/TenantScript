@@ -308,6 +308,9 @@ export async function executeIsolatedJudgeRun({
       mode: 0o444,
       flag: "wx"
     });
+    // Creation modes are reduced by the maintainer's umask. The judge runs as UID 65532, so set
+    // the final read-only mode explicitly instead of depending on the invoking shell's policy.
+    chmodSync(requestPath, 0o444);
 
     try {
       await backend.probe(request.sandbox.image);
