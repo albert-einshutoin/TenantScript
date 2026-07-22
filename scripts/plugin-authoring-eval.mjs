@@ -55,7 +55,7 @@ export function parsePluginAuthoringCorpus(input) {
     assert(Array.isArray(input.tasks) && input.tasks.length >= 10 && input.tasks.length <= 100);
 
     const ids = [];
-    const categories = new Set();
+    const categoryCounts = new Map(CATEGORIES.map((category) => [category, 0]));
     for (const task of input.tasks) {
       assertPlainObject(task);
       assertExactKeys(task, [
@@ -84,10 +84,11 @@ export function parsePluginAuthoringCorpus(input) {
       assertExactKeys(task.egress, ["mode"]);
       assert(task.egress.mode === "deny");
       ids.push(task.id);
-      categories.add(task.category);
+      categoryCounts.set(task.category, categoryCounts.get(task.category) + 1);
     }
     assertSortedUnique(ids);
-    assertArrayEquals([...categories].sort(), CATEGORIES);
+    // A fixed two-task stratum keeps category pass rates comparable across agents and revisions.
+    assert(CATEGORIES.every((category) => categoryCounts.get(category) === 2));
     return structuredClone(input);
   } catch {
     throw new Error("plugin authoring corpus is invalid");

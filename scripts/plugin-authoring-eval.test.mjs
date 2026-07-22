@@ -81,6 +81,10 @@ test("rejects unknown corpus fields, duplicates, unsafe prose, and oversized req
   oversized.tasks[0].requirement = "x".repeat(2_001);
   cases.push(oversized);
 
+  const imbalanced = clone(source);
+  imbalanced.tasks.find((task) => task.category === "capability").category = "approval";
+  cases.push(imbalanced);
+
   for (const input of cases) {
     assert.throws(() => parsePluginAuthoringCorpus(input), /plugin authoring corpus is invalid/);
   }
