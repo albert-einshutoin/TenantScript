@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,11 +23,7 @@ function withFixture(run) {
     cpSync(join(repoRoot, "templates", "submissions"), join(root, "templates", "submissions"), {
       recursive: true
     });
-    cpSync(
-      join(repoRoot, "docs", "security", "plugin-reviews"),
-      join(root, "docs", "security", "plugin-reviews"),
-      { recursive: true }
-    );
+    mkdirSync(join(root, "docs", "security", "plugin-reviews"), { recursive: true });
     const submissionPath = join(
       root,
       "templates/submissions/ticket-priority-normalizer/submission.json"
@@ -28,10 +32,49 @@ function withFixture(run) {
     submission.kind = "community";
     submission.source.repository = "https://github.com/community/template-example";
     writeFileSync(submissionPath, `${JSON.stringify(submission, null, 2)}\n`);
+    initializeFixtureReview(root, submission);
     run({ root, submission });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+}
+
+function initializeFixtureReview(root, submission) {
+  for (const args of [
+    ["init", "--quiet"],
+    ["config", "user.name", "TenantScript Test"],
+    ["config", "user.email", "test@example.com"],
+    ["add", "templates/submissions"],
+    ["commit", "--quiet", "-m", "fixture"]
+  ]) {
+    const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  const baseline = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+  assert.equal(baseline.status, 0, baseline.stderr);
+  const evidencePath = Object.keys(submission.source.files)[0];
+  const review = {
+    schemaVersion: 1,
+    id: "TS-PLUGIN-REVIEW-2026-002",
+    baselineCommit: baseline.stdout.trim(),
+    target: {
+      name: "Fixture template review",
+      scope: Object.keys(submission.source.files),
+      sourceDigests: submission.source.files
+    },
+    reviewer: { identity: "Fixture reviewer", relationship: "Test-only review" },
+    reviewedAt: "2026-07-22T00:00:00.000Z",
+    domains: ["security", "compatibility", "operations", "documentation", "license"].map(
+      (name) => ({ name, status: "pass", evidence: [evidencePath], notes: "Fixture evidence" })
+    ),
+    evidenceDigests: { [evidencePath]: submission.source.files[evidencePath] },
+    decision: "approve",
+    blockingFindings: [],
+    unverified: [],
+    limitations: ["Fixture-only review"],
+    nonGuarantees: ["Not a production claim"]
+  };
+  writeFileSync(join(root, submission.reviewRecord), `${JSON.stringify(review, null, 2)}\n`);
 }
 
 function runGenerator(root, ...args) {
@@ -174,6 +217,21 @@ test("rejects a submission whose review no longer approves the exact source", ()
     assert.equal(result.status, 1);
     assert.match(result.stderr, /template submissions are invalid/);
     assert.doesNotMatch(result.stderr, /request-changes|ticket-priority-normalizer/);
+  });
+});
+
+test("rejects an approved review whose evidence digest is stale", () => {
+  withFixture(({ root, submission }) => {
+    const reviewPath = join(root, submission.reviewRecord);
+    const review = JSON.parse(readFileSync(reviewPath, "utf8"));
+    const evidencePath = Object.keys(review.evidenceDigests)[0];
+    review.evidenceDigests[evidencePath] = "0".repeat(64);
+    writeFileSync(reviewPath, `${JSON.stringify(review, null, 2)}\n`);
+
+    const result = runGenerator(root, "--write");
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /plugin review records are invalid/);
+    assert.doesNotMatch(result.stderr, /0{16}|ticket-priority-normalizer/);
   });
 });
 

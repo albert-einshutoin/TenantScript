@@ -16,16 +16,8 @@ if (
 }
 
 const repoRoot = resolve(positional[0] ?? process.cwd());
-const checker = spawnSync(
-  process.execPath,
-  [join(scriptDirectory, "check-template-submissions.mjs"), repoRoot],
-  {
-    encoding: "utf8",
-    env: { PATH: process.env.PATH ?? "" }
-  }
-);
-
-if (checker.status !== 0) fail("template submissions are invalid");
+validateRepositoryInput("check-template-submissions.mjs", "template submissions are invalid");
+validateRepositoryInput("check-plugin-review-records.mjs", "plugin review records are invalid");
 
 const submissionsRoot = join(repoRoot, "templates", "submissions");
 const entries = readdirSync(submissionsRoot, { withFileTypes: true })
@@ -94,6 +86,14 @@ function readJson(path) {
   } catch {
     fail("template catalog input is invalid");
   }
+}
+
+function validateRepositoryInput(script, errorMessage) {
+  const checker = spawnSync(process.execPath, [join(scriptDirectory, script), repoRoot], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH ?? "" }
+  });
+  if (checker.status !== 0) fail(errorMessage);
 }
 
 function validateApprovedReview(review) {

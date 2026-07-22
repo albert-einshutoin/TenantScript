@@ -30,7 +30,8 @@ pnpm lint:template-catalog
 ```
 
 Tier 1 runs the focused catalog tests and the root lint gate rejects a missing, stale, symlinked, or
-non-deterministic artifact. The generator first runs the full template-submission validator and then
+non-deterministic artifact. The generator first runs both the full template-submission validator and
+plugin-review record validator, including evidence digests and required-unverified gates, and then
 requires all five review domains to pass with no blocking finding.
 
 ## Authority and non-guarantees
