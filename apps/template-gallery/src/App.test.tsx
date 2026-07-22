@@ -58,6 +58,35 @@ describe("Template gallery", () => {
     expect(within(invoice).getByText("aaaaaaaaaaaa")).toBeInTheDocument();
   });
 
+  it("labels unknown source providers as repositories without inventing a pinned URL", () => {
+    const template = catalog.templates[0];
+    if (template === undefined) throw new Error("test catalog requires a template");
+    const revision = "d".repeat(40);
+    render(
+      <App
+        catalog={{
+          schemaVersion: 1,
+          templates: [
+            {
+              ...template,
+              source: {
+                repository: "https://git.example.org/community/invoice",
+                revision
+              }
+            }
+          ]
+        }}
+      />
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: `View source repository for Invoice approval; reviewed revision ${revision}`
+      })
+    ).toHaveAttribute("href", "https://git.example.org/community/invoice");
+    expect(screen.getByText("dddddddddddd")).toBeInTheDocument();
+  });
+
   it("searches names, summaries, tags, hooks, and capabilities", () => {
     render(<App catalog={catalog} />);
     const search = screen.getByRole("searchbox", { name: "Search templates" });

@@ -23,11 +23,18 @@ test("renders approved catalog compatibility and safe source links", async ({ pa
   await expect(card).toContainText("Reviewed: approved");
 
   const reviewedRevisionUrl = getReviewedRevisionUrl(firstTemplate.source);
-  expect(reviewedRevisionUrl).toBeDefined();
-  const source = card.getByRole("link", {
-    name: `View reviewed source for ${firstTemplate.displayName}`
-  });
-  await expect(source).toHaveAttribute("href", reviewedRevisionUrl ?? "");
+  const source =
+    reviewedRevisionUrl === undefined
+      ? card.getByRole("link", {
+          name: `View source repository for ${firstTemplate.displayName}; reviewed revision ${firstTemplate.source.revision}`
+        })
+      : card.getByRole("link", {
+          name: `View reviewed source for ${firstTemplate.displayName}`
+        });
+  await expect(source).toHaveAttribute(
+    "href",
+    reviewedRevisionUrl ?? firstTemplate.source.repository
+  );
   await expect(source).toHaveAttribute("target", "_blank");
   await expect(source).toHaveAttribute("rel", "noopener noreferrer");
   await expect(card.getByText(firstTemplate.source.revision.slice(0, 12))).toBeVisible();
