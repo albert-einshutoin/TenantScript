@@ -36,6 +36,17 @@ jobs:
       - run: pnpm test:agent-scaffold
       - run: pnpm test:template-submissions
       - run: pnpm test:template-catalog
+      - id: template-gallery
+        run: pnpm test:template-gallery
+      - uses: actions/upload-artifact@v4
+        if: failure() && steps.template-gallery.outcome == 'failure'
+        with:
+          name: template-gallery-failure-${{ github.sha }}
+          path: |
+            apps/template-gallery/test-results
+            apps/template-gallery/playwright-report
+          if-no-files-found: error
+          retention-days: 14
       - run: pnpm test:admin-ui-accessibility
       - id: admin-ui-visual
         run: pnpm test:admin-ui-visual

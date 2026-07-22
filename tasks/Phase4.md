@@ -23,7 +23,7 @@
 - [ ] **P4-T02**(M)gallery サイト
   - 内容: template 一覧の静的サイト(Workers Assets)。検索・タグ・再利用数の表示
   - DoD: E2E smoke green、ADOPTERS と連動
-  - Progress: Issue #306で承認済みsubmissionだけを最小公開情報へ投影する決定論的catalog、closed schema、drift gateを実装。UI、検索、タグ、再利用数、Workers Assets配信は未実装
+  - Progress: Issue #306で承認済みsubmissionだけを最小公開情報へ投影する決定論的catalog、closed schema、drift gateを実装。Issue #308でcatalog駆動の静的UI、検索、provenance/hook typeタグ、capability filter、desktop/mobile/accessibility E2Eを追加。再利用数とWorkers Assets live配信は未実装
 
 - [ ] **P4-T03**(S)template 投稿ガイドライン
   - 内容: 投稿要件(テスト同梱、capability 最小権限、ライセンス)、レビューフロー
@@ -45,7 +45,7 @@
 - [ ] **P4-T06**(S)バージョン互換ダッシュボード
   - 内容: template/plugin の SDK バージョン互換状況の可視化
   - DoD: gallery サイトに表示
-  - Progress: Issue #306でSDK range、last tested version、hook、capability、deny-only egress、source revision、review decisionの公開data contractを実装。dashboard UIとlive/registry互換証跡は未実装
+  - Progress: Issue #306でSDK range、last tested version、hook、capability、deny-only egress、source revision、review decisionの公開data contractを実装。Issue #308でgallery cardとfilterへ可視化。live/registry互換証跡は未実装
 
 ## チャンク C: AI-assisted authoring(T07–T09)— D-016
 
