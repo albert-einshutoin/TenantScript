@@ -95,6 +95,21 @@ test("rejects symlinked and oversized result evidence", () => {
   });
 });
 
+test("rejects a symlinked result directory before reading external evidence", () => {
+  withFixture((root) => {
+    const resultsRoot = join(root, "evals", "plugin-authoring", "results");
+    const outsideResults = join(root, "outside-results");
+    cpSync(resultsRoot, outsideResults, { recursive: true });
+    rmSync(resultsRoot, { recursive: true });
+    symlinkSync(outsideResults, resultsRoot, "dir");
+
+    assert.throws(
+      () => generatePluginAuthoringEvalArtifacts(root),
+      /plugin authoring eval inputs are invalid/
+    );
+  });
+});
+
 test("rejects unknown evidence files instead of silently excluding them", () => {
   withFixture((root) => {
     writeFileSync(join(root, "evals", "plugin-authoring", "results", ".hidden"), "ignored");

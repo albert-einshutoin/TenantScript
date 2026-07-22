@@ -348,9 +348,19 @@ export function renderPluginAuthoringEvalDashboard(report) {
 
 export function generatePluginAuthoringEvalArtifacts(repositoryRoot) {
   const root = resolve(repositoryRoot);
+  const evalsRoot = join(root, "evals");
   const evalRoot = join(root, "evals", "plugin-authoring");
-  const corpus = parsePluginAuthoringCorpus(readBoundedJson(join(evalRoot, "corpus.json")));
   const resultDirectory = join(evalRoot, "results");
+  try {
+    // Validate every repository-controlled directory before any read so a parent symlink cannot
+    // redirect corpus or result evidence outside the checkout while child Dirents still look safe.
+    assertSafeDirectory(evalsRoot);
+    assertSafeDirectory(evalRoot);
+    assertSafeDirectory(resultDirectory);
+  } catch {
+    throw new Error("plugin authoring eval inputs are invalid");
+  }
+  const corpus = parsePluginAuthoringCorpus(readBoundedJson(join(evalRoot, "corpus.json")));
   let entries;
   try {
     entries = readdirSync(resultDirectory, { withFileTypes: true });
@@ -375,6 +385,11 @@ export function generatePluginAuthoringEvalArtifacts(repositoryRoot) {
     reportJson: `${JSON.stringify(report, null, 2)}\n`,
     dashboardMarkdown: renderPluginAuthoringEvalDashboard(report)
   };
+}
+
+function assertSafeDirectory(path) {
+  const metadata = lstatSync(path);
+  assert(metadata.isDirectory() && !metadata.isSymbolicLink());
 }
 
 function readBoundedJson(path) {
