@@ -35,6 +35,7 @@ jobs:
       - run: pnpm test:release-automation
       - run: pnpm test:agent-scaffold
       - run: pnpm test:template-submissions
+      - run: pnpm test:template-catalog
       - run: pnpm test:admin-ui-accessibility
       - id: admin-ui-visual
         run: pnpm test:admin-ui-visual
