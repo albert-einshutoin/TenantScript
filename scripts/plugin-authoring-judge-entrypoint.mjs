@@ -9,6 +9,7 @@ import {
   PLUGIN_AUTHORING_JUDGE_ARGV,
   PLUGIN_AUTHORING_JUDGE_PATHS
 } from "./plugin-authoring-judge-contract.mjs";
+import { createPluginAuthoringBuildAdapter } from "./plugin-authoring-build-adapter.mjs";
 import { runPluginAuthoringJudgeCore } from "./plugin-authoring-judge-core.mjs";
 import { parsePluginAuthoringCorpus } from "./plugin-authoring-eval.mjs";
 import {
@@ -128,7 +129,7 @@ export async function runPluginAuthoringJudgeCli({
   stderr = process.stderr,
   loadParseManifest = loadCanonicalManifestParser,
   execute = executePluginAuthoringJudge,
-  adapters = {}
+  adapters = { build: createPluginAuthoringBuildAdapter() }
 } = {}) {
   try {
     const paths = parsePluginAuthoringJudgeArgs(argv);

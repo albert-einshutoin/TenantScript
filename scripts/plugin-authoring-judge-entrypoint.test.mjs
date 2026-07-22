@@ -19,6 +19,7 @@ import {
   PLUGIN_AUTHORING_JUDGE_ENTRYPOINT,
   PLUGIN_AUTHORING_JUDGE_PATHS
 } from "./plugin-authoring-judge-contract.mjs";
+import { createPluginAuthoringBuildAdapter } from "./plugin-authoring-build-adapter.mjs";
 import {
   executePluginAuthoringJudge,
   parsePluginAuthoringJudgeArgs,
@@ -240,6 +241,24 @@ test("feeds adapters from inspected bytes when the live candidate changes", asyn
   });
 });
 
+test("runs the bounded build adapter against every materialized task snapshot", async () => {
+  await withFixture(async (paths) => {
+    const adapters = allPassingAdapters();
+    adapters.build = createPluginAuthoringBuildAdapter();
+    const result = await executePluginAuthoringJudge({
+      ...paths,
+      adapters,
+      parseManifest: acceptingParser
+    });
+    assert.equal(
+      result.taskResults.every(
+        (task) => task.judges.find((judge) => judge.name === "build")?.status === "pass"
+      ),
+      true
+    );
+  });
+});
+
 test("closes missing, false, throwing, and invalid adapters without skipping work", async () => {
   await withFixture(async (paths) => {
     const marker = ["API", "_TOKEN", "=fixture-marker"].join("");
@@ -404,7 +423,13 @@ test("writes exactly one JSON line on success and one fixed error on failure", a
     stdout,
     stderr,
     loadParseManifest: async () => acceptingParser,
-    execute: async () => expected
+    execute: async ({ adapters }) => {
+      assert.equal(typeof adapters.build, "function");
+      assert.equal(adapters["unit-test"], undefined);
+      assert.equal(adapters["security-test"], undefined);
+      assert.equal(adapters.audit, undefined);
+      return expected;
+    }
   });
   assert.equal(success, 0);
   assert.equal(writes.stdout, `${JSON.stringify(expected)}\n`);
@@ -427,7 +452,7 @@ test("writes exactly one JSON line on success and one fixed error on failure", a
   assert.equal(writes.stderr.includes(marker), false);
 });
 
-test("documents the implemented entrypoint and the four unavailable execution adapters", () => {
+test("documents the bounded build adapter and the three unavailable execution adapters", () => {
   const guide = readFileSync(
     join(repoRoot, "docs", "reference", "plugin-authoring-isolated-runner.md"),
     "utf8"
@@ -435,7 +460,9 @@ test("documents the implemented entrypoint and the four unavailable execution ad
   for (const required of [
     "plugin-authoring-judge-entrypoint.mjs",
     "container内でも再検証",
-    "4 execution adapter",
+    "bounded offline compile-check",
+    "3 execution adapter",
+    "package.json",
     "32 MiB",
     "fail closed"
   ]) {
