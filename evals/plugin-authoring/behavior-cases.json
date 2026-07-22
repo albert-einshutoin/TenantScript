@@ -137,6 +137,19 @@
             },
             "capabilityCalls": []
           }
+        },
+        {
+          "name": "fractional-age",
+          "hookName": "refund.requested",
+          "payload": { "purchaseAgeDays": 29.5 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "approval_required" }
+            },
+            "capabilityCalls": []
+          }
         }
       ]
     },

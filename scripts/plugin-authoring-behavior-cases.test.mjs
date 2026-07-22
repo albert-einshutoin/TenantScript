@@ -37,6 +37,14 @@ test("loads a closed judge-owned behavior matrix for every corpus task", () => {
     ).size,
     matrix.tasks.reduce((total, task) => total + task.cases.length, 0)
   );
+  const fractionalRefund = matrix.tasks
+    .find((task) => task.taskId === "approval-refund-review")
+    ?.cases.find((behaviorCase) => behaviorCase.name === "fractional-age");
+  assert.equal(fractionalRefund?.payload.purchaseAgeDays, 29.5);
+  assert.deepEqual(fractionalRefund?.expected.result, {
+    ok: true,
+    value: { decision: "deny", reason: "approval_required" }
+  });
 });
 
 test("rejects case omission, duplication, widening, unsafe values, and corpus drift", async (t) => {
