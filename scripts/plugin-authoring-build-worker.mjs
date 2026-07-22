@@ -134,10 +134,17 @@ function validateSource(path, source, sourceRoot) {
     ts.ScriptKind.TS
   );
   assert(sourceFile.parseDiagnostics.length === 0);
+  // Every candidate source must be a module. Script files and ambient declarations can merge
+  // global or trusted package types without importing executable code, weakening the fixed SDK
+  // contract even when `.d.ts` files themselves are rejected.
+  assert(ts.isExternalModule(sourceFile));
   assert(sourceFile.referencedFiles.length === 0);
   assert(sourceFile.typeReferenceDirectives.length === 0);
   assert(sourceFile.libReferenceDirectives.length === 0);
   const visit = (node) => {
+    assert(!ts.isModuleDeclaration(node));
+    const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+    assert(!modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword));
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
       assert(ts.isStringLiteral(node.moduleSpecifier));
       validateModuleSpecifier(node.moduleSpecifier.text, path, sourceRoot);

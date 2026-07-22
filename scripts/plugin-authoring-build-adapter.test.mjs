@@ -173,7 +173,13 @@ test("rejects type failures and unapproved package imports", async (t) => {
     "compiler suppression": '// @ts-ignore\nexport const value: number = "wrong";\n',
     "dynamic dependency": 'export const value = import("left-pad");\n',
     "relative escape": 'import value from "../outside.js";\nexport default value;\n',
-    "reference directive": '/// <reference path="../outside.d.ts" />\nexport const value = 1;\n'
+    "reference directive": '/// <reference path="../outside.d.ts" />\nexport const value = 1;\n',
+    "ambient SDK augmentation":
+      'import "@tenantscript/plugin-sdk";\n' +
+      'declare module "@tenantscript/plugin-sdk" { export function definePlugin(input: any): any; }\n' +
+      "export const value = 1;\n",
+    "ambient global": "declare global { interface Object { injected: true } }\nexport {};\n",
+    "ambient script": "interface Object { injected: true }\n"
   };
   for (const [name, source] of Object.entries(cases)) {
     await t.test(name, () => {
