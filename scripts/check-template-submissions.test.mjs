@@ -582,6 +582,39 @@ test("rejects loopback, private-address, and local-only repository hosts", () =>
   });
 });
 
+test("rejects private hosts in egress allowlists", () => {
+  for (const host of ["localhost", "10.0.0.1", "service.internal"]) {
+    withRepository(({ root, submission }) => {
+      submission.egress = { mode: "allowlist", allowHosts: [host] };
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1, host);
+      assert.match(result.stderr, /egress\.allowHosts must contain only public DNS hosts/);
+      assert.doesNotMatch(result.stderr, /localhost|10\.0\.0\.1|service\.internal/);
+    });
+  }
+});
+
+test("rejects non-HTTP private URLs in evidence", () => {
+  for (const privateUrl of ["ssh://deploy.internal/review", "postgres://user@db.internal/app"]) {
+    withRepository(({ root, submission }) => {
+      writeFileSync(
+        join(root, "templates/submissions/example-template/verification.md"),
+        `Private reference: ${privateUrl}\n`
+      );
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /verification\.evidence contains sensitive or private content/);
+      assert.doesNotMatch(result.stderr, /deploy|postgres|db\.internal|user@/);
+    });
+  }
+});
+
 test("publishes a closed JSON Schema for the submission packet", () => {
   const schema = JSON.parse(readFileSync(join(repoRoot, "templates", "submission.schema.json")));
 

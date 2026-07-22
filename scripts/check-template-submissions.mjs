@@ -18,7 +18,7 @@ const digestPattern = /^[0-9a-f]{64}$/;
 const capabilityPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const configKeyPattern = /^[A-Za-z][A-Za-z0-9]*$/;
 const hostPattern = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
-const httpUrlPattern = /https?:\/\/[^\s<>"'`]+/giu;
+const urlLikePattern = /[a-z][a-z0-9+.-]*:\/\/[^\s<>"'`]+/giu;
 const requiredSourceSuffixes = [
   "package.json",
   "src/index.ts",
@@ -355,6 +355,16 @@ function validateEgress(value, displayPath) {
     errors.push(`${displayPath}: egress.mode is invalid`);
   }
   validateSortedStrings(value.allowHosts, "egress.allowHosts", displayPath, hostPattern);
+  if (
+    Array.isArray(value.allowHosts) &&
+    value.allowHosts.some(
+      (host) => typeof host === "string" && !isPublicHostname(host.toLowerCase())
+    )
+  ) {
+    // Egress allowlists are runtime SSRF boundaries, so they use the same fail-closed public-host
+    // policy as immutable source provenance rather than accepting syntactically valid local names.
+    errors.push(`${displayPath}: egress.allowHosts must contain only public DNS hosts`);
+  }
   if (value.mode === "deny" && Array.isArray(value.allowHosts) && value.allowHosts.length > 0) {
     errors.push(`${displayPath}: deny egress requires an empty allowHosts`);
   }
@@ -751,7 +761,7 @@ function containsSensitiveFileContent(content) {
 }
 
 function containsPrivateUrl(text) {
-  for (const match of text.matchAll(httpUrlPattern)) {
+  for (const match of text.matchAll(urlLikePattern)) {
     try {
       const url = new URL(match[0]);
       const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "");

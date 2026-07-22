@@ -51,6 +51,8 @@ denied unless the reviewed behavior needs narrower declared access. Never includ
 labelled or unlabelled raw account identifiers, customer/tenant data, private-host URLs, production
 logs, or machine-local paths (including `file:///home/...`, `file:///tmp/...`, and Markdown-wrapped
 `` `/workspace/...` `` paths).
+Private-host detection covers URL schemes such as HTTPS, SSH, and PostgreSQL. Egress allowlists must
+likewise contain public DNS hosts only; local DNS names and IP literals are rejected.
 Repository paths may use legitimate security vocabulary such as `token-refresh.ts`; the checker scans
 the digest-bound file contents instead of treating path segments as secret fields.
 The exact `@tenantscript/manifest` and `@tenantscript/plugin-sdk` dependency versions must equal
