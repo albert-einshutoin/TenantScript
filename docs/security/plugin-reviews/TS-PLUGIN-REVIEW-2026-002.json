@@ -6,13 +6,15 @@
     "name": "Simulated ticket priority normalizer template submission",
     "scope": [
       "templates/submissions/ticket-priority-normalizer/plugin/package.json",
+      "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs",
       "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts",
       "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
       "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts",
       "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
     ],
     "sourceDigests": {
-      "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
+      "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
+      "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
       "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "a43645a8794dffd136c05cb8147a39d797aa390fceab728176deb4ea17b32b87",
       "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
       "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "556b6c11179fe6801660fae51e8f2548822b9d5137ddd299298032551c5848ec",
@@ -23,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T02:06:42.000Z",
+  "reviewedAt": "2026-07-22T02:19:19.000Z",
   "domains": [
     {
       "name": "security",
@@ -32,11 +34,12 @@
         "scripts/check-template-submissions.mjs",
         "scripts/check-template-submissions.test.mjs",
         "templates/submissions/ticket-priority-normalizer/SECURITY.md",
+        "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs",
         "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata, digest-bound source, and evidence including raw account identifiers, local file URLs, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, package-manager control files and install lifecycle scripts, non-public repository hosts, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks while requiring offline installation."
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata, digest-bound source, and evidence including raw account identifiers, local file URLs, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, package-manager control files, package-manager settings, and install lifecycle scripts, non-public repository hosts, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks while requiring offline installation."
     },
     {
       "name": "compatibility",
@@ -55,11 +58,12 @@
       "status": "pass",
       "evidence": [
         "scripts/template-submission-e2e.test.mjs",
+        "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs",
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts",
         "templates/submissions/ticket-priority-normalizer/verification.md"
       ],
-      "notes": "The handler is side-effect free, bounded by fixed input length and manifest limits, has no retry or external service behavior, and is continuously built, tested, bundled, and audited in an accountless lane."
+      "notes": "The handler is side-effect free, bounded by fixed input length and manifest limits, has no retry or external service behavior, and is continuously built, tested, bundled, and audited in an accountless lane. Its canonical build emits the manifest and bundle that the documented audit command consumes."
     },
     {
       "name": "documentation",
@@ -83,17 +87,18 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "df812f6e7b3b3b4f69847373cbecb9df1db351b2fb1ca458053f27dbbd37d71e",
-    "scripts/check-template-submissions.test.mjs": "f5ef78e72413f6f20c277dd196253068a0ef64888fa52a944a61d17cf29f186b",
-    "scripts/template-submission-e2e.test.mjs": "fc7d4117cf00f6903c9bef3645f6b592756ae5adfc165984cb350cbfa4b56ad7",
+    "scripts/check-template-submissions.mjs": "21fc934debedf99c0294f29d3dfbf40fbd2a312ec5abfb68887fe6c48476a3a6",
+    "scripts/check-template-submissions.test.mjs": "c4aa8111d13867510377853045adc13266786780b0b230b0ef5d6d35879e2a59",
+    "scripts/template-submission-e2e.test.mjs": "76140700a3312af5de347824d1662b5074c9653134f858bd99d3af3a8c774138",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
-    "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
+    "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
+    "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
     "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "a43645a8794dffd136c05cb8147a39d797aa390fceab728176deb4ea17b32b87",
     "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
     "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "556b6c11179fe6801660fae51e8f2548822b9d5137ddd299298032551c5848ec",
     "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4",
-    "templates/submissions/ticket-priority-normalizer/verification.md": "1bf03a2cb9995caed4d25aa87e75c8056ace84f997d78b67b55cf67cc5447336"
+    "templates/submissions/ticket-priority-normalizer/verification.md": "f64d10561e2f6ca1a7c14bf6404cfc4b554f9f6dcd27d0e91dc772769d2e8f76"
   },
   "decision": "approve",
   "blockingFindings": [],

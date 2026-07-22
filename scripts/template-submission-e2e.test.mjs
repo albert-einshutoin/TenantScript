@@ -129,7 +129,7 @@ async function createCliShim(tempRoot) {
   await mkdir(binDirectory, { recursive: true });
   await writeFile(
     shimPath,
-    `#!/usr/bin/env node\nconst { spawnSync } = require("node:child_process");\nconst result = spawnSync(process.execPath, [${JSON.stringify(
+    `#!/usr/bin/env node\nimport { spawnSync } from "node:child_process";\nconst result = spawnSync(process.execPath, [${JSON.stringify(
       cliPath
     )}, ...process.argv.slice(2)], { stdio: "inherit" });\nprocess.exit(result.status ?? 1);\n`
   );

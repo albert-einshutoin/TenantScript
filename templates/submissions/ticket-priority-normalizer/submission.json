@@ -7,10 +7,11 @@
   "license": "Apache-2.0",
   "source": {
     "repository": "https://github.com/albert-einshutoin/TenantScript",
-    "revision": "28e44e03f2cf386f38abef10c9d31192275bdb61",
+    "revision": "ab38958d8f3892dcac7e8ba4e56bf0fe42524519",
     "directory": "templates/submissions/ticket-priority-normalizer/plugin",
     "files": {
-      "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
+      "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
+      "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
       "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "a43645a8794dffd136c05cb8147a39d797aa390fceab728176deb4ea17b32b87",
       "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
       "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "556b6c11179fe6801660fae51e8f2548822b9d5137ddd299298032551c5848ec",

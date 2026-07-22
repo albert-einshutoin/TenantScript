@@ -68,8 +68,8 @@ directory. The digest map must cover that directory exactly; unlisted helpers, b
 symlinks are rejected. Package-manager control files such as `.pnpmfile.cjs`, `.npmrc`, and
 `pnpm-workspace.yaml` are also rejected because they can execute hooks or alter installation before
 the audited bundle is produced. The package must not define `preinstall`, `install`, `postinstall`, or
-`prepare` scripts. Do not amend or force-push the source commit after review starts; a legitimate
-change creates a new commit and new digests.
+`prepare` scripts or a root `pnpm` settings block. Do not amend or force-push the source commit after
+review starts; a legitimate change creates a new commit and new digests.
 Use the HTTPS repository-root URL for `source.repository`; GitHub `/tree/...` and `/blob/...` browser
 URLs are rejected because they are not repository identities.
 
@@ -87,6 +87,10 @@ External repositories are not fetched during accountless CI: their full SHA and 
 are syntactically checked, while provenance remains a blocking human-review item until durable
 external evidence is inspected. Submission installation also runs fully offline; missing package
 metadata fails the gate instead of reaching a registry.
+
+`pnpm build` must create `manifest.json` and `dist/plugin.cjs` in the plugin root. Tier 1 then runs the
+packet's canonical `ext audit` command against those exact artifacts and the restored submitted
+`package.json`; install-only local tarball overrides are never audited as a substitute.
 
 ## 3. Complete submission metadata
 
