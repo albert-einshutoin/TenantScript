@@ -45,10 +45,10 @@ security-boundary tests first. The final source must include a manifest, handler
 TenantScript package versions, explicit license, strict TypeScript configuration, and bounded
 `SECURITY.md` guidance.
 
-The manifest and packet must agree on hook name/type, `capabilities`, configuration keys, and `egress`.
-Keep capabilities empty and egress denied unless the reviewed behavior needs narrower declared access.
-Never include tokens, credentials, account identifiers, customer/tenant data, private URLs, raw
-production logs, or machine-local paths.
+The manifest and packet must agree exactly on hook name/type, capability names, configuration keys,
+and egress mode/hosts; Tier 1 compares them before build and audit. Keep capabilities empty and egress
+denied unless the reviewed behavior needs narrower declared access. Never include tokens, credentials,
+raw account identifiers, customer/tenant data, private URLs, production logs, or machine-local paths.
 
 ```sh
 # cwd: template plugin directory

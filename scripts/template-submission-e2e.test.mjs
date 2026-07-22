@@ -22,6 +22,23 @@ test("every template submission builds, tests, and audits packed public packages
   }
 });
 
+test("manifest security metadata must match its submission packet", () => {
+  const packet = {
+    hook: { name: "ticket.created", type: "transform" },
+    capabilities: [],
+    configKeys: [],
+    egress: { mode: "deny", allowHosts: [] }
+  };
+  const manifest = {
+    hooks: [{ name: "ticket.created", type: "transform" }],
+    capabilities: { "network.fetch": { hosts: ["api.example.com"] } },
+    configSchema: { properties: {}, required: [] },
+    egress: { mode: "allowlist", hosts: ["api.example.com"] }
+  };
+
+  assert.throws(() => assertManifestMatchesSubmission(manifest, packet));
+});
+
 async function exerciseSubmission(submission) {
   await mkdir(join(repoRoot, ".tmp"), { recursive: true });
   const tempRoot = await mkdtemp(join(repoRoot, ".tmp", `template-submission-${submission}-`));
@@ -80,6 +97,8 @@ async function exerciseSubmission(submission) {
       ],
       { cwd: pluginDirectory }
     );
+    const manifest = JSON.parse(manifestJson);
+    assertManifestMatchesSubmission(manifest, metadata);
     const manifestPath = join(tempRoot, "manifest.json");
     await writeFile(manifestPath, `${manifestJson}\n`);
     const bundlePath = join(tempRoot, "plugin.cjs");
@@ -109,6 +128,25 @@ async function exerciseSubmission(submission) {
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+function assertManifestMatchesSubmission(manifest, submission) {
+  const actual = {
+    hook: manifest.hooks.map(({ name, type }) => ({ name, type })),
+    capabilities: Object.keys(manifest.capabilities).sort(),
+    configKeys: Object.keys(manifest.configSchema.properties).sort(),
+    egress: {
+      mode: manifest.egress.mode,
+      allowHosts: manifest.egress.mode === "allowlist" ? [...manifest.egress.hosts].sort() : []
+    }
+  };
+  const expected = {
+    hook: [submission.hook],
+    capabilities: submission.capabilities,
+    configKeys: submission.configKeys,
+    egress: submission.egress
+  };
+  assert.deepEqual(actual, expected, "manifest security metadata must match submission.json");
 }
 
 function packPublicPackage(packageDirectory, destination) {

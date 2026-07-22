@@ -23,7 +23,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T01:00:00.000Z",
+  "reviewedAt": "2026-07-22T01:10:00.000Z",
   "domains": [
     {
       "name": "security",
@@ -36,7 +36,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform validates bounded untrusted input before returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata and evidence, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, non-public repository hosts, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check."
+      "notes": "The transform validates bounded untrusted input before returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata and evidence including raw account identifiers, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, non-public repository hosts, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check."
     },
     {
       "name": "compatibility",
@@ -48,7 +48,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet pins exact tested package versions, records a bounded SDK range and hook contract, uses strict ESM TypeScript, and is exercised against freshly packed public package contents. The E2E discovers every submission directory rather than naming one packet."
+      "notes": "The packet pins exact tested package versions, records a bounded SDK range and hook contract, uses strict ESM TypeScript, and is exercised against freshly packed public package contents. The E2E discovers every submission directory rather than naming one packet and compares manifest hook, capabilities, configuration keys, and egress with packet metadata."
     },
     {
       "name": "operations",
@@ -83,9 +83,9 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "0059e2711f1fc092fbb76d3cf15ce52224bf273c59b0d346e7f9a0f8dddc410e",
-    "scripts/check-template-submissions.test.mjs": "8a824b598c8d712417acd62ec728562f78ed633da588d62129f07fc81c74a777",
-    "scripts/template-submission-e2e.test.mjs": "b1a59fa820b34a7412cbc0affeb7fb50d8fec456bb25fb0adf97cf0c2382588c",
+    "scripts/check-template-submissions.mjs": "21e82fe488affa14ba38ad3f820576b610683de0076be4b4e209aa92cb02afdb",
+    "scripts/check-template-submissions.test.mjs": "14988ea1c87209c4d5ee689b2d321d14cf2fb0f5958709355bad8c8e80329dee",
+    "scripts/template-submission-e2e.test.mjs": "78700dae7676b50b59e0ea4b80ceef3a7a032f009db6e07248b124a9433b206c",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",

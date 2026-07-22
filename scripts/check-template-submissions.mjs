@@ -52,6 +52,7 @@ const secretLikePatterns = [
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/,
   /\bsk-[A-Za-z0-9]{20,}\b/,
   /\bBearer\s+[A-Za-z0-9._~+/-]{12,}/i,
+  /\b(?:cloudflare[_ -]?)?account[_-]?id\s*[:=]\s*["']?[0-9a-f]{32}\b/i,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /\b(?:tenant|customer)_[A-Za-z0-9_-]{4,}\b/i,
   /dash\.cloudflare\.com\/[0-9a-f]{16,}/i,
