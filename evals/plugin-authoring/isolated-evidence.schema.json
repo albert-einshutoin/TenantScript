@@ -75,7 +75,7 @@
     "startedAt": { "type": "string", "format": "date-time" },
     "completedAt": { "type": "string", "format": "date-time" },
     "taskResults": {
-      "$ref": "result.schema.json#/properties/taskResults",
+      "$ref": "https://tenantscript.dev/schemas/plugin-authoring-eval-result.schema.json#/properties/taskResults",
       "minItems": 10,
       "maxItems": 10
     },

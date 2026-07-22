@@ -312,7 +312,7 @@ test("publishes closed and bounded request, judge output, and evidence schemas",
   assert.equal(judgeOutputSchema.additionalProperties, false);
   assert.equal(
     judgeOutputSchema.properties.taskResults.$ref,
-    "result.schema.json#/properties/taskResults"
+    "https://tenantscript.dev/schemas/plugin-authoring-eval-result.schema.json#/properties/taskResults"
   );
   assert.equal(evidenceSchema.additionalProperties, false);
   assert.equal(evidenceSchema.properties.candidate.additionalProperties, false);
@@ -320,6 +320,10 @@ test("publishes closed and bounded request, judge output, and evidence schemas",
   assert.equal(evidenceSchema.properties.sandbox.properties.network.const, "none");
   assert.equal(evidenceSchema.properties.sandbox.properties.workspace.const, "bounded-tmpfs");
   assert.equal(evidenceSchema.properties.sandbox.properties.cleanup.const, "confirmed");
+  assert.equal(
+    evidenceSchema.properties.taskResults.$ref,
+    "https://tenantscript.dev/schemas/plugin-authoring-eval-result.schema.json#/properties/taskResults"
+  );
 });
 
 test("materializes the exact baseline without repository metadata or user-owned files", () => {
