@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T04:14:00.000Z",
+  "reviewedAt": "2026-07-22T04:23:00.000Z",
   "domains": [
     {
       "name": "security",
@@ -39,7 +39,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, collapses malformed values and hostile accessor or Proxy failures to one fixed non-reflective message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker scans every bounded regular file in the closed packet tree, including unreferenced artifacts, and rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs, Unix and Windows machine-local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, package-manager control files, package-manager settings, install lifecycle scripts, and pre/post build or test wrappers, non-public repository and egress hosts including legacy numeric IPv4 forms, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks while requiring offline installation."
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, collapses malformed values and hostile accessor or Proxy failures to one fixed non-reflective message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker scans every bounded regular file in the closed packet tree, including unreferenced artifacts, and rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs, Unix and Windows machine-local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, prebuilt audit artifacts, package-manager control files, package-manager settings, install lifecycle scripts, and pre/post build or test wrappers, non-public repository and egress hosts including legacy numeric IPv4 forms, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks, requires offline installation, and proves canonical audit outputs are absent before build."
     },
     {
       "name": "compatibility",
@@ -87,9 +87,9 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "30f16af978a9d1b1ce82ee3555a13e4343c0280950b376510df9cd160af4e08b",
-    "scripts/check-template-submissions.test.mjs": "94365cf1a3217d520ebdcb4986ce779e0449dcd361307123215cf02d82946cf0",
-    "scripts/template-submission-e2e.test.mjs": "cd7896a2ffe7e80626fa10f13bb35f04dfc1548381f39d19fde200ad8e111a32",
+    "scripts/check-template-submissions.mjs": "6ad61550c34f92f8797c398832d421916046be696b76dfc5b66687b4eb06dd47",
+    "scripts/check-template-submissions.test.mjs": "3545d93bd7226554ebec1c1bb0e35d835607bb13bfb78b85b4df31ff282644ef",
+    "scripts/template-submission-e2e.test.mjs": "ae97782820259a7c058ece731234914862760b4537b78b0415fbc57a0f29f895",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",

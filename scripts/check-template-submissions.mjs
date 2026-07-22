@@ -237,6 +237,17 @@ function validateSource(value, sdk, license, directoryName, displayPath) {
     errors.push(`${displayPath}: source.files must cover every regular file in source.directory`);
   }
   if (
+    typeof value.directory === "string" &&
+    copiedSourcePaths?.some((path) => {
+      const sourceRelativePath = path.slice(value.directory.length + 1);
+      return sourceRelativePath === "manifest.json" || sourceRelativePath.startsWith("dist/");
+    })
+  ) {
+    // Canonical audit outputs must be created by the CI build. Accepting submitted copies would let
+    // a no-op build reuse reviewed artifacts while behavior tests exercise different source code.
+    errors.push(`${displayPath}: source.directory must not contain prebuilt audit artifacts`);
+  }
+  if (
     copiedSourcePaths?.some((path) =>
       unsafePackageManagerControlNames.has(path.split("/").at(-1) ?? "")
     )

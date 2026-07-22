@@ -341,6 +341,34 @@ test("requires the digest map to cover every copied source file", () => {
   });
 });
 
+test("rejects prebuilt audit artifacts from submitted source", () => {
+  withRepository(({ root, submission }) => {
+    for (const [suffix, content] of [
+      ["manifest.json", "{}\n"],
+      ["dist/plugin.cjs", "module.exports = {};\n"]
+    ]) {
+      const path = `templates/submissions/example-template/plugin/${suffix}`;
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), content);
+      submission.source.files[path] = createHash("sha256")
+        .update(readFileSync(join(root, path)))
+        .digest("hex");
+    }
+    submission.source.files = Object.fromEntries(
+      Object.entries(submission.source.files).sort(([left], [right]) => left.localeCompare(right))
+    );
+    submission.source.revision = "1".repeat(40);
+    writeReviewRecord(root, submission);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /source\.directory must not contain prebuilt audit artifacts/);
+    assert.doesNotMatch(result.stderr, /manifest\.json|plugin\.cjs|dist/);
+  });
+});
+
 test("rejects package-manager hook and configuration files", () => {
   for (const controlFile of [".pnpmfile.cjs", ".npmrc", "pnpm-workspace.yaml"]) {
     withRepository(({ root, submission }) => {
