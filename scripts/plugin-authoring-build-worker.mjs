@@ -14,7 +14,7 @@ import {
   computePluginAuthoringTaskSnapshotDigest
 } from "./plugin-authoring-build-contract.mjs";
 
-const MAX_REQUEST_BYTES = 4 * 1024;
+const MAX_REQUEST_BYTES = 512 * 1024;
 const MAX_SOURCE_FILES = 512;
 const MAX_SOURCE_BYTES = 4 * 1024 * 1024;
 const MAX_SOURCE_DEPTH = 6;
@@ -92,6 +92,12 @@ export function executePluginAuthoringBuildWorker(requestPath) {
       flag: "wx",
       mode: 0o600
     });
+    const wrapperPath = join(request.buildRoot, "entrypoint.js");
+    writeFileSync(wrapperPath, reviewedEntrypoint(request.taskRoot, request.reviewedManifest), {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600
+    });
     const result = buildSync({
       absWorkingDir: request.taskRoot,
       alias: {
@@ -99,7 +105,7 @@ export function executePluginAuthoringBuildWorker(requestPath) {
         "@tenantscript/plugin-sdk": join(sdkRoot, "index.js")
       },
       bundle: true,
-      entryPoints: [join(sourceRoot, "index.ts")],
+      entryPoints: [wrapperPath],
       format: "cjs",
       ignoreAnnotations: true,
       legalComments: "none",
@@ -115,7 +121,7 @@ export function executePluginAuthoringBuildWorker(requestPath) {
     assert(Buffer.isBuffer(output) || output instanceof Uint8Array);
     const bundle = Buffer.from(output);
     assert(bundle.length >= 1 && bundle.length <= PLUGIN_AUTHORING_BUILD_BUNDLE_MAX_BYTES);
-    assertBundleInputs(result.metafile, request.taskRoot, sourceRoot, runtimeRoot);
+    assertBundleInputs(result.metafile, request.taskRoot, sourceRoot, runtimeRoot, wrapperPath);
     const bundlePath = join(request.buildRoot, "bundle.cjs");
     writeFileSync(bundlePath, bundle, { flag: "wx", mode: 0o600 });
     const receipt = {
@@ -144,7 +150,13 @@ function readRequest(requestPath) {
   assert(metadata.size <= MAX_REQUEST_BYTES);
   const request = JSON.parse(readFileSync(requestPath, "utf8"));
   assert(isPlainRecord(request));
-  assertExactKeys(request, ["schemaVersion", "taskId", "taskRoot", "buildRoot"]);
+  assertExactKeys(request, [
+    "schemaVersion",
+    "taskId",
+    "taskRoot",
+    "buildRoot",
+    "reviewedManifest"
+  ]);
   assert(request.schemaVersion === 1);
   assert(typeof request.taskId === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(request.taskId));
   assertAbsoluteNormalizedPath(request.taskRoot);
@@ -154,6 +166,7 @@ function readRequest(requestPath) {
   assert(request.taskId === basename(dirname(request.buildRoot)));
   assertDirectory(request.taskRoot);
   assertDirectory(request.buildRoot);
+  validateJsonValue(request.reviewedManifest);
   return request;
 }
 
@@ -283,10 +296,22 @@ export declare function definePlugin(input: DefinePluginInput): unknown;
 function pluginSdkRuntime() {
   // Keep this runtime deliberately smaller than the public SDK surface: candidate code can only
   // receive the reviewed definePlugin dispatch behavior needed by the fixed authoring corpus.
-  return `export function definePlugin(input) {
-  return {
+  return `const definitions = new WeakMap();
+export function definePlugin(input) {
+  const plugin = {
     manifest: input.manifest,
     dispatch: (request) => dispatchPlugin(input, request)
+  };
+  definitions.set(plugin, input);
+  return plugin;
+}
+export function bindReviewedPlugin(plugin, reviewedManifest) {
+  const definition = definitions.get(plugin);
+  if (definition === undefined) throw new Error("plugin must be created by definePlugin");
+  const reviewedDefinition = { manifest: reviewedManifest, handlers: definition.handlers };
+  return {
+    manifest: reviewedManifest,
+    dispatch: (request) => dispatchPlugin(reviewedDefinition, request)
   };
 }
 async function dispatchPlugin(input, request) {
@@ -314,12 +339,40 @@ async function dispatchPlugin(input, request) {
 `;
 }
 
-function assertBundleInputs(metafile, workingRoot, sourceRoot, runtimeRoot) {
+function reviewedEntrypoint(taskRoot, reviewedManifest) {
+  return `import * as candidate from ${JSON.stringify(join(taskRoot, "src", "index.ts"))};
+import { bindReviewedPlugin } from ${JSON.stringify(join(dirname(taskRoot), "build", "runtime", "plugin-sdk", "index.js"))};
+const candidatePlugin = candidate.plugin ?? candidate.default;
+export const plugin = bindReviewedPlugin(candidatePlugin, ${JSON.stringify(reviewedManifest)});
+export default plugin;
+`;
+}
+
+function assertBundleInputs(metafile, workingRoot, sourceRoot, runtimeRoot, wrapperPath) {
   assert(isPlainRecord(metafile) && isPlainRecord(metafile.inputs));
   for (const input of Object.keys(metafile.inputs)) {
     const absolute = resolve(workingRoot, input);
-    assert(isWithin(absolute, sourceRoot) || isWithin(absolute, runtimeRoot));
+    assert(
+      absolute === wrapperPath || isWithin(absolute, sourceRoot) || isWithin(absolute, runtimeRoot)
+    );
   }
+}
+
+function validateJsonValue(value, depth = 0, state = { nodes: 0 }) {
+  state.nodes += 1;
+  assert(state.nodes <= 4_096 && depth <= 32);
+  if (value === null || typeof value === "boolean" || typeof value === "string") return;
+  if (typeof value === "number") {
+    assert(Number.isFinite(value));
+    return;
+  }
+  if (Array.isArray(value)) {
+    assert(value.length <= 512);
+    for (const entry of value) validateJsonValue(entry, depth + 1, state);
+    return;
+  }
+  assert(isPlainRecord(value) && Object.keys(value).length <= 512);
+  for (const nested of Object.values(value)) validateJsonValue(nested, depth + 1, state);
 }
 
 function isWithin(path, root) {

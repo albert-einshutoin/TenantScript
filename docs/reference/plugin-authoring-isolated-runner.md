@@ -68,6 +68,8 @@ contractに対するcompile-checkであり、candidate独自dependencyや任意b
 成功時には、materialize済みsource全体のSHA-256と生成した`bundle.cjs`のSHA-256・byte数を結ぶ
 judge-owned build receiptを`/work/<task-id>/build`へ保存します。後続adapterはsourceまたはbundleが変化したreceiptを
 拒否し、candidateが用意したprebuilt artifactを実行しません。
+bundle entrypointは静的抽出済みのreviewed manifestを`definePlugin`由来のhandlerへ再bindingするため、candidateが
+別のhook、capability、egressを持つmanifestを渡して実行時だけ権限契約を差し替えることもできません。
 
 `unit-test` judgeにはjudge-owned behavior matrixを使うbounded adapterがあります。
 `behavior-cases.json`は固定10 taskごとに正常系、境界、malformed payload、provider failureをclosed dataとして保持し、

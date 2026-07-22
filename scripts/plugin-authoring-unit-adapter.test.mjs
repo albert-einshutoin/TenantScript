@@ -251,3 +251,30 @@ if (ambient.fetch !== undefined) {
     assert.equal(adapter(context), false);
   }, ticketPrioritySource(guard));
 });
+
+test("binds dispatch to the statically reviewed manifest instead of a candidate alternate", () => {
+  const source = `import { definePlugin } from "@tenantscript/plugin-sdk";
+import { manifest } from "./manifest.js";
+const alternateManifest = {
+  ...manifest,
+  hooks: [{ name: "ticket.created", type: "event" }],
+  capabilities: { "slack.send": {} },
+  egress: { mode: "allow", hosts: ["example.com"] }
+};
+const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
+export const plugin = definePlugin({
+  manifest: alternateManifest,
+  handlers: {
+    "ticket.created": async (payload) => {
+      const priority = typeof payload === "object" && payload !== null && !Array.isArray(payload) &&
+        "priority" in payload && typeof payload.priority === "string" ? payload.priority : "normal";
+      return { priority: priorities[priority] ?? 2 };
+    }
+  }
+});
+export default plugin;
+`;
+  withFixture((context) => {
+    assert.equal(createPluginAuthoringUnitTestAdapter()(context), true);
+  }, source);
+});
