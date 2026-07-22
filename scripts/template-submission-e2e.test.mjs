@@ -23,6 +23,7 @@ import { deserialize } from "node:v8";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const submissionsRoot = join(repoRoot, "templates", "submissions");
 const bundleRunnerPath = join(repoRoot, "scripts", "template-submission-bundle-runner.mjs");
+let linuxNetworkSandboxMode;
 const pnpmStoreDirectory = execFileSync("pnpm", ["store", "path"], {
   cwd: repoRoot,
   encoding: "utf8"
@@ -773,7 +774,8 @@ function run(command, args, options = {}) {
 function runSubmissionCommand(command, args, options = {}) {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const label = options.label ?? "submitted command";
-  const sandboxed = sandboxSubmissionCommand(command, args);
+  const environment = submissionEnvironment(options.pathPrefix);
+  const sandboxed = sandboxSubmissionCommand(command, args, environment);
   // spawnSync owns the deadline outside submitted JavaScript. SIGKILL and a minimal environment
   // keep an infinite loop or inherited maintainer credential from escaping the accountless lane.
   // The OS network namespace/profile is outside the submitted process, so deleting environment
@@ -781,7 +783,7 @@ function runSubmissionCommand(command, args, options = {}) {
   const child = spawnSync(sandboxed.command, sandboxed.args, {
     cwd: options.cwd ?? repoRoot,
     encoding: "utf8",
-    env: submissionEnvironment(options.pathPrefix),
+    env: environment,
     killSignal: "SIGKILL",
     maxBuffer: 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
@@ -798,7 +800,7 @@ function runSubmissionCommand(command, args, options = {}) {
   return child.stdout;
 }
 
-function sandboxSubmissionCommand(command, args) {
+function sandboxSubmissionCommand(command, args, environment) {
   if (process.platform === "darwin") {
     return {
       command: "/usr/bin/sandbox-exec",
@@ -806,6 +808,36 @@ function sandboxSubmissionCommand(command, args) {
     };
   }
   if (process.platform === "linux") {
+    const mode = getLinuxNetworkSandboxMode();
+    if (mode === "sudo") {
+      const uid = process.getuid?.();
+      const gid = process.getgid?.();
+      if (uid === undefined || gid === undefined) {
+        throw new Error("submitted-command network sandbox cannot determine the caller identity");
+      }
+      // The privileged process creates only the network namespace. setpriv drops back to the
+      // runner identity before the submitted executable starts, and env rebuilds the same
+      // allowlisted environment used by the unprivileged path.
+      return {
+        command: "/usr/bin/sudo",
+        args: [
+          "--non-interactive",
+          "/usr/bin/unshare",
+          "--net",
+          "--",
+          "/usr/bin/setpriv",
+          `--reuid=${String(uid)}`,
+          `--regid=${String(gid)}`,
+          "--clear-groups",
+          "--",
+          "/usr/bin/env",
+          "-i",
+          ...Object.entries(environment).map(([name, value]) => `${name}=${value}`),
+          command,
+          ...args
+        ]
+      };
+    }
     return {
       command: "/usr/bin/unshare",
       args: ["--user", "--map-root-user", "--net", "--", command, ...args]
@@ -813,6 +845,31 @@ function sandboxSubmissionCommand(command, args) {
   }
   // Submission verification must fail closed on hosts without a reviewed OS sandbox contract.
   throw new Error("submitted-command network sandbox is unsupported on this platform");
+}
+
+function getLinuxNetworkSandboxMode() {
+  if (linuxNetworkSandboxMode !== undefined) {
+    return linuxNetworkSandboxMode;
+  }
+  const unprivileged = spawnSync(
+    "/usr/bin/unshare",
+    ["--user", "--map-root-user", "--net", "--", "/usr/bin/true"],
+    { stdio: "ignore" }
+  );
+  if (unprivileged.status === 0) {
+    linuxNetworkSandboxMode = "unprivileged";
+    return linuxNetworkSandboxMode;
+  }
+  const privileged = spawnSync(
+    "/usr/bin/sudo",
+    ["--non-interactive", "/usr/bin/unshare", "--net", "--", "/usr/bin/true"],
+    { stdio: "ignore" }
+  );
+  if (privileged.status === 0) {
+    linuxNetworkSandboxMode = "sudo";
+    return linuxNetworkSandboxMode;
+  }
+  throw new Error("submitted-command network sandbox is unavailable on this Linux host");
 }
 
 function submissionEnvironment(pathPrefix) {
