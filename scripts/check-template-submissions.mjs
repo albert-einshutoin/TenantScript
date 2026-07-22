@@ -180,7 +180,14 @@ function validateSubmission(directoryName) {
   validateBoundedString(submission.displayName, 80, "displayName", displayPath);
   validateBoundedString(submission.summary, 240, "summary", displayPath);
   validateBoundedString(submission.license, 80, "license", displayPath);
-  validateSource(submission.source, submission.sdk, submission.license, directoryName, displayPath);
+  validateSource(
+    submission.source,
+    submission.sdk,
+    submission.license,
+    submission.kind,
+    directoryName,
+    displayPath
+  );
   validateSdk(submission.sdk, displayPath);
   validateHook(submission.hook, displayPath);
   validateSortedStrings(submission.capabilities, "capabilities", displayPath, capabilityPattern);
@@ -217,7 +224,7 @@ function validatePacketFiles(directoryName, displayPath) {
   }
 }
 
-function validateSource(value, sdk, license, directoryName, displayPath) {
+function validateSource(value, sdk, license, kind, directoryName, displayPath) {
   if (!isRecord(value)) {
     errors.push(`${displayPath}: source must be an object`);
     return;
@@ -227,6 +234,14 @@ function validateSource(value, sdk, license, directoryName, displayPath) {
   });
   if (!isPublicRepositoryUrl(value.repository)) {
     errors.push(`${displayPath}: source.repository must be a public HTTPS repository URL`);
+  }
+  if (
+    repositoryIdentity(value.repository) === canonicalRepositoryIdentity &&
+    kind !== "simulation"
+  ) {
+    // First-party rehearsal evidence is not community adoption. Bind the label to provenance so a
+    // repository-owned packet cannot gain external-contributor semantics through metadata alone.
+    errors.push(`${displayPath}: repository-owned submissions must use the simulation kind`);
   }
   const revisionIsValid = typeof value.revision === "string" && shaPattern.test(value.revision);
   if (!revisionIsValid) {

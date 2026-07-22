@@ -287,6 +287,18 @@ test("normalizes equivalent TenantScript repository URLs and rejects the null re
   });
 });
 
+test("requires repository-owned submissions to remain simulations", () => {
+  withRepository(({ root, submission }) => {
+    submission.kind = "community";
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /repository-owned submissions must use the simulation kind/);
+  });
+});
+
 test("rejects GitHub tree and blob URLs as repository provenance", () => {
   withRepository(({ root, submission }) => {
     for (const repository of [

@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T04:58:00.000Z",
+  "reviewedAt": "2026-07-22T05:24:00.000Z",
   "domains": [
     {
       "name": "security",
@@ -73,7 +73,7 @@
         "templates/submissions/ticket-priority-normalizer/SECURITY.md",
         "templates/submissions/ticket-priority-normalizer/verification.md"
       ],
-      "notes": "The packet records its purpose, immutable source, hook, capability and egress boundary, canonical verification commands, evidence, security note, review record, and explicit non-guarantees."
+      "notes": "The packet records its purpose, immutable source, hook, capability and egress boundary, canonical verification commands, evidence, security note, review record, and explicit non-guarantees. Repository-owned provenance is machine-bound to the simulation kind and cannot be represented as community adoption."
     },
     {
       "name": "license",
@@ -87,8 +87,8 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "a75bb6644860320b741fdd5ba82e5284d4b3aa4dc09b2f47f98526da072aadea",
-    "scripts/check-template-submissions.test.mjs": "56f5ebfad84c14f552fdeebdf7b92b042fa85d7dccd319cd6e899124133b36bb",
+    "scripts/check-template-submissions.mjs": "e912a759c364911f58d9aabc7c049cf169a9ba4292ef82805318590218bc69c1",
+    "scripts/check-template-submissions.test.mjs": "c56a15c57189941093ec87eb2769e7102784f3e6110ca36db68bb1afadfd5ad8",
     "scripts/template-submission-e2e.test.mjs": "0cb30b633fd8c7a545aaf21e11c1eb4ba068417d2f3b42ee33be586369081b6a",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
