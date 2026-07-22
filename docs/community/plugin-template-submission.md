@@ -65,6 +65,8 @@ tag, abbreviated SHA, or mutable URL—and SHA-256 every regular file under the 
 directory. The digest map must cover that directory exactly; unlisted helpers, build inputs, and
 symlinks are rejected. Do not amend or force-push the source commit after review starts; a legitimate
 change creates a new commit and new digests.
+Use the HTTPS repository-root URL for `source.repository`; GitHub `/tree/...` and `/blob/...` browser
+URLs are rejected because they are not repository identities.
 
 ```sh
 # cwd: repository root

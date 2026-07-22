@@ -505,6 +505,9 @@ function repositoryIdentity(value) {
     const pathname = url.pathname.replace(/\/+$/u, "").replace(/\.git$/iu, "");
     const segments = pathname.split("/").filter(Boolean);
     if (segments.length < 2) return undefined;
+    // GitHub adds tree/blob segments for browser pages; accepting them would change repository
+    // identity and skip the stronger revision-to-digest check for repository-owned submissions.
+    if (hostname === "github.com" && segments.length !== 2) return undefined;
     return `${hostname}/${segments.map((segment) => segment.toLowerCase()).join("/")}`;
   } catch {
     return undefined;

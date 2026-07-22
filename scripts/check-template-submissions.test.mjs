@@ -250,6 +250,27 @@ test("normalizes equivalent TenantScript repository URLs and rejects the null re
   });
 });
 
+test("rejects GitHub tree and blob URLs as repository provenance", () => {
+  withRepository(({ root, submission }) => {
+    for (const repository of [
+      "https://github.com/albert-einshutoin/TenantScript/tree/main",
+      "https://github.com/albert-einshutoin/TenantScript/blob/main/README.md"
+    ]) {
+      submission.source.repository = repository;
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1, repository);
+      assert.match(
+        result.stderr,
+        /submission\.json: source\.repository must be a public HTTPS repository URL/
+      );
+      assert.doesNotMatch(result.stderr, /tree\/main|blob\/main|README\.md/);
+    }
+  });
+});
+
 test("accepts digest provenance when a squash removes the source commit object", () => {
   withRepository(({ root, submission }) => {
     submission.source.revision = "1".repeat(40);
