@@ -22,6 +22,10 @@ import {
   parsePluginAuthoringCorpus,
   parsePluginAuthoringResult
 } from "./plugin-authoring-eval.mjs";
+import {
+  PLUGIN_AUTHORING_JUDGE_ARGV,
+  PLUGIN_AUTHORING_JUDGE_ENTRYPOINT
+} from "./plugin-authoring-judge-contract.mjs";
 
 const SHA40_PATTERN = /^[0-9a-f]{40}$/u;
 const SHA64_PATTERN = /^[0-9a-f]{64}$/u;
@@ -278,12 +282,9 @@ export function buildIsolatedJudgeDockerInvocation({
     `--mount=type=bind,src=${candidateRoot},dst=/candidate,readonly`,
     `--mount=type=bind,src=${requestPath},dst=/input/request.json,readonly`,
     "--workdir=/work",
-    "--entrypoint=/opt/tenantscript/bin/plugin-authoring-judge",
+    `--entrypoint=${PLUGIN_AUTHORING_JUDGE_ENTRYPOINT}`,
     request.sandbox.image,
-    "--request=/input/request.json",
-    "--baseline=/baseline",
-    "--candidate=/candidate",
-    "--workspace=/work"
+    ...PLUGIN_AUTHORING_JUDGE_ARGV
   ];
   return {
     command: "docker",
