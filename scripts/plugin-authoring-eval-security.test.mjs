@@ -10,6 +10,7 @@ import "./plugin-authoring-judge-core.test.mjs";
 import "./plugin-authoring-behavior-cases.test.mjs";
 import "./plugin-authoring-build-adapter.test.mjs";
 import "./plugin-authoring-build-receipt.test.mjs";
+import "./plugin-authoring-audit-adapter.test.mjs";
 import "./plugin-authoring-unit-adapter.test.mjs";
 import "./plugin-authoring-security-cases.test.mjs";
 import "./plugin-authoring-security-boundary.test.mjs";

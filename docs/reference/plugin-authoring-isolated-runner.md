@@ -100,10 +100,16 @@ duplicate/prototype-sensitive keyを拒否します。source byte、AST node、n
 parser diagnosticはcandidate内容を反射せず両judgeのfailureへ閉じます。この静的adapterはunknown sourceの非実行境界を
 提供しますが、build/test/audit sandboxやreview済みimageの完成を証明しません。
 
-auditの1 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
-boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskをskipしません。build / unit-test adapterの成功やtest
-doubleの全成功はimageやreal-agent qualityの証拠ではなく、残るaudit adapterがreview済みimageへ接続されるまで
-実runの全judge成功を主張しません。
+`audit` judgeはbuild receiptでsourceと`bundle.cjs`を再検証し、`src/manifest.ts`を実行せず静的抽出し、
+32 KiB以下・深さ8以下・512 node以下の`package.json`だけをbounded metadataとして読みます。candidateのpackage script、
+config、prebuilt artifactは実行・読込しません。judge-owned SDK versionとCLI公開APIのcanonical `auditPluginPackage`を使い、
+closed finding taxonomy、severity、certainty、path、message、決定論的順序を再検証します。公開CLIではwarningがreport成功に
+なり得ますが、isolated judgeではheuristic uncertaintyを安全性の証拠にしないzero-finding policyを採用し、warningを含む
+全findingをfail closedにします。この静的監査は既知の危険patternを検出するreview gateであり、安全性の認証ではありません。
+
+entrypoint interfaceはmissing、false、例外、boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskを
+skipしません。全execution adapterのrepository test成功やtest doubleの全成功は、review済みimageやreal-agent qualityの
+証拠ではありません。
 
 security-test成功は固定probeと入力で観測した実行境界だけを証明します。未実行の隠し分岐、危険APIの静的存在、dependency
 provenance、未知のsandbox脆弱性、container image supply chainは保証しません。前二者は後続audit、image自体は
