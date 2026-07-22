@@ -129,8 +129,13 @@ export function parseIsolatedRunnerRequest(input, corpusInput) {
   }
 }
 
-export function inspectIsolatedCandidateBundle(candidateRootInput, corpusInput) {
+export function inspectIsolatedCandidateBundle(
+  candidateRootInput,
+  corpusInput,
+  { readFile = readFileSync } = {}
+) {
   try {
+    assert(typeof readFile === "function");
     const corpus = parsePluginAuthoringCorpus(corpusInput);
     const candidateRoot = resolve(candidateRootInput);
     const rootMetadata = lstatSync(candidateRoot);
@@ -145,11 +150,12 @@ export function inspectIsolatedCandidateBundle(candidateRootInput, corpusInput) 
     );
     assert(rootEntries.every((entry) => entry.isDirectory() && !entry.isSymbolicLink()));
 
-    const records = [];
+    const collection = { records: [], totalBytes: 0, readFile };
     const taskFileCounts = new Map(expectedTasks.map((taskId) => [taskId, 0]));
     for (const taskId of expectedTasks) {
-      collectCandidateFiles(candidateRoot, join(candidateRoot, taskId), taskId, records, 1);
+      collectCandidateFiles(candidateRoot, join(candidateRoot, taskId), taskId, collection, 1);
     }
+    const { records } = collection;
     assert(records.length >= expectedTasks.length && records.length <= MAX_CANDIDATE_FILES);
 
     let totalBytes = 0;
@@ -181,7 +187,7 @@ export function inspectIsolatedCandidateBundle(candidateRootInput, corpusInput) 
   }
 }
 
-function collectCandidateFiles(root, current, taskId, records, depth) {
+function collectCandidateFiles(root, current, taskId, collection, depth) {
   assert(depth <= MAX_CANDIDATE_DEPTH);
   const entries = readdirSync(current, { withFileTypes: true }).sort((left, right) =>
     compareText(left.name, right.name)
@@ -196,12 +202,17 @@ function collectCandidateFiles(root, current, taskId, records, depth) {
     const metadata = lstatSync(absolutePath);
     assert(!metadata.isSymbolicLink());
     if (metadata.isDirectory()) {
-      collectCandidateFiles(root, absolutePath, taskId, records, depth + 1);
+      collectCandidateFiles(root, absolutePath, taskId, collection, depth + 1);
       continue;
     }
     assert(metadata.isFile() && metadata.nlink === 1);
     assert(metadata.size <= MAX_CANDIDATE_FILE_BYTES);
-    const bytes = readFileSync(absolutePath);
+    // Reject from metadata before allocating the next file. The post-read check below still
+    // protects the bound if a file changes size between inspection and retention.
+    assert(collection.totalBytes + metadata.size <= MAX_CANDIDATE_TOTAL_BYTES);
+    const bytes = collection.readFile(absolutePath);
+    assert(Buffer.isBuffer(bytes));
+    assert(collection.totalBytes + bytes.length <= MAX_CANDIDATE_TOTAL_BYTES);
     const afterRead = lstatSync(absolutePath);
     assert(
       afterRead.isFile() &&
@@ -212,8 +223,9 @@ function collectCandidateFiles(root, current, taskId, records, depth) {
         afterRead.size === metadata.size &&
         afterRead.mtimeMs === metadata.mtimeMs
     );
-    records.push({ taskId, path: relativePath, bytes });
-    assert(records.length <= MAX_CANDIDATE_FILES);
+    collection.totalBytes += bytes.length;
+    collection.records.push({ taskId, path: relativePath, bytes });
+    assert(collection.records.length <= MAX_CANDIDATE_FILES);
   }
 }
 

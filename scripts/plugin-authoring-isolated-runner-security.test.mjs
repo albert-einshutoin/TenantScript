@@ -123,6 +123,36 @@ test("rejects symlinks, hidden controls, missing tasks, and oversized files befo
   });
 });
 
+test("stops reading candidate bytes when the aggregate bundle cap is reached", async () => {
+  await withCandidateBundle((root) => {
+    const taskRoot = join(root, corpus.tasks[0].id);
+    for (let index = 0; index < 65; index += 1) {
+      writeFileSync(
+        join(taskRoot, `chunk-${String(index).padStart(3, "0")}.bin`),
+        Buffer.alloc(262_144)
+      );
+    }
+    let reads = 0;
+    let retainedBytes = 0;
+
+    assert.throws(
+      () =>
+        inspectIsolatedCandidateBundle(root, corpus, {
+          readFile(path) {
+            const bytes = readFileSync(path);
+            reads += 1;
+            retainedBytes += bytes.length;
+            assert.ok(retainedBytes <= 16 * 1024 * 1024);
+            return bytes;
+          }
+        }),
+      /isolated candidate bundle is invalid/
+    );
+    assert.ok(reads > 0);
+    assert.ok(retainedBytes <= 16 * 1024 * 1024);
+  });
+});
+
 test("stops before unknown execution when the sandbox probe fails", async () => {
   await withCandidateBundle(async (candidateRoot) => {
     const tempRoot = mkdtempSync(join(tmpdir(), "tenantscript-probe-failure-"));
