@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { lstatSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { chmodSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { TextDecoder } from "node:util";
 
@@ -31,12 +31,14 @@ export async function executePluginAuthoringJudge({
   candidateRoot,
   workspaceRoot,
   adapters = {},
+  inspectCandidate = inspectIsolatedCandidateBundle,
   parseManifest,
   now
 }) {
   let prepared;
   try {
     assert(typeof parseManifest === "function");
+    assert(typeof inspectCandidate === "function");
     assertAdapterContract(adapters);
     const roots = {
       requestPath: resolve(requestPath),
@@ -64,8 +66,9 @@ export async function executePluginAuthoringJudge({
     // The host runner validates before materialization, and the entrypoint validates again before
     // trusted build adapters receive paths. This prevents direct image invocation or mount drift
     // from smuggling symlinks, hard links, hidden controls, or oversized trees into later judges.
-    inspectIsolatedCandidateBundle(roots.candidateRoot, corpus);
-    const manifestSources = readCandidateManifestSources(roots.candidateRoot, corpus);
+    const candidate = inspectCandidate(roots.candidateRoot, corpus);
+    assertCandidateSnapshot(candidate, corpus);
+    const manifestSources = readManifestSourcesFromSnapshot(candidate.records, corpus);
     const manifestResults = new Map(
       corpus.tasks.map((task) => [
         task.id,
@@ -76,12 +79,11 @@ export async function executePluginAuthoringJudge({
         })
       ])
     );
-    const taskWorkspaces = new Map();
-    for (const task of corpus.tasks) {
-      const taskWorkspace = join(roots.workspaceRoot, task.id);
-      mkdirSync(taskWorkspace, { mode: 0o700 });
-      taskWorkspaces.set(task.id, taskWorkspace);
-    }
+    const taskWorkspaces = materializeCandidateSnapshot(
+      candidate.records,
+      corpus,
+      roots.workspaceRoot
+    );
     prepared = { corpus, manifestResults, taskWorkspaces, roots };
   } catch {
     throw new Error("plugin authoring judge input is invalid");
@@ -102,8 +104,8 @@ export async function executePluginAuthoringJudge({
       return adapter({
         task,
         baselineRoot: roots.baselineRoot,
-        taskRoot: join(roots.candidateRoot, task.id),
-        taskWorkspace: taskWorkspaces.get(task.id)
+        taskRoot: taskWorkspaces.get(task.id).taskRoot,
+        taskWorkspace: taskWorkspaces.get(task.id).taskWorkspace
       });
     }
   });
@@ -151,22 +153,83 @@ async function loadCanonicalManifestParser() {
   return manifestModule.parseManifest;
 }
 
-function readCandidateManifestSources(candidateRoot, corpus) {
-  const expectedTaskIds = corpus.tasks.map((task) => task.id);
-  const entries = readdirSync(candidateRoot).sort(compareText);
-  assertArrayEquals(entries, expectedTaskIds);
+function readManifestSourcesFromSnapshot(records, corpus) {
   const sources = new Map();
-  for (const taskId of expectedTaskIds) {
-    const taskRoot = join(candidateRoot, taskId);
-    const sourceRoot = join(taskRoot, "src");
-    assertDirectory(taskRoot);
-    assertDirectory(sourceRoot);
-    sources.set(
-      taskId,
-      readBoundedUtf8File(join(sourceRoot, "manifest.ts"), MANIFEST_SOURCE_MAX_BYTES)
-    );
+  for (const task of corpus.tasks) {
+    const expectedPath = `${task.id}/src/manifest.ts`;
+    const matches = records.filter((record) => record.path === expectedPath);
+    assert(matches.length === 1);
+    assert(matches[0].bytes.length <= MANIFEST_SOURCE_MAX_BYTES);
+    sources.set(task.id, textDecoder.decode(matches[0].bytes));
   }
   return sources;
+}
+
+function materializeCandidateSnapshot(records, corpus, workspaceRoot) {
+  const taskWorkspaces = new Map();
+  for (const task of corpus.tasks) {
+    const taskWorkspace = join(workspaceRoot, task.id);
+    const taskRoot = join(taskWorkspace, "source");
+    mkdirSync(taskRoot, { recursive: true, mode: 0o700 });
+    const prefix = `${task.id}/`;
+    const taskRecords = records.filter((record) => record.taskId === task.id);
+    assert(taskRecords.length >= 1);
+    for (const record of taskRecords) {
+      assert(record.path.startsWith(prefix));
+      const relativePath = record.path.slice(prefix.length);
+      assert(relativePath.length >= 1);
+      const destination = resolve(taskRoot, ...relativePath.split("/"));
+      const relativeDestination = relative(taskRoot, destination);
+      assert(
+        relativeDestination.length >= 1 &&
+          !isAbsolute(relativeDestination) &&
+          relativeDestination !== ".." &&
+          !relativeDestination.startsWith(`..${sep}`)
+      );
+      mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+      writeFileSync(destination, record.bytes, { mode: 0o600, flag: "wx" });
+    }
+    chmodTree(taskRoot, 0o500, 0o400);
+    taskWorkspaces.set(task.id, { taskWorkspace, taskRoot });
+  }
+  return taskWorkspaces;
+}
+
+function assertCandidateSnapshot(candidate, corpus) {
+  assert(isPlainRecord(candidate));
+  assert(Array.isArray(candidate.records));
+  assert(candidate.tasks === corpus.tasks.length);
+  assert(candidate.records.length === candidate.files);
+  assert(candidate.records.every((record) => isCandidateRecord(record)));
+  const taskIds = new Set(corpus.tasks.map((task) => task.id));
+  assert(candidate.records.every((record) => taskIds.has(record.taskId)));
+  assert(new Set(candidate.records.map((record) => record.path)).size === candidate.records.length);
+  assert(
+    candidate.records.reduce((total, record) => total + record.bytes.length, 0) ===
+      candidate.totalBytes
+  );
+}
+
+function isCandidateRecord(record) {
+  return (
+    isPlainRecord(record) &&
+    typeof record.taskId === "string" &&
+    typeof record.path === "string" &&
+    Buffer.isBuffer(record.bytes)
+  );
+}
+
+function chmodTree(root, directoryMode, fileMode) {
+  const metadata = lstatSync(root);
+  assert(!metadata.isSymbolicLink());
+  if (!metadata.isDirectory()) {
+    chmodSync(root, fileMode);
+    return;
+  }
+  for (const entry of readdirSync(root)) {
+    chmodTree(join(root, entry), directoryMode, fileMode);
+  }
+  chmodSync(root, directoryMode);
 }
 
 function readBoundedUtf8File(path, maxBytes) {
@@ -202,15 +265,6 @@ function isPlainRecord(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
-}
-
-function assertArrayEquals(left, right) {
-  assert(left.length === right.length);
-  assert(left.every((value, index) => value === right[index]));
-}
-
-function compareText(left, right) {
-  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function assert(condition) {

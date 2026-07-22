@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -30,6 +31,7 @@ import {
 } from "./plugin-authoring-eval.mjs";
 import {
   buildIsolatedJudgeDockerInvocation,
+  inspectIsolatedCandidateBundle,
   parseJudgeOutput
 } from "./plugin-authoring-isolated-runner.mjs";
 import { MANIFEST_SOURCE_MAX_BYTES } from "./plugin-authoring-manifest-extractor.mjs";
@@ -57,13 +59,25 @@ async function withFixture(run) {
     const sourceRoot = join(candidateRoot, task.id, "src");
     mkdirSync(sourceRoot, { recursive: true });
     writeFileSync(join(sourceRoot, "manifest.ts"), manifestSource(task));
+    writeFileSync(join(sourceRoot, "index.ts"), "export const candidateMarker = 'original';\n");
     writeFileSync(join(candidateRoot, task.id, "package.json"), "{}\n");
   }
 
   try {
     return await run({ root, baselineRoot, candidateRoot, workspaceRoot, requestPath });
   } finally {
+    makeTreeOwnerWritable(root);
     rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function makeTreeOwnerWritable(root) {
+  const metadata = lstatSync(root);
+  if (metadata.isSymbolicLink()) return;
+  chmodSync(root, metadata.isDirectory() ? 0o700 : 0o600);
+  if (!metadata.isDirectory()) return;
+  for (const entry of readdirSync(root)) {
+    makeTreeOwnerWritable(join(root, entry));
   }
 }
 
@@ -124,8 +138,8 @@ function allPassingAdapters(calls = []) {
           "taskWorkspace"
         ]);
         calls.push(`${task.id}:${judge}`);
-        assert.equal(taskRoot, join(taskRoot.slice(0, -task.id.length), task.id));
         assert.equal(taskWorkspace.endsWith(`/${task.id}`), true);
+        assert.equal(taskRoot, join(taskWorkspace, "source"));
         return true;
       }
     ])
@@ -185,6 +199,44 @@ test("runs the fixed task and judge order and preserves candidate input", async 
       corpus.tasks.map((task) => task.id)
     );
     assert.deepEqual(parseJudgeOutput(JSON.stringify(result), corpus), result.taskResults);
+  });
+});
+
+test("feeds adapters from inspected bytes when the live candidate changes", async () => {
+  await withFixture(async (paths) => {
+    let inspectionCalls = 0;
+    const firstTask = corpus.tasks[0];
+    const liveSourcePath = join(paths.candidateRoot, firstTask.id, "src", "index.ts");
+    const marker = ["API", "_TOKEN", "=swapped-after-inspection"].join("");
+    const inspectCandidate = (candidateRoot, corpusInput) => {
+      inspectionCalls += 1;
+      const inspected = inspectIsolatedCandidateBundle(candidateRoot, corpusInput);
+      writeFileSync(liveSourcePath, `export const candidateMarker = ${JSON.stringify(marker)};\n`);
+      return inspected;
+    };
+    const adapters = allPassingAdapters();
+    adapters.build = ({ task, taskRoot }) => {
+      if (task.id === firstTask.id) {
+        const source = readFileSync(join(taskRoot, "src", "index.ts"), "utf8");
+        assert.equal(source, "export const candidateMarker = 'original';\n");
+        assert.equal(source.includes(marker), false);
+      }
+      return true;
+    };
+
+    const result = await executePluginAuthoringJudge({
+      ...paths,
+      adapters,
+      inspectCandidate,
+      parseManifest: acceptingParser
+    });
+
+    assert.equal(inspectionCalls, 1);
+    assert.equal(
+      result.taskResults.every((task) => task.judges.every((judge) => judge.status === "pass")),
+      true
+    );
+    assert.equal(JSON.stringify(result).includes(marker), false);
   });
 });
 
@@ -269,8 +321,10 @@ test("rejects unsafe filesystem inputs with one non-reflective error", async (t)
     },
     "unrelated source symlink": ({ root, candidateRoot }) => {
       const outside = join(root, "outside.ts");
+      const sourcePath = join(candidateRoot, corpus.tasks[0].id, "src", "index.ts");
       writeFileSync(outside, "export const marker = true;\n");
-      symlinkSync(outside, join(candidateRoot, corpus.tasks[0].id, "src", "index.ts"));
+      rmSync(sourcePath);
+      symlinkSync(outside, sourcePath);
     },
     "manifest directory": ({ candidateRoot }) => {
       const manifestPath = join(candidateRoot, corpus.tasks[0].id, "src", "manifest.ts");
