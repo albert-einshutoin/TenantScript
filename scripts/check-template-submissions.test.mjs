@@ -372,6 +372,35 @@ test("rejects package install lifecycle scripts", () => {
   });
 });
 
+test("rejects package-manager settings embedded in package metadata", () => {
+  withRepository(({ root, submission }) => {
+    const packagePath = "templates/submissions/example-template/plugin/package.json";
+    writeFileSync(
+      join(root, packagePath),
+      `${JSON.stringify({
+        license: "Apache-2.0",
+        dependencies: {
+          "@tenantscript/manifest": "0.0.0",
+          "@tenantscript/plugin-sdk": "0.0.0"
+        },
+        pnpm: { overrides: { vite: "0.0.0" } }
+      })}\n`
+    );
+    submission.source.files[packagePath] = createHash("sha256")
+      .update(readFileSync(join(root, packagePath)))
+      .digest("hex");
+    submission.source.revision = "1".repeat(40);
+    writeReviewRecord(root, submission);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /source package must not define package-manager settings/);
+    assert.doesNotMatch(result.stderr, /vite|overrides/);
+  });
+});
+
 test("binds SDK metadata to submitted package dependencies", () => {
   withRepository(({ root, submission }) => {
     submission.sdk = { range: "^1.0.0", lastTestedVersion: "1.0.0" };

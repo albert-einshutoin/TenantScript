@@ -271,6 +271,11 @@ function validateSource(value, sdk, license, directoryName, displayPath) {
           // accepted template must not contain behavior that the audited path never exercises.
           errors.push(`${displayPath}: source package must not define install lifecycle scripts`);
         }
+        if (isRecord(packageJson) && packageJson.pnpm !== undefined) {
+          // The E2E adds its own local-tarball overrides after validation. Submitted pnpm settings
+          // would otherwise be overwritten and escape the exact dependency graph being audited.
+          errors.push(`${displayPath}: source package must not define package-manager settings`);
+        }
         const dependencies = isRecord(packageJson) ? packageJson.dependencies : undefined;
         const testedVersion = isRecord(sdk) ? sdk.lastTestedVersion : undefined;
         if (

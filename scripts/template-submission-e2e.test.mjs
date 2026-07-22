@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
@@ -59,7 +59,8 @@ async function exerciseSubmission(submission) {
     const manifestTarball = packPublicPackage("packages/manifest", tempRoot);
     const pluginSdkTarball = packPublicPackage("packages/plugin-sdk", tempRoot);
     const packageJsonPath = join(pluginDirectory, "package.json");
-    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
+    const submittedPackageJson = await readFile(packageJsonPath, "utf8");
+    const packageJson = JSON.parse(submittedPackageJson);
     const cliPackageJson = JSON.parse(
       await readFile(join(repoRoot, "packages", "cli", "package.json"), "utf8")
     );
@@ -69,8 +70,6 @@ async function exerciseSubmission(submission) {
       "@tenantscript/plugin-sdk": metadata.sdk.lastTestedVersion
     });
 
-    const auditPackagePath = join(tempRoot, "audit-package.json");
-    await writeFile(auditPackagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
     packageJson.dependencies = {
       "@tenantscript/manifest": `file:${manifestTarball}`,
       "@tenantscript/plugin-sdk": `file:${pluginSdkTarball}`
@@ -89,47 +88,53 @@ async function exerciseSubmission(submission) {
     await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
     run("pnpm", submissionInstallArguments(pluginDirectory));
-    const manifestJson = run(
-      process.execPath,
-      [
-        "--experimental-strip-types",
-        "--input-type=module",
-        "--eval",
-        'import { manifest } from "./src/manifest.ts"; process.stdout.write(JSON.stringify(manifest));'
-      ],
-      { cwd: pluginDirectory }
-    );
+    // Restore the digest-bound metadata before build and audit; install-only tarball overrides must
+    // never become a sanitized substitute for the package consumers receive.
+    await writeFile(packageJsonPath, submittedPackageJson);
+    const cliBinDirectory = await createCliShim(tempRoot);
+    const commandEnvironment = {
+      PATH: `${cliBinDirectory}${delimiter}${process.env.PATH ?? ""}`
+    };
+    run("pnpm", ["--dir", pluginDirectory, "build"], { env: commandEnvironment });
+    const manifestJson = await readFile(join(pluginDirectory, "manifest.json"), "utf8");
+    await readFile(join(pluginDirectory, "dist", "plugin.cjs"), "utf8");
     const manifest = JSON.parse(manifestJson);
     assertManifestMatchesSubmission(manifest, metadata);
-    const manifestPath = join(tempRoot, "manifest.json");
-    await writeFile(manifestPath, `${manifestJson}\n`);
-    const bundlePath = join(tempRoot, "plugin.cjs");
-    run(process.execPath, [
-      join(repoRoot, "packages", "cli", "dist", "bin.js"),
-      "build",
-      "--entry",
-      join(pluginDirectory, "src", "index.ts"),
-      "--out",
-      bundlePath
-    ]);
     const report = JSON.parse(
-      run(process.execPath, [
-        join(repoRoot, "packages", "cli", "dist", "bin.js"),
-        "audit",
-        "--manifest",
-        manifestPath,
-        "--package",
-        auditPackagePath,
-        "--bundle",
-        bundlePath
-      ])
+      run(
+        "ext",
+        [
+          "audit",
+          "--manifest",
+          "./manifest.json",
+          "--package",
+          "./package.json",
+          "--bundle",
+          "./dist/plugin.cjs"
+        ],
+        { cwd: pluginDirectory, env: commandEnvironment }
+      )
     );
     assert.deepEqual(report, { version: 1, passed: true, findings: [] });
-    run("pnpm", ["--dir", pluginDirectory, "build"]);
     run("pnpm", ["--dir", pluginDirectory, "test"]);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+async function createCliShim(tempRoot) {
+  const binDirectory = join(tempRoot, "bin");
+  const shimPath = join(binDirectory, "ext");
+  const cliPath = join(repoRoot, "packages", "cli", "dist", "bin.js");
+  await mkdir(binDirectory, { recursive: true });
+  await writeFile(
+    shimPath,
+    `#!/usr/bin/env node\nconst { spawnSync } = require("node:child_process");\nconst result = spawnSync(process.execPath, [${JSON.stringify(
+      cliPath
+    )}, ...process.argv.slice(2)], { stdio: "inherit" });\nprocess.exit(result.status ?? 1);\n`
+  );
+  await chmod(shimPath, 0o755);
+  return binDirectory;
 }
 
 function submissionInstallArguments(pluginDirectory) {
@@ -183,7 +188,7 @@ function run(command, args, options = {}) {
   return execFileSync(command, args, {
     cwd: options.cwd ?? repoRoot,
     encoding: "utf8",
-    env: { ...process.env, CI: "1" },
+    env: { ...process.env, ...options.env, CI: "1" },
     stdio: ["ignore", "pipe", "pipe"]
   });
 }
