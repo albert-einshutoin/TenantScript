@@ -57,6 +57,15 @@ writable stateは`/work/<task-id>`へ分離します。stdoutはclosed judge JSO
 閉じます。このrepository module自体はまだreview済みimageの
 `/opt/tenantscript/bin/plugin-authoring-judge`へinstallされていません。
 
+`build` judgeにはbounded offline compile-check adapterがあります。adapterはcandidateの`package.json` scripts、
+`tsconfig.json`、lockfile、install hookを実行・継承せず、judge codeと同じ固定Node executableから固定workerを
+shellなしで起動します。workerは`src`内の通常`.ts` fileだけを対象にし、相対importと
+`@tenantscript/manifest` / `@tenantscript/plugin-sdk`の公開root importだけを許可します。TypeScript compiler
+APIはsanitized environment、10秒timeout、stdout/stderr各32 KiB、合計64 KiB、container全体のPID/memory/network
+制限内で実行され、成功時は固定JSONだけを返します。candidate diagnostic、source、absolute pathはjudge outputへ
+反射しません。candidateの型定義やcompiler pluginを読み込まないため、このbuild判定はreview済みの最小authoring
+contractに対するcompile-checkであり、candidate独自dependencyや任意build pipelineの成功を証明しません。
+
 抽出済みmanifest valueに対しては、canonical manifest parserの成功と、task固有の単一hook、capability keyの
 exact set、egress denyを判定するpure policyがあります。parserの例外や不正な戻り値はdiagnosticを反射せず
 `manifest`と`least-privilege`のfailureへ閉じます。
@@ -69,9 +78,10 @@ duplicate/prototype-sensitive keyを拒否します。source byte、AST node、n
 parser diagnosticはcandidate内容を反射せず両judgeのfailureへ閉じます。この静的adapterはunknown sourceの非実行境界を
 提供しますが、build/test/audit sandboxやreview済みimageの完成を証明しません。
 
-build、unit-test、security-test、auditの4 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
-boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskをskipしません。test doubleの全成功はimageや
-real-agent qualityの証拠ではなく、4 execution adapterがreview済みimageへ接続されるまで実runの全judge成功を主張しません。
+unit-test、security-test、auditの3 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
+boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskをskipしません。build adapterの成功やtest
+doubleの全成功はimageやreal-agent qualityの証拠ではなく、残る3 execution adapterがreview済みimageへ接続されるまで
+実runの全judge成功を主張しません。
 
 reviewed judge imageがない場合のstop conditionは明確です。runnerは
 `isolated judge sandbox is unavailable`で停止し、host実行やrepository simulationへfallbackしません。
