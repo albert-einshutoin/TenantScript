@@ -287,6 +287,51 @@ test("binds an approved review record to the exact submitted source", () => {
   });
 });
 
+test("requires the digest map to cover every copied source file", () => {
+  withRepository(({ root, submission }) => {
+    writeFileSync(
+      join(root, "templates/submissions/example-template/plugin/src/helper.ts"),
+      "export const helper = true;\n"
+    );
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /source\.files must cover every regular file in source\.directory/);
+  });
+});
+
+test("rejects sensitive content in referenced evidence and security notes", () => {
+  withRepository(({ root, submission }) => {
+    const credential = `Bearer ${"Z".repeat(24)}`;
+    writeFileSync(
+      join(root, "templates/submissions/example-template/verification.md"),
+      `Unsafe evidence ${credential}\n`
+    );
+    writeSubmission(root, "example-template", submission);
+
+    let result = runChecker(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /verification\.evidence contains sensitive or private content/);
+    assert.doesNotMatch(result.stderr, /Z{8}/);
+
+    writeFileSync(
+      join(root, "templates/submissions/example-template/verification.md"),
+      "Accountless checks passed.\n"
+    );
+    writeFileSync(
+      join(root, "templates/submissions/example-template/SECURITY.md"),
+      "Local artifact: /Users/private/review.log\n"
+    );
+
+    result = runChecker(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /securityNote contains sensitive or private content/);
+    assert.doesNotMatch(result.stderr, /Users|review\.log/);
+  });
+});
+
 test("rejects loopback, private-address, and local-only repository hosts", () => {
   withRepository(({ root, submission }) => {
     for (const repository of [

@@ -147,7 +147,7 @@ function validateSubmission(directoryName) {
   validateBoundedString(submission.displayName, 80, "displayName", displayPath);
   validateBoundedString(submission.summary, 240, "summary", displayPath);
   validateBoundedString(submission.license, 80, "license", displayPath);
-  validateSource(submission.source, submission.license, displayPath);
+  validateSource(submission.source, submission.license, directoryName, displayPath);
   validateSdk(submission.sdk, displayPath);
   validateHook(submission.hook, displayPath);
   validateSortedStrings(submission.capabilities, "capabilities", displayPath, capabilityPattern);
@@ -155,11 +155,11 @@ function validateSubmission(directoryName) {
   validateSortedStrings(submission.configKeys, "configKeys", displayPath, configKeyPattern);
   validateVerification(submission.verification, displayPath);
   validateReviewRecord(submission.reviewRecord, submission.source, displayPath);
-  validateRegularReference(submission.securityNote, "securityNote", displayPath);
+  validateSafeReference(submission.securityNote, "securityNote", displayPath);
   validateNonGuarantees(submission.nonGuarantees, displayPath);
 }
 
-function validateSource(value, license, displayPath) {
+function validateSource(value, license, directoryName, displayPath) {
   if (!isRecord(value)) {
     errors.push(`${displayPath}: source must be an object`);
     return;
@@ -174,7 +174,12 @@ function validateSource(value, license, displayPath) {
   if (!revisionIsValid) {
     errors.push(`${displayPath}: source.revision must be a full commit SHA`);
   }
-  if (typeof value.directory !== "string" || !isRepositoryPath(value.directory)) {
+  const expectedDirectory = `templates/submissions/${directoryName}/plugin`;
+  if (
+    typeof value.directory !== "string" ||
+    !isRepositoryPath(value.directory) ||
+    value.directory !== expectedDirectory
+  ) {
     errors.push(`${displayPath}: source.directory must stay inside the repository`);
   }
   if (!isRecord(value.files) || Object.keys(value.files).length === 0) {
@@ -184,6 +189,13 @@ function validateSource(value, license, displayPath) {
   const filePaths = Object.keys(value.files);
   if (!isSortedUnique(filePaths)) {
     errors.push(`${displayPath}: source.files must be sorted and unique`);
+  }
+  const copiedSourcePaths =
+    value.directory === expectedDirectory ? listRegularSourceFiles(value.directory) : undefined;
+  if (copiedSourcePaths === undefined) {
+    errors.push(`${displayPath}: source.directory must contain only bounded regular files`);
+  } else if (!sameStringArray(filePaths, copiedSourcePaths)) {
+    errors.push(`${displayPath}: source.files must cover every regular file in source.directory`);
   }
   for (const suffix of requiredSourceSuffixes) {
     const requiredPath =
@@ -332,8 +344,15 @@ function validateVerification(value, displayPath) {
     for (const evidence of value.evidence) {
       if (typeof evidence !== "string" || !isRepositoryPath(evidence)) {
         errors.push(`${displayPath}: verification.evidence must stay inside the repository`);
-      } else if (readRegularRepositoryFile(evidence) === undefined) {
-        errors.push(`${displayPath}: verification.evidence must reference a regular file`);
+      } else {
+        const content = readRegularRepositoryFile(evidence);
+        if (content === undefined) {
+          errors.push(`${displayPath}: verification.evidence must reference a regular file`);
+        } else if (containsSensitiveFileContent(content)) {
+          errors.push(
+            `${displayPath}: verification.evidence contains sensitive or private content`
+          );
+        }
       }
     }
   }
@@ -378,6 +397,14 @@ function validateRegularReference(value, field, displayPath) {
   const content = readRegularRepositoryFile(value);
   if (content === undefined) {
     errors.push(`${displayPath}: ${field} must reference a regular file`);
+  }
+  return content;
+}
+
+function validateSafeReference(value, field, displayPath) {
+  const content = validateRegularReference(value, field, displayPath);
+  if (content !== undefined && containsSensitiveFileContent(content)) {
+    errors.push(`${displayPath}: ${field} contains sensitive or private content`);
   }
   return content;
 }
@@ -523,6 +550,36 @@ function readRegularRepositoryFile(path) {
   }
 }
 
+function listRegularSourceFiles(directory) {
+  if (!isRepositoryPath(directory) || hasSymlinkedParent(directory)) return undefined;
+  const pending = [directory];
+  const files = [];
+  let entryCount = 0;
+  try {
+    if (!lstatSync(resolve(repoRoot, directory)).isDirectory()) return undefined;
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (current === undefined) break;
+      const entries = readdirSync(resolve(repoRoot, current), { withFileTypes: true }).sort(
+        (left, right) => left.name.localeCompare(right.name)
+      );
+      for (const entry of entries) {
+        entryCount += 1;
+        if (entryCount > 256) return undefined;
+        const path = `${current}/${entry.name}`;
+        const metadata = lstatSync(resolve(repoRoot, path));
+        if (metadata.isSymbolicLink()) return undefined;
+        if (metadata.isDirectory()) pending.push(path);
+        else if (metadata.isFile()) files.push(path);
+        else return undefined;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return files.sort();
+}
+
 function hasSymlinkedParent(path) {
   const segments = path.split("/");
   let current = repoRoot;
@@ -610,6 +667,11 @@ function containsSensitiveContent(value) {
     }
   }
   return false;
+}
+
+function containsSensitiveFileContent(content) {
+  const text = content.toString("utf8");
+  return secretLikePatterns.some((pattern) => pattern.test(text));
 }
 
 function isRecord(value) {

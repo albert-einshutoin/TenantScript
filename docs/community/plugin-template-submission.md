@@ -60,8 +60,10 @@ pnpm test
 ## 2. Freeze source provenance
 
 Commit the complete plugin source before writing its packet. Record the full commit SHA—not a branch,
-tag, abbreviated SHA, or mutable URL—and SHA-256 every listed source file. Do not amend or force-push
-the source commit after review starts; a legitimate change creates a new commit and new digests.
+tag, abbreviated SHA, or mutable URL—and SHA-256 every regular file under the packet's `plugin/`
+directory. The digest map must cover that directory exactly; unlisted helpers, build inputs, and
+symlinks are rejected. Do not amend or force-push the source commit after review starts; a legitimate
+change creates a new commit and new digests.
 
 ```sh
 # cwd: repository root
@@ -96,10 +98,12 @@ The canonical audit command recorded in the packet is:
 ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/plugin.cjs
 ```
 
-The validator never executes submitted commands or downloads submitted repositories. Execution occurs
-only in the repository-controlled E2E after metadata, paths, digests, and a review record bound to the
-same source scope and digest map pass. The E2E discovers every submission directory so a new packet
-cannot silently receive static validation alone.
+The validator never executes submitted commands or downloads submitted repositories. It scans packet
+metadata, verification evidence, and the security note for credential-like or private content without
+reflecting submitted values in findings. Execution occurs only in the repository-controlled E2E after
+metadata, paths, complete source digests, and a review record bound to the same source scope and digest
+map pass. The E2E discovers every submission directory so a new packet cannot silently receive static
+validation alone.
 
 ## 4. Run the submission gates
 
