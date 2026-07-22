@@ -86,7 +86,7 @@ export function executePluginAuthoringBuildWorker(requestPath) {
     mkdirSync(manifestRoot, { recursive: true, mode: 0o700 });
     mkdirSync(stateRoot, { recursive: true, mode: 0o700 });
     mkdirSync(binderRoot, { recursive: true, mode: 0o700 });
-    writeFileSync(join(stateRoot, "index.js"), "export const definitions = new WeakMap();\n", {
+    writeFileSync(join(stateRoot, "index.js"), pluginStateRuntime(), {
       encoding: "utf8",
       flag: "wx",
       mode: 0o600
@@ -307,16 +307,32 @@ export declare function definePlugin(input: DefinePluginInput): unknown;
 `;
 }
 
+function pluginStateRuntime() {
+  // Capture the built-ins before candidate modules execute. The exported functions close over the
+  // original accessors, so prototype poisoning during candidate initialization cannot replace a
+  // reviewed binding lookup with candidate-controlled executable code.
+  return `const definitions = new WeakMap();
+const safeGet = Function.prototype.call.bind(WeakMap.prototype.get);
+const safeSet = Function.prototype.call.bind(WeakMap.prototype.set);
+export function registerPluginDefinition(plugin, bind) {
+  safeSet(definitions, plugin, bind);
+}
+export function readPluginDefinition(plugin) {
+  return safeGet(definitions, plugin);
+}
+`;
+}
+
 function pluginSdkRuntime(stateRoot) {
   // Keep this runtime deliberately smaller than the public SDK surface: candidate code can only
   // receive the reviewed definePlugin dispatch behavior needed by the fixed authoring corpus.
-  return `import { definitions } from ${JSON.stringify(join(stateRoot, "index.js"))};
+  return `import { registerPluginDefinition } from ${JSON.stringify(join(stateRoot, "index.js"))};
 export function definePlugin(input) {
   const plugin = {
     manifest: input.manifest,
     dispatch: (request) => dispatchPlugin(input, request)
   };
-  definitions.set(plugin, (reviewedManifest) => {
+  registerPluginDefinition(plugin, (reviewedManifest) => {
     const reviewedDefinition = { manifest: reviewedManifest, handlers: input.handlers };
     return {
       manifest: reviewedManifest,
@@ -353,9 +369,9 @@ async function dispatchPlugin(input, request) {
 function reviewedPluginBinderRuntime(stateRoot) {
   // This module is imported only by the generated wrapper. Candidate source cannot name its path:
   // candidate imports are restricted to the public SDK root and relatives inside the source tree.
-  return `import { definitions } from ${JSON.stringify(join(stateRoot, "index.js"))};
+  return `import { readPluginDefinition } from ${JSON.stringify(join(stateRoot, "index.js"))};
 export function bindReviewedPlugin(plugin, reviewedManifest) {
-  const bind = definitions.get(plugin);
+  const bind = readPluginDefinition(plugin);
   if (bind === undefined) throw new Error("plugin must be created by definePlugin");
   return bind(reviewedManifest);
 }

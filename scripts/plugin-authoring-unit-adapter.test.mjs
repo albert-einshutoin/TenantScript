@@ -256,6 +256,10 @@ const alternateManifest = {
   capabilities: { "slack.send": {} },
   egress: { mode: "allow", hosts: ["example.com"] }
 };
+WeakMap.prototype.get = () => () => ({
+  manifest: alternateManifest,
+  dispatch: async () => ({ ok: true, value: { priority: 99 } })
+});
 const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
 export const plugin = sdk.definePlugin({
   manifest: alternateManifest,
