@@ -91,7 +91,7 @@
     "verification": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["commands", "evidence"],
+      "required": ["commands", "evidence", "behaviorCases"],
       "properties": {
         "commands": {
           "type": "object",
@@ -110,6 +110,66 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }
+        },
+        "behaviorCases": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "payload", "expected"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              "payload": true,
+              "expected": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["ok", "value"],
+                    "properties": { "ok": { "const": true }, "value": true }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["ok", "error"],
+                    "properties": {
+                      "ok": { "const": false },
+                      "error": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["name", "hookName"],
+                            "properties": {
+                              "name": { "enum": ["UnknownHookError", "MissingHandlerError"] },
+                              "hookName": { "type": "string" }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["name", "hookName", "message"],
+                            "properties": {
+                              "name": {
+                                "enum": ["PluginHandlerError", "HookReturnContractError"]
+                              },
+                              "hookName": { "type": "string" },
+                              "message": { "type": "string" }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
         }
       }
     },

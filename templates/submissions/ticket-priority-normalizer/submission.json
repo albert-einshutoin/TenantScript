@@ -38,7 +38,38 @@
       "test": "pnpm test",
       "audit": "ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/plugin.cjs"
     },
-    "evidence": ["templates/submissions/ticket-priority-normalizer/verification.md"]
+    "evidence": ["templates/submissions/ticket-priority-normalizer/verification.md"],
+    "behaviorCases": [
+      {
+        "name": "normalizes-bounded-ticket",
+        "payload": {
+          "priority": "high",
+          "subject": "  Database unavailable  "
+        },
+        "expected": {
+          "ok": true,
+          "value": {
+            "priority": "high",
+            "subject": "Database unavailable"
+          }
+        }
+      },
+      {
+        "name": "rejects-unsupported-priority",
+        "payload": {
+          "priority": "urgent",
+          "subject": "Refund requested"
+        },
+        "expected": {
+          "ok": false,
+          "error": {
+            "name": "PluginHandlerError",
+            "hookName": "ticket.created",
+            "message": "invalid ticket payload"
+          }
+        }
+      }
+    ]
   },
   "reviewRecord": "docs/security/plugin-reviews/TS-PLUGIN-REVIEW-2026-002.json",
   "securityNote": "templates/submissions/ticket-priority-normalizer/SECURITY.md",

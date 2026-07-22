@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T05:24:00.000Z",
+  "reviewedAt": "2026-07-22T05:47:39.000Z",
   "domains": [
     {
       "name": "security",
@@ -51,7 +51,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The E2E runs tsc with no emit and exercises the plugin against freshly packed public package contents. The package test script is canonical and the E2E directly runs the required digest-bound behavior-test file. The E2E discovers every submission directory rather than naming one packet and compares manifest hook, capabilities, configuration keys, and egress with packet metadata."
+      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The E2E runs tsc with no emit and exercises the plugin against freshly packed public package contents. The package test script is canonical and the E2E directly runs the required digest-bound behavior-test file. The E2E discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then loads the generated CommonJS bundle and dispatches the packet's bounded success and failure cases with exact-result and zero-capability-call assertions."
     },
     {
       "name": "operations",
@@ -63,7 +63,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts",
         "templates/submissions/ticket-priority-normalizer/verification.md"
       ],
-      "notes": "The handler is side-effect free, bounded by fixed input length and manifest limits, has no retry or external service behavior, and is continuously built, tested, bundled, and audited in an accountless lane. Its canonical build emits the manifest and bundle that the documented audit command consumes."
+      "notes": "The handler is side-effect free, bounded by fixed input length and manifest limits, has no retry or external service behavior, and is continuously built, tested, bundled, dispatched, and audited in an accountless lane. Its canonical build emits the manifest and bundle that the documented audit command and packet-owned behavior cases consume."
     },
     {
       "name": "documentation",
@@ -73,7 +73,7 @@
         "templates/submissions/ticket-priority-normalizer/SECURITY.md",
         "templates/submissions/ticket-priority-normalizer/verification.md"
       ],
-      "notes": "The packet records its purpose, immutable source, hook, capability and egress boundary, canonical verification commands, evidence, security note, review record, and explicit non-guarantees. Repository-owned provenance is machine-bound to the simulation kind and cannot be represented as community adoption."
+      "notes": "The packet records its purpose, immutable source, hook, capability and egress boundary, canonical verification commands, bounded generated-bundle behavior cases, evidence, security note, review record, and explicit non-guarantees. Repository-owned provenance is machine-bound to the simulation kind and cannot be represented as community adoption."
     },
     {
       "name": "license",
@@ -87,10 +87,10 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "e912a759c364911f58d9aabc7c049cf169a9ba4292ef82805318590218bc69c1",
-    "scripts/check-template-submissions.test.mjs": "c56a15c57189941093ec87eb2769e7102784f3e6110ca36db68bb1afadfd5ad8",
-    "scripts/template-submission-e2e.test.mjs": "0cb30b633fd8c7a545aaf21e11c1eb4ba068417d2f3b42ee33be586369081b6a",
-    "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
+    "scripts/check-template-submissions.mjs": "b48f47140f365304892d2193ff6c65c6a0162d6afb251527d7f9b8ecbad63ba1",
+    "scripts/check-template-submissions.test.mjs": "82c526d4c16fd3cf02a3d9169a6d8929d3e722bd83fd4ade225cbe09d3f02339",
+    "scripts/template-submission-e2e.test.mjs": "d7e870ebfe41cfcf8f869d3eda0bf707cd6f6d9fab381e27b74a89d3f8b6478e",
+    "templates/submission.schema.json": "8b2a57f834ebdae76833cb14f245260a8cc43014343b8d90609528d5cdf897b4",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
     "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
@@ -98,7 +98,7 @@
     "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
     "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "9470e9dd5d23f5127fcb7bff0ae7e26689da37bdc682b413d6fbe81ac8853b06",
     "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4",
-    "templates/submissions/ticket-priority-normalizer/verification.md": "f64d10561e2f6ca1a7c14bf6404cfc4b554f9f6dcd27d0e91dc772769d2e8f76"
+    "templates/submissions/ticket-priority-normalizer/verification.md": "0b3ad2a15b5e3f9322895cb356c95c7110c8c298fe865f104da2d40087f708c2"
   },
   "decision": "approve",
   "blockingFindings": [],

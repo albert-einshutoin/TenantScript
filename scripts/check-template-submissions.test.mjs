@@ -121,7 +121,29 @@ function validSubmission(root, revision) {
         audit:
           "ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/plugin.cjs"
       },
-      evidence: ["templates/submissions/example-template/verification.md"]
+      evidence: ["templates/submissions/example-template/verification.md"],
+      behaviorCases: [
+        {
+          name: "accepts-ticket",
+          payload: { priority: "high", subject: "Database unavailable" },
+          expected: {
+            ok: true,
+            value: { priority: "high", subject: "Database unavailable" }
+          }
+        },
+        {
+          name: "rejects-ticket",
+          payload: { priority: "urgent", subject: "Refund requested" },
+          expected: {
+            ok: false,
+            error: {
+              name: "PluginHandlerError",
+              hookName: "ticket.created",
+              message: "invalid ticket payload"
+            }
+          }
+        }
+      ]
     },
     reviewRecord: "docs/security/plugin-reviews/TS-PLUGIN-REVIEW-2026-999.json",
     securityNote: "templates/submissions/example-template/SECURITY.md",
@@ -149,6 +171,65 @@ test("accepts a digest-bound simulated submission with deterministic output", ()
     assert.equal(second.stdout, first.stdout);
     assert.equal(second.stderr, "");
   });
+});
+
+test("requires bounded success and failure cases for generated bundle behavior", () => {
+  withRepository(({ root, submission }) => {
+    delete submission.verification.behaviorCases;
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /verification\.behaviorCases must contain between 2 and 16 cases/);
+  });
+});
+
+test("rejects unbounded, unordered, or open generated bundle behavior cases", () => {
+  const violations = [
+    {
+      mutate(submission) {
+        submission.verification.behaviorCases[1].expected = { ok: true, value: {} };
+      },
+      message: /behaviorCases must include success and failure results/
+    },
+    {
+      mutate(submission) {
+        submission.verification.behaviorCases.reverse();
+      },
+      message: /behaviorCases names must be sorted and unique/
+    },
+    {
+      mutate(submission) {
+        submission.verification.behaviorCases[0].unexpected = true;
+      },
+      message: /unknown field verification\.behaviorCases\.unexpected/
+    },
+    {
+      mutate(submission) {
+        submission.verification.behaviorCases[0].payload = { subject: "x".repeat(17 * 1024) };
+      },
+      message: /behaviorCases entry exceeds the 16 KiB limit/
+    },
+    {
+      mutate(submission) {
+        submission.verification.behaviorCases[0].expected.unexpected = true;
+      },
+      message: /unknown field verification\.behaviorCases\.expected\.unexpected/
+    }
+  ];
+
+  for (const { mutate, message } of violations) {
+    withRepository(({ root, submission }) => {
+      mutate(submission);
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, message);
+    });
+  }
 });
 
 test("rejects closed-schema, identity, SDK, hook, and egress violations", () => {
@@ -885,6 +966,7 @@ test("publishes a closed JSON Schema for the submission packet", () => {
   assert.deepEqual(schema.properties.kind.enum, ["community", "simulation"]);
   assert.equal(schema.properties.source.additionalProperties, false);
   assert.equal(schema.properties.verification.additionalProperties, false);
+  assert.ok(schema.properties.verification.required.includes("behaviorCases"));
   for (const required of [
     "source",
     "sdk",

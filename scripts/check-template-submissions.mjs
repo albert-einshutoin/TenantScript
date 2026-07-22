@@ -9,6 +9,7 @@ const submissionsRoot = resolve(repoRoot, "templates", "submissions");
 const canonicalRepositoryIdentity = "github.com/albert-einshutoin/tenantscript";
 const maximumSubmissionBytes = 256 * 1024;
 const maximumEvidenceBytes = 1024 * 1024;
+const maximumBehaviorCaseBytes = 16 * 1024;
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const hookNamePattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const exactSemverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -193,7 +194,7 @@ function validateSubmission(directoryName) {
   validateSortedStrings(submission.capabilities, "capabilities", displayPath, capabilityPattern);
   validateEgress(submission.egress, displayPath);
   validateSortedStrings(submission.configKeys, "configKeys", displayPath, configKeyPattern);
-  validateVerification(submission.verification, displayPath);
+  validateVerification(submission.verification, submission.hook?.name, displayPath);
   validateReviewRecord(submission.reviewRecord, submission.source, displayPath);
   const expectedSecurityNote = `templates/submissions/${directoryName}/SECURITY.md`;
   // Keep security guidance owned by the submitted packet so a generic evidence file cannot
@@ -520,12 +521,12 @@ function validateEgress(value, displayPath) {
   }
 }
 
-function validateVerification(value, displayPath) {
+function validateVerification(value, hookName, displayPath) {
   if (!isRecord(value)) {
     errors.push(`${displayPath}: verification must be an object`);
     return;
   }
-  validateAllowedFields(value, ["commands", "evidence"], displayPath, {
+  validateAllowedFields(value, ["commands", "evidence", "behaviorCases"], displayPath, {
     prefix: "verification."
   });
   if (!isRecord(value.commands)) {
@@ -559,6 +560,95 @@ function validateVerification(value, displayPath) {
         }
       }
     }
+  }
+  validateBehaviorCases(value.behaviorCases, hookName, displayPath);
+}
+
+function validateBehaviorCases(value, hookName, displayPath) {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 16) {
+    errors.push(`${displayPath}: verification.behaviorCases must contain between 2 and 16 cases`);
+    return;
+  }
+
+  const names = [];
+  let hasSuccess = false;
+  let hasFailure = false;
+  for (const behaviorCase of value) {
+    if (!isRecord(behaviorCase)) {
+      errors.push(`${displayPath}: verification.behaviorCases entries must be objects`);
+      continue;
+    }
+    validateAllowedFields(behaviorCase, ["name", "payload", "expected"], displayPath, {
+      prefix: "verification.behaviorCases."
+    });
+    for (const field of ["name", "payload", "expected"]) {
+      if (!(field in behaviorCase)) {
+        errors.push(`${displayPath}: verification.behaviorCases entry is missing ${field}`);
+      }
+    }
+    if (typeof behaviorCase.name !== "string" || !slugPattern.test(behaviorCase.name)) {
+      errors.push(`${displayPath}: verification.behaviorCases name is invalid`);
+    } else {
+      names.push(behaviorCase.name);
+    }
+    // Each case is executed against submitted code. Keep its parsed input bounded independently of
+    // the packet limit so one fixture cannot dominate CI memory or bundle-dispatch time.
+    if (Buffer.byteLength(JSON.stringify(behaviorCase), "utf8") > maximumBehaviorCaseBytes) {
+      errors.push(`${displayPath}: verification.behaviorCases entry exceeds the 16 KiB limit`);
+    }
+    validateExpectedDispatchResult(behaviorCase.expected, hookName, displayPath);
+    if (isRecord(behaviorCase.expected) && behaviorCase.expected.ok === true) {
+      hasSuccess = true;
+    } else if (isRecord(behaviorCase.expected) && behaviorCase.expected.ok === false) {
+      hasFailure = true;
+    }
+  }
+  if (!isSortedUnique(names) || names.length !== value.length) {
+    errors.push(`${displayPath}: verification.behaviorCases names must be sorted and unique`);
+  }
+  if (!hasSuccess || !hasFailure) {
+    errors.push(
+      `${displayPath}: verification.behaviorCases must include success and failure results`
+    );
+  }
+}
+
+function validateExpectedDispatchResult(value, hookName, displayPath) {
+  const prefix = "verification.behaviorCases.expected.";
+  if (!isRecord(value) || typeof value.ok !== "boolean") {
+    errors.push(`${displayPath}: verification.behaviorCases expected must contain boolean ok`);
+    return;
+  }
+  if (value.ok) {
+    validateAllowedFields(value, ["ok", "value"], displayPath, { prefix });
+    if (!("value" in value)) {
+      errors.push(`${displayPath}: verification.behaviorCases success is missing value`);
+    }
+    return;
+  }
+
+  validateAllowedFields(value, ["ok", "error"], displayPath, { prefix });
+  if (!isRecord(value.error)) {
+    errors.push(`${displayPath}: verification.behaviorCases failure is missing error`);
+    return;
+  }
+  const errorsWithMessages = new Set(["PluginHandlerError", "HookReturnContractError"]);
+  const errorsWithoutMessages = new Set(["UnknownHookError", "MissingHandlerError"]);
+  const errorName = value.error.name;
+  const allowedErrorFields = errorsWithMessages.has(errorName)
+    ? ["name", "hookName", "message"]
+    : ["name", "hookName"];
+  validateAllowedFields(value.error, allowedErrorFields, displayPath, {
+    prefix: `${prefix}error.`
+  });
+  if (!errorsWithMessages.has(errorName) && !errorsWithoutMessages.has(errorName)) {
+    errors.push(`${displayPath}: verification.behaviorCases error name is invalid`);
+  }
+  if (value.error.hookName !== hookName) {
+    errors.push(`${displayPath}: verification.behaviorCases error hookName must match hook.name`);
+  }
+  if (errorsWithMessages.has(errorName) && typeof value.error.message !== "string") {
+    errors.push(`${displayPath}: verification.behaviorCases error message is required`);
   }
 }
 
