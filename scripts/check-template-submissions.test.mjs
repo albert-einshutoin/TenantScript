@@ -25,6 +25,24 @@ function withRepository(run) {
     writeFileSync(join(pluginRoot, "src", "index.ts"), "export const plugin = {};\n");
     writeFileSync(join(pluginRoot, "src", "manifest.ts"), "export const manifest = {};\n");
     writeFileSync(join(pluginRoot, "test", "plugin.test.ts"), "export {};\n");
+    writeFileSync(
+      join(pluginRoot, "tsconfig.json"),
+      `${JSON.stringify({
+        compilerOptions: {
+          target: "ES2022",
+          lib: ["ES2022"],
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: true,
+          noUncheckedIndexedAccess: true,
+          exactOptionalPropertyTypes: true,
+          verbatimModuleSyntax: true,
+          isolatedModules: true,
+          skipLibCheck: true
+        },
+        include: ["src/**/*.ts", "test/**/*.ts"]
+      })}\n`
+    );
     writeFileSync(join(packetRoot, "SECURITY.md"), "Not a certification. Synthetic input only.\n");
     writeFileSync(join(packetRoot, "verification.md"), "Accountless checks passed.\n");
     execFileSync("git", ["init", "-q"], { cwd: root });
@@ -71,7 +89,8 @@ function validSubmission(root, revision) {
     "templates/submissions/example-template/plugin/package.json",
     "templates/submissions/example-template/plugin/src/index.ts",
     "templates/submissions/example-template/plugin/src/manifest.ts",
-    "templates/submissions/example-template/plugin/test/plugin.test.ts"
+    "templates/submissions/example-template/plugin/test/plugin.test.ts",
+    "templates/submissions/example-template/plugin/tsconfig.json"
   ]) {
     files[path] = createHash("sha256")
       .update(readFileSync(join(root, path)))
@@ -338,6 +357,47 @@ test("requires the digest map to cover every copied source file", () => {
 
     assert.equal(result.status, 1);
     assert.match(result.stderr, /source\.files must cover every regular file in source\.directory/);
+  });
+});
+
+test("requires a strict TypeScript configuration for submitted source", () => {
+  withRepository(({ root, submission }) => {
+    const tsconfigPath = "templates/submissions/example-template/plugin/tsconfig.json";
+    writeFileSync(
+      join(root, tsconfigPath),
+      `${JSON.stringify({
+        compilerOptions: { strict: false },
+        include: ["src/**/*.ts", "test/**/*.ts"]
+      })}\n`
+    );
+    submission.source.files[tsconfigPath] = createHash("sha256")
+      .update(readFileSync(join(root, tsconfigPath)))
+      .digest("hex");
+    submission.source.files = Object.fromEntries(
+      Object.entries(submission.source.files).sort(([left], [right]) => left.localeCompare(right))
+    );
+    submission.source.revision = "1".repeat(40);
+    writeReviewRecord(root, submission);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /source TypeScript configuration must enforce strict options/);
+  });
+
+  withRepository(({ root, submission }) => {
+    const tsconfigPath = "templates/submissions/example-template/plugin/tsconfig.json";
+    rmSync(join(root, tsconfigPath));
+    delete submission.source.files[tsconfigPath];
+    submission.source.revision = "1".repeat(40);
+    writeReviewRecord(root, submission);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /source\.files is missing a required plugin file/);
   });
 });
 

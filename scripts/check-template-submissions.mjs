@@ -23,8 +23,21 @@ const requiredSourceSuffixes = [
   "package.json",
   "src/index.ts",
   "src/manifest.ts",
-  "test/plugin.test.ts"
+  "test/plugin.test.ts",
+  "tsconfig.json"
 ];
+const requiredCompilerOptions = {
+  target: "ES2022",
+  lib: ["ES2022"],
+  module: "NodeNext",
+  moduleResolution: "NodeNext",
+  strict: true,
+  noUncheckedIndexedAccess: true,
+  exactOptionalPropertyTypes: true,
+  verbatimModuleSyntax: true,
+  isolatedModules: true,
+  skipLibCheck: true
+};
 const unsafePackageManagerControlNames = new Set([
   ".npmrc",
   ".pnpmfile.cjs",
@@ -352,6 +365,36 @@ function validateSource(value, sdk, license, directoryName, displayPath) {
         errors.push(`${displayPath}: source package metadata is invalid`);
       }
     }
+    validateTypeScriptConfiguration(value.directory, displayPath);
+  }
+}
+
+function validateTypeScriptConfiguration(directory, displayPath) {
+  const content = readRegularRepositoryFile(`${directory}/tsconfig.json`);
+  if (content === undefined) return;
+  try {
+    const configuration = JSON.parse(content.toString("utf8"));
+    const compilerOptions = isRecord(configuration) ? configuration.compilerOptions : undefined;
+    const expectedOptionNames = Object.keys(requiredCompilerOptions);
+    const hasExactTopLevel =
+      isRecord(configuration) &&
+      sameStringArray(Object.keys(configuration).sort(), ["compilerOptions", "include"]);
+    const hasExactCompilerOptions =
+      isRecord(compilerOptions) &&
+      Object.keys(compilerOptions).length === expectedOptionNames.length &&
+      expectedOptionNames.every((name) => {
+        const expected = requiredCompilerOptions[name];
+        const actual = compilerOptions[name];
+        return Array.isArray(expected) ? sameStringArray(actual, expected) : actual === expected;
+      });
+    const hasExactIncludes =
+      isRecord(configuration) &&
+      sameStringArray(configuration.include, ["src/**/*.ts", "test/**/*.ts"]);
+    if (!hasExactTopLevel || !hasExactCompilerOptions || !hasExactIncludes) {
+      errors.push(`${displayPath}: source TypeScript configuration must enforce strict options`);
+    }
+  } catch {
+    errors.push(`${displayPath}: source TypeScript configuration must enforce strict options`);
   }
 }
 

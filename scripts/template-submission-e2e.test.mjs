@@ -99,6 +99,7 @@ async function exerciseSubmission(submission) {
     // install did not pre-populate artifacts that a no-op build could silently reuse.
     await assert.rejects(readFile(join(pluginDirectory, "manifest.json")), { code: "ENOENT" });
     await assert.rejects(readFile(join(pluginDirectory, "dist", "plugin.cjs")), { code: "ENOENT" });
+    run("pnpm", ["--dir", pluginDirectory, "exec", "tsc", "--noEmit"]);
     run("pnpm", ["--dir", pluginDirectory, "build"], { env: commandEnvironment });
     const manifestJson = await readFile(join(pluginDirectory, "manifest.json"), "utf8");
     await readFile(join(pluginDirectory, "dist", "plugin.cjs"), "utf8");
