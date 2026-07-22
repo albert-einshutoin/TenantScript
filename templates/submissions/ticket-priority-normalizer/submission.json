@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "kind": "simulation",
+  "slug": "ticket-priority-normalizer",
+  "displayName": "Ticket priority normalizer",
+  "summary": "Normalizes a bounded support ticket subject and priority without capabilities or egress.",
+  "license": "Apache-2.0",
+  "source": {
+    "repository": "https://github.com/albert-einshutoin/TenantScript",
+    "revision": "dc04cd6a3916f31417eb0ec664df90ccedb6d725",
+    "directory": "templates/submissions/ticket-priority-normalizer/plugin",
+    "files": {
+      "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "b2ca30cc16ea05949fe22adbf6ec8ddea4b62c6dd8740824f33b8547e9db140b",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
+      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "8bcc3ce4c8596f19e1dffcfec39ba370fe971ecd38bf38e187cc05fe11598f4e",
+      "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4"
+    }
+  },
+  "sdk": {
+    "range": "^0.0.0",
+    "lastTestedVersion": "0.0.0"
+  },
+  "hook": {
+    "name": "ticket.created",
+    "type": "transform"
+  },
+  "capabilities": [],
+  "egress": {
+    "mode": "deny",
+    "allowHosts": []
+  },
+  "configKeys": [],
+  "verification": {
+    "commands": {
+      "build": "pnpm build",
+      "test": "pnpm test",
+      "audit": "ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/plugin.cjs"
+    },
+    "evidence": ["templates/submissions/ticket-priority-normalizer/verification.md"]
+  },
+  "reviewRecord": "docs/security/plugin-reviews/TS-PLUGIN-REVIEW-2026-002.json",
+  "securityNote": "templates/submissions/ticket-priority-normalizer/SECURITY.md",
+  "nonGuarantees": [
+    "This first-party simulation is not an independent review or community endorsement.",
+    "This repository check is not a certification, live deployment proof, or public npm installation."
+  ]
+}

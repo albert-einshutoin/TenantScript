@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "id": "TS-PLUGIN-REVIEW-2026-002",
+  "baselineCommit": "dc04cd6a3916f31417eb0ec664df90ccedb6d725",
+  "target": {
+    "name": "Simulated ticket priority normalizer template submission",
+    "scope": [
+      "templates/submissions/ticket-priority-normalizer/plugin/package.json",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
+      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts",
+      "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
+    ],
+    "sourceDigests": {
+      "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "b2ca30cc16ea05949fe22adbf6ec8ddea4b62c6dd8740824f33b8547e9db140b",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
+      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "8bcc3ce4c8596f19e1dffcfec39ba370fe971ecd38bf38e187cc05fe11598f4e",
+      "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4"
+    }
+  },
+  "reviewer": {
+    "identity": "TenantScript maintainers",
+    "relationship": "First-party review of a repository-owned simulated community submission"
+  },
+  "reviewedAt": "2026-07-22T00:10:23.000Z",
+  "domains": [
+    {
+      "name": "security",
+      "status": "pass",
+      "evidence": [
+        "scripts/check-template-submissions.mjs",
+        "scripts/check-template-submissions.test.mjs",
+        "templates/submissions/ticket-priority-normalizer/SECURITY.md",
+        "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts",
+        "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
+        "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
+      ],
+      "notes": "The transform validates bounded untrusted input before returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive content, mutable provenance, source drift, path escape, symlinks, and unsafe guarantee language without reflecting submitted values."
+    },
+    {
+      "name": "compatibility",
+      "status": "pass",
+      "evidence": [
+        "scripts/template-submission-e2e.test.mjs",
+        "templates/submission.schema.json",
+        "templates/submissions/ticket-priority-normalizer/plugin/package.json",
+        "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
+        "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
+      ],
+      "notes": "The packet pins exact tested package versions, records a bounded SDK range and hook contract, uses strict ESM TypeScript, and is exercised against freshly packed public package contents."
+    },
+    {
+      "name": "operations",
+      "status": "pass",
+      "evidence": [
+        "scripts/template-submission-e2e.test.mjs",
+        "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
+        "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts",
+        "templates/submissions/ticket-priority-normalizer/verification.md"
+      ],
+      "notes": "The handler is side-effect free, bounded by fixed input length and manifest limits, has no retry or external service behavior, and is continuously built, tested, bundled, and audited in an accountless lane."
+    },
+    {
+      "name": "documentation",
+      "status": "pass",
+      "evidence": [
+        "templates/submission.schema.json",
+        "templates/submissions/ticket-priority-normalizer/SECURITY.md",
+        "templates/submissions/ticket-priority-normalizer/verification.md"
+      ],
+      "notes": "The packet records its purpose, immutable source, hook, capability and egress boundary, canonical verification commands, evidence, security note, review record, and explicit non-guarantees."
+    },
+    {
+      "name": "license",
+      "status": "pass",
+      "evidence": [
+        "LICENSE",
+        "templates/submissions/ticket-priority-normalizer/plugin/package.json"
+      ],
+      "notes": "The simulated source is repository-owned, declares Apache-2.0 consistently with the repository, and contains no vendored code, assets, runtime dependencies, or generated binary artifacts."
+    }
+  ],
+  "evidenceDigests": {
+    "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
+    "scripts/check-template-submissions.mjs": "d1d88967476d772871c837e2246b982ed28e753caded07002df0045953091cb4",
+    "scripts/check-template-submissions.test.mjs": "8a8f28c3e6ab0d49045229397729d7a4782302ff27c81f4dcd0e83f64cdca711",
+    "scripts/template-submission-e2e.test.mjs": "23217c601850b73ff193d2921a5ab7a2ac7a2328f19ef45509b825c3184e7f9f",
+    "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
+    "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
+    "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
+    "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "b2ca30cc16ea05949fe22adbf6ec8ddea4b62c6dd8740824f33b8547e9db140b",
+    "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
+    "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "8bcc3ce4c8596f19e1dffcfec39ba370fe971ecd38bf38e187cc05fe11598f4e",
+    "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4",
+    "templates/submissions/ticket-priority-normalizer/verification.md": "1bf03a2cb9995caed4d25aa87e75c8056ace84f997d78b67b55cf67cc5447336"
+  },
+  "decision": "approve",
+  "blockingFindings": [],
+  "unverified": [
+    {
+      "item": "Independent review by a community contributor",
+      "required": false,
+      "reason": "This is an explicitly first-party simulation; no external contributor identity or endorsement is claimed."
+    },
+    {
+      "item": "Public npm installation and live Cloudflare execution",
+      "required": false,
+      "reason": "The accountless E2E uses packed repository packages and does not access credentials or a live provider environment."
+    }
+  ],
+  "limitations": [
+    "The decision covers only the listed source and evidence digests at the immutable baseline.",
+    "The simulation proves the repository workflow can accept one bounded packet; it is not evidence of community adoption or independent review.",
+    "The example ticket contract is synthetic and must not be treated as a production support schema or data-handling policy."
+  ],
+  "nonGuarantees": [
+    "This approval is not a security certification, vulnerability-free claim, community endorsement, or independent audit.",
+    "It does not claim public registry installation, live deployment, future compatibility, or suitability for a production tenant."
+  ]
+}
