@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "baselineRevision": "441ae870ac58d6693f8576fd6b081323611d1739",
+  "requiredJudges": ["manifest", "build", "unit-test", "security-test", "audit", "least-privilege"],
+  "tasks": [
+    {
+      "id": "approval-invoice-threshold",
+      "title": "Require approval for high-value invoices",
+      "category": "approval",
+      "requirement": "Create a policy plugin for invoice.created that requests human approval when the integer total is at least 100000 cents and otherwise allows processing. Reject malformed or non-integer totals with one fixed error. Add boundary and malformed-input tests.",
+      "hook": { "name": "invoice.created", "type": "policy" },
+      "capabilities": [],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "approval-refund-review",
+      "title": "Review refunds outside the automatic window",
+      "category": "approval",
+      "requirement": "Create a policy plugin for refund.requested that requires approval when the request is more than 30 days after purchase or the age cannot be safely parsed. Allow only bounded non-negative integer day values. Add tests for both sides of the boundary and malformed input.",
+      "hook": { "name": "refund.requested", "type": "policy" },
+      "capabilities": [],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "capability-github-issue",
+      "title": "Open a GitHub issue for a failed deployment",
+      "category": "capability",
+      "requirement": "Create an event plugin for deployment.failed that calls github.issue.create exactly once with a bounded title and body derived from validated fields. Request only the required capability, return a stable receipt, and add tests for malformed input and provider failure.",
+      "hook": { "name": "deployment.failed", "type": "event" },
+      "capabilities": ["github.issue.create"],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "capability-slack-alert",
+      "title": "Send a Slack alert for a blocked order",
+      "category": "capability",
+      "requirement": "Create an event plugin for order.blocked that calls slack.send exactly once with a bounded channel and message after validating the order identifier and reason. Request no capability other than slack.send and use one stable error for invalid payloads.",
+      "hook": { "name": "order.blocked", "type": "event" },
+      "capabilities": ["slack.send"],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "error-malformed-payload",
+      "title": "Fail closed on hostile customer payloads",
+      "category": "error-handling",
+      "requirement": "Create a transform plugin for customer.updated that returns only a bounded customer identifier and display name. Reject null values, arrays, accessors that throw, oversized strings, and unexpected types with one non-reflective error. Do not copy unknown fields.",
+      "hook": { "name": "customer.updated", "type": "transform" },
+      "capabilities": [],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "error-provider-failure",
+      "title": "Contain provider failure details",
+      "category": "error-handling",
+      "requirement": "Create an event plugin for incident.opened that sends one slack.send notification. If the capability rejects or returns malformed data, return one stable failure without exposing provider details or retrying the mutation. Add success, rejection, and malformed-result tests.",
+      "hook": { "name": "incident.opened", "type": "event" },
+      "capabilities": ["slack.send"],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "policy-api-method-allowlist",
+      "title": "Allow only reviewed API methods",
+      "category": "policy",
+      "requirement": "Create a policy plugin for api.requested that allows only GET and POST for the exact configured public origin. Deny redirects, credentials in URLs, all other methods, malformed URLs, and unknown fields. Add tests for every deny branch.",
+      "hook": { "name": "api.requested", "type": "policy" },
+      "capabilities": [],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "policy-data-residency",
+      "title": "Enforce an exact data residency region",
+      "category": "policy",
+      "requirement": "Create a policy plugin for record.export-requested that allows export only when the validated region is exactly eu-west. Deny missing, differently cased, unknown, or non-string regions with one stable reason and add table-driven tests.",
+      "hook": { "name": "record.export-requested", "type": "policy" },
+      "capabilities": [],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "webhook-currency-normalizer",
+      "title": "Normalize a payment webhook currency",
+      "category": "webhook-transform",
+      "requirement": "Create a transform plugin for payment.received that validates a three-letter ASCII currency code, normalizes it to uppercase, preserves a bounded integer amount, and returns only those two fields. Add tests for lowercase, invalid length, Unicode, fractional amounts, and extra input.",
+      "hook": { "name": "payment.received", "type": "transform" },
+      "capabilities": [],
+      "egress": { "mode": "deny" }
+    },
+    {
+      "id": "webhook-ticket-priority",
+      "title": "Normalize support ticket priority",
+      "category": "webhook-transform",
+      "requirement": "Create a transform plugin for ticket.created that maps low, normal, high, and urgent to integer priorities 1 through 4. Treat unknown or malformed values as normal without reflecting input, return only the normalized priority, and add exhaustive tests.",
+      "hook": { "name": "ticket.created", "type": "transform" },
+      "capabilities": [],
+      "egress": { "mode": "deny" }
+    }
+  ]
+}
