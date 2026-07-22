@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { isIP } from "node:net";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const repoRoot = resolve(process.argv[2] ?? process.cwd());
 const submissionsRoot = resolve(repoRoot, "templates", "submissions");
-const canonicalRepository = "https://github.com/albert-einshutoin/TenantScript";
+const canonicalRepositoryIdentity = "github.com/albert-einshutoin/tenantscript";
 const maximumSubmissionBytes = 256 * 1024;
 const maximumEvidenceBytes = 1024 * 1024;
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -212,7 +213,7 @@ function validateSource(value, license, displayPath) {
     }
     if (
       revisionIsValid &&
-      value.repository === canonicalRepository &&
+      repositoryIdentity(value.repository) === canonicalRepositoryIdentity &&
       !matchesGitRevision(value.revision, path, digest)
     ) {
       errors.push(`${displayPath}: source revision does not contain the reviewed file digest`);
@@ -414,21 +415,52 @@ function isSortedUnique(value) {
 }
 
 function isPublicRepositoryUrl(value) {
-  if (typeof value !== "string") return false;
+  return repositoryIdentity(value) !== undefined;
+}
+
+function repositoryIdentity(value) {
+  if (typeof value !== "string") return undefined;
   try {
     const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      url.username === "" &&
-      url.password === "" &&
-      url.search === "" &&
-      url.hash === "" &&
-      url.hostname !== "localhost" &&
-      url.pathname.split("/").filter(Boolean).length >= 2
-    );
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+    if (
+      url.protocol !== "https:" ||
+      url.username !== "" ||
+      url.password !== "" ||
+      url.port !== "" ||
+      url.search !== "" ||
+      url.hash !== "" ||
+      url.pathname.includes("%") ||
+      !isPublicHostname(hostname)
+    ) {
+      return undefined;
+    }
+    const pathname = url.pathname.replace(/\/+$/u, "").replace(/\.git$/iu, "");
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length < 2) return undefined;
+    return `${hostname}/${segments.map((segment) => segment.toLowerCase()).join("/")}`;
   } catch {
+    return undefined;
+  }
+}
+
+function isPublicHostname(hostname) {
+  const ipVersion = isIP(hostname);
+  if (ipVersion !== 0) {
+    // Public repository provenance should use a stable DNS identity. Rejecting every IP literal also
+    // avoids loopback, private, link-local, documentation, and IPv6-mapped address edge cases.
     return false;
   }
+  if (
+    !hostname.includes(".") ||
+    hostname.endsWith(".") ||
+    /(?:^|\.)(?:localhost|local|internal|lan|home|test|invalid|example)$/u.test(hostname)
+  ) {
+    return false;
+  }
+  return hostname
+    .split(".")
+    .every((label) => /^(?:[a-z0-9]|[a-z0-9][a-z0-9-]{0,61}[a-z0-9])$/u.test(label));
 }
 
 function isRepositoryPath(value) {

@@ -221,6 +221,46 @@ test("rejects oversized packets and unsafe semver components with bounded errors
   });
 });
 
+test("normalizes equivalent TenantScript repository URLs before verifying revision contents", () => {
+  withRepository(({ root, submission }) => {
+    submission.source.repository = "https://github.com/albert-einshutoin/TenantScript.git/";
+    submission.source.revision = "0".repeat(40);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(
+      result.stderr,
+      /submission\.json: source revision does not contain the reviewed file digest/
+    );
+  });
+});
+
+test("rejects loopback, private-address, and local-only repository hosts", () => {
+  withRepository(({ root, submission }) => {
+    for (const repository of [
+      "https://127.0.0.1/org/repo",
+      "https://10.0.0.1/org/repo",
+      "https://[::1]/org/repo",
+      "https://source.internal/org/repo",
+      "https://singlelabel/org/repo"
+    ]) {
+      submission.source.repository = repository;
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1, repository);
+      assert.match(
+        result.stderr,
+        /submission\.json: source\.repository must be a public HTTPS repository URL/
+      );
+      assert.doesNotMatch(result.stderr, /127\.0\.0\.1|10\.0\.0\.1|source\.internal|singlelabel/);
+    }
+  });
+});
+
 test("publishes a closed JSON Schema for the submission packet", () => {
   const schema = JSON.parse(readFileSync(join(repoRoot, "templates", "submission.schema.json")));
 
