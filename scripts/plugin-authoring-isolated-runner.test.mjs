@@ -172,6 +172,18 @@ test("wraps closed judge output in digest-bound isolated evidence and always cle
       probe: async (image) => calls.push(["probe", image]),
       run: async (invocation) => {
         calls.push(["run", invocation.containerName]);
+        const candidateMount = invocation.args.find((argument) =>
+          argument.endsWith(",dst=/candidate,readonly")
+        );
+        assert.ok(candidateMount);
+        const materializedRoot = candidateMount
+          .slice("--mount=type=bind,src=".length)
+          .split(",dst=")[0];
+        assert.equal(statSync(materializedRoot).mode & 0o022, 0);
+        assert.equal(
+          statSync(join(materializedRoot, corpus.tasks[0].id, "src", "index.ts")).mode & 0o222,
+          0
+        );
         return JSON.stringify({ schemaVersion: 1, taskResults: passingTaskResults() });
       },
       remove: async (containerName) => {

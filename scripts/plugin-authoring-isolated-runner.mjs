@@ -456,13 +456,15 @@ function parseJudgeOutput(rawOutput, corpus) {
 }
 
 function materializeCandidate(candidate, destination) {
-  mkdirSync(destination, { recursive: false, mode: 0o777 });
+  mkdirSync(destination, { recursive: false, mode: 0o700 });
   for (const record of candidate.records) {
     const destinationPath = join(destination, ...record.path.split("/"));
-    mkdirSync(dirname(destinationPath), { recursive: true, mode: 0o777 });
-    writeFileSync(destinationPath, record.bytes, { mode: 0o666, flag: "wx" });
+    mkdirSync(dirname(destinationPath), { recursive: true, mode: 0o700 });
+    writeFileSync(destinationPath, record.bytes, { mode: 0o600, flag: "wx" });
   }
-  chmodTree(destination, 0o777, 0o666);
+  // The container receives this tree as read-only input, so the host copy never needs write
+  // access after materialization. Explicit modes also neutralize permissive or restrictive umasks.
+  chmodTree(destination, 0o755, 0o444);
 }
 
 function assertSafeTemporaryRoot(path) {
