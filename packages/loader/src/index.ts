@@ -64,6 +64,8 @@ interface RuntimeLimitState {
   memoryMb: number;
 }
 
+type ScopedRuntimeEntrypoint = "handler" | "pluginDispatch";
+
 interface SerializedRuntimeError {
   name: string;
   message: string;
@@ -116,7 +118,30 @@ export async function runScopedHandler(params: {
   limits?: ScopedRuntimeLimits;
 }): Promise<ScopedRuntimeResult> {
   const limits = normalizeLimits(params.limits);
-  return await runHandlerInWorker({ ...params, limits });
+  return await runHandlerInWorker({ ...params, entrypoint: "handler", limits });
+}
+
+/**
+ * Runs the standard scaffold `plugin.dispatch` export inside the same local sandbox used by
+ * development and replay. The structured dispatch result is returned as `value` so callers can
+ * verify both success and SDK-normalized failure behavior without loading the bundle in Node.
+ */
+export async function runScopedPluginDispatch(params: {
+  bundleCode: string;
+  hookName: string;
+  payload: unknown;
+  context: ScopedRuntimeContext;
+  limits?: ScopedRuntimeLimits;
+}): Promise<ScopedRuntimeResult> {
+  const limits = normalizeLimits(params.limits);
+  return await runHandlerInWorker({
+    bundleCode: params.bundleCode,
+    handlerName: params.hookName,
+    payload: params.payload,
+    context: params.context,
+    entrypoint: "pluginDispatch",
+    limits
+  });
 }
 
 export function createApprovalContinuationRunner(
@@ -176,6 +201,7 @@ function runHandlerInWorker(params: {
   handlerName: string;
   payload: unknown;
   context: ScopedRuntimeContext;
+  entrypoint: ScopedRuntimeEntrypoint;
   limits: RuntimeLimitState;
 }): Promise<ScopedRuntimeResult> {
   const worker = new Worker(RUNTIME_WORKER_SOURCE, {
@@ -185,6 +211,7 @@ function runHandlerInWorker(params: {
     resourceLimits: { maxOldGenerationSizeMb: params.limits.memoryMb },
     workerData: {
       bundleCode: params.bundleCode,
+      entrypoint: params.entrypoint,
       handlerName: params.handlerName,
       payload: params.payload,
       limits: params.limits
@@ -428,7 +455,7 @@ async function run() {
   );
 
   evaluateBundle(workerData.bundleCode, sandbox, limits);
-  assertHandlerExists(sandbox.module.exports, workerData.handlerName);
+  assertEntrypointExists(sandbox.module.exports, workerData.handlerName, workerData.entrypoint);
   sandbox.__tenant_handler_name = workerData.handlerName;
   sandbox.__tenant_payload = workerData.payload;
   sandbox.__tenant_context = {
@@ -436,7 +463,7 @@ async function run() {
   };
 
   parentPort.postMessage({ type: "started" });
-  const result = invokeHandlerInSandbox(sandbox, limits);
+  const result = invokeEntrypointInSandbox(sandbox, limits, workerData.entrypoint);
   return await withWallClockTimeout(result, limits.timeoutMs, workerData.handlerName);
 }
 
@@ -452,7 +479,17 @@ function evaluateBundle(bundleCode, sandbox, limits) {
   }
 }
 
-function assertHandlerExists(exportedModule, handlerName) {
+function assertEntrypointExists(exportedModule, handlerName, entrypoint) {
+  if (entrypoint === "pluginDispatch") {
+    const plugin = isRecord(exportedModule)
+      ? (exportedModule.plugin ?? exportedModule.default ?? exportedModule)
+      : undefined;
+    if (!isRecord(plugin) || typeof plugin.dispatch !== "function") {
+      throw new Error("plugin bundle must export plugin.dispatch");
+    }
+    return;
+  }
+
   const handlers = isRecord(exportedModule) ? exportedModule.handlers : undefined;
   if (!isRecord(handlers)) {
     throw new Error("plugin bundle must export a handlers object");
@@ -463,13 +500,27 @@ function assertHandlerExists(exportedModule, handlerName) {
   }
 }
 
-function invokeHandlerInSandbox(sandbox, limits) {
+function invokeEntrypointInSandbox(sandbox, limits, entrypoint) {
+  const invocationSource =
+    entrypoint === "pluginDispatch"
+      ? [
+          "(() => {",
+          "  const exported = module.exports;",
+          "  const plugin = exported.plugin ?? exported.default ?? exported;",
+          "  return Promise.resolve(plugin.dispatch({",
+          "    hookName: __tenant_handler_name,",
+          "    payload: __tenant_payload,",
+          "    context: __tenant_context",
+          "  }));",
+          "})();"
+        ]
+      : [
+          "Promise.resolve(",
+          "  module.exports.handlers[__tenant_handler_name](__tenant_payload, __tenant_context)",
+          ");"
+        ];
   const invocation = new vm.Script(
-    [
-      "Promise.resolve(",
-      "  module.exports.handlers[__tenant_handler_name](__tenant_payload, __tenant_context)",
-      ");"
-    ].join("\n"),
+    invocationSource.join("\n"),
     { filename: "tenant-plugin-handler.cjs" }
   );
 

@@ -610,6 +610,7 @@
             { "name": "createApprovalContinuationRunner", "kind": "value" },
             { "name": "PluginBundle", "kind": "type" },
             { "name": "runScopedHandler", "kind": "value" },
+            { "name": "runScopedPluginDispatch", "kind": "value" },
             { "name": "ScopedRuntimeContext", "kind": "type" },
             { "name": "ScopedRuntimeLimitError", "kind": "type+value" },
             { "name": "ScopedRuntimeLimits", "kind": "type" },

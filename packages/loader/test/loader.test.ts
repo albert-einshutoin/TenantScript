@@ -7,7 +7,8 @@ import {
   ScopedRuntimeTimeoutError,
   bundlePlugin,
   createApprovalContinuationRunner,
-  runScopedHandler
+  runScopedHandler,
+  runScopedPluginDispatch
 } from "../src/index.js";
 
 describe("bundlePlugin", () => {
@@ -344,6 +345,46 @@ describe("runScopedHandler", () => {
         context: { capability: vi.fn() }
       })
     ).rejects.toThrow("plugin bundle does not export handler invoice.created");
+  });
+});
+
+describe("runScopedPluginDispatch", () => {
+  it("runs the standard plugin dispatch export without ambient Node globals", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async ({ hookName, payload, context }) => ({
+          ok: true,
+          value: {
+            hookName,
+            payload,
+            capability: await context.capability("kv.state", { key: "priority" }),
+            processVisible: typeof process !== "undefined",
+            requireVisible: typeof require !== "undefined"
+          }
+        })
+      };
+    `);
+
+    const result = await runScopedPluginDispatch({
+      bundleCode: bundle,
+      hookName: "ticket.created",
+      payload: { subject: "Database unavailable" },
+      context: { capability: vi.fn().mockResolvedValue({ value: "high" }) }
+    });
+
+    expect(result).toEqual({
+      value: {
+        ok: true,
+        value: {
+          hookName: "ticket.created",
+          payload: { subject: "Database unavailable" },
+          capability: { value: "high" },
+          processVisible: false,
+          requireVisible: false
+        }
+      },
+      logs: []
+    });
   });
 });
 

@@ -2,9 +2,43 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { ScopedRuntimeLimitError, bundlePlugin, runScopedHandler } from "../src/index.js";
+import {
+  ScopedRuntimeLimitError,
+  bundlePlugin,
+  runScopedHandler,
+  runScopedPluginDispatch
+} from "../src/index.js";
 
 describe("loader security suite", () => {
+  it("isolates the standard plugin dispatch export from Node globals", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: () => ({
+          ok: true,
+          value: {
+            processVisible: typeof process !== "undefined",
+            requireVisible: typeof require !== "undefined"
+          }
+        })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({
+      value: {
+        ok: true,
+        value: { processVisible: false, requireVisible: false }
+      },
+      logs: []
+    });
+  });
+
   it("does not expose process, raw secret bindings, or global namespaces", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {
