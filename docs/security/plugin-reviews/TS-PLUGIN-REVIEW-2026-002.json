@@ -83,8 +83,8 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "cbcfb6c467329c433bdc6eba3e5b7671e40af0be73e7d46710dba92c75f1f684",
-    "scripts/check-template-submissions.test.mjs": "1ac4a42dca40f260a3601d4b4e3d061c19f347a1e81762a79ca26165d070057d",
+    "scripts/check-template-submissions.mjs": "53c0b2f927b280f43ff4264337d53a87767204e96eac14c7557b0d1cb9a6999a",
+    "scripts/check-template-submissions.test.mjs": "f841cceae23aee9ad59f62d7063c9af23bff78915e4913de6894613ae15b8860",
     "scripts/template-submission-e2e.test.mjs": "b1a59fa820b34a7412cbc0affeb7fb50d8fec456bb25fb0adf97cf0c2382588c",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",

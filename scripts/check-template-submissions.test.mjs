@@ -280,7 +280,10 @@ test("binds an approved review record to the exact submitted source", () => {
 
     result = runChecker(root);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /reviewRecord source scope and digests must match submission\.source/);
+    assert.match(
+      result.stderr,
+      /reviewRecord source scope and digests must match submission\.source/
+    );
   });
 });
 

@@ -361,7 +361,9 @@ function validateReviewRecord(value, source, displayPath) {
       !sameStringArray(record.target.scope, Object.keys(source.files)) ||
       !sameDigestMap(record.target.sourceDigests, source.files)
     ) {
-      errors.push(`${displayPath}: reviewRecord source scope and digests must match submission.source`);
+      errors.push(
+        `${displayPath}: reviewRecord source scope and digests must match submission.source`
+      );
     }
   } catch {
     errors.push(`${displayPath}: reviewRecord must contain valid JSON`);
@@ -442,8 +444,7 @@ function sameDigestMap(left, right) {
   if (!isRecord(left) || !isRecord(right)) return false;
   const paths = Object.keys(right);
   return (
-    Object.keys(left).length === paths.length &&
-    paths.every((path) => left[path] === right[path])
+    Object.keys(left).length === paths.length && paths.every((path) => left[path] === right[path])
   );
 }
 
