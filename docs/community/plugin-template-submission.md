@@ -135,8 +135,9 @@ reordered calls fail. The copied build runs outside the repository checkout, and
 runs in a SIGKILL-bounded child process, so relative build inputs and synchronous loops cannot escape
 the reviewed source or occupy the CI lane indefinitely. The parent accepts only a per-dispatch
 HMAC-authenticated result, and rejects timers, immediates, or capability calls that remain after the
-handler returns. Keep these fixtures synthetic, individually bounded, and independent from network,
-credentials, time, randomness, or tenant data.
+handler returns. Install, typecheck, build, audit, and test processes receive only an explicit
+accountless environment and a hard 30-second command deadline. Keep these fixtures synthetic,
+individually bounded, and independent from network, credentials, time, randomness, or tenant data.
 
 ## 4. Run the submission gates
 

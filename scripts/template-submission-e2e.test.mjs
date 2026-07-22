@@ -55,6 +55,28 @@ test("submission installation disables hooks and registry access", () => {
   assert.ok(!arguments_.includes("--prefer-offline"));
 });
 
+test("submitted commands cannot inherit secrets and are externally time bounded", () => {
+  process.env.TENANTSCRIPT_SUBMISSION_TEST_SECRET = "must-not-reach-submitted-code";
+  try {
+    const observedSecret = runSubmissionCommand(
+      process.execPath,
+      ["-e", "process.stdout.write(process.env.TENANTSCRIPT_SUBMISSION_TEST_SECRET ?? 'absent')"],
+      { label: "environment probe" }
+    );
+    assert.equal(observedSecret, "absent");
+    assert.throws(
+      () =>
+        runSubmissionCommand(process.execPath, ["-e", "while (true) {}"], {
+          label: "timeout probe",
+          timeoutMs: 100
+        }),
+      /timeout probe exceeded the 100 ms submitted-command limit/
+    );
+  } finally {
+    delete process.env.TENANTSCRIPT_SUBMISSION_TEST_SECRET;
+  }
+});
+
 test("generated bundle dispatch terminates a synchronous loop", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-loop-"));
   try {
@@ -256,27 +278,31 @@ async function exerciseSubmission(submission) {
     };
     await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
-    run("pnpm", submissionInstallArguments(pluginDirectory, pnpmStoreDirectory));
+    runSubmissionCommand("pnpm", submissionInstallArguments(pluginDirectory, pnpmStoreDirectory), {
+      label: `${submission} install`
+    });
     // Restore the digest-bound metadata before build and audit; install-only tarball overrides must
     // never become a sanitized substitute for the package consumers receive.
     await writeFile(packageJsonPath, submittedPackageJson);
     const cliBinDirectory = await createCliShim(tempRoot);
-    const commandEnvironment = {
-      PATH: `${cliBinDirectory}${delimiter}${process.env.PATH ?? ""}`
-    };
     // The build is the authority for audited outputs; prove the copied submission and offline
     // install did not pre-populate artifacts that a no-op build could silently reuse.
     await assert.rejects(readFile(join(pluginDirectory, "manifest.json")), { code: "ENOENT" });
     await assert.rejects(readFile(join(pluginDirectory, "dist", "plugin.cjs")), { code: "ENOENT" });
-    run("pnpm", ["--dir", pluginDirectory, "exec", "tsc", "--noEmit"]);
-    run("pnpm", ["--dir", pluginDirectory, "build"], { env: commandEnvironment });
+    runSubmissionCommand("pnpm", ["--dir", pluginDirectory, "exec", "tsc", "--noEmit"], {
+      label: `${submission} typecheck`
+    });
+    runSubmissionCommand("pnpm", ["--dir", pluginDirectory, "build"], {
+      label: `${submission} build`,
+      pathPrefix: cliBinDirectory
+    });
     const manifestJson = await readFile(join(pluginDirectory, "manifest.json"), "utf8");
     const bundlePath = join(pluginDirectory, "dist", "plugin.cjs");
     await readFile(bundlePath, "utf8");
     const manifest = JSON.parse(manifestJson);
     assertManifestMatchesSubmission(manifest, metadata);
     const report = JSON.parse(
-      run(
+      runSubmissionCommand(
         "ext",
         [
           "audit",
@@ -287,7 +313,7 @@ async function exerciseSubmission(submission) {
           "--bundle",
           "./dist/plugin.cjs"
         ],
-        { cwd: pluginDirectory, env: commandEnvironment }
+        { cwd: pluginDirectory, label: `${submission} audit`, pathPrefix: cliBinDirectory }
       )
     );
     assert.deepEqual(report, { version: 1, passed: true, findings: [] });
@@ -312,8 +338,14 @@ async function exerciseSubmission(submission) {
     }
     // Run the required behavior-test file explicitly so a future package-script drift cannot turn
     // the evidence command into a no-op while leaving an unexecuted test in the digest map.
-    run("pnpm", ["--dir", pluginDirectory, "exec", "vitest", "run", "test/plugin.test.ts"]);
-    run("pnpm", ["--dir", pluginDirectory, "test"]);
+    runSubmissionCommand(
+      "pnpm",
+      ["--dir", pluginDirectory, "exec", "vitest", "run", "test/plugin.test.ts"],
+      { label: `${submission} required behavior test` }
+    );
+    runSubmissionCommand("pnpm", ["--dir", pluginDirectory, "test"], {
+      label: `${submission} canonical test`
+    });
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
@@ -329,7 +361,7 @@ function dispatchBundleInChild(bundlePath, request, caseName) {
   // intercepted by a synchronous loop, so the per-case limit remains real for hostile CPU behavior.
   const child = spawnSync(process.execPath, [bundleRunnerPath, bundlePath], {
     encoding: "utf8",
-    env: { ...process.env, CI: "1" },
+    env: submissionEnvironment(),
     input,
     killSignal: "SIGKILL",
     maxBuffer: 64 * 1024,
@@ -436,4 +468,37 @@ function run(command, args, options = {}) {
     env: { ...process.env, ...options.env, CI: "1" },
     stdio: ["ignore", "pipe", "pipe"]
   });
+}
+
+function runSubmissionCommand(command, args, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  const label = options.label ?? "submitted command";
+  // spawnSync owns the deadline outside submitted JavaScript. SIGKILL and a minimal environment
+  // keep an infinite loop or inherited maintainer credential from escaping the accountless lane.
+  const child = spawnSync(command, args, {
+    cwd: options.cwd ?? repoRoot,
+    encoding: "utf8",
+    env: submissionEnvironment(options.pathPrefix),
+    killSignal: "SIGKILL",
+    maxBuffer: 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: timeoutMs
+  });
+  if (child.error?.code === "ETIMEDOUT") {
+    throw new Error(`${label} exceeded the ${timeoutMs} ms submitted-command limit`);
+  }
+  if (child.error || child.signal !== null || child.status !== 0) {
+    // Submitted output can contain attacker-selected repository data, so keep CI diagnostics stable
+    // and non-reflective while the trusted label identifies the failing contract stage.
+    throw new Error(`${label} failed`);
+  }
+  return child.stdout;
+}
+
+function submissionEnvironment(pathPrefix) {
+  const inheritedPath = process.env.PATH ?? "";
+  return {
+    CI: "1",
+    PATH: pathPrefix ? `${pathPrefix}${delimiter}${inheritedPath}` : inheritedPath
+  };
 }

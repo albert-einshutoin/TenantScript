@@ -8,8 +8,9 @@ the packet's canonical `ext audit` command against those artifacts and the resto
 the packet's bounded success and failure cases against it in individually killable child processes,
 requiring exact results and zero capability calls. Each child result is authenticated with a
 per-dispatch key, and pending timers, immediates, or post-return capability calls fail verification.
-The copied build executes outside the checkout so relative paths cannot reach mutable repository
-files beyond the reviewed source snapshot.
+Submitted commands receive only `CI`, an allowlisted `PATH`, and a 30-second external deadline. The
+copied build executes outside the checkout so relative paths cannot reach mutable repository files
+beyond the reviewed source snapshot.
 
 The evidence is accountless and first-party. It does not prove public npm installation, a third-party
 review, live Cloudflare behavior, community adoption, or suitability for a production support workflow.
