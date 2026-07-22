@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 import "./plugin-authoring-judge-core.test.mjs";
+import "./plugin-authoring-manifest-extractor.test.mjs";
 import "./plugin-authoring-manifest-judges.test.mjs";
 
 import {
