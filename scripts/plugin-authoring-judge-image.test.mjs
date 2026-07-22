@@ -26,6 +26,11 @@ test("pins a linux amd64 non-root image with the fixed judge entrypoint", () => 
   assert.match(dockerfile, /^USER node$/mu);
   assert.match(dockerfile, /^ENTRYPOINT \["\/opt\/tenantscript\/bin\/plugin-authoring-judge"\]$/mu);
   assert.match(dockerfile, /pnpm install --frozen-lockfile --ignore-scripts/u);
+  assert.match(
+    dockerfile,
+    /pnpm --filter @tenantscript\/plugin-authoring-judge-image deploy --prod --legacy \/runtime/u
+  );
+  assert.doesNotMatch(dockerfile, /COPY --from=build .*\/build\/node_modules/u);
   assert.doesNotMatch(dockerfile, /(?:COPY|ADD)\s+\.\s/u);
   assert.doesNotMatch(dockerfile, /(?:latest|node:24|curl|wget)/u);
 });
@@ -64,10 +69,16 @@ test("wires the actual image contract into Tier 1 and documents its evidence bou
   );
   assert.equal(
     packageJson.scripts["test:judge-image"],
-    "node --test scripts/plugin-authoring-judge-image.test.mjs scripts/plugin-authoring-judge-image.integration.test.mjs"
+    "node --test scripts/plugin-authoring-judge-image.test.mjs scripts/plugin-authoring-judge-image-sbom.test.mjs scripts/plugin-authoring-judge-image.integration.test.mjs"
+  );
+  assert.equal(
+    packageJson.scripts["judge-image:evidence"],
+    "node scripts/plugin-authoring-judge-image-evidence.mjs generate .tmp/plugin-authoring-judge-image-evidence"
   );
   assert.match(packageJson.scripts.test, /pnpm test:judge-image/u);
   assert.match(tier1, /pnpm test:judge-image/u);
+  assert.match(tier1, /pnpm judge-image:evidence/u);
+  assert.match(tier1, /plugin-authoring-judge-image-evidence-\$\{\{ github\.sha \}\}/u);
   for (const required of [
     "linux/amd64",
     "allowlist",

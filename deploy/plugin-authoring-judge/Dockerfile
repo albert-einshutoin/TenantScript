@@ -8,9 +8,11 @@ COPY deploy/plugin-authoring-judge/package.json ./deploy/plugin-authoring-judge/
 RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
 RUN pnpm install --frozen-lockfile --ignore-scripts
 RUN pnpm --filter @tenantscript/cli... build
-RUN find packages -type d \( -name src -o -name test \) -prune -exec rm -rf '{}' + && \
+RUN pnpm --filter @tenantscript/plugin-authoring-judge-image deploy --prod --legacy /runtime
+RUN rm -rf packages/test-config && \
+    find packages -type d \( -name src -o -name test \) -prune -exec rm -rf '{}' + && \
     find packages -type f -name 'tsconfig*.json' -delete && \
-    chmod -R a+rX packages node_modules
+    chmod -R a+rX packages /runtime/node_modules
 
 FROM --platform=linux/amd64 node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9
 
@@ -21,7 +23,7 @@ LABEL org.opencontainers.image.source="https://github.com/albert-einshutoin/Tena
       org.opencontainers.image.title="TenantScript plugin authoring judge"
 
 WORKDIR /opt/tenantscript/repository
-COPY --from=build --chown=root:root /build/node_modules ./node_modules
+COPY --from=build --chown=root:root /runtime/node_modules ./node_modules
 COPY --from=build --chown=root:root /build/packages ./packages
 COPY --chown=root:root scripts ./scripts
 COPY --chown=root:root evals ./evals
