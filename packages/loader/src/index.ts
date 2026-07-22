@@ -196,6 +196,72 @@ function normalizeLimits(limits: ScopedRuntimeLimits | undefined): RuntimeLimitS
   return normalized;
 }
 
+function assertLosslessHostJsonValue(
+  value: unknown,
+  label: string,
+  ancestors = new Set<object>()
+): void {
+  try {
+    assertLosslessHostJsonValueStructure(value, ancestors);
+  } catch {
+    throw new TypeError(`${label} must be lossless JSON`);
+  }
+}
+
+// Worker structured clone can invoke accessors and flatten custom prototypes before the sandbox
+// sees them. Validate on the caller side first so local execution never authorizes a rewritten
+// payload or capability result that the production Cloudflare boundary would reject.
+function assertLosslessHostJsonValueStructure(value: unknown, ancestors: Set<object>): void {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value) && !Object.is(value, -0))
+  ) {
+    return;
+  }
+  if (typeof value !== "object" || ancestors.has(value)) {
+    throw new Error("value is not lossless JSON");
+  }
+
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (
+        Object.keys(value).length !== value.length ||
+        Object.getOwnPropertyNames(value).length !== value.length + 1 ||
+        Object.getOwnPropertySymbols(value).length !== 0
+      ) {
+        throw new Error("value is not lossless JSON");
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(value, index)) throw new Error("value is not lossless JSON");
+        assertLosslessHostJsonValueStructure(value[index], ancestors);
+      }
+      return;
+    }
+
+    const prototype: unknown = Object.getPrototypeOf(value);
+    const keys = Object.keys(value);
+    if (
+      (prototype !== Object.prototype && prototype !== null) ||
+      Object.getOwnPropertyNames(value).length !== keys.length ||
+      Object.getOwnPropertySymbols(value).length !== 0
+    ) {
+      throw new Error("value is not lossless JSON");
+    }
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !("value" in descriptor)) {
+        throw new Error("value is not lossless JSON");
+      }
+      assertLosslessHostJsonValueStructure(descriptor.value, ancestors);
+    }
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
 function runHandlerInWorker(params: {
   bundleCode: string;
   handlerName: string;
@@ -204,6 +270,7 @@ function runHandlerInWorker(params: {
   entrypoint: ScopedRuntimeEntrypoint;
   limits: RuntimeLimitState;
 }): Promise<ScopedRuntimeResult> {
+  assertLosslessHostJsonValue(params.payload, "handler payload");
   const worker = new Worker(RUNTIME_WORKER_SOURCE, {
     eval: true,
     // The local sandbox should not inherit credentials even if a future runtime regression exposes
@@ -257,6 +324,7 @@ function runHandlerInWorker(params: {
     ) => {
       try {
         const value = await params.context.capability(message.name, message.input);
+        assertLosslessHostJsonValue(value, "capability result");
         if (!settled) {
           worker.postMessage({ type: "capabilityResult", id: message.id, value });
         }
@@ -707,15 +775,66 @@ function hardenBridge(bridge) {
   return Object.freeze(bridge);
 }
 
+// JSON.stringify is a serializer, not a validator: it silently rewrites undefined, non-finite
+// numbers, sparse arrays, and objects such as Date. Reject those values before they cross the
+// local worker boundary so replay and development enforce the same data model as production.
+function assertLosslessJsonValue(value, ancestors = new Set()) {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value) && !Object.is(value, -0))
+  ) {
+    return;
+  }
+  if (typeof value !== "object" || ancestors.has(value)) {
+    throw new Error("value is not lossless JSON");
+  }
+
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (
+        Object.keys(value).length !== value.length ||
+        Object.getOwnPropertyNames(value).length !== value.length + 1 ||
+        Object.getOwnPropertySymbols(value).length !== 0
+      ) {
+        throw new Error("value is not lossless JSON");
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(value, index)) throw new Error("value is not lossless JSON");
+        assertLosslessJsonValue(value[index], ancestors);
+      }
+      return;
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    const keys = Object.keys(value);
+    if (
+      (prototype !== Object.prototype && prototype !== null) ||
+      Object.getOwnPropertyNames(value).length !== keys.length ||
+      Object.getOwnPropertySymbols(value).length !== 0
+    ) {
+      throw new Error("value is not lossless JSON");
+    }
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !("value" in descriptor)) {
+        throw new Error("value is not lossless JSON");
+      }
+      assertLosslessJsonValue(descriptor.value, ancestors);
+    }
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
 function serializeSandboxValue(value, label) {
   try {
-    const serialized = JSON.stringify(value);
-    if (serialized === undefined) {
-      return "null";
-    }
-    return serialized;
+    assertLosslessJsonValue(value);
+    return JSON.stringify(value);
   } catch (_error) {
-    throw new TypeError(label + " must be JSON-serializable");
+    throw new TypeError(label + " must be lossless JSON");
   }
 }
 

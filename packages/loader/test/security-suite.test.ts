@@ -176,6 +176,84 @@ describe("loader security suite", () => {
     ).rejects.toMatchObject({ executionStatus: "timeout" });
   });
 
+  it("rejects host payloads that JSON serialization would rewrite", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: ({ payload }) => ({ ok: true, value: payload })
+      };
+    `);
+    const sparsePayload = Array(2);
+    sparsePayload[1] = "present";
+    class InheritedPayload {
+      readonly visible = "value";
+    }
+    const invalidPayloads = [
+      undefined,
+      { amount: Number.NaN },
+      new Date("2026-01-01T00:00:00.000Z"),
+      sparsePayload,
+      new InheritedPayload(),
+      { missing: undefined }
+    ];
+
+    for (const payload of invalidPayloads) {
+      await expect(
+        runScopedPluginDispatch({
+          bundleCode: bundle,
+          hookName: "ticket.created",
+          payload,
+          context: { capability: vi.fn() }
+        })
+      ).rejects.toThrow("handler payload must be lossless JSON");
+    }
+  });
+
+  it("rejects host accessors without evaluating them during worker transfer", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: ({ payload }) => ({ ok: true, value: payload })
+      };
+    `);
+    let getterWasEvaluated = false;
+    const payload = Object.defineProperty({}, "secret", {
+      enumerable: true,
+      get: () => {
+        getterWasEvaluated = true;
+        return "value";
+      }
+    });
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload,
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toThrow("handler payload must be lossless JSON");
+    expect(getterWasEvaluated).toBe(false);
+  });
+
+  it("rejects capability results that JSON serialization would rewrite", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async ({ context }) => ({
+          ok: true,
+          value: await context.capability("kv.state", { key: "priority" })
+        })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: { capability: vi.fn().mockResolvedValue({ value: undefined }) }
+      })
+    ).rejects.toThrow("capability result must be lossless JSON");
+  });
+
   it("does not expose process, raw secret bindings, or global namespaces", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {
