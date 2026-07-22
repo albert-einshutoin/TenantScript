@@ -33,6 +33,7 @@ const unsafePackageManagerControlNames = new Set([
   "pnpm-workspace.yml"
 ]);
 const installLifecycleScripts = new Set(["preinstall", "install", "postinstall", "prepare"]);
+const testWrapperScripts = new Set(["pretest", "posttest"]);
 const topLevelFields = [
   "schemaVersion",
   "kind",
@@ -67,7 +68,7 @@ const secretLikePatterns = [
   /\b(?:tenant|customer)_[A-Za-z0-9_-]{4,}\b/i,
   /dash\.cloudflare\.com\/[0-9a-f]{16,}/i,
   // File URLs and Markdown punctuation can prefix absolute paths and must not bypass redaction.
-  /(?:file:\/\/(?:localhost)?\/|(?:^|[^A-Za-z0-9])\/)(?:Users|Volumes|home|workspace|root|tmp)\/|[A-Za-z]:\\Users\\/i
+  /(?:file:\/\/(?:localhost)?\/|(?:^|[^A-Za-z0-9])\/)(?:Users|Volumes|home|workspace|root|tmp)\/|[A-Za-z]:\\(?:Users|Volumes|home|workspace|root|tmp)\\/i
 ];
 const sensitiveFieldPattern = /(?:token|secret|credential|password|account.?id)/i;
 const prohibitedGuaranteePattern =
@@ -298,6 +299,15 @@ function validateSource(value, sdk, license, directoryName, displayPath) {
           // These hooks run on downstream installation while CI intentionally disables them, so an
           // accepted template must not contain behavior that the audited path never exercises.
           errors.push(`${displayPath}: source package must not define install lifecycle scripts`);
+        }
+        if (
+          isRecord(packageJson) &&
+          isRecord(packageJson.scripts) &&
+          Object.keys(packageJson.scripts).some((name) => testWrapperScripts.has(name))
+        ) {
+          // pnpm runs pre/post wrappers around `pnpm test`; disallow them so the digest-bound
+          // canonical command cannot gain side effects that the explicit Vitest check does not show.
+          errors.push(`${displayPath}: source package must not wrap the canonical test command`);
         }
         if (
           !isRecord(packageJson) ||
