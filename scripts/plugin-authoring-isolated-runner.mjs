@@ -471,7 +471,7 @@ export async function executeIsolatedJudgeRun({
   }
 }
 
-function parseJudgeOutput(rawOutput, corpus) {
+export function parseJudgeOutput(rawOutput, corpus) {
   try {
     assert(typeof rawOutput === "string");
     assert(Buffer.byteLength(rawOutput) <= MAX_JUDGE_OUTPUT_BYTES);
