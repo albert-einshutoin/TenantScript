@@ -44,6 +44,7 @@ const unsafePackageManagerControlNames = new Set([
   ".npmrc",
   ".pnpmfile.cjs",
   ".pnpmfile.mjs",
+  "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
   "pnpm-workspace.yml"
 ]);

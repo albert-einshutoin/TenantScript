@@ -51,6 +51,7 @@ test("submission installation disables hooks and registry access", () => {
   const arguments_ = submissionInstallArguments("/tmp/plugin", "/tmp/pnpm-store");
   assert.ok(arguments_.includes("--ignore-scripts"));
   assert.ok(arguments_.includes("--ignore-pnpmfile"));
+  assert.ok(arguments_.includes("--no-lockfile"));
   assert.ok(arguments_.includes("--offline"));
   assert.ok(!arguments_.includes("--prefer-offline"));
 });
@@ -422,6 +423,8 @@ function submissionInstallArguments(pluginDirectory, storeDirectory) {
     storeDirectory,
     // Missing cache entries must fail closed instead of letting unreviewed package metadata reach npm.
     "--offline",
+    // The packet cannot choose a previously locked graph instead of the exact validated versions.
+    "--no-lockfile",
     "--ignore-scripts",
     // --ignore-scripts does not disable pnpmfile hooks, which can mutate the copied source pre-audit.
     "--ignore-pnpmfile"

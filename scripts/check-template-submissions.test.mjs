@@ -592,8 +592,8 @@ test("rejects prebuilt audit artifacts from submitted source", () => {
   });
 });
 
-test("rejects package-manager hook and configuration files", () => {
-  for (const controlFile of [".pnpmfile.cjs", ".npmrc", "pnpm-workspace.yaml"]) {
+test("rejects package-manager hook, lock, and configuration files", () => {
+  for (const controlFile of [".pnpmfile.cjs", ".npmrc", "pnpm-lock.yaml", "pnpm-workspace.yaml"]) {
     withRepository(({ root, submission }) => {
       const path = `templates/submissions/example-template/plugin/${controlFile}`;
       writeFileSync(join(root, path), "module.exports = {};\n");
@@ -611,7 +611,7 @@ test("rejects package-manager hook and configuration files", () => {
 
       assert.equal(result.status, 1, controlFile);
       assert.match(result.stderr, /source\.directory contains a package-manager control file/);
-      assert.doesNotMatch(result.stderr, /pnpmfile|npmrc|pnpm-workspace/);
+      assert.doesNotMatch(result.stderr, /pnpmfile|npmrc|pnpm-lock|pnpm-workspace/);
     });
   }
 });
