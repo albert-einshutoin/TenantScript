@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -164,7 +166,15 @@ test("fails closed when the committed catalog is missing or stale", () => {
     assert.equal(symlinked.status, 1);
     assert.match(symlinked.stderr, /template catalog is missing or stale/);
     rmSync(catalogPath);
-    assert.equal(runGenerator(root, "--write").status, 0);
+    const danglingTarget = join(root, "outside-catalog.json");
+    symlinkSync(danglingTarget, catalogPath);
+    const danglingWrite = runGenerator(root, "--write");
+    assert.equal(danglingWrite.status, 1);
+    assert.match(danglingWrite.stderr, /template catalog path is unsafe/);
+    assert.equal(existsSync(danglingTarget), false);
+    unlinkSync(catalogPath);
+    const rewritten = runGenerator(root, "--write");
+    assert.equal(rewritten.status, 0, rewritten.stderr);
     writeFileSync(catalogPath, '{"schemaVersion":1,"templates":[]}\n');
     const stale = runGenerator(root);
     assert.equal(stale.status, 1);

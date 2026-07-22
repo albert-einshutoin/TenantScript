@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -61,9 +61,16 @@ const output = `${JSON.stringify({ schemaVersion: 1, templates }, null, 2)}\n`;
 const catalogPath = join(repoRoot, "templates", "catalog.json");
 
 if (write) {
-  if (existsSync(catalogPath)) {
-    const metadata = lstatSync(catalogPath);
-    if (!metadata.isFile() || metadata.isSymbolicLink()) fail("template catalog path is unsafe");
+  let metadata;
+  try {
+    metadata = lstatSync(catalogPath);
+  } catch (error) {
+    if (typeof error !== "object" || error === null || error.code !== "ENOENT") {
+      fail("template catalog path is unsafe");
+    }
+  }
+  if (metadata !== undefined && (!metadata.isFile() || metadata.isSymbolicLink())) {
+    fail("template catalog path is unsafe");
   }
   writeFileSync(catalogPath, output, { encoding: "utf8", mode: 0o644 });
   process.stdout.write(`Template catalog written (${String(templates.length)} templates).\n`);
