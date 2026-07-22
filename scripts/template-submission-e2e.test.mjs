@@ -73,6 +73,45 @@ test("generated bundle dispatch terminates a synchronous loop", async () => {
   }
 });
 
+test("generated bundle dispatch returns and records a declared capability call", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-capability-"));
+  try {
+    const bundlePath = join(tempRoot, "plugin.cjs");
+    await writeFile(
+      bundlePath,
+      `module.exports.plugin = {
+        async dispatch({ context }) {
+          const value = await context.capability("kv.state", { key: "ticket-priority" });
+          return { ok: true, value };
+        }
+      };\n`
+    );
+
+    const outcome = dispatchBundleInChild(
+      bundlePath,
+      {
+        hookName: "ticket.created",
+        payload: {},
+        capabilityCalls: [
+          {
+            name: "kv.state",
+            input: { key: "ticket-priority" },
+            result: { value: "high" }
+          }
+        ]
+      },
+      "declared-capability"
+    );
+
+    assert.deepEqual(outcome, {
+      result: { ok: true, value: { value: "high" } },
+      capabilityCalls: [{ name: "kv.state", input: { key: "ticket-priority" } }]
+    });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 async function exerciseSubmission(submission) {
   // Keep submitted build scripts outside the checkout. Even a reviewed relative path must not be
   // able to reach mutable repository files that are absent from the source digest map.
@@ -156,12 +195,17 @@ async function exerciseSubmission(submission) {
         bundlePath,
         {
           hookName: metadata.hook.name,
-          payload: behaviorCase.payload
+          payload: behaviorCase.payload,
+          capabilityCalls: behaviorCase.capabilityCalls
         },
         behaviorCase.name
       );
       assert.deepEqual(outcome.result, behaviorCase.expected, behaviorCase.name);
-      assert.equal(outcome.capabilityCallCount, 0, `${behaviorCase.name} invoked a capability`);
+      assert.deepEqual(
+        outcome.capabilityCalls,
+        behaviorCase.capabilityCalls.map(({ name, input }) => ({ name, input })),
+        `${behaviorCase.name} capability calls must match the packet`
+      );
     }
     // Run the required behavior-test file explicitly so a future package-script drift cannot turn
     // the evidence command into a no-op while leaving an unexecuted test in the digest map.

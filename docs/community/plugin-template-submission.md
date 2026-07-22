@@ -110,7 +110,8 @@ The closed packet schema requires:
 - pinned SDK caret range and exact last-tested version;
 - one hook name/type, sorted capabilities and config keys, plus explicit deny or host allowlist egress;
 - canonical build, test, and audit commands with repository-local evidence;
-- two to sixteen sorted deterministic behavior cases, including success and failure results;
+- two to sixteen sorted deterministic behavior cases, including success and failure results and an
+  explicit ordered capability-call plan;
 - an approved review record, security note, and explicit non-guarantees.
 
 The canonical audit command recorded in the packet is:
@@ -128,11 +129,12 @@ only in the repository-controlled E2E after metadata, paths, complete source dig
 record bound to the same source scope and digest map pass. The E2E discovers every submission
 directory so a new packet cannot silently receive static validation alone. It loads the generated
 `dist/plugin.cjs` and dispatches every packet-owned behavior case against that bundle, comparing the
-exact result and rejecting any capability call. The copied build runs outside the repository checkout,
-and each bundle dispatch runs in a SIGKILL-bounded child process, so relative build inputs and
-synchronous loops cannot escape the reviewed source or occupy the CI lane indefinitely. Keep these
-fixtures synthetic, individually bounded, and independent from network, credentials, time, randomness,
-or tenant data.
+exact result and capability-call sequence. Each planned call names a declared capability, fixes its
+input, and supplies the synthetic result returned to the handler; undeclared, missing, additional, or
+reordered calls fail. The copied build runs outside the repository checkout, and each bundle dispatch
+runs in a SIGKILL-bounded child process, so relative build inputs and synchronous loops cannot escape
+the reviewed source or occupy the CI lane indefinitely. Keep these fixtures synthetic, individually
+bounded, and independent from network, credentials, time, randomness, or tenant data.
 
 ## 4. Run the submission gates
 

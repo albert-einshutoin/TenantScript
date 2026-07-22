@@ -195,7 +195,12 @@ function validateSubmission(directoryName) {
   validateSortedStrings(submission.capabilities, "capabilities", displayPath, capabilityPattern);
   validateEgress(submission.egress, displayPath);
   validateSortedStrings(submission.configKeys, "configKeys", displayPath, configKeyPattern);
-  validateVerification(submission.verification, submission.hook?.name, displayPath);
+  validateVerification(
+    submission.verification,
+    submission.hook?.name,
+    submission.capabilities,
+    displayPath
+  );
   validateReviewRecord(submission.reviewRecord, submission.source, displayPath);
   const expectedSecurityNote = `templates/submissions/${directoryName}/SECURITY.md`;
   // Keep security guidance owned by the submitted packet so a generic evidence file cannot
@@ -529,7 +534,7 @@ function validateEgress(value, displayPath) {
   }
 }
 
-function validateVerification(value, hookName, displayPath) {
+function validateVerification(value, hookName, capabilities, displayPath) {
   if (!isRecord(value)) {
     errors.push(`${displayPath}: verification must be an object`);
     return;
@@ -569,10 +574,10 @@ function validateVerification(value, hookName, displayPath) {
       }
     }
   }
-  validateBehaviorCases(value.behaviorCases, hookName, displayPath);
+  validateBehaviorCases(value.behaviorCases, hookName, capabilities, displayPath);
 }
 
-function validateBehaviorCases(value, hookName, displayPath) {
+function validateBehaviorCases(value, hookName, capabilities, displayPath) {
   if (!Array.isArray(value) || value.length < 2 || value.length > 16) {
     errors.push(`${displayPath}: verification.behaviorCases must contain between 2 and 16 cases`);
     return;
@@ -586,10 +591,13 @@ function validateBehaviorCases(value, hookName, displayPath) {
       errors.push(`${displayPath}: verification.behaviorCases entries must be objects`);
       continue;
     }
-    validateAllowedFields(behaviorCase, ["name", "payload", "expected"], displayPath, {
-      prefix: "verification.behaviorCases."
-    });
-    for (const field of ["name", "payload", "expected"]) {
+    validateAllowedFields(
+      behaviorCase,
+      ["name", "payload", "expected", "capabilityCalls"],
+      displayPath,
+      { prefix: "verification.behaviorCases." }
+    );
+    for (const field of ["name", "payload", "expected", "capabilityCalls"]) {
       if (!(field in behaviorCase)) {
         errors.push(`${displayPath}: verification.behaviorCases entry is missing ${field}`);
       }
@@ -605,6 +613,7 @@ function validateBehaviorCases(value, hookName, displayPath) {
       errors.push(`${displayPath}: verification.behaviorCases entry exceeds the 16 KiB limit`);
     }
     validateExpectedDispatchResult(behaviorCase.expected, hookName, displayPath);
+    validateCapabilityCalls(behaviorCase.capabilityCalls, capabilities, displayPath);
     if (isRecord(behaviorCase.expected) && behaviorCase.expected.ok === true) {
       hasSuccess = true;
     } else if (isRecord(behaviorCase.expected) && behaviorCase.expected.ok === false) {
@@ -618,6 +627,40 @@ function validateBehaviorCases(value, hookName, displayPath) {
     errors.push(
       `${displayPath}: verification.behaviorCases must include success and failure results`
     );
+  }
+}
+
+function validateCapabilityCalls(value, capabilities, displayPath) {
+  if (!Array.isArray(value) || value.length > 8) {
+    errors.push(
+      `${displayPath}: verification.behaviorCases capabilityCalls must contain 0 to 8 calls`
+    );
+    return;
+  }
+  const declaredCapabilities = Array.isArray(capabilities) ? capabilities : [];
+  for (const capabilityCall of value) {
+    if (!isRecord(capabilityCall)) {
+      errors.push(
+        `${displayPath}: verification.behaviorCases capabilityCalls entries must be objects`
+      );
+      continue;
+    }
+    validateAllowedFields(capabilityCall, ["name", "input", "result"], displayPath, {
+      prefix: "verification.behaviorCases.capabilityCalls."
+    });
+    for (const field of ["name", "input", "result"]) {
+      if (!(field in capabilityCall)) {
+        errors.push(
+          `${displayPath}: verification.behaviorCases capability call is missing ${field}`
+        );
+      }
+    }
+    if (
+      typeof capabilityCall.name !== "string" ||
+      !declaredCapabilities.includes(capabilityCall.name)
+    ) {
+      errors.push(`${displayPath}: verification.behaviorCases capability call must be declared`);
+    }
   }
 }
 

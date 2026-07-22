@@ -132,7 +132,8 @@ function validSubmission(root, revision) {
           expected: {
             ok: true,
             value: { priority: "high", subject: "Database unavailable" }
-          }
+          },
+          capabilityCalls: []
         },
         {
           name: "rejects-ticket",
@@ -144,7 +145,8 @@ function validSubmission(root, revision) {
               hookName: "ticket.created",
               message: "invalid ticket payload"
             }
-          }
+          },
+          capabilityCalls: []
         }
       ]
     },
@@ -185,6 +187,36 @@ test("requires bounded success and failure cases for generated bundle behavior",
 
     assert.equal(result.status, 1);
     assert.match(result.stderr, /verification\.behaviorCases must contain between 2 and 16 cases/);
+  });
+});
+
+test("requires explicit capability plans for generated bundle behavior", () => {
+  withRepository(({ root, submission }) => {
+    delete submission.verification.behaviorCases[0].capabilityCalls;
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /behaviorCases entry is missing capabilityCalls/);
+  });
+});
+
+test("accepts a bounded behavior plan for a declared capability", () => {
+  withRepository(({ root, submission }) => {
+    submission.capabilities = ["kv.state"];
+    submission.verification.behaviorCases[0].capabilityCalls = [
+      {
+        name: "kv.state",
+        input: { key: "ticket-priority" },
+        result: { value: "high" }
+      }
+    ];
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 0, result.stderr);
   });
 });
 
@@ -237,6 +269,23 @@ test("rejects unbounded, unordered, or open generated bundle behavior cases", ()
         submission.verification.behaviorCases[0].expected.unexpected = true;
       },
       message: /unknown field verification\.behaviorCases\.expected\.unexpected/
+    },
+    {
+      mutate(submission) {
+        submission.verification.behaviorCases[0].capabilityCalls = [
+          { name: "network.fetch", input: {}, result: {} }
+        ];
+      },
+      message: /behaviorCases capability call must be declared/
+    },
+    {
+      mutate(submission) {
+        submission.verification.behaviorCases[0].capabilityCalls = Array.from(
+          { length: 9 },
+          () => ({ name: "network.fetch", input: {}, result: {} })
+        );
+      },
+      message: /behaviorCases capabilityCalls must contain 0 to 8 calls/
     }
   ];
 

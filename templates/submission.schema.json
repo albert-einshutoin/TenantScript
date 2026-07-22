@@ -118,7 +118,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "payload", "expected"],
+            "required": ["name", "payload", "expected", "capabilityCalls"],
             "properties": {
               "name": {
                 "type": "string",
@@ -167,6 +167,23 @@
                     }
                   }
                 ]
+              },
+              "capabilityCalls": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "input", "result"],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+                    },
+                    "input": true,
+                    "result": true
+                  }
+                }
               }
             }
           }

@@ -52,7 +52,8 @@
             "priority": "high",
             "subject": "Database unavailable"
           }
-        }
+        },
+        "capabilityCalls": []
       },
       {
         "name": "rejects-unsupported-priority",
@@ -67,7 +68,8 @@
             "hookName": "ticket.created",
             "message": "invalid ticket payload"
           }
-        }
+        },
+        "capabilityCalls": []
       }
     ]
   },

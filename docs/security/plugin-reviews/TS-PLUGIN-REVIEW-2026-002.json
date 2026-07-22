@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T06:05:26.000Z",
+  "reviewedAt": "2026-07-22T06:18:06.000Z",
   "domains": [
     {
       "name": "security",
@@ -53,7 +53,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, and exercises the plugin against freshly packed public package contents. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then loads the generated CommonJS bundle in a child process and dispatches the packet's bounded success and failure cases with exact-result and zero-capability-call assertions."
+      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, and exercises the plugin against freshly packed public package contents. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then loads the generated CommonJS bundle in a child process and dispatches the packet's bounded success and failure cases with exact-result assertions and ordered input/result plans for declared capability calls."
     },
     {
       "name": "operations",
@@ -90,11 +90,11 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "ac63f8cc6fcbe71f85f8d9d0883a2d606286079a2e8d6fd2a26b47df8ab64826",
-    "scripts/check-template-submissions.test.mjs": "7838be23fa2924556933b87ba9b3502f275e711a863999353b8c503cf1c897ee",
-    "scripts/template-submission-bundle-runner.mjs": "4ccc819a7d3fb6336ed4f6ebd659a990e8cca70d3781004e98ecc644951d35b0",
-    "scripts/template-submission-e2e.test.mjs": "8675f1d52d282e7c8f836001fc4091665fd568ada23e485e14f1807855d5b9f2",
-    "templates/submission.schema.json": "8b2a57f834ebdae76833cb14f245260a8cc43014343b8d90609528d5cdf897b4",
+    "scripts/check-template-submissions.mjs": "cb5ea68194d6f7427fa7fc2854162867c99d7efe8cc907fb3dde391883a1bd77",
+    "scripts/check-template-submissions.test.mjs": "4c298c1d08418adb76d41d7dc0b5f79bcc9d9fbfab72403d1d537e82678c6696",
+    "scripts/template-submission-bundle-runner.mjs": "0b16742578dd08751abcc989ab2891b790064db06664eb057d9906456c6d9b5d",
+    "scripts/template-submission-e2e.test.mjs": "8257f6cb8a18eb9eb0d254ed03c31c335699f176953ec103ef3d7c212ee2194d",
+    "templates/submission.schema.json": "b5ecd58fd7bdb54ad23a2d8e124dad710894c4ba4f8e38572130bf70c8b6bd32",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
     "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",
