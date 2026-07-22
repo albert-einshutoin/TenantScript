@@ -199,6 +199,7 @@ function validateSubmission(directoryName) {
   validateVerification(
     submission.verification,
     submission.hook?.name,
+    submission.hook?.type,
     submission.capabilities,
     displayPath
   );
@@ -535,7 +536,7 @@ function validateEgress(value, displayPath) {
   }
 }
 
-function validateVerification(value, hookName, capabilities, displayPath) {
+function validateVerification(value, hookName, hookType, capabilities, displayPath) {
   if (!isRecord(value)) {
     errors.push(`${displayPath}: verification must be an object`);
     return;
@@ -575,10 +576,10 @@ function validateVerification(value, hookName, capabilities, displayPath) {
       }
     }
   }
-  validateBehaviorCases(value.behaviorCases, hookName, capabilities, displayPath);
+  validateBehaviorCases(value.behaviorCases, hookName, hookType, capabilities, displayPath);
 }
 
-function validateBehaviorCases(value, hookName, capabilities, displayPath) {
+function validateBehaviorCases(value, hookName, hookType, capabilities, displayPath) {
   if (!Array.isArray(value) || value.length < 2 || value.length > 16) {
     errors.push(`${displayPath}: verification.behaviorCases must contain between 2 and 16 cases`);
     return;
@@ -613,7 +614,7 @@ function validateBehaviorCases(value, hookName, capabilities, displayPath) {
     if (Buffer.byteLength(JSON.stringify(behaviorCase), "utf8") > maximumBehaviorCaseBytes) {
       errors.push(`${displayPath}: verification.behaviorCases entry exceeds the 16 KiB limit`);
     }
-    validateExpectedDispatchResult(behaviorCase.expected, hookName, displayPath);
+    validateExpectedDispatchResult(behaviorCase.expected, hookName, hookType, displayPath);
     validateCapabilityCalls(behaviorCase.capabilityCalls, capabilities, displayPath);
     if (isRecord(behaviorCase.expected) && behaviorCase.expected.ok === true) {
       hasSuccess = true;
@@ -665,16 +666,21 @@ function validateCapabilityCalls(value, capabilities, displayPath) {
   }
 }
 
-function validateExpectedDispatchResult(value, hookName, displayPath) {
+function validateExpectedDispatchResult(value, hookName, hookType, displayPath) {
   const prefix = "verification.behaviorCases.expected.";
   if (!isRecord(value) || typeof value.ok !== "boolean") {
     errors.push(`${displayPath}: verification.behaviorCases expected must contain boolean ok`);
     return;
   }
   if (value.ok) {
-    validateAllowedFields(value, ["ok", "value"], displayPath, { prefix });
-    if (!("value" in value)) {
-      errors.push(`${displayPath}: verification.behaviorCases success is missing value`);
+    const successFields = hookType === "event" ? ["ok"] : ["ok", "value"];
+    validateAllowedFields(value, successFields, displayPath, { prefix });
+    // Event hooks deliberately discard handler values, while blocking hooks must prove the exact
+    // transformed or policy result that callers observe.
+    if (hookType !== "event" && !("value" in value)) {
+      errors.push(
+        `${displayPath}: verification.behaviorCases blocking-hook success is missing value`
+      );
     }
     return;
   }

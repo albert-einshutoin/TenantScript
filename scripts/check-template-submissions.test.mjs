@@ -302,6 +302,28 @@ test("rejects unbounded, unordered, or open generated bundle behavior cases", ()
   }
 });
 
+test("allows value-less event success but requires blocking-hook values", () => {
+  withRepository(({ root, submission }) => {
+    submission.hook.type = "event";
+    submission.verification.behaviorCases[0].expected = { ok: true };
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 0, result.stderr);
+  });
+
+  withRepository(({ root, submission }) => {
+    submission.verification.behaviorCases[0].expected = { ok: true };
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /blocking-hook success is missing value/);
+  });
+});
+
 test("rejects closed-schema, identity, SDK, hook, and egress violations", () => {
   withRepository(({ root, submission }) => {
     submission.unexpected = true;

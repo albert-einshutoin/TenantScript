@@ -56,6 +56,33 @@ test("submission installation disables hooks and registry access", () => {
   assert.ok(!arguments_.includes("--prefer-offline"));
 });
 
+test("SDK tarball rewrites preserve exact third-party dependencies", () => {
+  assert.deepEqual(
+    rewriteSubmissionDependencies(
+      {
+        "@tenantscript/manifest": "0.0.0",
+        "@tenantscript/plugin-sdk": "0.0.0",
+        zod: "4.3.6"
+      },
+      "manifest.tgz",
+      "plugin-sdk.tgz"
+    ),
+    {
+      "@tenantscript/manifest": "file:manifest.tgz",
+      "@tenantscript/plugin-sdk": "file:plugin-sdk.tgz",
+      zod: "4.3.6"
+    }
+  );
+});
+
+test("event success comparison omits the SDK-only undefined value", () => {
+  assert.deepEqual(normalizeDispatchResult({ ok: true, value: undefined }, "event"), { ok: true });
+  assert.deepEqual(normalizeDispatchResult({ ok: true, value: null }, "transform"), {
+    ok: true,
+    value: null
+  });
+});
+
 test("submitted commands cannot inherit secrets and are externally time bounded", () => {
   process.env.TENANTSCRIPT_SUBMISSION_TEST_SECRET = "must-not-reach-submitted-code";
   try {
@@ -291,15 +318,20 @@ async function exerciseSubmission(submission) {
       await readFile(join(repoRoot, "packages", "cli", "package.json"), "utf8")
     );
     assert.equal(metadata.sdk.lastTestedVersion, cliPackageJson.version);
-    assert.deepEqual(packageJson.dependencies, {
-      "@tenantscript/manifest": metadata.sdk.lastTestedVersion,
-      "@tenantscript/plugin-sdk": metadata.sdk.lastTestedVersion
-    });
+    assert.equal(
+      packageJson.dependencies["@tenantscript/manifest"],
+      metadata.sdk.lastTestedVersion
+    );
+    assert.equal(
+      packageJson.dependencies["@tenantscript/plugin-sdk"],
+      metadata.sdk.lastTestedVersion
+    );
 
-    packageJson.dependencies = {
-      "@tenantscript/manifest": `file:${manifestTarball}`,
-      "@tenantscript/plugin-sdk": `file:${pluginSdkTarball}`
-    };
+    packageJson.dependencies = rewriteSubmissionDependencies(
+      packageJson.dependencies,
+      manifestTarball,
+      pluginSdkTarball
+    );
     packageJson.pnpm = {
       overrides: {
         "@tenantscript/manifest": `file:${manifestTarball}`,
@@ -364,7 +396,11 @@ async function exerciseSubmission(submission) {
         },
         behaviorCase.name
       );
-      assert.deepEqual(outcome.result, behaviorCase.expected, behaviorCase.name);
+      assert.deepEqual(
+        normalizeDispatchResult(outcome.result, metadata.hook.type),
+        behaviorCase.expected,
+        behaviorCase.name
+      );
       assert.deepEqual(
         outcome.capabilityCalls,
         behaviorCase.capabilityCalls.map(({ name, input }) => ({ name, input })),
@@ -384,6 +420,25 @@ async function exerciseSubmission(submission) {
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+function rewriteSubmissionDependencies(dependencies, manifestTarball, pluginSdkTarball) {
+  // Only the SDK packages are replaced with freshly packed workspace artifacts. Preserving exact
+  // third-party versions ensures the E2E exercises the dependency contract that was reviewed.
+  return {
+    ...dependencies,
+    "@tenantscript/manifest": `file:${manifestTarball}`,
+    "@tenantscript/plugin-sdk": `file:${pluginSdkTarball}`
+  };
+}
+
+function normalizeDispatchResult(result, hookType) {
+  // The SDK returns value: undefined for successful event hooks, which JSON evidence cannot encode.
+  // Blocking hooks retain their exact value because callers observe it.
+  if (hookType === "event" && result !== null && typeof result === "object" && result.ok === true) {
+    return { ok: true };
+  }
+  return result;
 }
 
 function dispatchBundleInChild(bundlePath, request, caseName) {

@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T07:25:41.000Z",
+  "reviewedAt": "2026-07-22T07:38:18.000Z",
   "domains": [
     {
       "name": "security",
@@ -59,7 +59,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, and exercises the plugin against freshly packed public package contents. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then dispatches the generated CommonJS plugin export through the scoped loader with authenticated exact-result assertions and ordered input/result plans for declared capability calls."
+      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, preserves every reviewed exact third-party dependency while replacing only TenantScript SDK packages with fresh tarballs, and exercises the plugin against those public package contents. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then dispatches the generated CommonJS plugin export through the scoped loader with authenticated exact-result assertions and ordered input/result plans for declared capability calls. Successful event hooks omit the SDK-only undefined value from JSON evidence, while blocking-hook success retains its exact caller-visible value."
     },
     {
       "name": "operations",
@@ -101,11 +101,11 @@
     "packages/loader/src/index.ts": "513cf56b15615102ec8bf693a917ac5437910471ebacd56f86ed77095ebb599f",
     "packages/loader/test/loader.test.ts": "e147380384f76b4b693b8a13c98522a7d5d0afb44de2444bce2be2b3aa16767d",
     "packages/loader/test/security-suite.test.ts": "bd1e1400676d6bf3567154f9efb1b38cb2aa1393871fe2fc405b70a7a5123f45",
-    "scripts/check-template-submissions.mjs": "2c052c9f45ec9bf2f23fdfd84e55ce52872faf0b4ab291a4882c32a69f0427e0",
-    "scripts/check-template-submissions.test.mjs": "a5258f914005ab6b117b79aea8775ae017c34de3386732d2affb60758f8835a2",
+    "scripts/check-template-submissions.mjs": "ad89a130d384495133fdb097de4eec86cea4658132848127c772ad3e5324555d",
+    "scripts/check-template-submissions.test.mjs": "b21af9c47b05e56129fada7f266d662ae4e18352ea636350ddb360b2c6b265b8",
     "scripts/template-submission-bundle-runner.mjs": "1a06b289fcc0d17c55c630329dfb0723be98c7ef63093c434eb6dd56442e96fe",
-    "scripts/template-submission-e2e.test.mjs": "84fa88083abed6242d6527251d517345e18d7e5e80a28879a2adecfce4c9c08f",
-    "templates/submission.schema.json": "b5ecd58fd7bdb54ad23a2d8e124dad710894c4ba4f8e38572130bf70c8b6bd32",
+    "scripts/template-submission-e2e.test.mjs": "4671079da20bfbdf6086e9da1cf758f54dd537378adf6eed1187761496ffd329",
+    "templates/submission.schema.json": "b94b725a1d9f3d94bcb8a48788185aba0533ed99d2b1a7f9af67996898656fd4",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
     "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",

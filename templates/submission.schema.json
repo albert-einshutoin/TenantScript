@@ -130,7 +130,7 @@
                   {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": ["ok", "value"],
+                    "required": ["ok"],
                     "properties": { "ok": { "const": true }, "value": true }
                   },
                   {

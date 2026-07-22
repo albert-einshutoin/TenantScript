@@ -60,7 +60,9 @@ likewise contain public DNS hosts only; local DNS names and IP literals are reje
 Repository paths may use legitimate security vocabulary such as `token-refresh.ts`; the checker scans
 the digest-bound file contents instead of treating path segments as secret fields.
 The exact `@tenantscript/manifest` and `@tenantscript/plugin-sdk` dependency versions must equal
-`sdk.lastTestedVersion`; the declared caret range must include that version.
+`sdk.lastTestedVersion`; the declared caret range must include that version. Exact third-party
+dependencies are preserved while Tier 1 replaces only those two SDK packages with freshly packed
+workspace artifacts.
 
 ```sh
 # cwd: template plugin directory
@@ -112,7 +114,8 @@ The closed packet schema requires:
 - one hook name/type, sorted capabilities and config keys, plus explicit deny or host allowlist egress;
 - canonical build, test, and audit commands with repository-local evidence;
 - two to sixteen sorted deterministic behavior cases, including success and failure results and an
-  explicit ordered capability-call plan;
+  explicit ordered capability-call plan. Event success is `{ "ok": true }`; transform and policy
+  success also requires the exact `value` observed by the caller;
 - an approved review record, security note, and explicit non-guarantees.
 
 The canonical audit command recorded in the packet is:
