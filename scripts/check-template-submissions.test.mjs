@@ -332,6 +332,24 @@ test("rejects sensitive content in referenced evidence and security notes", () =
   });
 });
 
+test("rejects local Unix paths embedded in file URLs", () => {
+  for (const localUrl of ["file:///home/alice/review.log", "file:///tmp/output"]) {
+    withRepository(({ root, submission }) => {
+      writeFileSync(
+        join(root, "templates/submissions/example-template/verification.md"),
+        `Local artifact: ${localUrl}\n`
+      );
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /verification\.evidence contains sensitive or private content/);
+      assert.doesNotMatch(result.stderr, /alice|review\.log|file:\/\/\/|\/tmp\/output/);
+    });
+  }
+});
+
 test("rejects raw account identifiers in referenced packet files", () => {
   withRepository(({ root, submission }) => {
     const accountIdentifier = "a".repeat(32);

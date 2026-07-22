@@ -48,7 +48,8 @@ TenantScript package versions, explicit license, strict TypeScript configuration
 The manifest and packet must agree exactly on hook name/type, capability names, configuration keys,
 and egress mode/hosts; Tier 1 compares them before build and audit. Keep capabilities empty and egress
 denied unless the reviewed behavior needs narrower declared access. Never include tokens, credentials,
-raw account identifiers, customer/tenant data, private URLs, production logs, or machine-local paths.
+raw account identifiers, customer/tenant data, private URLs, production logs, or machine-local paths
+(including `file:///home/...` and `file:///tmp/...` URLs).
 
 ```sh
 # cwd: template plugin directory
