@@ -50,6 +50,8 @@ and egress mode/hosts; Tier 1 compares them before build and audit. Keep capabil
 denied unless the reviewed behavior needs narrower declared access. Never include tokens, credentials,
 raw account identifiers, customer/tenant data, private URLs, production logs, or machine-local paths
 (including `file:///home/...` and `file:///tmp/...` URLs).
+The exact `@tenantscript/manifest` and `@tenantscript/plugin-sdk` dependency versions must equal
+`sdk.lastTestedVersion`; the declared caret range must include that version.
 
 ```sh
 # cwd: template plugin directory
@@ -65,8 +67,9 @@ tag, abbreviated SHA, or mutable URL—and SHA-256 every regular file under the 
 directory. The digest map must cover that directory exactly; unlisted helpers, build inputs, and
 symlinks are rejected. Package-manager control files such as `.pnpmfile.cjs`, `.npmrc`, and
 `pnpm-workspace.yaml` are also rejected because they can execute hooks or alter installation before
-the audited bundle is produced. Do not amend or force-push the source commit after review starts; a
-legitimate change creates a new commit and new digests.
+the audited bundle is produced. The package must not define `preinstall`, `install`, `postinstall`, or
+`prepare` scripts. Do not amend or force-push the source commit after review starts; a legitimate
+change creates a new commit and new digests.
 Use the HTTPS repository-root URL for `source.repository`; GitHub `/tree/...` and `/blob/...` browser
 URLs are rejected because they are not repository identities.
 

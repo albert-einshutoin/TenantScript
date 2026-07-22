@@ -63,9 +63,10 @@ async function exerciseSubmission(submission) {
     const cliPackageJson = JSON.parse(
       await readFile(join(repoRoot, "packages", "cli", "package.json"), "utf8")
     );
+    assert.equal(metadata.sdk.lastTestedVersion, cliPackageJson.version);
     assert.deepEqual(packageJson.dependencies, {
-      "@tenantscript/manifest": cliPackageJson.version,
-      "@tenantscript/plugin-sdk": cliPackageJson.version
+      "@tenantscript/manifest": metadata.sdk.lastTestedVersion,
+      "@tenantscript/plugin-sdk": metadata.sdk.lastTestedVersion
     });
 
     const auditPackagePath = join(tempRoot, "audit-package.json");

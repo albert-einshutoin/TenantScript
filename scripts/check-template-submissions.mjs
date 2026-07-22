@@ -31,6 +31,7 @@ const unsafePackageManagerControlNames = new Set([
   "pnpm-workspace.yaml",
   "pnpm-workspace.yml"
 ]);
+const installLifecycleScripts = new Set(["preinstall", "install", "postinstall", "prepare"]);
 const topLevelFields = [
   "schemaVersion",
   "kind",
@@ -156,7 +157,7 @@ function validateSubmission(directoryName) {
   validateBoundedString(submission.displayName, 80, "displayName", displayPath);
   validateBoundedString(submission.summary, 240, "summary", displayPath);
   validateBoundedString(submission.license, 80, "license", displayPath);
-  validateSource(submission.source, submission.license, directoryName, displayPath);
+  validateSource(submission.source, submission.sdk, submission.license, directoryName, displayPath);
   validateSdk(submission.sdk, displayPath);
   validateHook(submission.hook, displayPath);
   validateSortedStrings(submission.capabilities, "capabilities", displayPath, capabilityPattern);
@@ -168,7 +169,7 @@ function validateSubmission(directoryName) {
   validateNonGuarantees(submission.nonGuarantees, displayPath);
 }
 
-function validateSource(value, license, directoryName, displayPath) {
+function validateSource(value, sdk, license, directoryName, displayPath) {
   if (!isRecord(value)) {
     errors.push(`${displayPath}: source must be an object`);
     return;
@@ -260,6 +261,27 @@ function validateSource(value, license, directoryName, displayPath) {
         const packageJson = JSON.parse(packageContent.toString("utf8"));
         if (!isRecord(packageJson) || packageJson.license !== license) {
           errors.push(`${displayPath}: license must match source package metadata`);
+        }
+        if (
+          isRecord(packageJson) &&
+          isRecord(packageJson.scripts) &&
+          Object.keys(packageJson.scripts).some((name) => installLifecycleScripts.has(name))
+        ) {
+          // These hooks run on downstream installation while CI intentionally disables them, so an
+          // accepted template must not contain behavior that the audited path never exercises.
+          errors.push(`${displayPath}: source package must not define install lifecycle scripts`);
+        }
+        const dependencies = isRecord(packageJson) ? packageJson.dependencies : undefined;
+        const testedVersion = isRecord(sdk) ? sdk.lastTestedVersion : undefined;
+        if (
+          typeof testedVersion !== "string" ||
+          !isRecord(dependencies) ||
+          dependencies["@tenantscript/manifest"] !== testedVersion ||
+          dependencies["@tenantscript/plugin-sdk"] !== testedVersion
+        ) {
+          errors.push(
+            `${displayPath}: source package SDK dependencies must match sdk.lastTestedVersion`
+          );
         }
       } catch {
         errors.push(`${displayPath}: source package metadata is invalid`);

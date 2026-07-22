@@ -18,7 +18,10 @@ function withRepository(run) {
     mkdirSync(join(pluginRoot, "src"), { recursive: true });
     mkdirSync(join(pluginRoot, "test"), { recursive: true });
     mkdirSync(join(root, "docs", "security", "plugin-reviews"), { recursive: true });
-    writeFileSync(join(pluginRoot, "package.json"), '{"license":"Apache-2.0"}\n');
+    writeFileSync(
+      join(pluginRoot, "package.json"),
+      '{"license":"Apache-2.0","dependencies":{"@tenantscript/manifest":"0.0.0","@tenantscript/plugin-sdk":"0.0.0"}}\n'
+    );
     writeFileSync(join(pluginRoot, "src", "index.ts"), "export const plugin = {};\n");
     writeFileSync(join(pluginRoot, "src", "manifest.ts"), "export const manifest = {};\n");
     writeFileSync(join(pluginRoot, "test", "plugin.test.ts"), "export {};\n");
@@ -345,6 +348,43 @@ test("rejects package-manager hook and configuration files", () => {
       assert.doesNotMatch(result.stderr, /pnpmfile|npmrc|pnpm-workspace/);
     });
   }
+});
+
+test("rejects package install lifecycle scripts", () => {
+  withRepository(({ root, submission }) => {
+    const packagePath = "templates/submissions/example-template/plugin/package.json";
+    writeFileSync(
+      join(root, packagePath),
+      `${JSON.stringify({ license: "Apache-2.0", scripts: { postinstall: "node unsafe.js" } })}\n`
+    );
+    submission.source.files[packagePath] = createHash("sha256")
+      .update(readFileSync(join(root, packagePath)))
+      .digest("hex");
+    submission.source.revision = "1".repeat(40);
+    writeReviewRecord(root, submission);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /source package must not define install lifecycle scripts/);
+    assert.doesNotMatch(result.stderr, /postinstall|unsafe\.js/);
+  });
+});
+
+test("binds SDK metadata to submitted package dependencies", () => {
+  withRepository(({ root, submission }) => {
+    submission.sdk = { range: "^1.0.0", lastTestedVersion: "1.0.0" };
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(
+      result.stderr,
+      /source package SDK dependencies must match sdk\.lastTestedVersion/
+    );
+  });
 });
 
 test("rejects sensitive content in referenced evidence and security notes", () => {
