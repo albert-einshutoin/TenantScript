@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tenantscript.dev/schemas/plugin-authoring-judge-output-v1.json",
+  "title": "TenantScript isolated plugin authoring judge output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "taskResults"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "taskResults": {
+      "$ref": "result.schema.json#/properties/taskResults",
+      "minItems": 10,
+      "maxItems": 10
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tenantscript.dev/schemas/plugin-authoring-runner-request-v1.json",
+  "title": "TenantScript isolated plugin authoring runner request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryRevision", "corpusDigest", "run", "sandbox"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repositoryRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "corpusDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "agent", "model", "costUsd"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "agent": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "model": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "costUsd": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100000
+        }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "timeoutMs", "memoryMb", "cpuCount", "pidsLimit", "tmpfsMb"],
+      "properties": {
+        "image": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@sha256:[0-9a-f]{64}$",
+          "maxLength": 300
+        },
+        "timeoutMs": { "type": "integer", "minimum": 1000, "maximum": 600000 },
+        "memoryMb": { "type": "integer", "minimum": 128, "maximum": 2048 },
+        "cpuCount": { "type": "number", "minimum": 0.25, "maximum": 4 },
+        "pidsLimit": { "type": "integer", "minimum": 16, "maximum": 256 },
+        "tmpfsMb": { "type": "integer", "minimum": 16, "maximum": 256 }
+      }
+    }
+  }
+}
