@@ -181,6 +181,21 @@ test("rejects mutable provenance, source drift, missing evidence, path escape, a
   });
 });
 
+test("requires the packet-owned SECURITY.md as the dedicated security note", () => {
+  withRepository(({ root, submission }) => {
+    submission.securityNote = "templates/submissions/example-template/verification.md";
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(
+      result.stderr,
+      /submission\.json: securityNote must reference the packet-owned SECURITY\.md/
+    );
+  });
+});
+
 test("rejects duplicate slugs and emits findings in stable lexical order", () => {
   withRepository(({ root, submission }) => {
     const duplicate = structuredClone(submission);

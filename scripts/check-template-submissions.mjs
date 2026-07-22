@@ -167,6 +167,12 @@ function validateSubmission(directoryName) {
   validateSortedStrings(submission.configKeys, "configKeys", displayPath, configKeyPattern);
   validateVerification(submission.verification, displayPath);
   validateReviewRecord(submission.reviewRecord, submission.source, displayPath);
+  const expectedSecurityNote = `templates/submissions/${directoryName}/SECURITY.md`;
+  // Keep security guidance owned by the submitted packet so a generic evidence file cannot
+  // silently replace the dedicated trust-boundary and non-certification documentation.
+  if (submission.securityNote !== expectedSecurityNote) {
+    errors.push(`${displayPath}: securityNote must reference the packet-owned SECURITY.md`);
+  }
   validateSafeReference(submission.securityNote, "securityNote", displayPath);
   validateNonGuarantees(submission.nonGuarantees, displayPath);
 }
