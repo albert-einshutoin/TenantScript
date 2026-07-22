@@ -15,10 +15,10 @@
 
 ## チャンク A: template gallery(T01–T03)
 
-- [ ] **P4-T01**(M)template リポジトリ + 基準
+- [x] **P4-T01**(M)template リポジトリ + 基準
   - 内容: 初期デモ3種(webhook transformer / invoice approval / API policy)を template 化。**全 template にテストと manifest を同梱することを基準化**
   - DoD: `ext init --template <name>` で取得 → build → test が green
-  - Progress: Issue #298でwebhook transformer、Issue #300でinvoice approval、Issue #302でread-only route境界をfail-closedにするAPI policyを追加。3templateをpacked public packageに対するbuild/test/audit E2Eで検証。community template基準は未完
+  - Progress: Issue #298でwebhook transformer、Issue #300でinvoice approval、Issue #302でAPI policyを追加。Issue #304でclosed submission schema、immutable source digest、security metadata、review record、packed public package build/test/auditを必須化し、初期3templateとcommunity template基準をrepository検証
 
 - [ ] **P4-T02**(M)gallery サイト
   - 内容: template 一覧の静的サイト(Workers Assets)。検索・タグ・再利用数の表示
@@ -27,6 +27,7 @@
 - [ ] **P4-T03**(S)template 投稿ガイドライン
   - 内容: 投稿要件(テスト同梱、capability 最小権限、ライセンス)、レビューフロー
   - DoD: community からの初投稿がガイドラインのみで完走
+  - Progress: Issue #304で投稿正本、PR template、機械validator、first-party模擬投稿の完走を追加。実community authorによる初投稿と独立reviewは未完
 
 ## チャンク B: plugin review & 配布品質(T04–T06)
 

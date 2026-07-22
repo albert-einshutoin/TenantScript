@@ -21,7 +21,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-07-21T23:49:08.000Z",
+  "reviewedAt": "2026-07-22T00:14:15.000Z",
   "domains": [
     {
       "name": "security",
@@ -84,7 +84,7 @@
     "docs/security/plugin-review-checklist.md": "1bee7b0bebadfd44b9cf86e288af48d3a8f9f42c0883d39823809dd1857f54f5",
     "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "package.json": "09639376196ebb109c481011bedcab4b8526eced22d3ec746e247c10fa7d94e1",
+    "package.json": "8a20dda7fdbea72fee98490b8fbf682ad8b1f05565bded1bb8088ab64669a96a",
     "packages/cli/package.json": "3fc19043fe7b7fd7cc2fae985cc5be60785063d884c798f2e3a23c5425c43123"
   },
   "decision": "approve",
