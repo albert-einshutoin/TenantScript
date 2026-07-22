@@ -201,6 +201,35 @@ test("generated bundle cannot access ambient Node globals in the sandbox", async
   }
 });
 
+test("generated bundle cannot recover Node through a host constructor", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-constructor-"));
+  try {
+    const bundlePath = join(tempRoot, "plugin.cjs");
+    await writeFile(
+      bundlePath,
+      `module.exports.plugin = {
+        dispatch() {
+          let processVisible = false;
+          try {
+            processVisible = Boolean(URL.constructor.constructor("return process")());
+          } catch {}
+          return { ok: true, value: { processVisible } };
+        }
+      };\n`
+    );
+
+    const outcome = dispatchBundleInChild(
+      bundlePath,
+      { hookName: "ticket.created", payload: {}, capabilityCalls: [] },
+      "sandbox-constructor"
+    );
+
+    assert.deepEqual(outcome.result, { ok: true, value: { processVisible: false } });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("generated bundle cannot hide a denied ambient fetch", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-egress-"));
   try {

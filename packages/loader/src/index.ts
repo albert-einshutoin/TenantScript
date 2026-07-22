@@ -206,6 +206,9 @@ function runHandlerInWorker(params: {
 }): Promise<ScopedRuntimeResult> {
   const worker = new Worker(RUNTIME_WORKER_SOURCE, {
     eval: true,
+    // The local sandbox should not inherit credentials even if a future runtime regression exposes
+    // part of the worker environment. Production execution remains isolated by Cloudflare.
+    env: {},
     // A worker-level V8 heap cap contains allocation storms independently from the wall-clock
     // timeout, protecting local tooling from a plugin that exhausts memory before it yields.
     resourceLimits: { maxOldGenerationSizeMb: params.limits.memoryMb },
@@ -408,7 +411,11 @@ parentPort.on("message", (message) => {
     const pending = pendingCapabilities.get(message.id);
     if (pending !== undefined) {
       pendingCapabilities.delete(message.id);
-      pending.resolve(message.value);
+      try {
+        pending.resolve(serializeSandboxValue(message.value, "capability result"));
+      } catch (error) {
+        pending.reject(error);
+      }
     }
     return;
   }
@@ -433,38 +440,139 @@ run().then(
 
 async function run() {
   const limits = workerData.limits;
-  const moduleExports = {};
-  const sandbox = vm.createContext(
-    {
-      module: { exports: moduleExports },
-      exports: moduleExports,
-      URL,
-      fetch: (input) => {
-        const url = getFetchTarget(input);
-        countSubrequest(limits, "fetch:" + url);
-        logs.push({ reason: "egress_denied", target: url });
-        return Promise.reject(new Error("egress denied: " + url));
-      }
-    },
-    {
-      codeGeneration: {
-        strings: false,
-        wasm: false
-      }
+  const sandbox = vm.createContext({}, {
+    codeGeneration: {
+      strings: false,
+      wasm: false
     }
-  );
+  });
+
+  initializeSandbox(sandbox, limits);
 
   evaluateBundle(workerData.bundleCode, sandbox, limits);
   assertEntrypointExists(sandbox.module.exports, workerData.handlerName, workerData.entrypoint);
   sandbox.__tenant_handler_name = workerData.handlerName;
-  sandbox.__tenant_payload = workerData.payload;
-  sandbox.__tenant_context = {
-    capability: (name, input) => callParentCapability(limits, name, input)
-  };
 
   parentPort.postMessage({ type: "started" });
   const result = invokeEntrypointInSandbox(sandbox, limits, workerData.entrypoint);
   return await withWallClockTimeout(result, limits.timeoutMs, workerData.handlerName);
+}
+
+function initializeSandbox(sandbox, limits) {
+  const HostURL = URL;
+  const normalizeUrl = hardenBridge((input, base) =>
+    new HostURL(input, base === undefined ? undefined : base).toString()
+  );
+  const denyFetch = hardenBridge((target) => {
+    try {
+      countSubrequest(limits, "fetch:" + target);
+      logs.push({ reason: "egress_denied", target });
+      return Promise.reject(serializeBridgeError(new Error("egress denied: " + target)));
+    } catch (error) {
+      return Promise.reject(serializeBridgeError(error));
+    }
+  });
+  const callCapability = hardenBridge(async (name, inputJson) => {
+    try {
+      return await callParentCapability(limits, name, JSON.parse(inputJson));
+    } catch (error) {
+      throw serializeBridgeError(error);
+    }
+  });
+
+  // Only primitives and prototype-less bridge callables cross into the context. The initialization
+  // script captures those bridges, deletes their globals, and exposes realm-native wrappers so
+  // submitted code cannot climb a host constructor chain back to Node's process object.
+  sandbox.__tenant_normalize_url_bridge = normalizeUrl;
+  sandbox.__tenant_fetch_bridge = denyFetch;
+  sandbox.__tenant_capability_bridge = callCapability;
+  sandbox.__tenant_payload_json = serializeSandboxValue(workerData.payload, "handler payload");
+
+  const initialization = new vm.Script(
+    [
+      "(() => {",
+      "  const normalizeUrlBridge = __tenant_normalize_url_bridge;",
+      "  const fetchBridge = __tenant_fetch_bridge;",
+      "  const capabilityBridge = __tenant_capability_bridge;",
+      "  const payloadJson = __tenant_payload_json;",
+      "  delete globalThis.__tenant_normalize_url_bridge;",
+      "  delete globalThis.__tenant_fetch_bridge;",
+      "  delete globalThis.__tenant_capability_bridge;",
+      "  delete globalThis.__tenant_payload_json;",
+      "  const bridgeError = (error) => {",
+      "    try {",
+      "      const packet = JSON.parse(String(error));",
+      "      const bridged = new Error(packet.message);",
+      "      bridged.name = packet.name;",
+      "      if (packet.executionStatus === 'budget_exceeded') {",
+      "        bridged.executionStatus = packet.executionStatus;",
+      "        bridged.logs = packet.logs;",
+      "      }",
+      "      return bridged;",
+      "    } catch (_ignored) {",
+      "      return new Error('sandbox bridge failed');",
+      "    }",
+      "  };",
+      "  class SandboxURL {",
+      "    constructor(input, base) {",
+      "      try {",
+      "        this.href = normalizeUrlBridge(String(input), base === undefined ? undefined : String(base));",
+      "      } catch (error) {",
+      "        throw new TypeError(bridgeError(error).message);",
+      "      }",
+      "    }",
+      "    toString() { return this.href; }",
+      "    toJSON() { return this.href; }",
+      "  }",
+      "  Object.freeze(SandboxURL.prototype);",
+      "  Object.freeze(SandboxURL);",
+      "  globalThis.URL = SandboxURL;",
+      "  globalThis.fetch = async (input) => {",
+      "    try {",
+      "      return await fetchBridge(String(input));",
+      "    } catch (error) {",
+      "      throw bridgeError(error);",
+      "    }",
+      "  };",
+      "  globalThis.module = { exports: {} };",
+      "  globalThis.exports = globalThis.module.exports;",
+      "  globalThis.__tenant_payload = JSON.parse(payloadJson);",
+      "  globalThis.__tenant_context = Object.freeze({",
+      "    capability: async (name, input) => {",
+      "      try {",
+      "        const resultJson = await capabilityBridge(String(name), JSON.stringify(input));",
+      "        return JSON.parse(resultJson);",
+      "      } catch (error) {",
+      "        throw bridgeError(error);",
+      "      }",
+      "    }",
+      "  });",
+      "})();"
+    ].join("\n"),
+    { filename: "tenant-sandbox-init.cjs" }
+  );
+  initialization.runInContext(sandbox, { timeout: limits.timeoutMs });
+}
+
+function hardenBridge(bridge) {
+  Object.setPrototypeOf(bridge, null);
+  return Object.freeze(bridge);
+}
+
+function serializeSandboxValue(value, label) {
+  try {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) {
+      return "null";
+    }
+    return serialized;
+  } catch (_error) {
+    throw new TypeError(label + " must be JSON-serializable");
+  }
+}
+
+function serializeBridgeError(error) {
+  return JSON.stringify(serializeError(error));
 }
 
 function evaluateBundle(bundleCode, sandbox, limits) {
@@ -616,6 +724,20 @@ function serializeError(error) {
   }
   if (error instanceof Error) {
     return { name: error.name, message: error.message };
+  }
+  if (
+    isRecord(error) &&
+    error.executionStatus === "budget_exceeded" &&
+    Array.isArray(error.logs) &&
+    typeof error.name === "string" &&
+    typeof error.message === "string"
+  ) {
+    return {
+      name: error.name,
+      message: error.message,
+      executionStatus: error.executionStatus,
+      logs: error.logs
+    };
   }
   // Errors created inside node:vm are from another realm, so instanceof Error is false. Preserve
   // only their stable name/message fields instead of reflecting stack or plugin-owned metadata.

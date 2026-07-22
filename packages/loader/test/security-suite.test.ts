@@ -39,6 +39,56 @@ describe("loader security suite", () => {
     });
   });
 
+  it("does not expose host constructors through sandbox inputs or bridges", async () => {
+    const bundle = await bundleFromSource(`
+      const recoversProcess = (value) => {
+        try {
+          return Boolean(value.constructor.constructor("return process")());
+        } catch (_error) {
+          return false;
+        }
+      };
+      exports.plugin = {
+        dispatch: async ({ payload, context }) => {
+          const capabilityResult = await context.capability("kv.state", { key: "priority" });
+          return {
+            ok: true,
+            value: {
+              url: recoversProcess(URL),
+              fetch: recoversProcess(fetch),
+              module: recoversProcess(module),
+              payload: recoversProcess(payload),
+              capability: recoversProcess(context.capability),
+              capabilityResult: recoversProcess(capabilityResult)
+            }
+          };
+        }
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: { subject: "Database unavailable" },
+        context: { capability: vi.fn().mockResolvedValue({ value: "high" }) }
+      })
+    ).resolves.toEqual({
+      value: {
+        ok: true,
+        value: {
+          url: false,
+          fetch: false,
+          module: false,
+          payload: false,
+          capability: false,
+          capabilityResult: false
+        }
+      },
+      logs: []
+    });
+  });
+
   it("does not expose process, raw secret bindings, or global namespaces", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {

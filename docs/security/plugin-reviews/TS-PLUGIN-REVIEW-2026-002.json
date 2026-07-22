@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T07:38:18.000Z",
+  "reviewedAt": "2026-07-22T07:53:27.000Z",
   "domains": [
     {
       "name": "security",
@@ -43,7 +43,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, collapses malformed values and hostile accessor or Proxy failures to one fixed non-reflective message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker scans every bounded regular file in the closed packet tree, including unreferenced artifacts, and rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs, Unix and Windows machine-local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, prebuilt audit artifacts, package-manager control files including lockfiles, package-manager settings, install lifecycle scripts, non-canonical build or test entrypoints, and pre/post wrappers, non-public repository and egress hosts including legacy numeric IPv4 forms, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks, ignores lockfiles, requires offline installation, gives submitted processes only an allowlisted accountless environment, runs the copied build outside the checkout, dispatches the generated bundle through the scoped loader without ambient Node globals or raw egress, authenticates child evidence with a per-dispatch key, and proves canonical audit outputs are absent before build."
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, collapses malformed values and hostile accessor or Proxy failures to one fixed non-reflective message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker scans every bounded regular file in the closed packet tree, including unreferenced artifacts, and rejects sensitive metadata, digest-bound source, and evidence including labelled or unlabelled raw account identifiers, private-host URLs across URL schemes, local file URLs, Unix and Windows machine-local paths, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, prebuilt audit artifacts, package-manager control files including lockfiles, package-manager settings, install lifecycle scripts, non-canonical build or test entrypoints, and pre/post wrappers, non-public repository and egress hosts including legacy numeric IPv4 forms, GitHub browser URLs, unrelated approvals, and unsafe guarantee language without reflecting submitted values. It also requires the packet-owned SECURITY.md so generic evidence cannot replace the dedicated trust-boundary guidance. Digest-map path keys may contain legitimate security vocabulary, while every referenced source file still receives the same content scan. Source digests remain enforceable after squash while available Git objects receive an additional content check, and the E2E disables lifecycle scripts and pnpmfile hooks, ignores lockfiles, requires offline installation, gives submitted processes only an allowlisted accountless environment, runs the copied build outside the checkout, dispatches the generated bundle through the scoped loader without ambient Node globals or raw egress, authenticates child evidence with a per-dispatch key, and proves canonical audit outputs are absent before build. The local worker starts with an empty environment, reconstructs payloads and capability results inside the sandbox realm, exposes only realm-native URL, fetch, module, and capability wrappers, and removes prototype-less host bridges before submitted code runs so constructor-chain escapes cannot recover Node process access."
     },
     {
       "name": "compatibility",
@@ -98,13 +98,13 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "packages/loader/src/index.ts": "513cf56b15615102ec8bf693a917ac5437910471ebacd56f86ed77095ebb599f",
+    "packages/loader/src/index.ts": "800e8955cee0c768c129d3992e5041ce98732ee3c523d60c17f6e7ba8d34ec21",
     "packages/loader/test/loader.test.ts": "e147380384f76b4b693b8a13c98522a7d5d0afb44de2444bce2be2b3aa16767d",
-    "packages/loader/test/security-suite.test.ts": "bd1e1400676d6bf3567154f9efb1b38cb2aa1393871fe2fc405b70a7a5123f45",
+    "packages/loader/test/security-suite.test.ts": "9edbf59ea5eee76256ebe0a1f2b1da3bf9cc7c1653455ae23ef6c17226c9b0cf",
     "scripts/check-template-submissions.mjs": "ad89a130d384495133fdb097de4eec86cea4658132848127c772ad3e5324555d",
     "scripts/check-template-submissions.test.mjs": "b21af9c47b05e56129fada7f266d662ae4e18352ea636350ddb360b2c6b265b8",
     "scripts/template-submission-bundle-runner.mjs": "1a06b289fcc0d17c55c630329dfb0723be98c7ef63093c434eb6dd56442e96fe",
-    "scripts/template-submission-e2e.test.mjs": "4671079da20bfbdf6086e9da1cf758f54dd537378adf6eed1187761496ffd329",
+    "scripts/template-submission-e2e.test.mjs": "d0062e0ccaf99d61e688ba48bb778c3ff891724ec3b1d5476a21e6e3b2284320",
     "templates/submission.schema.json": "b94b725a1d9f3d94bcb8a48788185aba0533ed99d2b1a7f9af67996898656fd4",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
