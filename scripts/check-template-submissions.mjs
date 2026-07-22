@@ -1,0 +1,507 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
+
+const repoRoot = resolve(process.argv[2] ?? process.cwd());
+const submissionsRoot = resolve(repoRoot, "templates", "submissions");
+const canonicalRepository = "https://github.com/albert-einshutoin/TenantScript";
+const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const hookNamePattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+const exactSemverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const caretRangePattern = /^\^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const shaPattern = /^[0-9a-f]{40}$/;
+const digestPattern = /^[0-9a-f]{64}$/;
+const capabilityPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+const configKeyPattern = /^[A-Za-z][A-Za-z0-9]*$/;
+const hostPattern = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+const requiredSourceSuffixes = [
+  "package.json",
+  "src/index.ts",
+  "src/manifest.ts",
+  "test/plugin.test.ts"
+];
+const topLevelFields = [
+  "schemaVersion",
+  "kind",
+  "slug",
+  "displayName",
+  "summary",
+  "license",
+  "source",
+  "sdk",
+  "hook",
+  "capabilities",
+  "egress",
+  "configKeys",
+  "verification",
+  "reviewRecord",
+  "securityNote",
+  "nonGuarantees"
+];
+const expectedCommands = {
+  build: "pnpm build",
+  test: "pnpm test",
+  audit: "ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/plugin.cjs"
+};
+const secretLikePatterns = [
+  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/,
+  /\bsk-[A-Za-z0-9]{20,}\b/,
+  /\bBearer\s+[A-Za-z0-9._~+/-]{12,}/i,
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+  /\b(?:tenant|customer)_[A-Za-z0-9_-]{4,}\b/i,
+  /dash\.cloudflare\.com\/[0-9a-f]{16,}/i,
+  /(?:\/Users\/|\/Volumes\/|(?:^|\s)\/(?:home|workspace|root|tmp)\/|[A-Za-z]:\\Users\\)/
+];
+const sensitiveFieldPattern = /(?:token|secret|credential|password|account.?id)/i;
+const prohibitedGuaranteePattern =
+  /\b(?:certified|certification|vulnerability[- ]free|guaranteed safe)\b/i;
+const errors = [];
+const seenSlugs = new Set();
+let submissionCount = 0;
+
+if (!existsSync(submissionsRoot)) {
+  errors.push("templates/submissions: directory is missing");
+} else {
+  const entries = readdirSync(submissionsRoot, { withFileTypes: true }).sort((left, right) =>
+    left.name.localeCompare(right.name)
+  );
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !slugPattern.test(entry.name)) {
+      errors.push("templates/submissions: directory name is invalid");
+      continue;
+    }
+    validateSubmission(entry.name);
+  }
+  if (submissionCount === 0) {
+    errors.push("templates/submissions: at least one submission is required");
+  }
+}
+
+if (errors.length > 0) {
+  process.stderr.write(`${[...new Set(errors)].sort().join("\n")}\n`);
+  process.exitCode = 1;
+} else {
+  const noun = submissionCount === 1 ? "submission" : "submissions";
+  process.stdout.write(`Template submission check passed (${String(submissionCount)} ${noun}).\n`);
+}
+
+function validateSubmission(directoryName) {
+  submissionCount += 1;
+  const displayPath = `templates/submissions/${directoryName}/submission.json`;
+  const absolutePath = resolve(submissionsRoot, directoryName, "submission.json");
+  let submission;
+  try {
+    submission = JSON.parse(readFileSync(absolutePath, "utf8"));
+  } catch {
+    errors.push(`${displayPath}: invalid or missing JSON`);
+    return;
+  }
+  if (!isRecord(submission)) {
+    errors.push(`${displayPath}: submission must be a JSON object`);
+    return;
+  }
+
+  validateAllowedFields(submission, topLevelFields, displayPath);
+  for (const field of topLevelFields) {
+    if (!(field in submission)) errors.push(`${displayPath}: missing field ${field}`);
+  }
+  if (containsSensitiveContent(submission)) {
+    errors.push(`${displayPath}: sensitive or private content is not allowed`);
+  }
+  if (
+    (typeof submission.displayName === "string" &&
+      prohibitedGuaranteePattern.test(submission.displayName)) ||
+    (typeof submission.summary === "string" && prohibitedGuaranteePattern.test(submission.summary))
+  ) {
+    errors.push(`${displayPath}: prohibited guarantee language is not allowed`);
+  }
+
+  if (submission.schemaVersion !== 1) {
+    errors.push(`${displayPath}: schemaVersion must be 1`);
+  }
+  if (submission.kind !== "community" && submission.kind !== "simulation") {
+    errors.push(`${displayPath}: kind is invalid`);
+  }
+  if (typeof submission.slug !== "string" || !slugPattern.test(submission.slug)) {
+    errors.push(`${displayPath}: slug is invalid`);
+  } else {
+    if (submission.slug !== directoryName) {
+      errors.push(`${displayPath}: slug must match its directory`);
+    }
+    if (seenSlugs.has(submission.slug)) {
+      errors.push("templates/submissions: duplicate slug");
+    }
+    seenSlugs.add(submission.slug);
+  }
+  validateBoundedString(submission.displayName, 80, "displayName", displayPath);
+  validateBoundedString(submission.summary, 240, "summary", displayPath);
+  validateBoundedString(submission.license, 80, "license", displayPath);
+  validateSource(submission.source, submission.license, displayPath);
+  validateSdk(submission.sdk, displayPath);
+  validateHook(submission.hook, displayPath);
+  validateSortedStrings(submission.capabilities, "capabilities", displayPath, capabilityPattern);
+  validateEgress(submission.egress, displayPath);
+  validateSortedStrings(submission.configKeys, "configKeys", displayPath, configKeyPattern);
+  validateVerification(submission.verification, displayPath);
+  validateReviewRecord(submission.reviewRecord, displayPath);
+  validateRegularReference(submission.securityNote, "securityNote", displayPath);
+  validateNonGuarantees(submission.nonGuarantees, displayPath);
+}
+
+function validateSource(value, license, displayPath) {
+  if (!isRecord(value)) {
+    errors.push(`${displayPath}: source must be an object`);
+    return;
+  }
+  validateAllowedFields(value, ["repository", "revision", "directory", "files"], displayPath, {
+    prefix: "source."
+  });
+  if (!isPublicRepositoryUrl(value.repository)) {
+    errors.push(`${displayPath}: source.repository must be a public HTTPS repository URL`);
+  }
+  const revisionIsValid = typeof value.revision === "string" && shaPattern.test(value.revision);
+  if (!revisionIsValid) {
+    errors.push(`${displayPath}: source.revision must be a full commit SHA`);
+  }
+  if (typeof value.directory !== "string" || !isRepositoryPath(value.directory)) {
+    errors.push(`${displayPath}: source.directory must stay inside the repository`);
+  }
+  if (!isRecord(value.files) || Object.keys(value.files).length === 0) {
+    errors.push(`${displayPath}: source.files must be a non-empty digest map`);
+    return;
+  }
+  const filePaths = Object.keys(value.files);
+  if (!isSortedUnique(filePaths)) {
+    errors.push(`${displayPath}: source.files must be sorted and unique`);
+  }
+  for (const suffix of requiredSourceSuffixes) {
+    const requiredPath =
+      typeof value.directory === "string" ? `${value.directory}/${suffix}` : suffix;
+    if (!(requiredPath in value.files)) {
+      errors.push(`${displayPath}: source.files is missing a required plugin file`);
+    }
+  }
+  for (const path of filePaths) {
+    const digest = value.files[path];
+    if (
+      typeof value.directory !== "string" ||
+      !path.startsWith(`${value.directory}/`) ||
+      !isRepositoryPath(path)
+    ) {
+      errors.push(`${displayPath}: source file path must stay inside source.directory`);
+      continue;
+    }
+    if (typeof digest !== "string" || !digestPattern.test(digest)) {
+      errors.push(`${displayPath}: source file digest must be lowercase SHA-256`);
+      continue;
+    }
+    const current = readRegularRepositoryFile(path);
+    if (current === undefined || sha256(current) !== digest) {
+      errors.push(`${displayPath}: source file digest does not match`);
+      continue;
+    }
+    if (
+      revisionIsValid &&
+      value.repository === canonicalRepository &&
+      !matchesGitRevision(value.revision, path, digest)
+    ) {
+      errors.push(`${displayPath}: source revision does not contain the reviewed file digest`);
+    }
+  }
+  if (typeof value.directory === "string" && typeof license === "string") {
+    const packageContent = readRegularRepositoryFile(`${value.directory}/package.json`);
+    if (packageContent !== undefined) {
+      try {
+        const packageJson = JSON.parse(packageContent.toString("utf8"));
+        if (!isRecord(packageJson) || packageJson.license !== license) {
+          errors.push(`${displayPath}: license must match source package metadata`);
+        }
+      } catch {
+        errors.push(`${displayPath}: source package metadata is invalid`);
+      }
+    }
+  }
+}
+
+function validateSdk(value, displayPath) {
+  if (!isRecord(value)) {
+    errors.push(`${displayPath}: sdk must be an object`);
+    return;
+  }
+  validateAllowedFields(value, ["range", "lastTestedVersion"], displayPath, { prefix: "sdk." });
+  const rangeMatch = typeof value.range === "string" ? value.range.match(caretRangePattern) : null;
+  if (rangeMatch === null) {
+    errors.push(`${displayPath}: sdk.range must be a pinned caret range`);
+  }
+  const versionMatch =
+    typeof value.lastTestedVersion === "string"
+      ? value.lastTestedVersion.match(exactSemverPattern)
+      : null;
+  if (versionMatch === null) {
+    errors.push(`${displayPath}: sdk.lastTestedVersion must be exact semver`);
+  }
+  if (rangeMatch !== null && versionMatch !== null && !satisfiesCaret(rangeMatch, versionMatch)) {
+    errors.push(`${displayPath}: sdk.lastTestedVersion must satisfy sdk.range`);
+  }
+}
+
+function validateHook(value, displayPath) {
+  if (!isRecord(value)) {
+    errors.push(`${displayPath}: hook must be an object`);
+    return;
+  }
+  validateAllowedFields(value, ["name", "type"], displayPath, { prefix: "hook." });
+  if (typeof value.name !== "string" || !hookNamePattern.test(value.name)) {
+    errors.push(`${displayPath}: hook.name is invalid`);
+  }
+  if (!new Set(["event", "transform", "policy"]).has(value.type)) {
+    errors.push(`${displayPath}: hook.type is invalid`);
+  }
+}
+
+function validateEgress(value, displayPath) {
+  if (!isRecord(value)) {
+    errors.push(`${displayPath}: egress must be an object`);
+    return;
+  }
+  validateAllowedFields(value, ["mode", "allowHosts"], displayPath, { prefix: "egress." });
+  if (value.mode !== "deny" && value.mode !== "allowlist") {
+    errors.push(`${displayPath}: egress.mode is invalid`);
+  }
+  validateSortedStrings(value.allowHosts, "egress.allowHosts", displayPath, hostPattern);
+  if (value.mode === "deny" && Array.isArray(value.allowHosts) && value.allowHosts.length > 0) {
+    errors.push(`${displayPath}: deny egress requires an empty allowHosts`);
+  }
+  if (
+    value.mode === "allowlist" &&
+    Array.isArray(value.allowHosts) &&
+    value.allowHosts.length === 0
+  ) {
+    errors.push(`${displayPath}: allowlist egress requires at least one host`);
+  }
+}
+
+function validateVerification(value, displayPath) {
+  if (!isRecord(value)) {
+    errors.push(`${displayPath}: verification must be an object`);
+    return;
+  }
+  validateAllowedFields(value, ["commands", "evidence"], displayPath, {
+    prefix: "verification."
+  });
+  if (!isRecord(value.commands)) {
+    errors.push(`${displayPath}: verification.commands must be an object`);
+  } else {
+    validateAllowedFields(value.commands, Object.keys(expectedCommands), displayPath, {
+      prefix: "verification.commands."
+    });
+    for (const [name, command] of Object.entries(expectedCommands)) {
+      if (value.commands[name] !== command) {
+        errors.push(`${displayPath}: verification.commands.${name} must use the canonical command`);
+      }
+    }
+  }
+  validateSortedStrings(value.evidence, "verification.evidence", displayPath);
+  if (Array.isArray(value.evidence) && value.evidence.length === 0) {
+    errors.push(`${displayPath}: verification.evidence must not be empty`);
+  }
+  if (Array.isArray(value.evidence)) {
+    for (const evidence of value.evidence) {
+      if (typeof evidence !== "string" || !isRepositoryPath(evidence)) {
+        errors.push(`${displayPath}: verification.evidence must stay inside the repository`);
+      } else if (readRegularRepositoryFile(evidence) === undefined) {
+        errors.push(`${displayPath}: verification.evidence must reference a regular file`);
+      }
+    }
+  }
+}
+
+function validateReviewRecord(value, displayPath) {
+  const content = validateRegularReference(value, "reviewRecord", displayPath);
+  if (content === undefined) return;
+  try {
+    const record = JSON.parse(content.toString("utf8"));
+    if (!isRecord(record) || record.decision !== "approve") {
+      errors.push(`${displayPath}: reviewRecord must contain an approve decision`);
+    }
+  } catch {
+    errors.push(`${displayPath}: reviewRecord must contain valid JSON`);
+  }
+}
+
+function validateRegularReference(value, field, displayPath) {
+  if (typeof value !== "string" || !isRepositoryPath(value)) {
+    errors.push(`${displayPath}: ${field} must stay inside the repository`);
+    return undefined;
+  }
+  const content = readRegularRepositoryFile(value);
+  if (content === undefined) {
+    errors.push(`${displayPath}: ${field} must reference a regular file`);
+  }
+  return content;
+}
+
+function validateNonGuarantees(value, displayPath) {
+  validateSortedStrings(value, "nonGuarantees", displayPath);
+  if (!Array.isArray(value) || value.length === 0) {
+    errors.push(`${displayPath}: nonGuarantees must not be empty`);
+    return;
+  }
+  for (const item of value) {
+    if (typeof item !== "string" || item.trim() === "" || item.length > 240) {
+      errors.push(`${displayPath}: nonGuarantees entries must be bounded strings`);
+    }
+  }
+}
+
+function validateAllowedFields(value, allowed, displayPath, options = {}) {
+  const prefix = options.prefix ?? "";
+  for (const field of Object.keys(value)) {
+    if (!allowed.includes(field)) {
+      errors.push(`${displayPath}: unknown field ${prefix}${field}`);
+    }
+  }
+  for (const field of allowed) {
+    if (!(field in value)) errors.push(`${displayPath}: missing field ${prefix}${field}`);
+  }
+}
+
+function validateBoundedString(value, maximum, field, displayPath) {
+  if (typeof value !== "string" || value.trim() === "" || value.length > maximum) {
+    errors.push(`${displayPath}: ${field} must be a bounded non-empty string`);
+  }
+}
+
+function validateSortedStrings(value, field, displayPath, pattern) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    errors.push(`${displayPath}: ${field} must be an array of strings`);
+    return;
+  }
+  if (!isSortedUnique(value)) {
+    errors.push(`${displayPath}: ${field} must be sorted and unique`);
+  }
+  if (pattern !== undefined && value.some((item) => !pattern.test(item))) {
+    errors.push(`${displayPath}: ${field} contains an invalid value`);
+  }
+}
+
+function isSortedUnique(value) {
+  return value.every((item, index) => index === 0 || value[index - 1] < item);
+}
+
+function isPublicRepositoryUrl(value) {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.search === "" &&
+      url.hash === "" &&
+      url.hostname !== "localhost" &&
+      url.pathname.split("/").filter(Boolean).length >= 2
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isRepositoryPath(value) {
+  if (typeof value !== "string" || value === "" || isAbsolute(value) || value.includes("\\")) {
+    return false;
+  }
+  const absolute = resolve(repoRoot, value);
+  const pathFromRoot = relative(repoRoot, absolute);
+  return pathFromRoot !== "" && pathFromRoot !== ".." && !pathFromRoot.startsWith(`..${sep}`);
+}
+
+function readRegularRepositoryFile(path) {
+  if (!isRepositoryPath(path) || hasSymlinkedParent(path)) return undefined;
+  try {
+    const absolute = resolve(repoRoot, path);
+    if (!lstatSync(absolute).isFile()) return undefined;
+    return readFileSync(absolute);
+  } catch {
+    return undefined;
+  }
+}
+
+function hasSymlinkedParent(path) {
+  const segments = path.split("/");
+  let current = repoRoot;
+  for (const segment of segments) {
+    current = resolve(current, segment);
+    try {
+      if (lstatSync(current).isSymbolicLink()) return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function matchesGitRevision(revision, path, digest) {
+  const commitCheck = runGit(["cat-file", "-e", `${revision}^{commit}`]);
+  if (commitCheck.status !== 0) return false;
+  const result = runGit(["show", `${revision}:${path}`], { encoding: "buffer" });
+  return result.status === 0 && sha256(result.stdout) === digest;
+}
+
+function runGit(args, options = {}) {
+  return spawnSync("git", args, {
+    cwd: repoRoot,
+    encoding: options.encoding === "buffer" ? null : "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
+function sha256(content) {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function satisfiesCaret(rangeMatch, versionMatch) {
+  const base = rangeMatch.slice(1).map(Number);
+  const version = versionMatch.slice(1).map(Number);
+  const [major, minor, patch] = base;
+  const [versionMajor, versionMinor, versionPatch] = version;
+  if (
+    major === undefined ||
+    minor === undefined ||
+    patch === undefined ||
+    versionMajor === undefined ||
+    versionMinor === undefined ||
+    versionPatch === undefined
+  ) {
+    return false;
+  }
+  const atLeastBase = compareSemver(version, base) >= 0;
+  if (!atLeastBase) return false;
+  if (major > 0) return versionMajor === major;
+  if (minor > 0) return versionMajor === 0 && versionMinor === minor;
+  return versionMajor === 0 && versionMinor === 0 && versionPatch === patch;
+}
+
+function compareSemver(left, right) {
+  for (let index = 0; index < 3; index += 1) {
+    const difference = left[index] - right[index];
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+function containsSensitiveContent(value, fieldName = "") {
+  if (sensitiveFieldPattern.test(fieldName)) return true;
+  if (typeof value === "string") return secretLikePatterns.some((pattern) => pattern.test(value));
+  if (Array.isArray(value)) return value.some((item) => containsSensitiveContent(item));
+  if (isRecord(value)) {
+    return Object.entries(value).some(([field, child]) => containsSensitiveContent(child, field));
+  }
+  return false;
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
