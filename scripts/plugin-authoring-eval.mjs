@@ -345,7 +345,11 @@ export function renderPluginAuthoringEvalDashboard(report) {
   }
   lines.push("", "## Failure guidance", "");
   if (report.failures.length === 0) {
-    lines.push("No fixture failures. This is not evidence from an external agent run.");
+    lines.push(
+      report.source.metricProvenance === "isolated-agent-run"
+        ? "No isolated-agent failures in the declared evidence. This does not establish production safety."
+        : "No fixture failures. This is not evidence from an external agent run."
+    );
   } else {
     for (const failure of report.failures) {
       lines.push(`- \`${failure.code}\` (${String(failure.count)}): ${failure.nextAction}`);
@@ -355,7 +359,9 @@ export function renderPluginAuthoringEvalDashboard(report) {
     "",
     "## Execution boundary",
     "",
-    "This repository contract does not execute unknown generated code. A future isolated runner must produce every deterministic judge result, preserve the pinned revision, and stop when isolation is unavailable.",
+    report.source.metricProvenance === "isolated-agent-run"
+      ? "This repository contract does not execute unknown generated code while generating this report. Isolated-agent evidence is accepted only with a declared evidence bundle digest and does not establish production safety."
+      : "This repository contract does not execute unknown generated code. A future isolated runner must produce every deterministic judge result, preserve the pinned revision, and stop when isolation is unavailable.",
     ""
   );
   return lines.join("\n");
@@ -428,6 +434,12 @@ function assertOutputPath(path) {
   }
 }
 
+function readBoundedArtifact(path) {
+  const metadata = lstatSync(path);
+  assert(metadata.isFile() && !metadata.isSymbolicLink() && metadata.size <= 1_048_576);
+  return readFileSync(path, "utf8");
+}
+
 function checkOrWriteArtifacts(root, write) {
   const outputs = generatePluginAuthoringEvalArtifacts(root);
   const evalRoot = join(root, "evals", "plugin-authoring");
@@ -445,7 +457,7 @@ function checkOrWriteArtifacts(root, write) {
       }
     } else {
       try {
-        assert(readFileSync(path, "utf8") === expected);
+        assert(readBoundedArtifact(path) === expected);
       } catch {
         throw new Error("plugin authoring eval artifacts are missing or stale");
       }

@@ -139,3 +139,20 @@ test("will not follow a generated-report symlink during write", () => {
     assert.equal(readFileSync(outside, "utf8"), "operator-owned\n");
   });
 });
+
+test("will not follow a generated-artifact symlink during check", () => {
+  withFixture((root) => {
+    const outputPath = join(root, "evals", "plugin-authoring", "dashboard.md");
+    const outside = join(root, "outside-dashboard.md");
+    writeFileSync(outside, readFileSync(outputPath));
+    rmSync(outputPath);
+    symlinkSync(outside, outputPath);
+
+    const result = spawnSync(process.execPath, [scriptPath, root], {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "" }
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /plugin authoring eval artifacts are missing or stale/);
+  });
+});

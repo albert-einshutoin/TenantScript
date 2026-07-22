@@ -249,6 +249,13 @@ test("excludes repository simulations from isolated-agent metrics and dashboard 
   isolatedSource.run.agent = "external-agent";
   isolatedSource.run.provenance = "isolated-agent-run";
   isolatedSource.run.evidenceBundleDigest = "a".repeat(64);
+  const isolatedSuccess = parsePluginAuthoringResult(isolatedSource, corpus);
+  const successfulDashboard = renderPluginAuthoringEvalDashboard(
+    buildPluginAuthoringEvalReport(corpus, [simulation, isolatedSuccess])
+  );
+  assert.match(successfulDashboard, /No isolated-agent failures/);
+  assert.doesNotMatch(successfulDashboard, /not evidence from an external agent run/);
+
   const failedJudge = isolatedSource.taskResults[0].judges.find(
     (judge) => judge.name === "security-test"
   );
