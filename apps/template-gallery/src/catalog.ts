@@ -73,7 +73,7 @@ export function getReviewedRevisionUrl(source: TemplateCatalogItem["source"]): s
   const repository = new URL(source.repository);
   if (repository.hostname.toLowerCase() !== "github.com") return undefined;
 
-  const pathname = repository.pathname.replace(/\/+$/u, "");
+  const pathname = repository.pathname.replace(/\/+$/u, "").replace(/\.git$/iu, "");
   repository.pathname = `${pathname}/tree/${source.revision}`;
   return repository.href;
 }

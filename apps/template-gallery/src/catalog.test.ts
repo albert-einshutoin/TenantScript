@@ -10,6 +10,17 @@ describe("reviewed source links", () => {
     ).toBe(`https://github.com/example/template/tree/${revision}`);
   });
 
+  it("strips the accepted HTTPS clone suffix before linking the reviewed tree", () => {
+    const revision = "f".repeat(40);
+
+    expect(
+      getReviewedRevisionUrl({
+        repository: "https://github.com/example/template.GIT/",
+        revision
+      })
+    ).toBe(`https://github.com/example/template/tree/${revision}`);
+  });
+
   it("does not invent a mutable or provider-specific revision URL for unknown hosts", () => {
     expect(
       getReviewedRevisionUrl({
