@@ -413,6 +413,52 @@ test("materializes the exact baseline without repository metadata or user-owned 
   }
 });
 
+test("disables host Git hooks while materializing the baseline", () => {
+  const root = mkdtempSync(join(tmpdir(), "tenantscript-hook-isolation-"));
+  const repositoryRoot = join(root, "repository");
+  const temporaryRoot = join(root, "temporary");
+  const destination = join(temporaryRoot, "baseline");
+  const marker = join(root, "hook-executed");
+  try {
+    mkdirSync(repositoryRoot);
+    mkdirSync(temporaryRoot);
+    assert.equal(spawnSync("git", ["init"], { cwd: repositoryRoot }).status, 0);
+    writeFileSync(join(repositoryRoot, "README.md"), "fixture\n");
+    assert.equal(spawnSync("git", ["add", "README.md"], { cwd: repositoryRoot }).status, 0);
+    assert.equal(
+      spawnSync(
+        "git",
+        [
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          "commit",
+          "-m",
+          "fixture"
+        ],
+        { cwd: repositoryRoot }
+      ).status,
+      0
+    );
+    const hook = join(repositoryRoot, ".git", "hooks", "post-checkout");
+    writeFileSync(hook, `#!/bin/sh\nprintf executed > ${JSON.stringify(marker)}\n`);
+    chmodSync(hook, 0o755);
+
+    createGitWorkspaceAdapter().prepare({
+      repositoryRoot,
+      revision: "HEAD",
+      destination,
+      temporaryRoot
+    });
+
+    assert.equal(existsSync(marker), false);
+    assert.equal(readFileSync(join(destination, "README.md"), "utf8"), "fixture\n");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("CLI completes the pinned workspace, sandbox, evidence, and result workflow", async () => {
   await withCandidateBundle((candidateRoot) => {
     const root = mkdtempSync(join(tmpdir(), "tenantscript-isolated-cli-"));

@@ -540,12 +540,16 @@ export function createGitWorkspaceAdapter() {
     prepare({ repositoryRoot, revision, destination, temporaryRoot }) {
       const worktree = join(temporaryRoot, "source-worktree");
       const environment = trustedEnvironment(temporaryRoot);
-      const added = spawnSync("git", ["worktree", "add", "--detach", worktree, revision], {
-        cwd: repositoryRoot,
-        encoding: "utf8",
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"]
-      });
+      const added = spawnSync(
+        "git",
+        ["-c", "core.hooksPath=/dev/null", "worktree", "add", "--detach", worktree, revision],
+        {
+          cwd: repositoryRoot,
+          encoding: "utf8",
+          env: environment,
+          stdio: ["ignore", "pipe", "pipe"]
+        }
+      );
       if (added.status !== 0 || added.error !== undefined) {
         throw new Error("worktree add failed");
       }
@@ -561,12 +565,16 @@ export function createGitWorkspaceAdapter() {
         // temporary copy removable prevents a failed run from leaving durable worktree evidence.
         chmodTree(destination, 0o755, 0o644);
       } finally {
-        const removed = spawnSync("git", ["worktree", "remove", "--force", worktree], {
-          cwd: repositoryRoot,
-          encoding: "utf8",
-          env: environment,
-          stdio: ["ignore", "pipe", "pipe"]
-        });
+        const removed = spawnSync(
+          "git",
+          ["-c", "core.hooksPath=/dev/null", "worktree", "remove", "--force", worktree],
+          {
+            cwd: repositoryRoot,
+            encoding: "utf8",
+            env: environment,
+            stdio: ["ignore", "pipe", "pipe"]
+          }
+        );
         if (removed.status !== 0 || removed.error !== undefined) {
           throw new Error("worktree cleanup failed");
         }
