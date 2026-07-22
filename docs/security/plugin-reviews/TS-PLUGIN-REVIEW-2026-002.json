@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T07:53:27.000Z",
+  "reviewedAt": "2026-07-22T08:10:26.000Z",
   "domains": [
     {
       "name": "security",
@@ -59,7 +59,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, preserves every reviewed exact third-party dependency while replacing only TenantScript SDK packages with fresh tarballs, and exercises the plugin against those public package contents. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then dispatches the generated CommonJS plugin export through the scoped loader with authenticated exact-result assertions and ordered input/result plans for declared capability calls. Successful event hooks omit the SDK-only undefined value from JSON evidence, while blocking-hook success retains its exact caller-visible value."
+      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, preserves every reviewed exact third-party dependency while replacing only TenantScript SDK packages with fresh tarballs, and exercises the plugin against those public package contents. Its ext command resolves only to an accountless offline installation assembled from freshly packed CLI and runtime packages under the temporary root; the readable shim contains no checkout path. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then dispatches the generated CommonJS plugin export through the scoped loader with authenticated exact-result assertions and ordered input/result plans for declared capability calls. Successful event hooks omit the SDK-only undefined value from JSON evidence, while blocking-hook success retains its exact caller-visible value."
     },
     {
       "name": "operations",
@@ -104,7 +104,7 @@
     "scripts/check-template-submissions.mjs": "ad89a130d384495133fdb097de4eec86cea4658132848127c772ad3e5324555d",
     "scripts/check-template-submissions.test.mjs": "b21af9c47b05e56129fada7f266d662ae4e18352ea636350ddb360b2c6b265b8",
     "scripts/template-submission-bundle-runner.mjs": "1a06b289fcc0d17c55c630329dfb0723be98c7ef63093c434eb6dd56442e96fe",
-    "scripts/template-submission-e2e.test.mjs": "d0062e0ccaf99d61e688ba48bb778c3ff891724ec3b1d5476a21e6e3b2284320",
+    "scripts/template-submission-e2e.test.mjs": "f1af659b981da992200865347c62868b84c5ecdc5f5b5e7625e0e36ec012fee8",
     "templates/submission.schema.json": "b94b725a1d9f3d94bcb8a48788185aba0533ed99d2b1a7f9af67996898656fd4",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",

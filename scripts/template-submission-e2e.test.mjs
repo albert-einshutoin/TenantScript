@@ -56,6 +56,13 @@ test("submission installation disables hooks and registry access", () => {
   assert.ok(!arguments_.includes("--prefer-offline"));
 });
 
+test("CLI shim does not reveal the repository checkout", () => {
+  const source = cliShimSource();
+
+  assert.ok(!source.includes(repoRoot));
+  assert.match(source, /new URL\("\.\.\/trusted-cli\/node_modules\//);
+});
+
 test("SDK tarball rewrites preserve exact third-party dependencies", () => {
   assert.deepEqual(
     rewriteSubmissionDependencies(
@@ -380,7 +387,7 @@ async function exerciseSubmission(submission) {
     // Restore the digest-bound metadata before build and audit; install-only tarball overrides must
     // never become a sanitized substitute for the package consumers receive.
     await writeFile(packageJsonPath, submittedPackageJson);
-    const cliBinDirectory = await createCliShim(tempRoot);
+    const cliBinDirectory = await createCliShim(tempRoot, manifestTarball);
     // The build is the authority for audited outputs; prove the copied submission and offline
     // install did not pre-populate artifacts that a no-op build could silently reuse.
     await assert.rejects(readFile(join(pluginDirectory, "manifest.json")), { code: "ENOENT" });
@@ -509,19 +516,75 @@ function dispatchBundleInChild(bundlePath, request, caseName) {
   return outcome;
 }
 
-async function createCliShim(tempRoot) {
+async function createCliShim(tempRoot, manifestTarball) {
   const binDirectory = join(tempRoot, "bin");
   const shimPath = join(binDirectory, "ext");
-  const cliPath = join(repoRoot, "packages", "cli", "dist", "bin.js");
-  await mkdir(binDirectory, { recursive: true });
+  const trustedCliDirectory = join(tempRoot, "trusted-cli");
+  const tarballs = {
+    "@tenantscript/cli": packPublicPackage("packages/cli", tempRoot),
+    "@tenantscript/control-plane": packPublicPackage("packages/control-plane", tempRoot),
+    "@tenantscript/host-sdk": packPublicPackage("packages/host-sdk", tempRoot),
+    "@tenantscript/loader": packPublicPackage("packages/loader", tempRoot),
+    "@tenantscript/manifest": manifestTarball
+  };
+
+  await mkdir(trustedCliDirectory, { recursive: true });
   await writeFile(
-    shimPath,
-    `#!/usr/bin/env node\nimport { spawnSync } from "node:child_process";\nconst result = spawnSync(process.execPath, [${JSON.stringify(
-      cliPath
-    )}, ...process.argv.slice(2)], { stdio: "inherit" });\nprocess.exit(result.status ?? 1);\n`
+    join(trustedCliDirectory, "package.json"),
+    `${JSON.stringify(
+      {
+        private: true,
+        type: "module",
+        dependencies: { "@tenantscript/cli": `file:${tarballs["@tenantscript/cli"]}` },
+        pnpm: {
+          overrides: Object.fromEntries(
+            Object.entries(tarballs).map(([name, tarball]) => [name, `file:${tarball}`])
+          )
+        }
+      },
+      null,
+      2
+    )}\n`
   );
+  runSubmissionCommand(
+    "pnpm",
+    [
+      "--dir",
+      trustedCliDirectory,
+      "install",
+      "--store-dir",
+      pnpmStoreDirectory,
+      "--offline",
+      "--no-lockfile",
+      "--ignore-scripts",
+      "--ignore-pnpmfile"
+    ],
+    { label: "trusted CLI install" }
+  );
+  await readFile(
+    join(trustedCliDirectory, "node_modules", "@tenantscript", "cli", "dist", "bin.js"),
+    "utf8"
+  );
+  await mkdir(binDirectory, { recursive: true });
+  await writeFile(shimPath, cliShimSource());
   await chmod(shimPath, 0o755);
   return binDirectory;
+}
+
+function cliShimSource() {
+  // Resolve only within the temporary trusted-tool installation. Embedding repoRoot here would let
+  // submitted build code discover and consume mutable files outside its digest-bound source copy.
+  return `#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+const cliPath = fileURLToPath(
+  new URL("../trusted-cli/node_modules/@tenantscript/cli/dist/bin.js", import.meta.url)
+);
+const result = spawnSync(process.execPath, [cliPath, ...process.argv.slice(2)], {
+  stdio: "inherit"
+});
+process.exit(result.status ?? 1);
+`;
 }
 
 function submissionInstallArguments(pluginDirectory, storeDirectory) {
