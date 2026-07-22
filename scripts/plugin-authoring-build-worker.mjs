@@ -379,8 +379,8 @@ export function bindReviewedPlugin(plugin, reviewedManifest) {
 }
 
 function reviewedEntrypoint(taskRoot, reviewedManifest) {
-  return `import * as candidate from ${JSON.stringify(join(taskRoot, "src", "index.ts"))};
-import { bindReviewedPlugin } from ${JSON.stringify(join(dirname(taskRoot), "build", "runtime", "reviewed-plugin-binder", "index.js"))};
+  return `import { bindReviewedPlugin } from ${JSON.stringify(join(dirname(taskRoot), "build", "runtime", "reviewed-plugin-binder", "index.js"))};
+import * as candidate from ${JSON.stringify(join(taskRoot, "src", "index.ts"))};
 const candidatePlugin = candidate.plugin ?? candidate.default;
 export const plugin = bindReviewedPlugin(candidatePlugin, ${JSON.stringify(reviewedManifest)});
 export default plugin;

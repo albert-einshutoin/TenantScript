@@ -27,7 +27,7 @@ const corpus = parsePluginAuthoringCorpus(
 );
 const ticketTask = corpus.tasks.find((task) => task.id === "webhook-ticket-priority");
 
-function withFixture(run, source = ticketPrioritySource()) {
+function withFixture(run, source = ticketPrioritySource(), extraSourceFiles = {}) {
   const root = mkdtempSync(join(tmpdir(), "tenantscript-unit-adapter-"));
   const taskWorkspace = join(root, "work", ticketTask.id);
   const taskRoot = join(taskWorkspace, "source");
@@ -36,6 +36,9 @@ function withFixture(run, source = ticketPrioritySource()) {
   mkdirSync(baselineRoot);
   writeFileSync(join(taskRoot, "src", "manifest.ts"), manifestSource(ticketTask));
   writeFileSync(join(taskRoot, "src", "index.ts"), source);
+  for (const [name, contents] of Object.entries(extraSourceFiles)) {
+    writeFileSync(join(taskRoot, "src", name), contents);
+  }
   writeFileSync(
     join(taskRoot, "package.json"),
     '{"scripts":{"pretest":"touch candidate-test-ran","test":"exit 99"}}\n'
@@ -247,8 +250,9 @@ if (ambient.fetch !== undefined) {
   }, ticketPrioritySource(guard));
 });
 
-test("binds dispatch without exposing the judge-only binder to candidate imports", () => {
-  const source = `import * as sdk from "@tenantscript/plugin-sdk";
+test("binds dispatch before candidate side effects and hides the judge-only binder", () => {
+  const source = `import "./poison.js";
+import * as sdk from "@tenantscript/plugin-sdk";
 import { manifest } from "./manifest.js";
 const alternateManifest = {
   ...manifest,
@@ -256,10 +260,6 @@ const alternateManifest = {
   capabilities: { "slack.send": {} },
   egress: { mode: "allow", hosts: ["example.com"] }
 };
-WeakMap.prototype.get = () => () => ({
-  manifest: alternateManifest,
-  dispatch: async () => ({ ok: true, value: { priority: 99 } })
-});
 const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
 export const plugin = sdk.definePlugin({
   manifest: alternateManifest,
@@ -274,7 +274,19 @@ export const plugin = sdk.definePlugin({
 });
 export default plugin;
 `;
-  withFixture((context) => {
-    assert.equal(createPluginAuthoringUnitTestAdapter()(context), true);
-  }, source);
+  withFixture(
+    (context) => {
+      assert.equal(createPluginAuthoringUnitTestAdapter()(context), true);
+    },
+    source,
+    {
+      "poison.ts": `const prototype = WeakMap.prototype as unknown as { get: (...args: unknown[]) => unknown };
+prototype.get = () => () => ({
+  manifest: {},
+  dispatch: async () => ({ ok: true, value: { priority: 99 } })
+});
+export {};
+`
+    }
+  );
 });
