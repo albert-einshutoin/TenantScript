@@ -184,6 +184,7 @@ test("rejects sensitive content and prohibited guarantees without reflecting inp
     submission.summary = `Certified vulnerability-free ${credential}`;
     submission.nonGuarantees = ["customer tenant_very_private is safe"];
     submission.apiToken = credential;
+    submission["forged\nlog-line"] = credential;
     writeSubmission(root, "example-template", submission);
 
     const result = runChecker(root);
@@ -193,6 +194,30 @@ test("rejects sensitive content and prohibited guarantees without reflecting inp
     assert.match(result.stderr, /submission\.json: prohibited guarantee language is not allowed/);
     assert.doesNotMatch(result.stderr, new RegExp("A{8}"));
     assert.doesNotMatch(result.stderr, /tenant_very_private/);
+    assert.doesNotMatch(result.stderr, /forged|log-line/);
+  });
+});
+
+test("rejects oversized packets and unsafe semver components with bounded errors", () => {
+  withRepository(({ root, submission }) => {
+    submission.sdk.range = `^${"9".repeat(400)}.0.0`;
+    submission.sdk.lastTestedVersion = `${"9".repeat(400)}.0.0`;
+    writeSubmission(root, "example-template", submission);
+
+    const semverResult = runChecker(root);
+    assert.equal(semverResult.status, 1);
+    assert.match(
+      semverResult.stderr,
+      /submission\.json: sdk versions must use safe integer components/
+    );
+    assert.doesNotMatch(semverResult.stderr, /9{20}/);
+
+    submission.summary = "x".repeat(300_000);
+    writeSubmission(root, "example-template", submission);
+    const oversizedResult = runChecker(root);
+    assert.equal(oversizedResult.status, 1);
+    assert.match(oversizedResult.stderr, /submission\.json: JSON exceeds the 256 KiB limit/);
+    assert.ok(oversizedResult.stderr.length < 500);
   });
 });
 

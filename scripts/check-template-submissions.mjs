@@ -6,6 +6,8 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 const repoRoot = resolve(process.argv[2] ?? process.cwd());
 const submissionsRoot = resolve(repoRoot, "templates", "submissions");
 const canonicalRepository = "https://github.com/albert-einshutoin/TenantScript";
+const maximumSubmissionBytes = 256 * 1024;
+const maximumEvidenceBytes = 1024 * 1024;
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const hookNamePattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const exactSemverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -93,6 +95,12 @@ function validateSubmission(directoryName) {
   const absolutePath = resolve(submissionsRoot, directoryName, "submission.json");
   let submission;
   try {
+    const metadata = lstatSync(absolutePath);
+    if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error("invalid file");
+    if (metadata.size > maximumSubmissionBytes) {
+      errors.push(`${displayPath}: JSON exceeds the 256 KiB limit`);
+      return;
+    }
     submission = JSON.parse(readFileSync(absolutePath, "utf8"));
   } catch {
     errors.push(`${displayPath}: invalid or missing JSON`);
@@ -242,7 +250,19 @@ function validateSdk(value, displayPath) {
   if (versionMatch === null) {
     errors.push(`${displayPath}: sdk.lastTestedVersion must be exact semver`);
   }
-  if (rangeMatch !== null && versionMatch !== null && !satisfiesCaret(rangeMatch, versionMatch)) {
+  const safeComponents =
+    rangeMatch !== null &&
+    versionMatch !== null &&
+    [...rangeMatch.slice(1), ...versionMatch.slice(1)].every((part) =>
+      Number.isSafeInteger(Number(part))
+    );
+  if (rangeMatch !== null && versionMatch !== null && !safeComponents) {
+    errors.push(`${displayPath}: sdk versions must use safe integer components`);
+  } else if (
+    rangeMatch !== null &&
+    versionMatch !== null &&
+    !satisfiesCaret(rangeMatch, versionMatch)
+  ) {
     errors.push(`${displayPath}: sdk.lastTestedVersion must satisfy sdk.range`);
   }
 }
@@ -360,7 +380,9 @@ function validateAllowedFields(value, allowed, displayPath, options = {}) {
   const prefix = options.prefix ?? "";
   for (const field of Object.keys(value)) {
     if (!allowed.includes(field)) {
-      errors.push(`${displayPath}: unknown field ${prefix}${field}`);
+      const fieldPath = `${prefix}${field}`;
+      const safeField = /^[A-Za-z][A-Za-z0-9.]{0,80}$/.test(fieldPath) ? ` ${fieldPath}` : "";
+      errors.push(`${displayPath}: unknown field${safeField}`);
     }
   }
   for (const field of allowed) {
@@ -410,7 +432,12 @@ function isPublicRepositoryUrl(value) {
 }
 
 function isRepositoryPath(value) {
-  if (typeof value !== "string" || value === "" || isAbsolute(value) || value.includes("\\")) {
+  if (
+    typeof value !== "string" ||
+    value === "" ||
+    isAbsolute(value) ||
+    /[\\:\u0000-\u001f\u007f]/u.test(value)
+  ) {
     return false;
   }
   const absolute = resolve(repoRoot, value);
@@ -422,7 +449,8 @@ function readRegularRepositoryFile(path) {
   if (!isRepositoryPath(path) || hasSymlinkedParent(path)) return undefined;
   try {
     const absolute = resolve(repoRoot, path);
-    if (!lstatSync(absolute).isFile()) return undefined;
+    const metadata = lstatSync(absolute);
+    if (!metadata.isFile() || metadata.size > maximumEvidenceBytes) return undefined;
     return readFileSync(absolute);
   } catch {
     return undefined;
@@ -492,12 +520,26 @@ function compareSemver(left, right) {
   return 0;
 }
 
-function containsSensitiveContent(value, fieldName = "") {
-  if (sensitiveFieldPattern.test(fieldName)) return true;
-  if (typeof value === "string") return secretLikePatterns.some((pattern) => pattern.test(value));
-  if (Array.isArray(value)) return value.some((item) => containsSensitiveContent(item));
-  if (isRecord(value)) {
-    return Object.entries(value).some(([field, child]) => containsSensitiveContent(child, field));
+function containsSensitiveContent(value) {
+  // Iteration keeps an adversarially deep JSON object from exhausting the Node.js call stack.
+  const pending = [{ field: "", value }];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined) break;
+    if (sensitiveFieldPattern.test(current.field)) return true;
+    if (typeof current.value === "string") {
+      if (secretLikePatterns.some((pattern) => pattern.test(current.value))) return true;
+      continue;
+    }
+    if (Array.isArray(current.value)) {
+      for (const child of current.value) pending.push({ field: "", value: child });
+      continue;
+    }
+    if (isRecord(current.value)) {
+      for (const [field, child] of Object.entries(current.value)) {
+        pending.push({ field, value: child });
+      }
+    }
   }
   return false;
 }

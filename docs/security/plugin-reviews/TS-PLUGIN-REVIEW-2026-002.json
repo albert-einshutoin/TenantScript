@@ -23,7 +23,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T00:10:23.000Z",
+  "reviewedAt": "2026-07-22T00:16:03.000Z",
   "domains": [
     {
       "name": "security",
@@ -83,8 +83,8 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "d1d88967476d772871c837e2246b982ed28e753caded07002df0045953091cb4",
-    "scripts/check-template-submissions.test.mjs": "8a8f28c3e6ab0d49045229397729d7a4782302ff27c81f4dcd0e83f64cdca711",
+    "scripts/check-template-submissions.mjs": "da717c1adc023828ff234040ead291d0cdc5d220cd9ee36172025f468fd104bd",
+    "scripts/check-template-submissions.test.mjs": "f7390e3428d3acb1429f52e458caa1b0b120137fee77b216d33427cff0736764",
     "scripts/template-submission-e2e.test.mjs": "23217c601850b73ff193d2921a5ab7a2ac7a2328f19ef45509b825c3184e7f9f",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
