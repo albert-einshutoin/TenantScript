@@ -14,6 +14,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { createServer } from "node:net";
 import { delimiter, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -131,6 +132,37 @@ test("submitted commands cannot inherit secrets and are externally time bounded"
     );
   } finally {
     delete process.env.TENANTSCRIPT_SUBMISSION_TEST_SECRET;
+  }
+});
+
+test("submitted commands cannot open network connections", async () => {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  try {
+    assert.doesNotThrow(() =>
+      runSubmissionCommand(
+        process.execPath,
+        [
+          "-e",
+          [
+            `const socket = require("node:net").connect(${String(address.port)}, "127.0.0.1");`,
+            'socket.once("connect", () => process.exit(42));',
+            'socket.once("error", () => process.exit(0));',
+            "setTimeout(() => process.exit(0), 500);"
+          ].join("\n")
+        ],
+        { label: "network probe", timeoutMs: 1_000 }
+      )
+    );
+  } finally {
+    server.close();
   }
 });
 
@@ -741,9 +773,12 @@ function run(command, args, options = {}) {
 function runSubmissionCommand(command, args, options = {}) {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const label = options.label ?? "submitted command";
+  const sandboxed = sandboxSubmissionCommand(command, args);
   // spawnSync owns the deadline outside submitted JavaScript. SIGKILL and a minimal environment
   // keep an infinite loop or inherited maintainer credential from escaping the accountless lane.
-  const child = spawnSync(command, args, {
+  // The OS network namespace/profile is outside the submitted process, so deleting environment
+  // variables or spawning another executable cannot restore build-time egress.
+  const child = spawnSync(sandboxed.command, sandboxed.args, {
     cwd: options.cwd ?? repoRoot,
     encoding: "utf8",
     env: submissionEnvironment(options.pathPrefix),
@@ -761,6 +796,23 @@ function runSubmissionCommand(command, args, options = {}) {
     throw new Error(`${label} failed`);
   }
   return child.stdout;
+}
+
+function sandboxSubmissionCommand(command, args) {
+  if (process.platform === "darwin") {
+    return {
+      command: "/usr/bin/sandbox-exec",
+      args: ["-p", "(version 1) (allow default) (deny network*)", command, ...args]
+    };
+  }
+  if (process.platform === "linux") {
+    return {
+      command: "/usr/bin/unshare",
+      args: ["--user", "--map-root-user", "--net", "--", command, ...args]
+    };
+  }
+  // Submission verification must fail closed on hosts without a reviewed OS sandbox contract.
+  throw new Error("submitted-command network sandbox is unsupported on this platform");
 }
 
 function submissionEnvironment(pathPrefix) {
