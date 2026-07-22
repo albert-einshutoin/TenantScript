@@ -8,6 +8,7 @@ import { loadPluginAuthoringTaskBehaviorCases } from "./plugin-authoring-behavio
 import { verifyPluginAuthoringBuildReceipt } from "./plugin-authoring-build-contract.mjs";
 
 const runnerPath = resolve(import.meta.dirname, "plugin-authoring-behavior-runner.mjs");
+const judgeRoot = resolve(import.meta.dirname, "..");
 const RESULT_PATTERN = /^TENANTSCRIPT_BEHAVIOR_RESULT:([A-Za-z0-9_-]+):([0-9a-f]{64})\n$/u;
 
 export const PLUGIN_AUTHORING_UNIT_LIMITS = Object.freeze({
@@ -29,7 +30,10 @@ export function createPluginAuthoringUnitTestAdapter({
     try {
       validateContext(context);
       receipt = verifyPluginAuthoringBuildReceipt(context);
-      cases = loadTaskCases(context.baselineRoot, context.task);
+      // Behavior cases are judge code, not repository baseline data. Resolving them beside this
+      // adapter binds the matrix to the reviewed image digest and keeps a mounted baseline from
+      // replacing or omitting the tests used to score candidate behavior.
+      cases = loadTaskCases(judgeRoot, context.task);
       assert(Array.isArray(cases) && cases.length >= 1 && cases.length <= 8);
     } catch {
       return false;

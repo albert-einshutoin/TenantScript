@@ -80,9 +80,23 @@ export function executePluginAuthoringBuildWorker(requestPath) {
     const runtimeRoot = join(request.buildRoot, "runtime");
     const sdkRoot = join(runtimeRoot, "plugin-sdk");
     const manifestRoot = join(runtimeRoot, "manifest");
+    const stateRoot = join(runtimeRoot, "plugin-state");
+    const binderRoot = join(runtimeRoot, "reviewed-plugin-binder");
     mkdirSync(sdkRoot, { recursive: true, mode: 0o700 });
     mkdirSync(manifestRoot, { recursive: true, mode: 0o700 });
-    writeFileSync(join(sdkRoot, "index.js"), pluginSdkRuntime(), {
+    mkdirSync(stateRoot, { recursive: true, mode: 0o700 });
+    mkdirSync(binderRoot, { recursive: true, mode: 0o700 });
+    writeFileSync(join(stateRoot, "index.js"), "export const definitions = new WeakMap();\n", {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600
+    });
+    writeFileSync(join(sdkRoot, "index.js"), pluginSdkRuntime(stateRoot), {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600
+    });
+    writeFileSync(join(binderRoot, "index.js"), reviewedPluginBinderRuntime(stateRoot), {
       encoding: "utf8",
       flag: "wx",
       mode: 0o600
@@ -293,26 +307,23 @@ export declare function definePlugin(input: DefinePluginInput): unknown;
 `;
 }
 
-function pluginSdkRuntime() {
+function pluginSdkRuntime(stateRoot) {
   // Keep this runtime deliberately smaller than the public SDK surface: candidate code can only
   // receive the reviewed definePlugin dispatch behavior needed by the fixed authoring corpus.
-  return `const definitions = new WeakMap();
+  return `import { definitions } from ${JSON.stringify(join(stateRoot, "index.js"))};
 export function definePlugin(input) {
   const plugin = {
     manifest: input.manifest,
     dispatch: (request) => dispatchPlugin(input, request)
   };
-  definitions.set(plugin, input);
+  definitions.set(plugin, (reviewedManifest) => {
+    const reviewedDefinition = { manifest: reviewedManifest, handlers: input.handlers };
+    return {
+      manifest: reviewedManifest,
+      dispatch: (request) => dispatchPlugin(reviewedDefinition, request)
+    };
+  });
   return plugin;
-}
-export function bindReviewedPlugin(plugin, reviewedManifest) {
-  const definition = definitions.get(plugin);
-  if (definition === undefined) throw new Error("plugin must be created by definePlugin");
-  const reviewedDefinition = { manifest: reviewedManifest, handlers: definition.handlers };
-  return {
-    manifest: reviewedManifest,
-    dispatch: (request) => dispatchPlugin(reviewedDefinition, request)
-  };
 }
 async function dispatchPlugin(input, request) {
   const hook = input.manifest.hooks.find((candidate) => candidate.name === request.hookName);
@@ -339,9 +350,21 @@ async function dispatchPlugin(input, request) {
 `;
 }
 
+function reviewedPluginBinderRuntime(stateRoot) {
+  // This module is imported only by the generated wrapper. Candidate source cannot name its path:
+  // candidate imports are restricted to the public SDK root and relatives inside the source tree.
+  return `import { definitions } from ${JSON.stringify(join(stateRoot, "index.js"))};
+export function bindReviewedPlugin(plugin, reviewedManifest) {
+  const bind = definitions.get(plugin);
+  if (bind === undefined) throw new Error("plugin must be created by definePlugin");
+  return bind(reviewedManifest);
+}
+`;
+}
+
 function reviewedEntrypoint(taskRoot, reviewedManifest) {
   return `import * as candidate from ${JSON.stringify(join(taskRoot, "src", "index.ts"))};
-import { bindReviewedPlugin } from ${JSON.stringify(join(dirname(taskRoot), "build", "runtime", "plugin-sdk", "index.js"))};
+import { bindReviewedPlugin } from ${JSON.stringify(join(dirname(taskRoot), "build", "runtime", "reviewed-plugin-binder", "index.js"))};
 const candidatePlugin = candidate.plugin ?? candidate.default;
 export const plugin = bindReviewedPlugin(candidatePlugin, ${JSON.stringify(reviewedManifest)});
 export default plugin;

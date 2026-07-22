@@ -31,7 +31,9 @@ function withFixture(run, source = ticketPrioritySource()) {
   const root = mkdtempSync(join(tmpdir(), "tenantscript-unit-adapter-"));
   const taskWorkspace = join(root, "work", ticketTask.id);
   const taskRoot = join(taskWorkspace, "source");
+  const baselineRoot = join(root, "baseline");
   mkdirSync(join(taskRoot, "src"), { recursive: true });
+  mkdirSync(baselineRoot);
   writeFileSync(join(taskRoot, "src", "manifest.ts"), manifestSource(ticketTask));
   writeFileSync(join(taskRoot, "src", "index.ts"), source);
   writeFileSync(
@@ -40,7 +42,7 @@ function withFixture(run, source = ticketPrioritySource()) {
   );
   const context = {
     task: ticketTask,
-    baselineRoot: repoRoot,
+    baselineRoot,
     taskRoot,
     taskWorkspace
   };
@@ -116,7 +118,7 @@ function successfulChild(authenticationKey, behaviorCase, overrides = {}) {
 
 test("runs every judge-owned case through the real loader sandbox", () => {
   withFixture((context) => {
-    const cases = loadPluginAuthoringTaskBehaviorCases(context.baselineRoot, context.task);
+    const cases = loadPluginAuthoringTaskBehaviorCases(repoRoot, context.task);
     assert.equal(cases.length, 6);
     assert.equal(createPluginAuthoringUnitTestAdapter()(context), true);
     assert.equal(existsSync(join(context.taskRoot, "candidate-test-ran")), false);
@@ -126,10 +128,7 @@ test("runs every judge-owned case through the real loader sandbox", () => {
 
 test("uses a fixed authenticated bounded process contract", () => {
   withFixture((context) => {
-    const behaviorCase = loadPluginAuthoringTaskBehaviorCases(
-      context.baselineRoot,
-      context.task
-    )[0];
+    const behaviorCase = loadPluginAuthoringTaskBehaviorCases(repoRoot, context.task)[0];
     const calls = [];
     const key = Buffer.alloc(32, 7);
     const adapter = createPluginAuthoringUnitTestAdapter({
@@ -184,10 +183,7 @@ test("fails closed for stale build evidence before spawning", () => {
 
 test("runs later cases after failure and accepts only authenticated closed observations", () => {
   withFixture((context) => {
-    const behaviorCase = loadPluginAuthoringTaskBehaviorCases(
-      context.baselineRoot,
-      context.task
-    )[0];
+    const behaviorCase = loadPluginAuthoringTaskBehaviorCases(repoRoot, context.task)[0];
     const cases = [behaviorCase, { ...structuredClone(behaviorCase), name: "second-case" }];
     const key = Buffer.alloc(32, 9);
     const failures = {
@@ -243,17 +239,16 @@ if (ambient.fetch !== undefined) {
 }
 `;
   withFixture((context) => {
-    const behaviorCase = loadPluginAuthoringTaskBehaviorCases(
-      context.baselineRoot,
-      context.task
-    ).find((entry) => entry.name === "maps-normal");
+    const behaviorCase = loadPluginAuthoringTaskBehaviorCases(repoRoot, context.task).find(
+      (entry) => entry.name === "maps-normal"
+    );
     const adapter = createPluginAuthoringUnitTestAdapter({ loadTaskCases: () => [behaviorCase] });
     assert.equal(adapter(context), false);
   }, ticketPrioritySource(guard));
 });
 
-test("binds dispatch to the statically reviewed manifest instead of a candidate alternate", () => {
-  const source = `import { definePlugin } from "@tenantscript/plugin-sdk";
+test("binds dispatch without exposing the judge-only binder to candidate imports", () => {
+  const source = `import * as sdk from "@tenantscript/plugin-sdk";
 import { manifest } from "./manifest.js";
 const alternateManifest = {
   ...manifest,
@@ -262,10 +257,11 @@ const alternateManifest = {
   egress: { mode: "allow", hosts: ["example.com"] }
 };
 const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
-export const plugin = definePlugin({
+export const plugin = sdk.definePlugin({
   manifest: alternateManifest,
   handlers: {
     "ticket.created": async (payload) => {
+      if ("bindReviewedPlugin" in sdk) return { priority: 99 };
       const priority = typeof payload === "object" && payload !== null && !Array.isArray(payload) &&
         "priority" in payload && typeof payload.priority === "string" ? payload.priority : "normal";
       return { priority: priorities[priority] ?? 2 };

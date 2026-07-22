@@ -56,10 +56,6 @@ async function withFixture(run) {
     join(baselineRoot, "evals", "plugin-authoring", "corpus.json"),
     `${JSON.stringify(corpus)}\n`
   );
-  writeFileSync(
-    join(baselineRoot, "evals", "plugin-authoring", "behavior-cases.json"),
-    readFileSync(join(repoRoot, "evals", "plugin-authoring", "behavior-cases.json"))
-  );
   writeFileSync(requestPath, `${JSON.stringify(validRequest())}\n`);
   for (const task of corpus.tasks) {
     const sourceRoot = join(candidateRoot, task.id, "src");
