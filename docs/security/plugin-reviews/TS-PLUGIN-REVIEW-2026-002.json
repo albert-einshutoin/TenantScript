@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T08:18:05.000Z",
+  "reviewedAt": "2026-07-22T08:30:30.000Z",
   "domains": [
     {
       "name": "security",
@@ -59,7 +59,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, preserves every reviewed exact third-party dependency while replacing only TenantScript SDK packages with fresh tarballs, and exercises the plugin against those public package contents. Its ext command resolves only to a temporary copy of the root frozen install's exact CLI runtime closure; generated package-manager shims and nested node_modules are excluded, all symlinks are dereferenced, every copied file is checked for the checkout path, and the readable shim contains only a temp-relative entrypoint. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then dispatches the generated CommonJS plugin export through the scoped loader with authenticated exact-result assertions and ordered input/result plans for declared capability calls. Successful event hooks omit the SDK-only undefined value from JSON evidence, while blocking-hook success retains its exact caller-visible value."
+      "notes": "The packet requires exact registry semver for every dependency section, pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, and carries a closed strict ESM TypeScript configuration. The package build and test scripts are canonical and digest-bound. The E2E runs tsc with no emit, directly runs the required behavior-test file, preserves every reviewed exact third-party dependency while replacing only TenantScript SDK packages with fresh tarballs, resolves relative pack filenames against their trusted destination, and exercises the plugin against those public package contents. Its ext command resolves only to a temporary copy of the root frozen install's exact CLI runtime closure; generated package-manager shims and nested node_modules are excluded, all symlinks are dereferenced, every copied file is checked for the checkout path, and the readable shim contains only a temp-relative entrypoint. It discovers every submission directory rather than naming one packet, compares manifest hook, capabilities, configuration keys, and egress with packet metadata, then dispatches the generated CommonJS plugin export through the scoped loader with authenticated exact-result assertions and ordered input/result plans for declared capability calls. The realm-native URL wrapper retains standard parsing, mutation, and URLSearchParams iteration while exchanging only serialized snapshots with the hardened host bridge. Successful event hooks omit the SDK-only undefined value from JSON evidence, while blocking-hook success retains its exact caller-visible value."
     },
     {
       "name": "operations",
@@ -98,13 +98,13 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "packages/loader/src/index.ts": "800e8955cee0c768c129d3992e5041ce98732ee3c523d60c17f6e7ba8d34ec21",
-    "packages/loader/test/loader.test.ts": "e147380384f76b4b693b8a13c98522a7d5d0afb44de2444bce2be2b3aa16767d",
+    "packages/loader/src/index.ts": "691bf96d9b36aeca883b15e53511dca845903dac7179f37db8472ea98e3d0a89",
+    "packages/loader/test/loader.test.ts": "4f7794092bf9b9cf3dbcbb310b6853baea5a289b220c1705b330470ec32da4e4",
     "packages/loader/test/security-suite.test.ts": "9edbf59ea5eee76256ebe0a1f2b1da3bf9cc7c1653455ae23ef6c17226c9b0cf",
     "scripts/check-template-submissions.mjs": "ad89a130d384495133fdb097de4eec86cea4658132848127c772ad3e5324555d",
     "scripts/check-template-submissions.test.mjs": "b21af9c47b05e56129fada7f266d662ae4e18352ea636350ddb360b2c6b265b8",
     "scripts/template-submission-bundle-runner.mjs": "1a06b289fcc0d17c55c630329dfb0723be98c7ef63093c434eb6dd56442e96fe",
-    "scripts/template-submission-e2e.test.mjs": "ea42070dd461df6e28ad008c6f6673260df9abc8743e0780d7486f904a1627cb",
+    "scripts/template-submission-e2e.test.mjs": "1e311220953034e1fcde2742c270ac3601e40ddfdc377c3f20c17ababfad2a79",
     "templates/submission.schema.json": "b94b725a1d9f3d94bcb8a48788185aba0533ed99d2b1a7f9af67996898656fd4",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",

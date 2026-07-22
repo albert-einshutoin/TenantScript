@@ -202,6 +202,53 @@ describe("runScopedHandler", () => {
     });
   });
 
+  it("preserves standard URL parsing and search parameter behavior", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": () => {
+          const url = new URL("https://user:pass@example.com:8443/path?tag=a&tag=b#section");
+          url.hostname = "api.example.com";
+          url.searchParams.set("tag", "c");
+          url.searchParams.append("page", "2");
+          return {
+            href: url.href,
+            origin: url.origin,
+            protocol: url.protocol,
+            hostname: url.hostname,
+            pathname: url.pathname,
+            hash: url.hash,
+            tag: url.searchParams.get("tag"),
+            entries: [...url.searchParams]
+          };
+        }
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({
+      value: {
+        href: "https://user:pass@api.example.com:8443/path?tag=c&page=2#section",
+        origin: "https://api.example.com:8443",
+        protocol: "https:",
+        hostname: "api.example.com",
+        pathname: "/path",
+        hash: "#section",
+        tag: "c",
+        entries: [
+          ["tag", "c"],
+          ["page", "2"]
+        ]
+      },
+      logs: []
+    });
+  });
+
   it("terminates async handlers that starve the microtask queue", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {

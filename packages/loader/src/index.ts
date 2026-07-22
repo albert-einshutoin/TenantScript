@@ -460,9 +460,43 @@ async function run() {
 
 function initializeSandbox(sandbox, limits) {
   const HostURL = URL;
-  const normalizeUrl = hardenBridge((input, base) =>
-    new HostURL(input, base === undefined ? undefined : base).toString()
-  );
+  const operateUrl = hardenBridge((requestJson) => {
+    try {
+      const request = JSON.parse(requestJson);
+      const url =
+        typeof request.href === "string"
+          ? new HostURL(request.href)
+          : new HostURL(request.input, request.base);
+      if (request.set !== undefined) {
+        const settableProperties = new Set([
+          "href",
+          "protocol",
+          "username",
+          "password",
+          "host",
+          "hostname",
+          "port",
+          "pathname",
+          "search",
+          "hash"
+        ]);
+        if (!settableProperties.has(request.set.name)) {
+          throw new TypeError("unsupported URL property");
+        }
+        url[request.set.name] = request.set.value;
+      }
+      if (request.searchParams !== undefined) {
+        const methods = new Set(["append", "delete", "set", "sort"]);
+        if (!methods.has(request.searchParams.method)) {
+          throw new TypeError("unsupported URLSearchParams operation");
+        }
+        url.searchParams[request.searchParams.method](...request.searchParams.args);
+      }
+      return JSON.stringify(snapshotUrl(url));
+    } catch (error) {
+      throw serializeBridgeError(error);
+    }
+  });
   const denyFetch = hardenBridge((target) => {
     try {
       countSubrequest(limits, "fetch:" + target);
@@ -483,7 +517,7 @@ function initializeSandbox(sandbox, limits) {
   // Only primitives and prototype-less bridge callables cross into the context. The initialization
   // script captures those bridges, deletes their globals, and exposes realm-native wrappers so
   // submitted code cannot climb a host constructor chain back to Node's process object.
-  sandbox.__tenant_normalize_url_bridge = normalizeUrl;
+  sandbox.__tenant_url_bridge = operateUrl;
   sandbox.__tenant_fetch_bridge = denyFetch;
   sandbox.__tenant_capability_bridge = callCapability;
   sandbox.__tenant_payload_json = serializeSandboxValue(workerData.payload, "handler payload");
@@ -491,11 +525,11 @@ function initializeSandbox(sandbox, limits) {
   const initialization = new vm.Script(
     [
       "(() => {",
-      "  const normalizeUrlBridge = __tenant_normalize_url_bridge;",
+      "  const urlBridge = __tenant_url_bridge;",
       "  const fetchBridge = __tenant_fetch_bridge;",
       "  const capabilityBridge = __tenant_capability_bridge;",
       "  const payloadJson = __tenant_payload_json;",
-      "  delete globalThis.__tenant_normalize_url_bridge;",
+      "  delete globalThis.__tenant_url_bridge;",
       "  delete globalThis.__tenant_fetch_bridge;",
       "  delete globalThis.__tenant_capability_bridge;",
       "  delete globalThis.__tenant_payload_json;",
@@ -513,20 +547,94 @@ function initializeSandbox(sandbox, limits) {
       "      return new Error('sandbox bridge failed');",
       "    }",
       "  };",
-      "  class SandboxURL {",
-      "    constructor(input, base) {",
+      "  const urlSnapshot = Symbol('urlSnapshot');",
+      "  const urlParams = Symbol('urlParams');",
+      "  const urlOwner = Symbol('urlOwner');",
+      "  const applyUrl = Symbol('applyUrl');",
+      "  const runUrlOperation = (request) => {",
       "      try {",
-      "        this.href = normalizeUrlBridge(String(input), base === undefined ? undefined : String(base));",
+      "        return JSON.parse(urlBridge(JSON.stringify(request)));",
       "      } catch (error) {",
       "        throw new TypeError(bridgeError(error).message);",
       "      }",
+      "  };",
+      "  const encodeParam = (value) => encodeURIComponent(String(value)).replace(/%20/g, '+');",
+      "  const serializeParamsInit = (init) => {",
+      "    if (init == null) return '';",
+      "    if (typeof init === 'string') return init.startsWith('?') ? init.slice(1) : init;",
+      "    const entries = typeof init?.[Symbol.iterator] === 'function' ? [...init] : Object.entries(init);",
+      "    return entries.map(([name, value]) => encodeParam(name) + '=' + encodeParam(value)).join('&');",
+      "  };",
+      "  class SandboxURLSearchParams {",
+      "    constructor(ownerOrInit) {",
+      "      this[urlOwner] = ownerOrInit instanceof SandboxURL",
+      "        ? ownerOrInit",
+      "        : new SandboxURL('https://sandbox.invalid/?' + serializeParamsInit(ownerOrInit));",
       "    }",
+      "    append(name, value) { this[urlOwner][applyUrl]({ searchParams: { method: 'append', args: [String(name), String(value)] } }); }",
+      "    delete(name, value) {",
+      "      const args = value === undefined ? [String(name)] : [String(name), String(value)];",
+      "      this[urlOwner][applyUrl]({ searchParams: { method: 'delete', args } });",
+      "    }",
+      "    get(name) { const pair = this[urlOwner][urlSnapshot].searchParams.find(([key]) => key === String(name)); return pair?.[1] ?? null; }",
+      "    getAll(name) { return this[urlOwner][urlSnapshot].searchParams.filter(([key]) => key === String(name)).map(([, value]) => value); }",
+      "    has(name, value) {",
+      "      return this[urlOwner][urlSnapshot].searchParams.some(([key, entryValue]) =>",
+      "        key === String(name) && (value === undefined || entryValue === String(value))",
+      "      );",
+      "    }",
+      "    set(name, value) { this[urlOwner][applyUrl]({ searchParams: { method: 'set', args: [String(name), String(value)] } }); }",
+      "    sort() { this[urlOwner][applyUrl]({ searchParams: { method: 'sort', args: [] } }); }",
+      "    get size() { return this[urlOwner][urlSnapshot].searchParams.length; }",
+      "    toString() { return this[urlOwner][urlSnapshot].searchParamsString; }",
+      "    *entries() { for (const [name, value] of this[urlOwner][urlSnapshot].searchParams) yield [name, value]; }",
+      "    *keys() { for (const [name] of this[urlOwner][urlSnapshot].searchParams) yield name; }",
+      "    *values() { for (const [, value] of this[urlOwner][urlSnapshot].searchParams) yield value; }",
+      "    forEach(callback, thisArg) { for (const [name, value] of this) callback.call(thisArg, value, name, this); }",
+      "    [Symbol.iterator]() { return this.entries(); }",
+      "  }",
+      "  class SandboxURL {",
+      "    constructor(input, base) {",
+      "      this[urlSnapshot] = runUrlOperation({",
+      "        input: String(input),",
+      "        ...(base === undefined ? {} : { base: String(base) })",
+      "      });",
+      "      this[urlParams] = new SandboxURLSearchParams(this);",
+      "    }",
+      "    [applyUrl](operation) { this[urlSnapshot] = runUrlOperation({ href: this.href, ...operation }); }",
+      "    get href() { return this[urlSnapshot].href; }",
+      "    set href(value) { this[applyUrl]({ set: { name: 'href', value: String(value) } }); }",
+      "    get origin() { return this[urlSnapshot].origin; }",
+      "    get protocol() { return this[urlSnapshot].protocol; }",
+      "    set protocol(value) { this[applyUrl]({ set: { name: 'protocol', value: String(value) } }); }",
+      "    get username() { return this[urlSnapshot].username; }",
+      "    set username(value) { this[applyUrl]({ set: { name: 'username', value: String(value) } }); }",
+      "    get password() { return this[urlSnapshot].password; }",
+      "    set password(value) { this[applyUrl]({ set: { name: 'password', value: String(value) } }); }",
+      "    get host() { return this[urlSnapshot].host; }",
+      "    set host(value) { this[applyUrl]({ set: { name: 'host', value: String(value) } }); }",
+      "    get hostname() { return this[urlSnapshot].hostname; }",
+      "    set hostname(value) { this[applyUrl]({ set: { name: 'hostname', value: String(value) } }); }",
+      "    get port() { return this[urlSnapshot].port; }",
+      "    set port(value) { this[applyUrl]({ set: { name: 'port', value: String(value) } }); }",
+      "    get pathname() { return this[urlSnapshot].pathname; }",
+      "    set pathname(value) { this[applyUrl]({ set: { name: 'pathname', value: String(value) } }); }",
+      "    get search() { return this[urlSnapshot].search; }",
+      "    set search(value) { this[applyUrl]({ set: { name: 'search', value: String(value) } }); }",
+      "    get searchParams() { return this[urlParams]; }",
+      "    get hash() { return this[urlSnapshot].hash; }",
+      "    set hash(value) { this[applyUrl]({ set: { name: 'hash', value: String(value) } }); }",
       "    toString() { return this.href; }",
       "    toJSON() { return this.href; }",
+      "    static canParse(input, base) { try { new SandboxURL(input, base); return true; } catch { return false; } }",
+      "    static parse(input, base) { try { return new SandboxURL(input, base); } catch { return null; } }",
       "  }",
+      "  Object.freeze(SandboxURLSearchParams.prototype);",
+      "  Object.freeze(SandboxURLSearchParams);",
       "  Object.freeze(SandboxURL.prototype);",
       "  Object.freeze(SandboxURL);",
       "  globalThis.URL = SandboxURL;",
+      "  globalThis.URLSearchParams = SandboxURLSearchParams;",
       "  globalThis.fetch = async (input) => {",
       "    try {",
       "      return await fetchBridge(String(input));",
@@ -573,6 +681,24 @@ function serializeSandboxValue(value, label) {
 
 function serializeBridgeError(error) {
   return JSON.stringify(serializeError(error));
+}
+
+function snapshotUrl(url) {
+  return {
+    href: url.href,
+    origin: url.origin,
+    protocol: url.protocol,
+    username: url.username,
+    password: url.password,
+    host: url.host,
+    hostname: url.hostname,
+    port: url.port,
+    pathname: url.pathname,
+    search: url.search,
+    hash: url.hash,
+    searchParams: [...url.searchParams],
+    searchParamsString: url.searchParams.toString()
+  };
 }
 
 function evaluateBundle(bundleCode, sandbox, limits) {

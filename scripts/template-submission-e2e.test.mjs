@@ -14,7 +14,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, relative, sep } from "node:path";
+import { delimiter, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { deserialize } from "node:v8";
@@ -91,6 +91,17 @@ test("SDK tarball rewrites preserve exact third-party dependencies", () => {
       zod: "4.3.6"
     }
   );
+});
+
+test("packed package filenames resolve against their destination", () => {
+  const destination = join(tmpdir(), "packs");
+  const absoluteTarball = join(tmpdir(), "other", "manifest.tgz");
+
+  assert.equal(
+    resolvePackedTarball(destination, "manifest.tgz"),
+    join(destination, "manifest.tgz")
+  );
+  assert.equal(resolvePackedTarball(destination, absoluteTarball), absoluteTarball);
 });
 
 test("event success comparison omits the SDK-only undefined value", () => {
@@ -677,7 +688,11 @@ function packPublicPackage(packageDirectory, destination) {
   ]);
   const result = JSON.parse(output);
   assert.equal(typeof result.filename, "string");
-  return result.filename;
+  return resolvePackedTarball(destination, result.filename);
+}
+
+function resolvePackedTarball(destination, filename) {
+  return isAbsolute(filename) ? filename : join(destination, filename);
 }
 
 function run(command, args, options = {}) {
