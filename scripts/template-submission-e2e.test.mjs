@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { deserialize } from "node:v8";
@@ -387,7 +398,7 @@ async function exerciseSubmission(submission) {
     // Restore the digest-bound metadata before build and audit; install-only tarball overrides must
     // never become a sanitized substitute for the package consumers receive.
     await writeFile(packageJsonPath, submittedPackageJson);
-    const cliBinDirectory = await createCliShim(tempRoot, manifestTarball);
+    const cliBinDirectory = await createCliShim(tempRoot);
     // The build is the authority for audited outputs; prove the copied submission and offline
     // install did not pre-populate artifacts that a no-op build could silently reuse.
     await assert.rejects(readFile(join(pluginDirectory, "manifest.json")), { code: "ENOENT" });
@@ -516,59 +527,88 @@ function dispatchBundleInChild(bundlePath, request, caseName) {
   return outcome;
 }
 
-async function createCliShim(tempRoot, manifestTarball) {
+async function createCliShim(tempRoot) {
   const binDirectory = join(tempRoot, "bin");
   const shimPath = join(binDirectory, "ext");
   const trustedCliDirectory = join(tempRoot, "trusted-cli");
-  const tarballs = {
-    "@tenantscript/cli": packPublicPackage("packages/cli", tempRoot),
-    "@tenantscript/control-plane": packPublicPackage("packages/control-plane", tempRoot),
-    "@tenantscript/host-sdk": packPublicPackage("packages/host-sdk", tempRoot),
-    "@tenantscript/loader": packPublicPackage("packages/loader", tempRoot),
-    "@tenantscript/manifest": manifestTarball
+  const workspaceRuntimePackages = {
+    "@tenantscript/cli": "packages/cli",
+    "@tenantscript/control-plane": "packages/control-plane",
+    "@tenantscript/host-sdk": "packages/host-sdk",
+    "@tenantscript/loader": "packages/loader",
+    "@tenantscript/manifest": "packages/manifest"
+  };
+  const externalRuntimePackages = {
+    esbuild: "packages/loader/node_modules/esbuild",
+    "jsonc-parser": "packages/cli/node_modules/jsonc-parser",
+    semver: "packages/control-plane/node_modules/semver",
+    zod: "packages/manifest/node_modules/zod"
   };
 
-  await mkdir(trustedCliDirectory, { recursive: true });
-  await writeFile(
-    join(trustedCliDirectory, "package.json"),
-    `${JSON.stringify(
-      {
-        private: true,
-        type: "module",
-        dependencies: { "@tenantscript/cli": `file:${tarballs["@tenantscript/cli"]}` },
-        pnpm: {
-          overrides: Object.fromEntries(
-            Object.entries(tarballs).map(([name, tarball]) => [name, `file:${tarball}`])
-          )
-        }
-      },
-      null,
-      2
-    )}\n`
+  // Copy the already frozen-install-resolved runtime closure instead of resolving a second graph.
+  // This works in an empty CI store and gives submitted code only temporary, trusted package bytes.
+  for (const [name, packageDirectory] of Object.entries(workspaceRuntimePackages)) {
+    await copyWorkspaceRuntimePackage(
+      join(repoRoot, packageDirectory),
+      join(trustedCliDirectory, "node_modules", ...name.split("/"))
+    );
+  }
+  for (const [name, packageDirectory] of Object.entries(externalRuntimePackages)) {
+    await copyExternalRuntimePackage(
+      join(repoRoot, packageDirectory),
+      join(trustedCliDirectory, "node_modules", name)
+    );
+  }
+  const esbuildDirectory = await realpath(join(repoRoot, externalRuntimePackages.esbuild));
+  await cp(
+    join(dirname(esbuildDirectory), "@esbuild"),
+    join(trustedCliDirectory, "node_modules", "@esbuild"),
+    { recursive: true, dereference: true }
   );
-  runSubmissionCommand(
-    "pnpm",
-    [
-      "--dir",
-      trustedCliDirectory,
-      "install",
-      "--store-dir",
-      pnpmStoreDirectory,
-      "--offline",
-      "--no-lockfile",
-      "--ignore-scripts",
-      "--ignore-pnpmfile"
-    ],
-    { label: "trusted CLI install" }
-  );
-  await readFile(
-    join(trustedCliDirectory, "node_modules", "@tenantscript", "cli", "dist", "bin.js"),
-    "utf8"
-  );
+  await assertTrustedCliIsCheckoutIndependent(trustedCliDirectory);
   await mkdir(binDirectory, { recursive: true });
   await writeFile(shimPath, cliShimSource());
   await chmod(shimPath, 0o755);
   return binDirectory;
+}
+
+async function copyWorkspaceRuntimePackage(source, destination) {
+  await mkdir(destination, { recursive: true });
+  await cp(join(source, "dist"), join(destination, "dist"), {
+    recursive: true,
+    dereference: true
+  });
+  await cp(join(source, "package.json"), join(destination, "package.json"));
+}
+
+async function copyExternalRuntimePackage(source, destination) {
+  const resolvedSource = await realpath(source);
+  await cp(resolvedSource, destination, {
+    recursive: true,
+    dereference: true,
+    // pnpm may place generated .bin shims below a store package. They are not package content and
+    // can contain checkout-specific paths, so copy only the package's own published files.
+    filter: (candidate) =>
+      candidate === resolvedSource ||
+      !relative(resolvedSource, candidate).split(sep).includes("node_modules")
+  });
+}
+
+async function assertTrustedCliIsCheckoutIndependent(directory) {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    const stats = await lstat(path);
+    assert.equal(stats.isSymbolicLink(), false, "trusted CLI copy must not contain symlinks");
+    if (stats.isDirectory()) {
+      await assertTrustedCliIsCheckoutIndependent(path);
+    } else if (stats.isFile()) {
+      assert.equal(
+        (await readFile(path)).includes(repoRoot),
+        false,
+        "trusted CLI copy must not contain the repository checkout path"
+      );
+    }
+  }
 }
 
 function cliShimSource() {
