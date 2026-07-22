@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T10:56:12.000Z",
+  "reviewedAt": "2026-07-22T11:14:59.000Z",
   "domains": [
     {
       "name": "security",
@@ -101,11 +101,11 @@
     "packages/loader/src/index.ts": "824beac6ff8b43e6b528f5ee7360498ced09ccae29a3d5ec5d0309e7093aa886",
     "packages/loader/test/loader.test.ts": "6e7fb14d0b97d6930adc63aa777f6502c02785918c2533a77454d725155b1e48",
     "packages/loader/test/security-suite.test.ts": "694857dec630be7c27794faa1f79f4aeeac2c57abcb31162ed7709e0a7102359",
-    "scripts/check-template-submissions.mjs": "ad89a130d384495133fdb097de4eec86cea4658132848127c772ad3e5324555d",
-    "scripts/check-template-submissions.test.mjs": "b21af9c47b05e56129fada7f266d662ae4e18352ea636350ddb360b2c6b265b8",
+    "scripts/check-template-submissions.mjs": "4874d1a8fa0bcf923cda2c2947f4779cd19519d616429f031249cd44e1e06126",
+    "scripts/check-template-submissions.test.mjs": "a05c9900e9b4e5164b6001af91c4a5a0f305ef4cae0f2427c571f25e5652c936",
     "scripts/template-submission-bundle-runner.mjs": "f55b8aa1616c8fdab4c4873c4a2fbe8567f5aefe0f0da86f89e9b3a419289670",
     "scripts/template-submission-e2e.test.mjs": "7ec2ff48a8b0c39f24fb2a0b361e2358f2706bf463210e6d19a065ce749fbfac",
-    "templates/submission.schema.json": "b94b725a1d9f3d94bcb8a48788185aba0533ed99d2b1a7f9af67996898656fd4",
+    "templates/submission.schema.json": "d9fba423319ec7364f72e852580bb5a75caf295ebc6587d037cb52fa467e6700",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
     "templates/submissions/ticket-priority-normalizer/plugin/scripts/build.mjs": "ee1cc7b9329c74b6dacdf340064c0e021e9c4601292b8bb8773b1bb7d2bb9e4c",

@@ -11,6 +11,8 @@ test("publishes a complete community template submission path", async () => {
     "full commit SHA",
     "capabilities",
     "egress",
+    "only accepts egress mode `deny`",
+    "host-specific behavior",
     "pnpm lint:template-submissions",
     "pnpm test:template-submissions",
     "ext audit --manifest ./manifest.json --package ./package.json --bundle ./dist/plugin.cjs",

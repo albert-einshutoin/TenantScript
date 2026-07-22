@@ -26,7 +26,7 @@
 ## Security and operation
 
 - [ ] Capability grants are the minimum used by a tested handler path.
-- [ ] Egress is denied or limited to reviewed exact hosts; no wildcard or raw credential path exists.
+- [ ] Egress is denied and the host list is empty; allowlists are not yet accepted by the submission lane.
 - [ ] Untrusted input, output bounds, fixed errors, and undeclared-hook rejection are tested.
 - [ ] Retry, idempotency, side effects, limits, rollback/disable, and privacy behavior are documented.
 - [ ] `SECURITY.md` contains no credential, account identifier, customer/tenant data, or private URL.

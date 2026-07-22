@@ -510,8 +510,13 @@ function validateEgress(value, displayPath) {
     return;
   }
   validateAllowedFields(value, ["mode", "allowHosts"], displayPath, { prefix: "egress." });
-  if (value.mode !== "deny" && value.mode !== "allowlist") {
-    errors.push(`${displayPath}: egress.mode is invalid`);
+  if (value.mode !== "deny") {
+    // The accountless submission lane blocks all networking, so an allowlist would currently be
+    // metadata rather than evidence. Keep community packets fail-closed until behavior cases can
+    // exercise each host and bind the resulting audit trail to the review record.
+    errors.push(
+      `${displayPath}: template submissions require deny egress until host-specific behavior evidence is supported`
+    );
   }
   validateSortedStrings(value.allowHosts, "egress.allowHosts", displayPath, hostPattern);
   if (
@@ -524,15 +529,8 @@ function validateEgress(value, displayPath) {
     // policy as immutable source provenance rather than accepting syntactically valid local names.
     errors.push(`${displayPath}: egress.allowHosts must contain only public DNS hosts`);
   }
-  if (value.mode === "deny" && Array.isArray(value.allowHosts) && value.allowHosts.length > 0) {
+  if (Array.isArray(value.allowHosts) && value.allowHosts.length > 0) {
     errors.push(`${displayPath}: deny egress requires an empty allowHosts`);
-  }
-  if (
-    value.mode === "allowlist" &&
-    Array.isArray(value.allowHosts) &&
-    value.allowHosts.length === 0
-  ) {
-    errors.push(`${displayPath}: allowlist egress requires at least one host`);
   }
 }
 

@@ -1033,6 +1033,21 @@ test("rejects private hosts in egress allowlists", () => {
   }
 });
 
+test("rejects egress allowlists until host-specific behavior evidence is supported", () => {
+  withRepository(({ root, submission }) => {
+    submission.egress = { mode: "allowlist", allowHosts: ["api.example.com"] };
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(
+      result.stderr,
+      /template submissions require deny egress until host-specific behavior evidence is supported/
+    );
+  });
+});
+
 test("rejects non-HTTP private URLs in evidence", () => {
   for (const privateUrl of ["ssh://deploy.internal/review", "postgres://user@db.internal/app"]) {
     withRepository(({ root, submission }) => {
@@ -1059,6 +1074,8 @@ test("publishes a closed JSON Schema for the submission packet", () => {
   assert.equal(schema.properties.source.additionalProperties, false);
   assert.equal(schema.properties.verification.additionalProperties, false);
   assert.ok(schema.properties.verification.required.includes("behaviorCases"));
+  assert.equal(schema.properties.egress.properties.mode.const, "deny");
+  assert.equal(schema.properties.egress.properties.allowHosts.maxItems, 0);
   for (const required of [
     "source",
     "sdk",

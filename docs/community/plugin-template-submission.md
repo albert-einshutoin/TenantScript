@@ -50,13 +50,17 @@ invokes the required `test/plugin.test.ts` directly so the behavior test cannot 
 no-op.
 
 The manifest and packet must agree exactly on hook name/type, capability names, configuration keys,
-and egress mode/hosts; Tier 1 compares them before build and audit. Keep capabilities empty and egress
-denied unless the reviewed behavior needs narrower declared access. Never include tokens, credentials,
+and egress mode/hosts; Tier 1 compares them before build and audit. The submission contract currently
+only accepts egress mode `deny` with an empty host list. Tier 1 cannot yet execute and authenticate
+host-specific behavior and audit evidence, so a manifest that needs an allowlist is not eligible for
+the gallery submission lane. Keep capabilities empty unless the reviewed behavior needs a narrower
+declared grant. Never include tokens, credentials,
 labelled or unlabelled raw account identifiers, customer/tenant data, private-host URLs, production
 logs, or machine-local paths (including `file:///home/...`, `file:///tmp/...`, and Markdown-wrapped
 `` `/workspace/...` `` paths).
-Private-host detection covers URL schemes such as HTTPS, SSH, and PostgreSQL. Egress allowlists must
-likewise contain public DNS hosts only; local DNS names and IP literals are rejected.
+Private-host detection covers URL schemes such as HTTPS, SSH, and PostgreSQL. The checker still rejects
+private DNS names and IP literals found in egress metadata, without treating that validation as
+permission to submit an allowlist.
 Repository paths may use legitimate security vocabulary such as `token-refresh.ts`; the checker scans
 the digest-bound file contents instead of treating path segments as secret fields.
 The exact `@tenantscript/manifest` and `@tenantscript/plugin-sdk` dependency versions must equal
@@ -111,7 +115,7 @@ The closed packet schema requires:
 - stable slug, display name, bounded summary, and SPDX-style license metadata;
 - public HTTPS source repository, full commit SHA, source directory, and sorted SHA-256 file map;
 - pinned SDK caret range and exact last-tested version;
-- one hook name/type, sorted capabilities and config keys, plus explicit deny or host allowlist egress;
+- one hook name/type, sorted capabilities and config keys, plus explicit deny egress and no hosts;
 - canonical build, test, and audit commands with repository-local evidence;
 - two to sixteen sorted deterministic behavior cases, including success and failure results and an
   explicit ordered capability-call plan. Event success is `{ "ok": true }`; transform and policy
@@ -187,8 +191,10 @@ Maintainers resolve all actionable review threads and wait for Tier 1 and securi
   digest, repeat build/test/audit, and refresh the review record.
 - **missing or unsafe evidence** — add a sanitized repository-local artifact; never paste a credential,
   customer payload, private URL, or machine path into the packet.
-- **capability or egress mismatch** — remove speculative access or add the narrow grant, handler call,
-  negative test, audit evidence, and reviewer rationale together.
+- **capability mismatch** — remove speculative access or add the narrow grant, handler call, negative
+  test, audit evidence, and reviewer rationale together.
+- **egress mismatch** — use deny-only behavior for this submission. Host allowlists remain outside the
+  gallery contract until host-specific behavior and audit evidence are machine-checked.
 - **review record rejected** — complete all five domains and remove blockers; `unverified` is not a pass.
 - **live or registry check unavailable** — mark it not verified with a reason. Do not convert an
   accountless result into a live claim.

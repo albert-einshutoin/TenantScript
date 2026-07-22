@@ -75,9 +75,10 @@
       "additionalProperties": false,
       "required": ["mode", "allowHosts"],
       "properties": {
-        "mode": { "enum": ["deny", "allowlist"] },
+        "mode": { "const": "deny" },
         "allowHosts": {
           "type": "array",
+          "maxItems": 0,
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$" }
         }
