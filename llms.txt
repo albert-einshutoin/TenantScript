@@ -41,6 +41,7 @@ Use these sources for the current boundary:
 - [Zero-integration proxy quickstart](docs/quickstarts/zero-integration-proxy-mode.md)
 - [Typed SDK integration quickstart](docs/quickstarts/sdk-integration.md)
 - [Agent-friendly plugin authoring](docs/quickstarts/agent-plugin-authoring.md)
+- [Plugin authoring eval contract](docs/reference/plugin-authoring-evals.md)
 - [Public SDK reference](docs/reference/sdk.md)
 - [Canonical TenantScript glossary](docs/reference/glossary.md)
 - [CLI command and exit-code reference](docs/reference/cli.md)

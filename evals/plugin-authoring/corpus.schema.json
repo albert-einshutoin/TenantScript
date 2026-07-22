@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tenantscript.dev/schemas/plugin-authoring-eval-corpus.schema.json",
+  "title": "TenantScript plugin authoring evaluation corpus",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "baselineRevision", "requiredJudges", "tasks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "baselineRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "requiredJudges": {
+      "const": ["manifest", "build", "unit-test", "security-test", "audit", "least-privilege"]
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "category", "requirement", "hook", "capabilities", "egress"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$", "maxLength": 80 },
+          "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "category": {
+            "enum": ["approval", "capability", "error-handling", "policy", "webhook-transform"]
+          },
+          "requirement": { "type": "string", "minLength": 40, "maxLength": 2000 },
+          "hook": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
+                "maxLength": 120
+              },
+              "type": { "enum": ["event", "transform", "policy"] }
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
+              "maxLength": 120
+            }
+          },
+          "egress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode"],
+            "properties": { "mode": { "const": "deny" } }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "corpusDigest": "9bf86c36f4bf79e1a9c659f92e88dfd619c83ab5db196d89bc46f6f0b87441f9",
+  "repositoryRevision": "441ae870ac58d6693f8576fd6b081323611d1739",
+  "run": {
+    "id": "repository-simulation-001",
+    "agent": "fixture-agent",
+    "model": "fixture-model-v1",
+    "provenance": "repository-simulation",
+    "evidenceBundleDigest": null,
+    "startedAt": "2026-07-22T00:00:00.000Z",
+    "completedAt": "2026-07-22T00:01:00.000Z",
+    "costUsd": null
+  },
+  "taskResults": [
+    {
+      "taskId": "approval-invoice-threshold",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "approval-refund-review",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "capability-github-issue",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "capability-slack-alert",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "error-malformed-payload",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "error-provider-failure",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "policy-api-method-allowlist",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "policy-data-residency",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "webhook-currency-normalizer",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    },
+    {
+      "taskId": "webhook-ticket-priority",
+      "judges": [
+        { "name": "manifest", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "build", "status": "pass", "durationMs": 20, "failureCode": null },
+        { "name": "unit-test", "status": "pass", "durationMs": 30, "failureCode": null },
+        { "name": "security-test", "status": "pass", "durationMs": 40, "failureCode": null },
+        { "name": "audit", "status": "pass", "durationMs": 10, "failureCode": null },
+        { "name": "least-privilege", "status": "pass", "durationMs": 10, "failureCode": null }
+      ]
+    }
+  ]
+}

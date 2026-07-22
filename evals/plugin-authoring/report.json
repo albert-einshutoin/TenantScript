@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "corpusDigest": "9bf86c36f4bf79e1a9c659f92e88dfd619c83ab5db196d89bc46f6f0b87441f9",
+    "baselineRevision": "441ae870ac58d6693f8576fd6b081323611d1739",
+    "tasks": 10,
+    "runs": 1
+  },
+  "runs": [
+    {
+      "id": "repository-simulation-001",
+      "agent": "fixture-agent",
+      "model": "fixture-model-v1",
+      "provenance": "repository-simulation",
+      "status": "success",
+      "summary": {
+        "passed": 10,
+        "total": 10,
+        "passRate": 1
+      },
+      "durationMs": 60000,
+      "costUsd": null
+    }
+  ],
+  "agents": [
+    {
+      "agent": "fixture-agent",
+      "model": "fixture-model-v1",
+      "runs": 1,
+      "passed": 10,
+      "total": 10,
+      "passAt1": 1,
+      "costUsd": null
+    }
+  ],
+  "categories": [
+    {
+      "category": "approval",
+      "passed": 2,
+      "total": 2,
+      "passRate": 1
+    },
+    {
+      "category": "capability",
+      "passed": 2,
+      "total": 2,
+      "passRate": 1
+    },
+    {
+      "category": "error-handling",
+      "passed": 2,
+      "total": 2,
+      "passRate": 1
+    },
+    {
+      "category": "policy",
+      "passed": 2,
+      "total": 2,
+      "passRate": 1
+    },
+    {
+      "category": "webhook-transform",
+      "passed": 2,
+      "total": 2,
+      "passRate": 1
+    }
+  ],
+  "tasks": [
+    {
+      "id": "approval-invoice-threshold",
+      "category": "approval",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "approval-refund-review",
+      "category": "approval",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "capability-github-issue",
+      "category": "capability",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "capability-slack-alert",
+      "category": "capability",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "error-malformed-payload",
+      "category": "error-handling",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "error-provider-failure",
+      "category": "error-handling",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "policy-api-method-allowlist",
+      "category": "policy",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "policy-data-residency",
+      "category": "policy",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "webhook-currency-normalizer",
+      "category": "webhook-transform",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    },
+    {
+      "id": "webhook-ticket-priority",
+      "category": "webhook-transform",
+      "passed": 1,
+      "total": 1,
+      "passRate": 1
+    }
+  ],
+  "failures": []
+}
