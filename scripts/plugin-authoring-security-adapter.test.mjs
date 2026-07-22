@@ -225,3 +225,38 @@ test("continues after failures and rejects forged or unsafe observations", () =>
     }
   });
 });
+
+test("rejects an allowlisted capability call whose input differs from the security plan", () => {
+  withFixture((context) => {
+    const baseCase = loadPluginAuthoringTaskSecurityCases(repoRoot, task)[0];
+    const securityCase = {
+      ...structuredClone(baseCase),
+      capabilityPlan: [
+        {
+          name: "slack.send",
+          input: { channel: "approved", message: "bounded" },
+          outcome: { status: "resolve", value: { messageId: "msg-1" } }
+        }
+      ]
+    };
+    const key = Buffer.alloc(32, 7);
+    const adapter = createPluginAuthoringSecurityTestAdapter({
+      loadTaskCases: () => [securityCase],
+      randomBytesImpl: (size) => (size === 16 ? Buffer.alloc(16, 8) : key),
+      spawnSyncImpl: () =>
+        authenticatedChild(key, {
+          capabilityCalls: [
+            { name: "slack.send", input: { channel: "attacker", message: "unplanned" } }
+          ]
+        }),
+      terminateProcessGroup: () => {}
+    });
+    assert.equal(
+      adapter({
+        ...context,
+        task: { ...context.task, capabilities: ["slack.send"] }
+      }),
+      false
+    );
+  });
+});

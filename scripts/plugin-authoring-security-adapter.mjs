@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { verifyPluginAuthoringBuildReceipt } from "./plugin-authoring-build-contract.mjs";
 import { loadPluginAuthoringTaskSecurityCases } from "./plugin-authoring-security-cases.mjs";
@@ -78,12 +79,12 @@ export function createPluginAuthoringSecurityTestAdapter({
         assert(observation.boundaryProbesPassed === true);
         assert(observation.canaryVisible === false);
         assert(Array.isArray(observation.capabilityCalls));
-        assert(observation.capabilityCalls.length <= securityCase.capabilityPlan.length);
-        assert(
-          observation.capabilityCalls.every((call) =>
-            isAllowedCapabilityCall(call, context.task.capabilities)
-          )
-        );
+        assert(observation.capabilityCalls.length === securityCase.capabilityPlan.length);
+        for (const [index, call] of observation.capabilityCalls.entries()) {
+          const planned = securityCase.capabilityPlan[index];
+          assert(isAllowedCapabilityCall(call, context.task.capabilities));
+          assert(call.name === planned.name && isDeepStrictEqual(call.input, planned.input));
+        }
         assert(Array.isArray(observation.runtimeLogs) && observation.runtimeLogs.length === 0);
         assert(observation.pendingCapabilityCalls === 0);
       } catch {
