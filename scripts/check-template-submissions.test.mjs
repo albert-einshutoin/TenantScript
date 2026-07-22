@@ -323,6 +323,30 @@ test("requires the digest map to cover every copied source file", () => {
   });
 });
 
+test("rejects package-manager hook and configuration files", () => {
+  for (const controlFile of [".pnpmfile.cjs", ".npmrc", "pnpm-workspace.yaml"]) {
+    withRepository(({ root, submission }) => {
+      const path = `templates/submissions/example-template/plugin/${controlFile}`;
+      writeFileSync(join(root, path), "module.exports = {};\n");
+      submission.source.files[path] = createHash("sha256")
+        .update(readFileSync(join(root, path)))
+        .digest("hex");
+      submission.source.files = Object.fromEntries(
+        Object.entries(submission.source.files).sort(([left], [right]) => left.localeCompare(right))
+      );
+      submission.source.revision = "1".repeat(40);
+      writeReviewRecord(root, submission);
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1, controlFile);
+      assert.match(result.stderr, /source\.directory contains a package-manager control file/);
+      assert.doesNotMatch(result.stderr, /pnpmfile|npmrc|pnpm-workspace/);
+    });
+  }
+});
+
 test("rejects sensitive content in referenced evidence and security notes", () => {
   withRepository(({ root, submission }) => {
     const credential = `Bearer ${"Z".repeat(24)}`;

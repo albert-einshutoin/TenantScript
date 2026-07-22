@@ -24,6 +24,13 @@ const requiredSourceSuffixes = [
   "src/manifest.ts",
   "test/plugin.test.ts"
 ];
+const unsafePackageManagerControlNames = new Set([
+  ".npmrc",
+  ".pnpmfile.cjs",
+  ".pnpmfile.mjs",
+  "pnpm-workspace.yaml",
+  "pnpm-workspace.yml"
+]);
 const topLevelFields = [
   "schemaVersion",
   "kind",
@@ -198,6 +205,15 @@ function validateSource(value, license, directoryName, displayPath) {
     errors.push(`${displayPath}: source.directory must contain only bounded regular files`);
   } else if (!sameStringArray(filePaths, copiedSourcePaths)) {
     errors.push(`${displayPath}: source.files must cover every regular file in source.directory`);
+  }
+  if (
+    copiedSourcePaths?.some((path) =>
+      unsafePackageManagerControlNames.has(path.split("/").at(-1) ?? "")
+    )
+  ) {
+    // Install-time package-manager hooks execute before the audited manifest and bundle are read,
+    // so digest-binding them is insufficient; submissions must not carry this control surface.
+    errors.push(`${displayPath}: source.directory contains a package-manager control file`);
   }
   for (const suffix of requiredSourceSuffixes) {
     const requiredPath =

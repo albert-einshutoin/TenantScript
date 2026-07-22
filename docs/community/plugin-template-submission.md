@@ -63,8 +63,10 @@ pnpm test
 Commit the complete plugin source before writing its packet. Record the full commit SHA—not a branch,
 tag, abbreviated SHA, or mutable URL—and SHA-256 every regular file under the packet's `plugin/`
 directory. The digest map must cover that directory exactly; unlisted helpers, build inputs, and
-symlinks are rejected. Do not amend or force-push the source commit after review starts; a legitimate
-change creates a new commit and new digests.
+symlinks are rejected. Package-manager control files such as `.pnpmfile.cjs`, `.npmrc`, and
+`pnpm-workspace.yaml` are also rejected because they can execute hooks or alter installation before
+the audited bundle is produced. Do not amend or force-push the source commit after review starts; a
+legitimate change creates a new commit and new digests.
 Use the HTTPS repository-root URL for `source.repository`; GitHub `/tree/...` and `/blob/...` browser
 URLs are rejected because they are not repository identities.
 

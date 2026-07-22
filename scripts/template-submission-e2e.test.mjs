@@ -39,6 +39,12 @@ test("manifest security metadata must match its submission packet", () => {
   assert.throws(() => assertManifestMatchesSubmission(manifest, packet));
 });
 
+test("package-manager hooks stay disabled during submission installation", () => {
+  const arguments_ = submissionInstallArguments("/tmp/plugin");
+  assert.ok(arguments_.includes("--ignore-scripts"));
+  assert.ok(arguments_.includes("--ignore-pnpmfile"));
+});
+
 async function exerciseSubmission(submission) {
   await mkdir(join(repoRoot, ".tmp"), { recursive: true });
   const tempRoot = await mkdtemp(join(repoRoot, ".tmp", `template-submission-${submission}-`));
@@ -79,14 +85,7 @@ async function exerciseSubmission(submission) {
     };
     await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
-    run("pnpm", [
-      "--dir",
-      pluginDirectory,
-      "install",
-      "--ignore-workspace",
-      "--prefer-offline",
-      "--ignore-scripts"
-    ]);
+    run("pnpm", submissionInstallArguments(pluginDirectory));
     const manifestJson = run(
       process.execPath,
       [
@@ -128,6 +127,19 @@ async function exerciseSubmission(submission) {
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+function submissionInstallArguments(pluginDirectory) {
+  return [
+    "--dir",
+    pluginDirectory,
+    "install",
+    "--ignore-workspace",
+    "--prefer-offline",
+    "--ignore-scripts",
+    // --ignore-scripts does not disable pnpmfile hooks, which can mutate the copied source pre-audit.
+    "--ignore-pnpmfile"
+  ];
 }
 
 function assertManifestMatchesSubmission(manifest, submission) {
