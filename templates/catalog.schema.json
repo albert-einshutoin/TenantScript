@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tenantscript.dev/schemas/template-catalog.schema.json",
+  "title": "TenantScript public template compatibility catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "templates"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "displayName",
+          "summary",
+          "license",
+          "provenance",
+          "source",
+          "sdk",
+          "hook",
+          "capabilities",
+          "egress",
+          "configKeys",
+          "review"
+        ],
+        "properties": {
+          "slug": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "license": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "provenance": { "enum": ["community", "simulation"] },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["repository", "revision"],
+            "properties": {
+              "repository": { "type": "string", "pattern": "^https://" },
+              "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+            }
+          },
+          "sdk": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["range", "lastTestedVersion"],
+            "properties": {
+              "range": { "type": "string", "pattern": "^\\^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+              "lastTestedVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+            }
+          },
+          "hook": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "type"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" },
+              "type": { "enum": ["event", "transform", "policy"] }
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" }
+          },
+          "egress": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode"],
+            "properties": { "mode": { "const": "deny" } }
+          },
+          "configKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" }
+          },
+          "review": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["decision"],
+            "properties": { "decision": { "const": "approve" } }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "templates": [
+    {
+      "slug": "ticket-priority-normalizer",
+      "displayName": "Ticket priority normalizer",
+      "summary": "Normalizes a bounded support ticket subject and priority without capabilities or egress.",
+      "license": "Apache-2.0",
+      "provenance": "simulation",
+      "source": {
+        "repository": "https://github.com/albert-einshutoin/TenantScript",
+        "revision": "45aa61f68204f82bebe7e98ebfb6ab930d70fc0e"
+      },
+      "sdk": {
+        "range": "^0.0.0",
+        "lastTestedVersion": "0.0.0"
+      },
+      "hook": {
+        "name": "ticket.created",
+        "type": "transform"
+      },
+      "capabilities": [],
+      "egress": {
+        "mode": "deny"
+      },
+      "configKeys": [],
+      "review": {
+        "decision": "approve"
+      }
+    }
+  ]
+}
