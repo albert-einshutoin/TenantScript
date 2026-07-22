@@ -44,8 +44,14 @@ runnerはstderrを保持も反射もしません。
 
 repositoryには、固定corpusを10 task x 6 judgeの順序で評価し、adapterのfalse、例外、不正な戻り値を
 judge固有のfailure codeへ閉じるorchestration coreがあります。このcoreはcandidate codeを実行せず、
-review済みimage、production judge adapter、sandboxの証拠ではありません。manifest抽出やbuildを行うadapterは
-後続のimage実装でcontainer内だけに接続し、scaffold正本の`src/manifest.ts`を扱います。
+review済みimage、production execution adapter、sandboxの証拠ではありません。
+
+`scripts/plugin-authoring-judge-entrypoint.mjs`はrunnerと共有する固定entrypoint/argv contractを持ち、request、
+digest固定corpus、空workspace、candidate bundleをcontainer内でも再検証してからcoreを呼びます。host側で検証済みでも
+candidate全体を再度inspectするのは、direct image invocationやmount driftから後続adapterへsymlink、hard link、hidden
+control、oversized treeを渡さないためです。taskごとに独立した`/work/<task-id>`を作り、stdoutはclosed judge JSON 1行、
+entrypoint failureは固定stderrだけに閉じます。このrepository module自体はまだreview済みimageの
+`/opt/tenantscript/bin/plugin-authoring-judge`へinstallされていません。
 
 抽出済みmanifest valueに対しては、canonical manifest parserの成功と、task固有の単一hook、capability keyの
 exact set、egress denyを判定するpure policyがあります。parserの例外や不正な戻り値はdiagnosticを反射せず
@@ -58,6 +64,10 @@ top-levelはscaffoldが生成するtype-only `TenantScriptManifest` importと
 duplicate/prototype-sensitive keyを拒否します。source byte、AST node、nesting depthにも上限があります。抽出失敗や
 parser diagnosticはcandidate内容を反射せず両judgeのfailureへ閉じます。この静的adapterはunknown sourceの非実行境界を
 提供しますが、build/test/audit sandboxやreview済みimageの完成を証明しません。
+
+build、unit-test、security-test、auditの4 execution adapterは未実装です。entrypoint interfaceではmissing、false、例外、
+boolean以外の結果を各judgeのfailureへfail closedにし、後続judgeとtaskをskipしません。test doubleの全成功はimageや
+real-agent qualityの証拠ではなく、4 execution adapterがreview済みimageへ接続されるまで実runの全judge成功を主張しません。
 
 reviewed judge imageがない場合のstop conditionは明確です。runnerは
 `isolated judge sandbox is unavailable`で停止し、host実行やrepository simulationへfallbackしません。
