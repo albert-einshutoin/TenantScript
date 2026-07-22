@@ -300,9 +300,13 @@ export async function executeIsolatedJudgeRun({
   let runAttempted = false;
   let cleanupConfirmed = false;
   let executionFailure = false;
+  let temporaryRootOwned = false;
 
   try {
     assertSafeTemporaryRoot(temporaryRoot);
+    // Cleanup is authorized only after the factory-provided root has passed the empty,
+    // non-symlink directory contract. A failed ownership check must preserve caller files.
+    temporaryRootOwned = true;
     try {
       workspace.prepare({
         repositoryRoot: resolve(repositoryRoot),
@@ -433,7 +437,9 @@ export async function executeIsolatedJudgeRun({
       result
     };
   } finally {
-    rmSync(temporaryRoot, { recursive: true, force: true });
+    if (temporaryRootOwned) {
+      rmSync(temporaryRoot, { recursive: true, force: true });
+    }
   }
 }
 

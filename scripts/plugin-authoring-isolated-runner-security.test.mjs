@@ -153,6 +153,30 @@ test("stops reading candidate bytes when the aggregate bundle cap is reached", a
   });
 });
 
+test("does not delete a temporary root before establishing ownership", async () => {
+  await withCandidateBundle(async (candidateRoot) => {
+    const tempRoot = mkdtempSync(join(tmpdir(), "tenantscript-unowned-root-"));
+    const sentinel = join(tempRoot, "operator-owned.txt");
+    writeFileSync(sentinel, "preserve me\n");
+
+    try {
+      await assert.rejects(
+        executeIsolatedJudgeRun({
+          repositoryRoot: repoRoot,
+          candidateRoot,
+          request: requestFixture(),
+          corpus,
+          workspace: workspaceFixture(),
+          temporaryRootFactory: () => tempRoot
+        })
+      );
+      assert.equal(readFileSync(sentinel, "utf8"), "preserve me\n");
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
 test("stops before unknown execution when the sandbox probe fails", async () => {
   await withCandidateBundle(async (candidateRoot) => {
     const tempRoot = mkdtempSync(join(tmpdir(), "tenantscript-probe-failure-"));
