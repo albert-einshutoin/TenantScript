@@ -13,9 +13,9 @@
     ],
     "sourceDigests": {
       "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
-      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "b2ca30cc16ea05949fe22adbf6ec8ddea4b62c6dd8740824f33b8547e9db140b",
+      "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "a43645a8794dffd136c05cb8147a39d797aa390fceab728176deb4ea17b32b87",
       "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
-      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "8bcc3ce4c8596f19e1dffcfec39ba370fe971ecd38bf38e187cc05fe11598f4e",
+      "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "556b6c11179fe6801660fae51e8f2548822b9d5137ddd299298032551c5848ec",
       "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4"
     }
   },
@@ -23,7 +23,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T01:10:00.000Z",
+  "reviewedAt": "2026-07-22T01:20:00.000Z",
   "domains": [
     {
       "name": "security",
@@ -36,7 +36,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts"
       ],
-      "notes": "The transform validates bounded untrusted input before returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata and evidence including raw account identifiers, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, non-public repository hosts, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check."
+      "notes": "The transform bounds the raw untrusted subject before trimming or returning a reduced output, emits a fixed failure message, calls no capabilities, denies egress, and rejects undeclared hooks. The packet checker rejects sensitive metadata and evidence including raw account identifiers, null provenance revisions, incomplete source digest maps, source drift, path escape, symlinks, non-public repository hosts, unrelated approvals, and unsafe guarantee language without reflecting submitted values. Source digests remain enforceable after squash while available Git objects receive an additional content check."
     },
     {
       "name": "compatibility",
@@ -89,9 +89,9 @@
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "af9be7a41972d49429f1c235a1ba3f86147974516315588b747e88d13dd63d2c",
-    "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "b2ca30cc16ea05949fe22adbf6ec8ddea4b62c6dd8740824f33b8547e9db140b",
+    "templates/submissions/ticket-priority-normalizer/plugin/src/index.ts": "a43645a8794dffd136c05cb8147a39d797aa390fceab728176deb4ea17b32b87",
     "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts": "03345d5873290af3d926e8ea629b68a9dda44a3d856e590a05b2d2aee0513cdb",
-    "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "8bcc3ce4c8596f19e1dffcfec39ba370fe971ecd38bf38e187cc05fe11598f4e",
+    "templates/submissions/ticket-priority-normalizer/plugin/test/plugin.test.ts": "556b6c11179fe6801660fae51e8f2548822b9d5137ddd299298032551c5848ec",
     "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json": "690e1c54983ef7cc1ea91871c8658be902cd79a11cf39935ab20a1e8cacacae4",
     "templates/submissions/ticket-priority-normalizer/verification.md": "1bf03a2cb9995caed4d25aa87e75c8056ace84f997d78b67b55cf67cc5447336"
   },
