@@ -1,0 +1,779 @@
+{
+  "schemaVersion": 1,
+  "tasks": [
+    {
+      "taskId": "approval-invoice-threshold",
+      "cases": [
+        {
+          "name": "below-threshold",
+          "hookName": "invoice.created",
+          "payload": { "totalCents": 99999 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "decision": "allow" } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "at-threshold",
+          "hookName": "invoice.created",
+          "payload": { "totalCents": 100000 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "approval_required" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "above-threshold",
+          "hookName": "invoice.created",
+          "payload": { "totalCents": 100001 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "approval_required" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "fractional-total",
+          "hookName": "invoice.created",
+          "payload": { "totalCents": 10.5 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "invoice.created",
+                "message": "invalid_invoice_total"
+              }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "missing-total",
+          "hookName": "invoice.created",
+          "payload": {},
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "invoice.created",
+                "message": "invalid_invoice_total"
+              }
+            },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "approval-refund-review",
+      "cases": [
+        {
+          "name": "inside-window",
+          "hookName": "refund.requested",
+          "payload": { "purchaseAgeDays": 29 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "decision": "allow" } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "window-boundary",
+          "hookName": "refund.requested",
+          "payload": { "purchaseAgeDays": 30 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "decision": "allow" } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "outside-window",
+          "hookName": "refund.requested",
+          "payload": { "purchaseAgeDays": 31 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "approval_required" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "missing-age",
+          "hookName": "refund.requested",
+          "payload": {},
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "approval_required" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "negative-age",
+          "hookName": "refund.requested",
+          "payload": { "purchaseAgeDays": -1 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "approval_required" }
+            },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "capability-github-issue",
+      "cases": [
+        {
+          "name": "creates-one-issue",
+          "hookName": "deployment.failed",
+          "payload": { "deploymentId": "dep-123", "reason": "health check failed" },
+          "capabilityPlan": [
+            {
+              "name": "github.issue.create",
+              "input": { "title": "Deployment dep-123 failed", "body": "health check failed" },
+              "outcome": { "status": "resolve", "value": { "issueId": "issue-1" } }
+            }
+          ],
+          "expected": {
+            "result": { "ok": true },
+            "capabilityCalls": [
+              {
+                "name": "github.issue.create",
+                "input": { "title": "Deployment dep-123 failed", "body": "health check failed" }
+              }
+            ]
+          }
+        },
+        {
+          "name": "rejects-empty-id",
+          "hookName": "deployment.failed",
+          "payload": { "deploymentId": "", "reason": "failed" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "deployment.failed",
+                "message": "invalid_deployment"
+              }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "contains-provider-rejection",
+          "hookName": "deployment.failed",
+          "payload": { "deploymentId": "dep-123", "reason": "health check failed" },
+          "capabilityPlan": [
+            {
+              "name": "github.issue.create",
+              "input": { "title": "Deployment dep-123 failed", "body": "health check failed" },
+              "outcome": { "status": "reject" }
+            }
+          ],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "deployment.failed",
+                "message": "issue_creation_failed"
+              }
+            },
+            "capabilityCalls": [
+              {
+                "name": "github.issue.create",
+                "input": { "title": "Deployment dep-123 failed", "body": "health check failed" }
+              }
+            ]
+          }
+        },
+        {
+          "name": "rejects-oversized-reason",
+          "hookName": "deployment.failed",
+          "payload": {
+            "deploymentId": "dep-123",
+            "reason": "This deployment failure reason is deliberately longer than the reviewed one hundred and sixty character limit so the candidate must fail closed before calling the provider mutation endpoint at all."
+          },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "deployment.failed",
+                "message": "invalid_deployment"
+              }
+            },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "capability-slack-alert",
+      "cases": [
+        {
+          "name": "sends-one-alert",
+          "hookName": "order.blocked",
+          "payload": { "orderId": "ord-42", "reason": "payment review", "channel": "ops-alerts" },
+          "capabilityPlan": [
+            {
+              "name": "slack.send",
+              "input": {
+                "channel": "ops-alerts",
+                "message": "Order ord-42 blocked: payment review"
+              },
+              "outcome": { "status": "resolve", "value": { "messageId": "msg-1" } }
+            }
+          ],
+          "expected": {
+            "result": { "ok": true },
+            "capabilityCalls": [
+              {
+                "name": "slack.send",
+                "input": {
+                  "channel": "ops-alerts",
+                  "message": "Order ord-42 blocked: payment review"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "rejects-missing-order",
+          "hookName": "order.blocked",
+          "payload": { "reason": "payment review", "channel": "ops-alerts" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "order.blocked",
+                "message": "invalid_blocked_order"
+              }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "rejects-invalid-channel",
+          "hookName": "order.blocked",
+          "payload": { "orderId": "ord-42", "reason": "payment review", "channel": "" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "order.blocked",
+                "message": "invalid_blocked_order"
+              }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "contains-provider-rejection",
+          "hookName": "order.blocked",
+          "payload": { "orderId": "ord-42", "reason": "payment review", "channel": "ops-alerts" },
+          "capabilityPlan": [
+            {
+              "name": "slack.send",
+              "input": {
+                "channel": "ops-alerts",
+                "message": "Order ord-42 blocked: payment review"
+              },
+              "outcome": { "status": "reject" }
+            }
+          ],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "order.blocked",
+                "message": "alert_failed"
+              }
+            },
+            "capabilityCalls": [
+              {
+                "name": "slack.send",
+                "input": {
+                  "channel": "ops-alerts",
+                  "message": "Order ord-42 blocked: payment review"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "error-malformed-payload",
+      "cases": [
+        {
+          "name": "returns-closed-customer",
+          "hookName": "customer.updated",
+          "payload": { "customerId": "cus-1", "displayName": "Ada" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "customerId": "cus-1", "displayName": "Ada" } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "drops-extra-input",
+          "hookName": "customer.updated",
+          "payload": { "customerId": "cus-1", "displayName": "Ada", "internalNote": "ignored" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "customerId": "cus-1", "displayName": "Ada" } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "rejects-null",
+          "hookName": "customer.updated",
+          "payload": null,
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "customer.updated",
+                "message": "invalid_customer"
+              }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "rejects-array",
+          "hookName": "customer.updated",
+          "payload": [],
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "customer.updated",
+                "message": "invalid_customer"
+              }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "rejects-empty-name",
+          "hookName": "customer.updated",
+          "payload": { "customerId": "cus-1", "displayName": "" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "customer.updated",
+                "message": "invalid_customer"
+              }
+            },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "error-provider-failure",
+      "cases": [
+        {
+          "name": "accepts-valid-provider-result",
+          "hookName": "incident.opened",
+          "payload": { "incidentId": "inc-9", "channel": "incidents" },
+          "capabilityPlan": [
+            {
+              "name": "slack.send",
+              "input": { "channel": "incidents", "message": "Incident inc-9 opened" },
+              "outcome": { "status": "resolve", "value": { "messageId": "msg-9" } }
+            }
+          ],
+          "expected": {
+            "result": { "ok": true },
+            "capabilityCalls": [
+              {
+                "name": "slack.send",
+                "input": { "channel": "incidents", "message": "Incident inc-9 opened" }
+              }
+            ]
+          }
+        },
+        {
+          "name": "contains-provider-rejection",
+          "hookName": "incident.opened",
+          "payload": { "incidentId": "inc-9", "channel": "incidents" },
+          "capabilityPlan": [
+            {
+              "name": "slack.send",
+              "input": { "channel": "incidents", "message": "Incident inc-9 opened" },
+              "outcome": { "status": "reject" }
+            }
+          ],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "incident.opened",
+                "message": "notification_failed"
+              }
+            },
+            "capabilityCalls": [
+              {
+                "name": "slack.send",
+                "input": { "channel": "incidents", "message": "Incident inc-9 opened" }
+              }
+            ]
+          }
+        },
+        {
+          "name": "rejects-malformed-provider-result",
+          "hookName": "incident.opened",
+          "payload": { "incidentId": "inc-9", "channel": "incidents" },
+          "capabilityPlan": [
+            {
+              "name": "slack.send",
+              "input": { "channel": "incidents", "message": "Incident inc-9 opened" },
+              "outcome": { "status": "resolve", "value": {} }
+            }
+          ],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "incident.opened",
+                "message": "notification_failed"
+              }
+            },
+            "capabilityCalls": [
+              {
+                "name": "slack.send",
+                "input": { "channel": "incidents", "message": "Incident inc-9 opened" }
+              }
+            ]
+          }
+        },
+        {
+          "name": "rejects-invalid-incident",
+          "hookName": "incident.opened",
+          "payload": { "incidentId": "", "channel": "incidents" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "incident.opened",
+                "message": "invalid_incident"
+              }
+            },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "policy-api-method-allowlist",
+      "cases": [
+        {
+          "name": "allows-get",
+          "hookName": "api.requested",
+          "payload": { "method": "GET", "url": "https://api.example.com/v1/items" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "decision": "allow" } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "allows-post",
+          "hookName": "api.requested",
+          "payload": { "method": "POST", "url": "https://api.example.com/v1/items" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "decision": "allow" } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "denies-put",
+          "hookName": "api.requested",
+          "payload": { "method": "PUT", "url": "https://api.example.com/v1/items" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "request_not_allowed" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "denies-other-origin",
+          "hookName": "api.requested",
+          "payload": { "method": "GET", "url": "https://other.example.com/v1/items" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "request_not_allowed" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "denies-credentials",
+          "hookName": "api.requested",
+          "payload": { "method": "GET", "url": "https://user:secret@api.example.com/v1/items" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "request_not_allowed" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "denies-unknown-fields",
+          "hookName": "api.requested",
+          "payload": {
+            "method": "GET",
+            "url": "https://api.example.com/v1/items",
+            "redirect": true
+          },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "request_not_allowed" }
+            },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "policy-data-residency",
+      "cases": [
+        {
+          "name": "allows-eu-west",
+          "hookName": "record.export-requested",
+          "payload": { "region": "eu-west" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "decision": "allow" } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "denies-uppercase",
+          "hookName": "record.export-requested",
+          "payload": { "region": "EU-WEST" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "region_not_allowed" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "denies-missing",
+          "hookName": "record.export-requested",
+          "payload": {},
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "region_not_allowed" }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "denies-non-string",
+          "hookName": "record.export-requested",
+          "payload": { "region": 1 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": true,
+              "value": { "decision": "deny", "reason": "region_not_allowed" }
+            },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "webhook-currency-normalizer",
+      "cases": [
+        {
+          "name": "normalizes-lowercase",
+          "hookName": "payment.received",
+          "payload": { "currency": "usd", "amount": 1250 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "currency": "USD", "amount": 1250 } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "preserves-uppercase",
+          "hookName": "payment.received",
+          "payload": { "currency": "JPY", "amount": 500 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "currency": "JPY", "amount": 500 } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "drops-extra-input",
+          "hookName": "payment.received",
+          "payload": { "currency": "eur", "amount": 800, "note": "ignored" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "currency": "EUR", "amount": 800 } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "rejects-unicode-currency",
+          "hookName": "payment.received",
+          "payload": { "currency": "€ur", "amount": 800 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "payment.received",
+                "message": "invalid_payment"
+              }
+            },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "rejects-fractional-amount",
+          "hookName": "payment.received",
+          "payload": { "currency": "USD", "amount": 1.5 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": {
+              "ok": false,
+              "error": {
+                "name": "PluginHandlerError",
+                "hookName": "payment.received",
+                "message": "invalid_payment"
+              }
+            },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "webhook-ticket-priority",
+      "cases": [
+        {
+          "name": "maps-low",
+          "hookName": "ticket.created",
+          "payload": { "priority": "low" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "priority": 1 } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "maps-normal",
+          "hookName": "ticket.created",
+          "payload": { "priority": "normal" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "priority": 2 } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "maps-high",
+          "hookName": "ticket.created",
+          "payload": { "priority": "high" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "priority": 3 } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "maps-urgent",
+          "hookName": "ticket.created",
+          "payload": { "priority": "urgent" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "priority": 4 } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "defaults-unknown",
+          "hookName": "ticket.created",
+          "payload": { "priority": "surprise" },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "priority": 2 } },
+            "capabilityCalls": []
+          }
+        },
+        {
+          "name": "defaults-malformed",
+          "hookName": "ticket.created",
+          "payload": { "priority": 99 },
+          "capabilityPlan": [],
+          "expected": {
+            "result": { "ok": true, "value": { "priority": 2 } },
+            "capabilityCalls": []
+          }
+        }
+      ]
+    }
+  ]
+}
