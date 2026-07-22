@@ -34,7 +34,21 @@
         "startedAt": { "type": "string", "format": "date-time", "maxLength": 30 },
         "completedAt": { "type": "string", "format": "date-time", "maxLength": 30 },
         "costUsd": { "type": ["number", "null"], "minimum": 0, "maximum": 100000 }
-      }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "provenance": { "const": "repository-simulation" },
+            "evidenceBundleDigest": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "provenance": { "const": "isolated-agent-run" },
+            "evidenceBundleDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        }
+      ]
     },
     "taskResults": {
       "type": "array",

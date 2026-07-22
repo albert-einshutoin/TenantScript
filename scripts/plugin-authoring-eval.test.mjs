@@ -315,6 +315,16 @@ test("published schemas stay closed and bound every collection", () => {
   assert.ok(corpusSchema.properties.tasks.maxItems <= 100);
   assert.equal(corpusSchema.properties.tasks.items.additionalProperties, false);
   assert.equal(resultSchema.additionalProperties, false);
+  assert.deepEqual(
+    resultSchema.properties.run.oneOf.map((variant) => [
+      variant.properties.provenance.const,
+      variant.properties.evidenceBundleDigest.type
+    ]),
+    [
+      ["repository-simulation", "null"],
+      ["isolated-agent-run", "string"]
+    ]
+  );
   assert.ok(resultSchema.properties.taskResults.maxItems <= 100);
   assert.equal(resultSchema.properties.taskResults.items.additionalProperties, false);
   assert.ok(resultSchema.properties.taskResults.items.properties.judges.maxItems <= 10);
