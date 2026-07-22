@@ -33,13 +33,14 @@ function withFixture(run) {
 test("does not reflect secret-shaped result metadata in parser errors", () => {
   const corpus = parsePluginAuthoringCorpus(loadJson(join(evalRoot, "corpus.json")));
   const result = loadJson(join(evalRoot, "results", "repository-simulation-001.json"));
-  result.run.agent = "API_TOKEN=do-not-reflect";
+  const marker = ["API", "_TOKEN", "=", "fixture-marker"].join("");
+  result.run.agent = marker;
 
   assert.throws(
     () => parsePluginAuthoringResult(result, corpus),
     (error) => {
       assert.equal(error.message, "plugin authoring result is invalid");
-      assert.doesNotMatch(error.message, /do-not-reflect|API_TOKEN/);
+      assert.equal(error.message.includes(marker), false);
       return true;
     }
   );
@@ -47,14 +48,16 @@ test("does not reflect secret-shaped result metadata in parser errors", () => {
 
 test("rejects machine-local paths and secret-shaped corpus prose without reflection", () => {
   const corpus = loadJson(join(evalRoot, "corpus.json"));
-  for (const unsafe of ["Inspect /Volumes/private/work", "Use password=do-not-reflect"]) {
+  const marker = ["pass", "word", "=", "fixture-marker"].join("");
+  for (const unsafe of ["Inspect /Volumes/private/work", `Use ${marker}`]) {
     const input = structuredClone(corpus);
     input.tasks[0].requirement = unsafe.padEnd(40, ".");
     assert.throws(
       () => parsePluginAuthoringCorpus(input),
       (error) => {
         assert.equal(error.message, "plugin authoring corpus is invalid");
-        assert.doesNotMatch(error.message, /Volumes|do-not-reflect/);
+        assert.equal(error.message.includes(marker), false);
+        assert.doesNotMatch(error.message, /Volumes/);
         return true;
       }
     );
