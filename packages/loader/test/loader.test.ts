@@ -249,6 +249,29 @@ describe("runScopedHandler", () => {
     });
   });
 
+  it("preserves hashes in raw URLSearchParams input", async () => {
+    const bundle = await bundleFromSource(`
+      exports.handlers = {
+        "invoice.created": () => ({
+          value: new URLSearchParams("a=1#b=2").get("a"),
+          serialized: new URLSearchParams("a=1#b=2").toString()
+        })
+      };
+    `);
+
+    await expect(
+      runScopedHandler({
+        bundleCode: bundle,
+        handlerName: "invoice.created",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({
+      value: { value: "1#b=2", serialized: "a=1%23b%3D2" },
+      logs: []
+    });
+  });
+
   it("terminates async handlers that starve the microtask queue", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {

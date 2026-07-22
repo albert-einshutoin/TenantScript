@@ -167,6 +167,38 @@ test("submitted commands cannot open network connections", async () => {
   }
 });
 
+test("submitted command descendants cannot survive a timeout", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-process-tree-"));
+  const markerPath = join(tempRoot, "survived.txt");
+  try {
+    assert.throws(
+      () =>
+        runSubmissionCommand(
+          process.execPath,
+          [
+            "-e",
+            [
+              'const { spawn } = require("node:child_process");',
+              "spawn(process.execPath, [",
+              '  "-e",',
+              '  "setTimeout(() => require(\\"node:fs\\").writeFileSync(process.argv[1], \\"survived\\"), 500)",',
+              "  process.argv[1]",
+              '], { stdio: "ignore" });',
+              "while (true) {}"
+            ].join("\n"),
+            markerPath
+          ],
+          { label: "process tree probe", timeoutMs: 100 }
+        ),
+      /process tree probe exceeded the 100 ms submitted-command limit/
+    );
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    await assert.rejects(readFile(markerPath), { code: "ENOENT" });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("generated bundle dispatch terminates a synchronous loop", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-loop-"));
   try {
@@ -782,6 +814,7 @@ function runSubmissionCommand(command, args, options = {}) {
   // variables or spawning another executable cannot restore build-time egress.
   const child = spawnSync(sandboxed.command, sandboxed.args, {
     cwd: options.cwd ?? repoRoot,
+    detached: process.platform !== "darwin",
     encoding: "utf8",
     env: environment,
     killSignal: "SIGKILL",
@@ -789,6 +822,13 @@ function runSubmissionCommand(command, args, options = {}) {
     stdio: ["ignore", "pipe", "pipe"],
     timeout: timeoutMs
   });
+  if (process.platform !== "darwin") {
+    terminateSubmissionProcessGroup(child.pid);
+  }
+  if (sandboxed.processGroupToken !== undefined) {
+    const processGroupId = submittedProcessGroupId(child.stderr, sandboxed.processGroupToken);
+    terminateSubmissionProcessGroup(processGroupId);
+  }
   if (child.error?.code === "ETIMEDOUT") {
     throw new Error(`${label} exceeded the ${timeoutMs} ms submitted-command limit`);
   }
@@ -800,11 +840,52 @@ function runSubmissionCommand(command, args, options = {}) {
   return child.stdout;
 }
 
+function terminateSubmissionProcessGroup(pid) {
+  if (!Number.isInteger(pid) || pid <= 0 || process.platform === "win32") {
+    return;
+  }
+  try {
+    // Submitted commands own a fresh session. Killing its process group after every exit removes
+    // descendants that intentionally keep running after their direct parent has completed.
+    process.kill(-pid, "SIGKILL");
+  } catch (error) {
+    if (error?.code !== "ESRCH") {
+      throw error;
+    }
+  }
+}
+
+function submittedProcessGroupId(stderr, token) {
+  const match = stderr.match(
+    new RegExp(`TENANTSCRIPT_SUBMISSION_PROCESS_GROUP:${token}:([0-9]+)`, "u")
+  );
+  if (match === null) {
+    throw new Error("submitted-command process group was not established");
+  }
+  return Number(match[1]);
+}
+
 function sandboxSubmissionCommand(command, args, environment) {
   if (process.platform === "darwin") {
+    const processGroupToken = randomBytes(16).toString("hex");
     return {
       command: "/usr/bin/sandbox-exec",
-      args: ["-p", "(version 1) (allow default) (deny network*)", command, ...args]
+      args: [
+        "-p",
+        "(version 1) (allow default) (deny network*)",
+        "/usr/bin/perl",
+        "-MPOSIX",
+        "-e",
+        [
+          "POSIX::setsid() or exit 125;",
+          "select(STDERR); $| = 1;",
+          `print STDERR "TENANTSCRIPT_SUBMISSION_PROCESS_GROUP:${processGroupToken}:$$\\n";`,
+          "exec @ARGV;"
+        ].join(" "),
+        command,
+        ...args
+      ],
+      processGroupToken
     };
   }
   if (process.platform === "linux") {
@@ -824,6 +905,9 @@ function sandboxSubmissionCommand(command, args, environment) {
           "--non-interactive",
           "/usr/bin/unshare",
           "--net",
+          "--pid",
+          "--fork",
+          "--kill-child=SIGKILL",
           "--",
           "/usr/bin/setpriv",
           `--reuid=${String(uid)}`,
@@ -840,7 +924,17 @@ function sandboxSubmissionCommand(command, args, environment) {
     }
     return {
       command: "/usr/bin/unshare",
-      args: ["--user", "--map-root-user", "--net", "--", command, ...args]
+      args: [
+        "--user",
+        "--map-root-user",
+        "--net",
+        "--pid",
+        "--fork",
+        "--kill-child=SIGKILL",
+        "--",
+        command,
+        ...args
+      ]
     };
   }
   // Submission verification must fail closed on hosts without a reviewed OS sandbox contract.
@@ -853,7 +947,16 @@ function getLinuxNetworkSandboxMode() {
   }
   const unprivileged = spawnSync(
     "/usr/bin/unshare",
-    ["--user", "--map-root-user", "--net", "--", "/usr/bin/true"],
+    [
+      "--user",
+      "--map-root-user",
+      "--net",
+      "--pid",
+      "--fork",
+      "--kill-child=SIGKILL",
+      "--",
+      "/usr/bin/true"
+    ],
     { stdio: "ignore" }
   );
   if (unprivileged.status === 0) {
@@ -862,7 +965,16 @@ function getLinuxNetworkSandboxMode() {
   }
   const privileged = spawnSync(
     "/usr/bin/sudo",
-    ["--non-interactive", "/usr/bin/unshare", "--net", "--", "/usr/bin/true"],
+    [
+      "--non-interactive",
+      "/usr/bin/unshare",
+      "--net",
+      "--pid",
+      "--fork",
+      "--kill-child=SIGKILL",
+      "--",
+      "/usr/bin/true"
+    ],
     { stdio: "ignore" }
   );
   if (privileged.status === 0) {
