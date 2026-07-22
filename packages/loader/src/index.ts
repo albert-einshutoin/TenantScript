@@ -448,21 +448,27 @@ async function run() {
     }
   });
 
-  const invocationInstaller = initializeSandbox(sandbox, limits);
+  const runtimeBindings = initializeSandbox(sandbox, limits);
 
   evaluateBundle(workerData.bundleCode, sandbox, limits);
   assertEntrypointExists(sandbox.module.exports, workerData.handlerName, workerData.entrypoint);
-  installInvocationState(sandbox, limits, invocationInstaller);
+  installInvocationState(sandbox, limits, runtimeBindings.installerName);
 
   parentPort.postMessage({ type: "started" });
-  const result = invokeEntrypointInSandbox(sandbox, limits, workerData.entrypoint);
+  const result = invokeEntrypointInSandbox(
+    sandbox,
+    limits,
+    workerData.entrypoint,
+    runtimeBindings.promiseResolveName
+  );
   return await withWallClockTimeout(result, limits.timeoutMs, workerData.handlerName);
 }
 
 function initializeSandbox(sandbox, limits) {
-  // A random lexical binding keeps the installer unreachable to evaluated code while
-  // retaining invocation data inside the VM realm until export validation succeeds.
+  // Random lexical bindings keep the installer and trusted Promise intrinsic unreachable to
+  // evaluated code while retaining them inside the VM realm until invocation.
   const installerName = "__tenant_install_" + randomBytes(16).toString("hex");
+  const promiseResolveName = "__tenant_resolve_" + randomBytes(16).toString("hex");
   const HostURL = URL;
   const operateUrl = hardenBridge((requestJson) => {
     try {
@@ -529,6 +535,7 @@ function initializeSandbox(sandbox, limits) {
 
   const initialization = new vm.Script(
     [
+      "const " + promiseResolveName + " = Promise.resolve.bind(Promise);",
       "const " + installerName + " = (() => {",
       "  const urlBridge = __tenant_url_bridge;",
       "  const fetchBridge = __tenant_fetch_bridge;",
@@ -685,7 +692,7 @@ function initializeSandbox(sandbox, limits) {
     { filename: "tenant-sandbox-init.cjs" }
   );
   initialization.runInContext(sandbox, { timeout: limits.timeoutMs });
-  return installerName;
+  return { installerName, promiseResolveName };
 }
 
 function installInvocationState(sandbox, limits, installerName) {
@@ -767,14 +774,14 @@ function assertEntrypointExists(exportedModule, handlerName, entrypoint) {
   }
 }
 
-function invokeEntrypointInSandbox(sandbox, limits, entrypoint) {
+function invokeEntrypointInSandbox(sandbox, limits, entrypoint, promiseResolveName) {
   const invocationSource =
     entrypoint === "pluginDispatch"
       ? [
           "(() => {",
           "  const exported = module.exports;",
           "  const plugin = exported.plugin ?? exported.default ?? exported;",
-          "  return Promise.resolve(plugin.dispatch({",
+          "  return " + promiseResolveName + "(plugin.dispatch({",
           "    hookName: __tenant_handler_name,",
           "    payload: __tenant_payload,",
           "    context: __tenant_context",
@@ -782,7 +789,7 @@ function invokeEntrypointInSandbox(sandbox, limits, entrypoint) {
           "})();"
         ]
       : [
-          "Promise.resolve(",
+          promiseResolveName + "(",
           "  module.exports.handlers[__tenant_handler_name](__tenant_payload, __tenant_context)",
           ");"
         ];

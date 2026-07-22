@@ -157,6 +157,25 @@ describe("loader security suite", () => {
     expect(capability).toHaveBeenCalledExactlyOnceWith("kv.state", { key: "priority" });
   });
 
+  it("uses an evaluation-time Promise intrinsic for dispatch settlement", async () => {
+    const bundle = await bundleFromSource(`
+      Promise.resolve = () => ({ ok: true, value: "forged" });
+      exports.plugin = {
+        dispatch: () => new Promise(() => {})
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: {},
+        context: { capability: vi.fn() },
+        limits: { timeoutMs: 25 }
+      })
+    ).rejects.toMatchObject({ executionStatus: "timeout" });
+  });
+
   it("does not expose process, raw secret bindings, or global namespaces", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {
