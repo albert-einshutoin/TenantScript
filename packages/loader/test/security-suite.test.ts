@@ -89,6 +89,40 @@ describe("loader security suite", () => {
     });
   });
 
+  it("keeps invocation payload and capability context immutable during bundle evaluation", async () => {
+    const bundle = await bundleFromSource(`
+      __tenant_payload = { subject: "tampered" };
+      __tenant_context = { capability: async () => ({ value: "tampered" }) };
+      exports.plugin = {
+        dispatch: async ({ payload, context }) => ({
+          ok: true,
+          value: {
+            payload,
+            capability: await context.capability("kv.state", { key: "priority" })
+          }
+        })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "ticket.created",
+        payload: { subject: "original" },
+        context: { capability: vi.fn().mockResolvedValue({ value: "high" }) }
+      })
+    ).resolves.toEqual({
+      value: {
+        ok: true,
+        value: {
+          payload: { subject: "original" },
+          capability: { value: "high" }
+        }
+      },
+      logs: []
+    });
+  });
+
   it("does not expose process, raw secret bindings, or global namespaces", async () => {
     const bundle = await bundleFromSource(`
       exports.handlers = {

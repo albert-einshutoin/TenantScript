@@ -451,7 +451,6 @@ async function run() {
 
   evaluateBundle(workerData.bundleCode, sandbox, limits);
   assertEntrypointExists(sandbox.module.exports, workerData.handlerName, workerData.entrypoint);
-  sandbox.__tenant_handler_name = workerData.handlerName;
 
   parentPort.postMessage({ type: "started" });
   const result = invokeEntrypointInSandbox(sandbox, limits, workerData.entrypoint);
@@ -521,6 +520,7 @@ function initializeSandbox(sandbox, limits) {
   sandbox.__tenant_fetch_bridge = denyFetch;
   sandbox.__tenant_capability_bridge = callCapability;
   sandbox.__tenant_payload_json = serializeSandboxValue(workerData.payload, "handler payload");
+  sandbox.__tenant_handler_name_value = workerData.handlerName;
 
   const initialization = new vm.Script(
     [
@@ -529,10 +529,12 @@ function initializeSandbox(sandbox, limits) {
       "  const fetchBridge = __tenant_fetch_bridge;",
       "  const capabilityBridge = __tenant_capability_bridge;",
       "  const payloadJson = __tenant_payload_json;",
+      "  const handlerName = __tenant_handler_name_value;",
       "  delete globalThis.__tenant_url_bridge;",
       "  delete globalThis.__tenant_fetch_bridge;",
       "  delete globalThis.__tenant_capability_bridge;",
       "  delete globalThis.__tenant_payload_json;",
+      "  delete globalThis.__tenant_handler_name_value;",
       "  const bridgeError = (error) => {",
       "    try {",
       "      const packet = JSON.parse(String(error));",
@@ -644,8 +646,7 @@ function initializeSandbox(sandbox, limits) {
       "  };",
       "  globalThis.module = { exports: {} };",
       "  globalThis.exports = globalThis.module.exports;",
-      "  globalThis.__tenant_payload = JSON.parse(payloadJson);",
-      "  globalThis.__tenant_context = Object.freeze({",
+      "  const invocationContext = Object.freeze({",
       "    capability: async (name, input) => {",
       "      try {",
       "        const resultJson = await capabilityBridge(String(name), JSON.stringify(input));",
@@ -654,6 +655,11 @@ function initializeSandbox(sandbox, limits) {
       "        throw bridgeError(error);",
       "      }",
       "    }",
+      "  });",
+      "  Object.defineProperties(globalThis, {",
+      "    __tenant_handler_name: { value: handlerName, writable: false, configurable: false },",
+      "    __tenant_payload: { value: JSON.parse(payloadJson), writable: false, configurable: false },",
+      "    __tenant_context: { value: invocationContext, writable: false, configurable: false }",
       "  });",
       "})();"
     ].join("\n"),

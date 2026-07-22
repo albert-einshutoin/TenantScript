@@ -16,6 +16,7 @@ try {
   const authenticateDigest = authenticator.digest.bind(authenticator);
   const request = envelope.request;
   const capabilityCalls = [];
+  let outstandingCapabilityCalls = 0;
   const runtimeResult = await runScopedPluginDispatch({
     bundleCode: readFileSync(bundlePath, "utf8"),
     hookName: request.hookName,
@@ -26,7 +27,16 @@ try {
         // Snapshot untrusted input at the call boundary so later plugin mutation cannot rewrite the
         // evidence compared by the parent process.
         capabilityCalls.push({ name, input: clone(input) });
-        return clone(plannedCall?.result);
+        outstandingCapabilityCalls += 1;
+        try {
+          // Keep the synthetic result pending through the current event-loop turn. Awaited calls
+          // still complete quickly, while fire-and-forget calls remain observable when dispatch
+          // returns and cannot be misreported as completed side effects.
+          await new Promise((resolve) => setImmediate(resolve));
+          return clone(plannedCall?.result);
+        } finally {
+          outstandingCapabilityCalls -= 1;
+        }
       }
     },
     limits: {
@@ -35,6 +45,9 @@ try {
       memoryMb: 128
     }
   });
+  if (outstandingCapabilityCalls !== 0) {
+    throw new Error("dispatch returned with outstanding capability calls");
+  }
   const result = runtimeResult.value;
   const encodedResult = bufferToString(
     serialize({

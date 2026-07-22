@@ -323,6 +323,40 @@ test("generated bundle fails when capability work remains after dispatch", async
   }
 });
 
+test("generated bundle fails on an unawaited capability microtask", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-unawaited-capability-"));
+  try {
+    const bundlePath = join(tempRoot, "plugin.cjs");
+    await writeFile(
+      bundlePath,
+      `module.exports.plugin = {
+        dispatch({ context }) {
+          Promise.resolve().then(() => context.capability("kv.state", { key: "late" }));
+          return { ok: true, value: "returned" };
+        }
+      };\n`
+    );
+
+    assert.throws(
+      () =>
+        dispatchBundleInChild(
+          bundlePath,
+          {
+            hookName: "ticket.created",
+            payload: {},
+            capabilityCalls: [
+              { name: "kv.state", input: { key: "late" }, result: { value: "ignored" } }
+            ]
+          },
+          "unawaited-capability"
+        ),
+      /bundle runner failed/
+    );
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("generated bundle fails on a capability call after dispatch returns", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "template-submission-post-return-call-"));
   try {
