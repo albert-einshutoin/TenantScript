@@ -19,6 +19,7 @@ import {
   PLUGIN_AUTHORING_JUDGE_ENTRYPOINT,
   PLUGIN_AUTHORING_JUDGE_PATHS
 } from "./plugin-authoring-judge-contract.mjs";
+import { createPluginAuthoringAuditAdapter } from "./plugin-authoring-audit-adapter.mjs";
 import { createPluginAuthoringBuildAdapter } from "./plugin-authoring-build-adapter.mjs";
 import { createPluginAuthoringSecurityTestAdapter } from "./plugin-authoring-security-adapter.mjs";
 import { createPluginAuthoringUnitTestAdapter } from "./plugin-authoring-unit-adapter.mjs";
@@ -63,7 +64,10 @@ async function withFixture(run) {
     mkdirSync(sourceRoot, { recursive: true });
     writeFileSync(join(sourceRoot, "manifest.ts"), manifestSource(task));
     writeFileSync(join(sourceRoot, "index.ts"), "export const candidateMarker = 'original';\n");
-    writeFileSync(join(candidateRoot, task.id, "package.json"), "{}\n");
+    writeFileSync(
+      join(candidateRoot, task.id, "package.json"),
+      '{"scripts":{"test":"node --test"},"devDependencies":{"@tenantscript/plugin-sdk":"0.0.0"}}\n'
+    );
   }
 
   try {
@@ -323,7 +327,7 @@ test("runs the bounded build adapter against every materialized task snapshot", 
   });
 });
 
-test("passes every fixed behavior and security case through build and the real loader sandbox", async () => {
+test("passes all execution judges through build, the real loader sandbox, and canonical audit", async () => {
   await withFixture(async (paths) => {
     for (const task of corpus.tasks) {
       writeFileSync(
@@ -335,6 +339,7 @@ test("passes every fixed behavior and security case through build and the real l
     adapters.build = createPluginAuthoringBuildAdapter();
     adapters["unit-test"] = createPluginAuthoringUnitTestAdapter();
     adapters["security-test"] = createPluginAuthoringSecurityTestAdapter();
+    adapters.audit = createPluginAuthoringAuditAdapter();
     const result = await executePluginAuthoringJudge({
       ...paths,
       adapters,
@@ -344,9 +349,7 @@ test("passes every fixed behavior and security case through build and the real l
       task.judges
         .filter(
           (judge) =>
-            (judge.name === "build" ||
-              judge.name === "unit-test" ||
-              judge.name === "security-test") &&
+            ["build", "unit-test", "security-test", "audit"].includes(judge.name) &&
             judge.status !== "pass"
         )
         .map((judge) => `${task.taskId}:${judge.name}`)
@@ -523,7 +526,7 @@ test("writes exactly one JSON line on success and one fixed error on failure", a
       assert.equal(typeof adapters.build, "function");
       assert.equal(typeof adapters["unit-test"], "function");
       assert.equal(typeof adapters["security-test"], "function");
-      assert.equal(adapters.audit, undefined);
+      assert.equal(typeof adapters.audit, "function");
       return expected;
     }
   });
@@ -548,7 +551,7 @@ test("writes exactly one JSON line on success and one fixed error on failure", a
   assert.equal(writes.stderr.includes(marker), false);
 });
 
-test("documents the bounded build, unit, and security adapters and the unavailable audit adapter", () => {
+test("documents every bounded execution adapter and its audit limits", () => {
   const guide = readFileSync(
     join(repoRoot, "docs", "reference", "plugin-authoring-isolated-runner.md"),
     "utf8"
@@ -559,7 +562,8 @@ test("documents the bounded build, unit, and security adapters and the unavailab
     "bounded offline compile-check",
     "judge-owned behavior",
     "judge-owned adversarial",
-    "1 execution adapter",
+    "canonical `auditPluginPackage`",
+    "zero-finding",
     "package.json",
     "32 MiB",
     "fail closed"
