@@ -40,3 +40,6 @@ The catalog reports repository evidence for one immutable source revision. It is
 for later source, dependency resolution, SDK releases, registry installation, live deployment, production
 suitability, community adoption, or vulnerability absence. `provenance: simulation` remains visibly distinct
 from a community submission and must not be presented as external adoption.
+
+The repository-verified consumer UI and its deployment boundary are documented in
+[Template gallery](template-gallery.md).
