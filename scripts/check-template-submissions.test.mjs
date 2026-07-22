@@ -582,6 +582,43 @@ test("binds SDK metadata to submitted package dependencies", () => {
   });
 });
 
+test("rejects local inputs in every package dependency section", () => {
+  for (const section of [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies"
+  ]) {
+    withRepository(({ root, submission }) => {
+      const packagePath = "templates/submissions/example-template/plugin/package.json";
+      const packageJson = JSON.parse(readFileSync(join(root, packagePath), "utf8"));
+      packageJson[section] = {
+        ...packageJson[section],
+        "unreviewed-helper": "file:../../unreviewed-helper"
+      };
+      writeFileSync(join(root, packagePath), `${JSON.stringify(packageJson)}\n`);
+      submission.source.files[packagePath] = createHash("sha256")
+        .update(readFileSync(join(root, packagePath)))
+        .digest("hex");
+      submission.source.revision = "1".repeat(40);
+      writeReviewRecord(root, submission);
+      writeSubmission(root, "example-template", submission);
+
+      const result = runChecker(root);
+
+      assert.equal(result.status, 1, section);
+      assert.match(
+        result.stderr,
+        /source package dependency specifications must be exact registry versions/
+      );
+      assert.doesNotMatch(
+        result.stderr,
+        /unreviewed-helper|file:|optionalDependencies|peerDependencies/
+      );
+    });
+  }
+});
+
 test("rejects sensitive content in referenced evidence and security notes", () => {
   withRepository(({ root, submission }) => {
     const credential = `Bearer ${"Z".repeat(24)}`;

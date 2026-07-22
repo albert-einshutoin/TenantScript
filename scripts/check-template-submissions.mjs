@@ -47,6 +47,12 @@ const unsafePackageManagerControlNames = new Set([
 ]);
 const installLifecycleScripts = new Set(["preinstall", "install", "postinstall", "prepare"]);
 const commandWrapperScripts = new Set(["prebuild", "postbuild", "pretest", "posttest"]);
+const dependencySections = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies"
+];
 const topLevelFields = [
   "schemaVersion",
   "kind",
@@ -349,6 +355,14 @@ function validateSource(value, sdk, license, directoryName, displayPath) {
           // would otherwise be overwritten and escape the exact dependency graph being audited.
           errors.push(`${displayPath}: source package must not define package-manager settings`);
         }
+        if (!isRecord(packageJson) || !hasOnlyExactRegistryDependencies(packageJson)) {
+          // Local/workspace protocols can import code outside source.files, while mutable ranges can
+          // change the build input without changing the reviewed packet. Exact registry versions keep
+          // every installed package input stable and prevent path-based scope escapes.
+          errors.push(
+            `${displayPath}: source package dependency specifications must be exact registry versions`
+          );
+        }
         const dependencies = isRecord(packageJson) ? packageJson.dependencies : undefined;
         const testedVersion = isRecord(sdk) ? sdk.lastTestedVersion : undefined;
         if (
@@ -367,6 +381,19 @@ function validateSource(value, sdk, license, directoryName, displayPath) {
     }
     validateTypeScriptConfiguration(value.directory, displayPath);
   }
+}
+
+function hasOnlyExactRegistryDependencies(packageJson) {
+  return dependencySections.every((section) => {
+    const dependencies = packageJson[section];
+    if (dependencies === undefined) return true;
+    if (!isRecord(dependencies)) return false;
+    return Object.values(dependencies).every((specification) => {
+      if (typeof specification !== "string") return false;
+      const match = specification.match(exactSemverPattern);
+      return match !== null && match.slice(1).every((part) => Number.isSafeInteger(Number(part)));
+    });
+  });
 }
 
 function validateTypeScriptConfiguration(directory, displayPath) {
