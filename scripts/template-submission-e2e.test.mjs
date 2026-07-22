@@ -116,6 +116,9 @@ async function exerciseSubmission(submission) {
       )
     );
     assert.deepEqual(report, { version: 1, passed: true, findings: [] });
+    // Run the required behavior-test file explicitly so a future package-script drift cannot turn
+    // the evidence command into a no-op while leaving an unexecuted test in the digest map.
+    run("pnpm", ["--dir", pluginDirectory, "exec", "vitest", "run", "test/plugin.test.ts"]);
     run("pnpm", ["--dir", pluginDirectory, "test"]);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });

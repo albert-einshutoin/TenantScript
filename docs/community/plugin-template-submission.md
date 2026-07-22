@@ -44,6 +44,8 @@ Start from a built-in `ext init --template` template or a minimal plugin. Add th
 security-boundary tests first. The final source must include a manifest, handler, test, exact
 TenantScript package versions, explicit license, strict TypeScript configuration, and bounded
 `SECURITY.md` guidance.
+The package `test` script must be exactly `vitest run`; Tier 1 additionally invokes the required
+`test/plugin.test.ts` directly so the digest-bound behavior test cannot be hidden behind a no-op.
 
 The manifest and packet must agree exactly on hook name/type, capability names, configuration keys,
 and egress mode/hosts; Tier 1 compares them before build and audit. Keep capabilities empty and egress

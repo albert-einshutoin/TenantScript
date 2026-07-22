@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T02:59:42.000Z",
+  "reviewedAt": "2026-07-22T03:09:42.000Z",
   "domains": [
     {
       "name": "security",
@@ -51,7 +51,7 @@
         "templates/submissions/ticket-priority-normalizer/plugin/src/manifest.ts",
         "templates/submissions/ticket-priority-normalizer/plugin/tsconfig.json"
       ],
-      "notes": "The packet pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, uses strict ESM TypeScript, and is exercised against freshly packed public package contents. The E2E discovers every submission directory rather than naming one packet and compares manifest hook, capabilities, configuration keys, and egress with packet metadata."
+      "notes": "The packet pins exact tested package versions, requires manifest and plugin SDK dependencies to equal the tested version, records a bounded SDK range and hook contract, uses strict ESM TypeScript, and is exercised against freshly packed public package contents. The package test script is canonical and the E2E directly runs the required digest-bound behavior-test file. The E2E discovers every submission directory rather than naming one packet and compares manifest hook, capabilities, configuration keys, and egress with packet metadata."
     },
     {
       "name": "operations",
@@ -87,9 +87,9 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "scripts/check-template-submissions.mjs": "7297d013b8c7647a0f4b63dd0e35d555492bd081889c3f4f0f15cb217484381e",
-    "scripts/check-template-submissions.test.mjs": "bdaf53080a1b8a68ad3a8a2eac341aa05802e7ce43b30ccbd2dba7bb9e5a208a",
-    "scripts/template-submission-e2e.test.mjs": "76140700a3312af5de347824d1662b5074c9653134f858bd99d3af3a8c774138",
+    "scripts/check-template-submissions.mjs": "60099f31458dbbe690cb4cdfdcc5858427062cd1f1c64f9ac8ed3a2cd0b76259",
+    "scripts/check-template-submissions.test.mjs": "a3c64769581830e34cee0856972bb3915c408f3c2b50edcb02b029b4f6e8d391",
+    "scripts/template-submission-e2e.test.mjs": "cd7896a2ffe7e80626fa10f13bb35f04dfc1548381f39d19fde200ad8e111a32",
     "templates/submission.schema.json": "d3b6fca98225d02fe7c2615d60204a2189b862b1d391ac350ade8ea9598ac90f",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
