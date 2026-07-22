@@ -501,6 +501,26 @@ test("rejects sensitive content in digest-matched submitted source", () => {
   });
 });
 
+test("allows sensitive vocabulary in digest-map repository paths", () => {
+  withRepository(({ root, submission }) => {
+    const sourcePath = "templates/submissions/example-template/plugin/src/token-refresh.ts";
+    writeFileSync(join(root, sourcePath), "export const refreshIntervalMs = 1000;\n");
+    submission.source.files[sourcePath] = createHash("sha256")
+      .update(readFileSync(join(root, sourcePath)))
+      .digest("hex");
+    submission.source.files = Object.fromEntries(
+      Object.entries(submission.source.files).sort(([left], [right]) => left.localeCompare(right))
+    );
+    submission.source.revision = "1".repeat(40);
+    writeReviewRecord(root, submission);
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 0, result.stderr);
+  });
+});
+
 test("rejects loopback, private-address, and local-only repository hosts", () => {
   withRepository(({ root, submission }) => {
     for (const repository of [

@@ -699,22 +699,39 @@ function compareSemver(left, right) {
 
 function containsSensitiveContent(value) {
   // Iteration keeps an adversarially deep JSON object from exhausting the Node.js call stack.
-  const pending = [{ field: "", value }];
+  const pending = [{ field: "", parentField: "", skipFieldCheck: false, value }];
   while (pending.length > 0) {
     const current = pending.pop();
     if (current === undefined) break;
-    if (sensitiveFieldPattern.test(current.field)) return true;
+    if (!current.skipFieldCheck && sensitiveFieldPattern.test(current.field)) return true;
     if (typeof current.value === "string") {
       if (secretLikePatterns.some((pattern) => pattern.test(current.value))) return true;
       continue;
     }
     if (Array.isArray(current.value)) {
-      for (const child of current.value) pending.push({ field: "", value: child });
+      for (const child of current.value) {
+        pending.push({
+          field: "",
+          parentField: current.field,
+          skipFieldCheck: false,
+          value: child
+        });
+      }
       continue;
     }
     if (isRecord(current.value)) {
+      // source.files keys are repository paths, not user-defined JSON field names. Their referenced
+      // contents are scanned separately after digest verification, so only the path-key heuristic is
+      // skipped here while every digest value and nested field remains subject to content checks.
+      const childrenAreDigestMapPaths =
+        current.parentField === "source" && current.field === "files";
       for (const [field, child] of Object.entries(current.value)) {
-        pending.push({ field, value: child });
+        pending.push({
+          field,
+          parentField: current.field,
+          skipFieldCheck: childrenAreDigestMapPaths,
+          value: child
+        });
       }
     }
   }
