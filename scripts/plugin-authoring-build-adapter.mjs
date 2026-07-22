@@ -25,6 +25,7 @@ export function createPluginAuthoringBuildAdapter({
         requestPath,
         `${JSON.stringify({
           schemaVersion: 1,
+          taskId: context.task.id,
           taskRoot: paths.taskRoot,
           buildRoot: paths.buildRoot
         })}\n`,

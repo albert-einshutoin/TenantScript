@@ -368,7 +368,7 @@ test("wires eval drift, security checks, documentation, and Tier 1", () => {
   );
   assert.equal(
     packageJson.scripts["test:agent-evals"],
-    "node --test scripts/plugin-authoring-eval.test.mjs scripts/plugin-authoring-eval-security.test.mjs scripts/plugin-authoring-isolated-runner.test.mjs scripts/plugin-authoring-isolated-runner-security.test.mjs"
+    "pnpm --filter @tenantscript/loader... build && node --test scripts/plugin-authoring-eval.test.mjs scripts/plugin-authoring-eval-security.test.mjs scripts/plugin-authoring-isolated-runner.test.mjs scripts/plugin-authoring-isolated-runner-security.test.mjs"
   );
   assert.match(packageJson.scripts.lint, /pnpm lint:agent-evals/);
   assert.match(packageJson.scripts.test, /pnpm test:agent-evals/);

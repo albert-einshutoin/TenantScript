@@ -1,10 +1,18 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { TextDecoder } from "node:util";
 
 import ts from "typescript";
+import { buildSync } from "esbuild";
+
+import {
+  PLUGIN_AUTHORING_BUILD_BUNDLE_MAX_BYTES,
+  PLUGIN_AUTHORING_BUILD_CONTRACT_VERSION,
+  computePluginAuthoringTaskSnapshotDigest
+} from "./plugin-authoring-build-contract.mjs";
 
 const MAX_REQUEST_BYTES = 4 * 1024;
 const MAX_SOURCE_FILES = 512;
@@ -50,9 +58,9 @@ export function executePluginAuthoringBuildWorker(requestPath) {
       // judge validates imports itself and never consults candidate `type`, exports, or scripts.
       module: ts.ModuleKind.ESNext,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
       noEmitOnError: true,
       noUncheckedIndexedAccess: true,
-      outDir: join(request.buildRoot, "output"),
       paths: {
         "@tenantscript/manifest": [join(typesRoot, "manifest", "index.d.ts")],
         "@tenantscript/plugin-sdk": [join(typesRoot, "plugin-sdk", "index.d.ts")]
@@ -68,8 +76,62 @@ export function executePluginAuthoringBuildWorker(requestPath) {
     const program = ts.createProgram(sourceFiles, options);
     const diagnostics = ts.getPreEmitDiagnostics(program);
     if (diagnostics.length !== 0) return false;
-    const emitted = program.emit();
-    return !emitted.emitSkipped && emitted.diagnostics.length === 0;
+
+    const runtimeRoot = join(request.buildRoot, "runtime");
+    const sdkRoot = join(runtimeRoot, "plugin-sdk");
+    const manifestRoot = join(runtimeRoot, "manifest");
+    mkdirSync(sdkRoot, { recursive: true, mode: 0o700 });
+    mkdirSync(manifestRoot, { recursive: true, mode: 0o700 });
+    writeFileSync(join(sdkRoot, "index.js"), pluginSdkRuntime(), {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600
+    });
+    writeFileSync(join(manifestRoot, "index.js"), "export {};\n", {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600
+    });
+    const result = buildSync({
+      absWorkingDir: request.taskRoot,
+      alias: {
+        "@tenantscript/manifest": join(manifestRoot, "index.js"),
+        "@tenantscript/plugin-sdk": join(sdkRoot, "index.js")
+      },
+      bundle: true,
+      entryPoints: [join(sourceRoot, "index.ts")],
+      format: "cjs",
+      ignoreAnnotations: true,
+      legalComments: "none",
+      logLevel: "silent",
+      metafile: true,
+      platform: "neutral",
+      sourcemap: false,
+      target: "es2022",
+      treeShaking: false,
+      write: false
+    });
+    const output = result.outputFiles?.[0]?.contents;
+    assert(Buffer.isBuffer(output) || output instanceof Uint8Array);
+    const bundle = Buffer.from(output);
+    assert(bundle.length >= 1 && bundle.length <= PLUGIN_AUTHORING_BUILD_BUNDLE_MAX_BYTES);
+    assertBundleInputs(result.metafile, request.taskRoot, sourceRoot, runtimeRoot);
+    const bundlePath = join(request.buildRoot, "bundle.cjs");
+    writeFileSync(bundlePath, bundle, { flag: "wx", mode: 0o600 });
+    const receipt = {
+      schemaVersion: 1,
+      contractVersion: PLUGIN_AUTHORING_BUILD_CONTRACT_VERSION,
+      taskId: request.taskId,
+      sourceSha256: computePluginAuthoringTaskSnapshotDigest(request.taskRoot),
+      bundleSha256: createHash("sha256").update(bundle).digest("hex"),
+      bundleBytes: bundle.length
+    };
+    writeFileSync(join(request.buildRoot, "receipt.json"), `${JSON.stringify(receipt)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600
+    });
+    return true;
   } catch {
     return false;
   }
@@ -82,12 +144,14 @@ function readRequest(requestPath) {
   assert(metadata.size <= MAX_REQUEST_BYTES);
   const request = JSON.parse(readFileSync(requestPath, "utf8"));
   assert(isPlainRecord(request));
-  assertExactKeys(request, ["schemaVersion", "taskRoot", "buildRoot"]);
+  assertExactKeys(request, ["schemaVersion", "taskId", "taskRoot", "buildRoot"]);
   assert(request.schemaVersion === 1);
+  assert(typeof request.taskId === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(request.taskId));
   assertAbsoluteNormalizedPath(request.taskRoot);
   assertAbsoluteNormalizedPath(request.buildRoot);
   assert(requestPath === join(request.buildRoot, "request.json"));
   assert(request.taskRoot === join(dirname(request.buildRoot), "source"));
+  assert(request.taskId === basename(dirname(request.buildRoot)));
   assertDirectory(request.taskRoot);
   assertDirectory(request.buildRoot);
   return request;
@@ -214,6 +278,56 @@ export interface DefinePluginInput {
 }
 export declare function definePlugin(input: DefinePluginInput): unknown;
 `;
+}
+
+function pluginSdkRuntime() {
+  // Keep this runtime deliberately smaller than the public SDK surface: candidate code can only
+  // receive the reviewed definePlugin dispatch behavior needed by the fixed authoring corpus.
+  return `export function definePlugin(input) {
+  return {
+    manifest: input.manifest,
+    dispatch: (request) => dispatchPlugin(input, request)
+  };
+}
+async function dispatchPlugin(input, request) {
+  const hook = input.manifest.hooks.find((candidate) => candidate.name === request.hookName);
+  if (hook === undefined) return { ok: false, error: { name: "UnknownHookError", hookName: request.hookName } };
+  const handler = input.handlers[request.hookName];
+  if (handler === undefined) return { ok: false, error: { name: "MissingHandlerError", hookName: request.hookName } };
+  let value;
+  try { value = await handler(request.payload, request.context); }
+  catch (error) {
+    return { ok: false, error: { name: "PluginHandlerError", hookName: request.hookName, message: error instanceof Error ? error.message : "Unknown plugin handler failure" } };
+  }
+  if (hook.type === "event") return { ok: true, value: undefined };
+  if (hook.type === "transform") {
+    return value === undefined
+      ? { ok: false, error: { name: "HookReturnContractError", hookName: request.hookName, message: "transform hooks must return a payload" } }
+      : { ok: true, value };
+  }
+  const valid = value !== null && typeof value === "object" && "decision" in value &&
+    (value.decision === "allow" || value.decision === "deny" || (value.decision === "modify" && "payload" in value));
+  return valid
+    ? { ok: true, value }
+    : { ok: false, error: { name: "HookReturnContractError", hookName: request.hookName, message: "policy hooks must return allow, deny, or modify with a payload" } };
+}
+`;
+}
+
+function assertBundleInputs(metafile, workingRoot, sourceRoot, runtimeRoot) {
+  assert(isPlainRecord(metafile) && isPlainRecord(metafile.inputs));
+  for (const input of Object.keys(metafile.inputs)) {
+    const absolute = resolve(workingRoot, input);
+    assert(isWithin(absolute, sourceRoot) || isWithin(absolute, runtimeRoot));
+  }
+}
+
+function isWithin(path, root) {
+  const relativePath = relative(root, path);
+  return (
+    relativePath === "" ||
+    (!isAbsolute(relativePath) && relativePath !== ".." && !relativePath.startsWith(`..${sep}`))
+  );
 }
 
 function assertAbsoluteNormalizedPath(path) {

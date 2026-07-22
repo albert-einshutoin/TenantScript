@@ -84,7 +84,7 @@
     "docs/security/plugin-review-checklist.md": "1bee7b0bebadfd44b9cf86e288af48d3a8f9f42c0883d39823809dd1857f54f5",
     "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "package.json": "d8552e4c8ad510d732c527aa6fadefbb26802443ab19a51b171b484b2f2aa26a",
+    "package.json": "93fc27f92ae1e4bcfc14ff27ebf2fc202e9fd1670a9a08a86e787a480bb6ca05",
     "packages/cli/package.json": "3fc19043fe7b7fd7cc2fae985cc5be60785063d884c798f2e3a23c5425c43123"
   },
   "decision": "approve",
