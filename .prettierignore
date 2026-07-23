@@ -3,6 +3,9 @@ dist/
 coverage/
 pnpm-lock.yaml
 
+# Preserve the byte-exact GitHub Actions artifact evidence bound by its SHA-256 review record.
+docs/security/judge-image-reviews/evidence/TS-JUDGE-IMAGE-REVIEW-2026-001.json
+
 # Product/task docs are prose source of truth and should not be bulk-reflowed by
 # initial toolchain setup.
 docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md

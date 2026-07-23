@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "github-actions-artifact-observation",
+  "repository": "albert-einshutoin/TenantScript",
+  "artifact": {
+    "id": 8549777257,
+    "name": "plugin-authoring-judge-image-evidence-5af8a882f0e1876e025d2ec776d280049e3b08fa",
+    "digest": "sha256:07ad87a23c7fb5af3ed5574fcec6e09f813a208afca0a8c49b945eea4b1d9598",
+    "sizeBytes": 307742,
+    "createdAt": "2026-07-23T01:15:34.000Z",
+    "expiresAt": "2026-08-06T01:15:33.000Z"
+  },
+  "workflowRun": {
+    "id": 29971113794,
+    "headSha": "14cf79f31ff4d01f7ea9b848b87ae02f24fab56d"
+  }
+}
