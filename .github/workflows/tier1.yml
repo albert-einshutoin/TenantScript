@@ -33,12 +33,13 @@ jobs:
       - run: pnpm test:api-surface
       - run: pnpm test:release-policy
       - run: pnpm test:release-automation
+      - run: node --test scripts/tier1-artifact-action-contract.test.mjs
       - run: pnpm test:agent-scaffold
       - run: pnpm test:agent-evals
       - run: pnpm test:judge-image
       - run: node --test scripts/plugin-authoring-judge-image-publish.test.mjs
       - run: pnpm judge-image:evidence
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: plugin-authoring-judge-image-evidence-${{ github.sha }}
           path: .tmp/plugin-authoring-judge-image-evidence
@@ -49,7 +50,7 @@ jobs:
       - run: pnpm test:template-catalog
       - id: template-gallery
         run: pnpm test:template-gallery
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: failure() && steps.template-gallery.outcome == 'failure'
         with:
           name: template-gallery-failure-${{ github.sha }}
@@ -61,7 +62,7 @@ jobs:
       - run: pnpm test:admin-ui-accessibility
       - id: admin-ui-visual
         run: pnpm test:admin-ui-visual
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: failure() && steps.admin-ui-visual.outcome == 'failure'
         with:
           name: admin-ui-visual-failure-${{ github.sha }}
@@ -75,7 +76,7 @@ jobs:
       - run: pnpm test:packages
       - run: pnpm test:sbom
       - run: pnpm sbom:generate
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: tenantscript-sbom-${{ github.sha }}
           path: .tmp/release-artifacts/tenantscript.cdx.json
