@@ -2,6 +2,7 @@ import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { discoverPublicPackages } from "./publishable-packages.mjs";
+import { readV1LaunchReadiness, validateV1LaunchReadiness } from "./v1-launch-readiness.mjs";
 
 const expectedPublicPackages = [
   "@tenantscript/capabilities",
@@ -15,7 +16,7 @@ const expectedPublicPackages = [
 ];
 const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
 
-export function validateReleaseCandidate({ tag, packages, changesetFiles }) {
+export function validateReleaseCandidate({ tag, packages, changesetFiles, v1Readiness }) {
   const actualNames = packages.map(({ name }) => name).sort();
   if (JSON.stringify(actualNames) !== JSON.stringify(expectedPublicPackages)) {
     throw new Error("public package set does not match the release contract");
@@ -43,6 +44,22 @@ export function validateReleaseCandidate({ tag, packages, changesetFiles }) {
   if (pendingChangesets.length > 0) {
     throw new Error("release candidate contains unconsumed Changesets");
   }
+  const major = Number(version.split(".")[0]);
+  if (major >= 2) {
+    throw new Error("major release requires a dedicated readiness gate");
+  }
+  if (major === 1) {
+    const readiness = validateV1LaunchReadiness(v1Readiness, { requireApproved: true });
+    return {
+      tag,
+      version,
+      packages: actualNames,
+      readiness: {
+        targetVersion: readiness.targetVersion,
+        status: readiness.decision.status
+      }
+    };
+  }
   return { tag, version, packages: actualNames };
 }
 
@@ -52,10 +69,18 @@ export async function inspectReleaseCandidate(rootDirectory, tag) {
     discoverPublicPackages(root),
     readdir(resolve(root, ".changeset"))
   ]);
+  const version = packages[0]?.manifest.version;
+  const v1Readiness =
+    typeof version === "string" && version.startsWith("1.")
+      ? readV1LaunchReadiness(resolve(root, "docs/releases/v1-launch-readiness.json"), {
+          repositoryRoot: root
+        })
+      : undefined;
   return validateReleaseCandidate({
     tag,
     packages: packages.map(({ name, manifest }) => ({ name, version: manifest.version })),
-    changesetFiles
+    changesetFiles,
+    v1Readiness
   });
 }
 

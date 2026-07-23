@@ -14,14 +14,70 @@ const publicPackageNames = [
   "@tenantscript/proxy"
 ];
 
+function approvedReadiness() {
+  return {
+    schemaVersion: 1,
+    kind: "tenantscript-v1-launch-readiness",
+    repository: "albert-einshutoin/TenantScript",
+    targetVersion: "1.0.0",
+    gates: {
+      productionAdopters: {
+        required: 5,
+        verified: 5,
+        evidence: ["ADOPTERS.md"]
+      },
+      externalContributors: {
+        required: 10,
+        verified: 10,
+        evidence: ["docs/releases/v1-external-contributors.md"]
+      },
+      advisoryResponses: {
+        required: 1,
+        verified: 1,
+        evidence: ["docs/releases/v1-advisory-response.md"]
+      },
+      externalSecurityReview: {
+        completed: true,
+        criticalOpen: 0,
+        highOpen: 0,
+        evidence: ["https://example.org/tenantscript-security-review"]
+      },
+      selfHostValidators: {
+        required: 2,
+        verified: 2,
+        evidence: ["docs/operations/self-host-production.md"]
+      },
+      releaseBlockers: {
+        openIssues: [],
+        evidence: ["docs/releases/v1-blocker-triage.md"]
+      },
+      releaseMaterials: {
+        changelog: true,
+        announcement: true,
+        evidence: ["CHANGELOG.md", "docs/releases/v1-announcement.md"]
+      }
+    },
+    decision: {
+      status: "approved",
+      blockers: []
+    }
+  };
+}
+
 test("accepts a stable tag matching every fixed public package", () => {
   assert.deepEqual(
     validateReleaseCandidate({
       tag: "v1.2.3",
       packages: publicPackageNames.map((name) => ({ name, version: "1.2.3" })),
-      changesetFiles: ["README.md"]
+      changesetFiles: ["README.md"],
+      v1Readiness: approvedReadiness()
     }),
-    { tag: "v1.2.3", version: "1.2.3", packages: publicPackageNames }
+    {
+      tag: "v1.2.3",
+      version: "1.2.3",
+      packages: publicPackageNames,
+      readiness: { targetVersion: "1.0.0", status: "approved" }
+    }
   );
 });
 
@@ -29,7 +85,8 @@ test("fails closed for tag, version, package-set, and pending Changeset drift", 
   const valid = {
     tag: "v1.2.3",
     packages: publicPackageNames.map((name) => ({ name, version: "1.2.3" })),
-    changesetFiles: ["README.md"]
+    changesetFiles: ["README.md"],
+    v1Readiness: approvedReadiness()
   };
 
   assert.throws(
@@ -61,6 +118,54 @@ test("fails closed for tag, version, package-set, and pending Changeset drift", 
   assert.throws(
     () => validateReleaseCandidate({ ...valid, tag: "v1.2.3-beta.1" }),
     /stable release tag/u
+  );
+});
+
+test("keeps 0.x available and fails closed at unsupported major release boundaries", () => {
+  assert.deepEqual(
+    validateReleaseCandidate({
+      tag: "v0.9.0",
+      packages: versioned("0.9.0"),
+      changesetFiles: ["README.md"]
+    }),
+    { tag: "v0.9.0", version: "0.9.0", packages: publicPackageNames }
+  );
+
+  assert.throws(
+    () =>
+      validateReleaseCandidate({
+        tag: "v1.0.0",
+        packages: versioned("1.0.0"),
+        changesetFiles: ["README.md"]
+      }),
+    /v1 launch readiness record is invalid/u
+  );
+
+  const blocked = approvedReadiness();
+  blocked.gates.productionAdopters.verified = 4;
+  blocked.decision = {
+    status: "blocked",
+    blockers: ["production-adopters"]
+  };
+  assert.throws(
+    () =>
+      validateReleaseCandidate({
+        tag: "v1.0.0",
+        packages: versioned("1.0.0"),
+        changesetFiles: ["README.md"],
+        v1Readiness: blocked
+      }),
+    /v1 launch readiness is not approved/u
+  );
+
+  assert.throws(
+    () =>
+      validateReleaseCandidate({
+        tag: "v2.0.0",
+        packages: versioned("2.0.0"),
+        changesetFiles: ["README.md"]
+      }),
+    /major release requires a dedicated readiness gate/u
   );
 });
 
