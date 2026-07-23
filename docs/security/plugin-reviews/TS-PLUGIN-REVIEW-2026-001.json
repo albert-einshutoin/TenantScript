@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-001",
-  "baselineCommit": "6d293f3f12cfd1049216dbe90f63bbd831ab28ba",
+  "baselineCommit": "bbd19056247205e0d0b3a117adedaf04e788d591",
   "target": {
     "name": "Built-in ext init plugin scaffold and first-party templates",
     "scope": [
