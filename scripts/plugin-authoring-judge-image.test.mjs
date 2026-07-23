@@ -54,6 +54,10 @@ test("stages only reviewed regular files and excludes repository/user state", ()
       false
     );
     assert.equal(result.paths.includes("scripts/plugin-authoring-judge-entrypoint.mjs"), true);
+    assert.equal(
+      result.paths.includes("scripts/plugin-authoring-judge-image-failure-scenarios.mjs"),
+      false
+    );
     assert.equal(result.paths.includes("evals/plugin-authoring/corpus.json"), true);
   } finally {
     rmSync(output, { recursive: true, force: true });
@@ -69,7 +73,7 @@ test("wires the actual image contract into Tier 1 and documents its evidence bou
   );
   assert.equal(
     packageJson.scripts["test:judge-image"],
-    "node --test scripts/plugin-authoring-judge-image.test.mjs scripts/plugin-authoring-judge-image-sbom.test.mjs scripts/plugin-authoring-judge-image.integration.test.mjs"
+    "node --test scripts/plugin-authoring-judge-image.test.mjs scripts/plugin-authoring-judge-image-sbom.test.mjs scripts/plugin-authoring-judge-image-failure-scenarios.test.mjs scripts/plugin-authoring-judge-image.integration.test.mjs"
   );
   assert.equal(
     packageJson.scripts["judge-image:evidence"],
@@ -85,6 +89,13 @@ test("wires the actual image contract into Tier 1 and documents its evidence bou
     "allowlist",
     "non-root",
     "read-only root",
+    "known-bad",
+    "manifest-invalid",
+    "build-failed",
+    "unit-test-failed",
+    "security-test-failed",
+    "audit-failed",
+    "least-privilege-failed",
     "未publish",
     "未attest"
   ]) {
