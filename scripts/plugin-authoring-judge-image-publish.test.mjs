@@ -8,7 +8,6 @@ import { test } from "node:test";
 import {
   createPluginAuthoringJudgeImagePublicationReceipt,
   readPluginAuthoringJudgeImagePublicationReceipt,
-  writePluginAuthoringJudgeImagePublicationReceipt,
   validatePluginAuthoringJudgeImagePublicationReceipt
 } from "./plugin-authoring-judge-image-publish.mjs";
 
@@ -101,31 +100,37 @@ test("fails closed for drift, widening, mutable references, and approval claims"
   }
 });
 
-test("writes a bounded receipt once and rejects an existing destination", () => {
+test("CLI writes a bounded receipt once and rejects an existing destination", () => {
   const root = join(repoRoot, ".tmp", `judge-image-publication-test-${String(process.pid)}`);
   const path = join(root, "receipt.json");
   rmSync(root, { recursive: true, force: true });
   try {
     const fixture = receiptFixture();
-    writePluginAuthoringJudgeImagePublicationReceipt(path, {
-      sourceRevision: revision,
-      workflowRunId: String(fixture.workflow.runId),
-      imageDigest: digest,
-      attestationId: String(fixture.attestation.id),
-      attestationUrl: fixture.attestation.url
-    });
-    assert.deepEqual(readPluginAuthoringJudgeImagePublicationReceipt(path), fixture);
-    assert.throws(
-      () =>
-        writePluginAuthoringJudgeImagePublicationReceipt(path, {
-          sourceRevision: revision,
-          workflowRunId: String(fixture.workflow.runId),
-          imageDigest: digest,
-          attestationId: String(fixture.attestation.id),
-          attestationUrl: fixture.attestation.url
-        }),
-      /receipt could not be written/u
+    // Match the hosted receipt job without inheriting developer credentials or machine state.
+    const environment = {
+      PATH: process.env.PATH ?? "",
+      SOURCE_REVISION: revision,
+      GITHUB_RUN_ID: String(fixture.workflow.runId),
+      IMAGE_DIGEST: digest,
+      ATTESTATION_ID: String(fixture.attestation.id),
+      ATTESTATION_URL: fixture.attestation.url
+    };
+    const first = spawnSync(
+      process.execPath,
+      [join(repoRoot, "scripts", "plugin-authoring-judge-image-publish.mjs"), "write", path],
+      { cwd: repoRoot, encoding: "utf8", env: environment }
     );
+    assert.equal(first.status, 0, first.stderr);
+    assert.equal(first.stdout, "Judge image publication receipt written.\n");
+    assert.deepEqual(readPluginAuthoringJudgeImagePublicationReceipt(path), fixture);
+
+    const second = spawnSync(
+      process.execPath,
+      [join(repoRoot, "scripts", "plugin-authoring-judge-image-publish.mjs"), "write", path],
+      { cwd: repoRoot, encoding: "utf8", env: environment }
+    );
+    assert.notEqual(second.status, 0);
+    assert.equal(second.stderr, "Judge image publication receipt could not be written.\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
