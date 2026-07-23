@@ -38,6 +38,7 @@ jobs:
       - run: pnpm test:agent-evals
       - run: pnpm test:judge-image
       - run: node --test scripts/plugin-authoring-judge-image-publish.test.mjs
+      - run: node --test scripts/plugin-authoring-judge-image-verify.test.mjs
       - run: pnpm judge-image:evidence
       - uses: actions/upload-artifact@v6
         with:
