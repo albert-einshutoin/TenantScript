@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { runRuntimeBenchmark, validateRuntimeBenchmarkBaseUrl } from "./runtime-benchmark-live.mjs";
+import {
+  resolveRuntimeBenchmarkBaseUrl,
+  runRuntimeBenchmark,
+  validateRuntimeBenchmarkBaseUrl
+} from "./runtime-benchmark-live.mjs";
 
 const sourceRevision = "a".repeat(40);
 const baseUrl = "https://tenantscript-runtime-bench.example.org";
@@ -201,6 +205,59 @@ test("accepts only a public credential-free HTTPS benchmark origin", () => {
   }
 });
 
+test("derives the fixed Worker origin from the authenticated Cloudflare account", async () => {
+  const accountId = "a".repeat(32);
+  const apiToken = "cloudflare-api-token";
+  const requests = [];
+  const origin = await resolveRuntimeBenchmarkBaseUrl({
+    accountId,
+    apiToken,
+    fetchImpl: async (url, init) => {
+      requests.push({ url: String(url), init });
+      return response({
+        success: true,
+        errors: [],
+        messages: [],
+        result: { subdomain: "reviewed-account" }
+      });
+    }
+  });
+  assert.equal(origin, "https://tenantscript-phase0-runtime-bench.reviewed-account.workers.dev/");
+  assert.equal(
+    requests[0].url,
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/subdomain`
+  );
+  assert.equal(requests[0].init.headers.authorization, `Bearer ${apiToken}`);
+  assert.equal(requests[0].init.redirect, "error");
+});
+
+test("rejects untrusted Cloudflare origin discovery before benchmark credentials are used", async () => {
+  const invalidResponses = [
+    {
+      success: false,
+      errors: [],
+      messages: [],
+      result: { subdomain: "reviewed-account" }
+    },
+    {
+      success: true,
+      errors: [],
+      messages: [],
+      result: { subdomain: "attacker.example.org" }
+    }
+  ];
+  for (const value of invalidResponses) {
+    await assert.rejects(
+      resolveRuntimeBenchmarkBaseUrl({
+        accountId: "a".repeat(32),
+        apiToken: "cloudflare-api-token",
+        fetchImpl: async () => response(value)
+      }),
+      /runtime benchmark failed/u
+    );
+  }
+});
+
 test("requires bounded Access credentials without reflecting them into evidence", async () => {
   let requests = 0;
   await assert.rejects(
@@ -270,8 +327,9 @@ test("Tier 2 keeps credentials off PRs and preserves sanitized evidence", () => 
   assert.match(workflow, /secrets\.CLOUDFLARE_ACCOUNT_ID/u);
   assert.match(workflow, /secrets\.CF_ACCESS_CLIENT_ID/u);
   assert.match(workflow, /secrets\.CF_ACCESS_CLIENT_SECRET/u);
-  assert.match(workflow, /vars\.TIER2_RUNTIME_BENCH_URL/u);
-  assert.match(workflow, /node scripts\/runtime-benchmark-live\.mjs check-url/u);
+  assert.doesNotMatch(workflow, /vars\.TIER2_RUNTIME_BENCH_URL/u);
+  assert.match(workflow, /node scripts\/runtime-benchmark-live\.mjs resolve-origin/u);
+  assert.match(workflow, /steps\.runtime-origin\.outputs\.url/u);
   assert.match(workflow, /node scripts\/runtime-benchmark-live\.mjs run/u);
   assert.match(workflow, /actions\/upload-artifact@v6/u);
   assert.match(workflow, /include-hidden-files:\s*true/u);

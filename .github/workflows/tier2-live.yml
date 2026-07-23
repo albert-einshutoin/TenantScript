@@ -25,10 +25,14 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Validate fixed public benchmark origin
+      - id: runtime-origin
+        name: Resolve the reviewed Worker origin
         env:
-          TIER2_RUNTIME_BENCH_URL: ${{ vars.TIER2_RUNTIME_BENCH_URL }}
-        run: node scripts/runtime-benchmark-live.mjs check-url --base-url "$TIER2_RUNTIME_BENCH_URL"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          origin="$(node scripts/runtime-benchmark-live.mjs resolve-origin)"
+          printf 'url=%s\n' "$origin" >> "$GITHUB_OUTPUT"
       - name: Deploy reviewed runtime benchmark
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -37,7 +41,7 @@ jobs:
       - id: runtime-benchmark
         name: Measure fixed warm and cold scenarios
         env:
-          TIER2_RUNTIME_BENCH_URL: ${{ vars.TIER2_RUNTIME_BENCH_URL }}
+          TIER2_RUNTIME_BENCH_URL: ${{ steps.runtime-origin.outputs.url }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: >-

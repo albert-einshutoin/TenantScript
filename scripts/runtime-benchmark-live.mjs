@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
 const EVIDENCE_PATH = resolve(".tmp/tier2/runtime-benchmark-evidence.json");
+const RUNTIME_BENCHMARK_WORKER_NAME = "tenantscript-phase0-runtime-bench";
 const scenarios = [
   { name: "warm-get", mode: "get", iterations: 80, warmup: 10, thresholdP95Ms: 50 },
   { name: "cold-load", mode: "load", iterations: 40, warmup: 0, thresholdP95Ms: 300 }
@@ -162,6 +163,56 @@ async function readBoundedBody(response) {
   return new TextDecoder("utf-8", { fatal: true }).decode(body);
 }
 
+export async function resolveRuntimeBenchmarkBaseUrl({ accountId, apiToken, fetchImpl = fetch }) {
+  try {
+    assert(typeof accountId === "string" && /^[0-9a-f]{32}$/u.test(accountId));
+    assert(
+      typeof apiToken === "string" &&
+        apiToken.length >= 20 &&
+        apiToken.length <= 512 &&
+        /^[A-Za-z0-9_-]+$/u.test(apiToken)
+    );
+    const response = await fetchImpl(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/subdomain`,
+      {
+        method: "GET",
+        redirect: "error",
+        credentials: "omit",
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${apiToken}`
+        },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      }
+    );
+    assert(response instanceof Response && !response.redirected && response.status === 200);
+    assert(/^application\/json(?:;|$)/iu.test(response.headers.get("content-type") ?? ""));
+    const contentLength = response.headers.get("content-length");
+    if (contentLength !== null) {
+      assert(/^\d+$/u.test(contentLength) && Number(contentLength) <= MAX_RESPONSE_BYTES);
+    }
+    const text = await readBoundedBody(response);
+    assert(!secretLike.test(text));
+    const body = JSON.parse(text);
+    exactKeys(body, ["errors", "messages", "result", "success"]);
+    assert.equal(body.success, true);
+    assert.deepEqual(body.errors, []);
+    assert.deepEqual(body.messages, []);
+    exactKeys(body.result, ["subdomain"]);
+    assert(
+      typeof body.result.subdomain === "string" &&
+        /^(?:[a-z0-9]|[a-z0-9][a-z0-9-]{0,61}[a-z0-9])$/u.test(body.result.subdomain)
+    );
+    // Derive the destination from the authenticated account plus the reviewed Worker name.
+    // A mutable URL must never decide where Access credentials are sent.
+    return validateRuntimeBenchmarkBaseUrl(
+      `https://${RUNTIME_BENCHMARK_WORKER_NAME}.${body.result.subdomain}.workers.dev/`
+    );
+  } catch {
+    throw new Error("runtime benchmark failed");
+  }
+}
+
 export async function runRuntimeBenchmark({
   baseUrl,
   sourceRevision,
@@ -233,6 +284,15 @@ function ensureEvidenceDirectory() {
 
 async function main() {
   const [command, baseUrlFlag, baseUrl, sourceFlag, sourceRevision] = process.argv.slice(2);
+  if (command === "resolve-origin" && process.argv.length === 3) {
+    console.log(
+      await resolveRuntimeBenchmarkBaseUrl({
+        accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+        apiToken: process.env.CLOUDFLARE_API_TOKEN
+      })
+    );
+    return;
+  }
   if (baseUrlFlag !== "--base-url" || baseUrl === undefined) throw new Error("invalid arguments");
   validateRuntimeBenchmarkBaseUrl(baseUrl);
   if (command === "check-url" && process.argv.length === 5) return;

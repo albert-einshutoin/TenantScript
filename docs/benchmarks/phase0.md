@@ -50,8 +50,7 @@ evidence**. Keep `TIER2_LIVE_ENABLED` unset until a maintainer has all of the fo
   deployment authority; and
 - a Cloudflare Access application protecting the benchmark origin plus environment secrets
   `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` for its least-authority service token; and
-- repository variable `TIER2_RUNTIME_BENCH_URL` containing the public credential-free HTTPS origin
-  of the fixed benchmark Worker.
+- the fixed `tenantscript-phase0-runtime-bench` Worker covered by that Access application.
 
 Set repository variable `TIER2_LIVE_ENABLED=true` only after those controls are reviewed. The workflow
 deploys from `main`, checks `/health`, runs the exact warm and cold/create scenarios above, and retains
@@ -60,6 +59,10 @@ token to the prevalidated benchmark origin, never writes that token to evidence,
 and request time, and first requires `/health` to reject an anonymous request so a missing Access
 policy cannot produce passing evidence. It fails when warm p95 reaches 50 ms or cold/create p95
 reaches 300 ms.
+
+The workflow does not accept a mutable benchmark URL. Before deployment it asks Cloudflare's fixed
+API origin for the authenticated account's `workers.dev` subdomain and combines that value with the
+reviewed Worker name. Access credentials are sent only to that derived origin.
 
 This is an absolute Phase 0 Go/No-Go gate. A 20% regression claim requires a reviewed live baseline
 and is not inferred from repository tests. On failure, do not raise thresholds or enable a token
