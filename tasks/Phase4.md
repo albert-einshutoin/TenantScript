@@ -23,7 +23,7 @@
 - [ ] **P4-T02**(M)gallery サイト
   - 内容: template 一覧の静的サイト(Workers Assets)。検索・タグ・再利用数の表示
   - DoD: E2E smoke green、ADOPTERS と連動
-  - Progress: Issue #306で承認済みsubmissionだけを最小公開情報へ投影する決定論的catalog、closed schema、drift gateを実装。Issue #308でcatalog駆動の静的UI、検索、provenance/hook typeタグ、capability filter、desktop/mobile/accessibility E2Eを追加。再利用数とWorkers Assets live配信は未実装
+  - Progress: Issue #306で承認済みsubmissionだけを最小公開情報へ投影する決定論的catalog、closed schema、drift gateを実装。Issue #308でcatalog駆動の静的UI、検索、provenance/hook typeタグ、capability filter、desktop/mobile/accessibility E2Eを追加。Issue #350でstatic-only Workers Assets config、Tier 1 dry-run、main full SHAとprotected environmentに限定したmanual release laneを追加。実live deploy、再利用数、独自domainは未実施
 
 - [ ] **P4-T03**(S)template 投稿ガイドライン
   - 内容: 投稿要件(テスト同梱、capability 最小権限、ライセンス)、レビューフロー
