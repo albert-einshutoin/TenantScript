@@ -114,8 +114,8 @@ one report matching `result.schema.json` to standard output. The verifier does n
 adapter or trust its declared expectations: it binds all 21 ordered `id`, `rule`, and `expected`
 values to the canonical corpus, then requires every `actual` decision to match. Input is limited to
 64 KiB and decoded as strict UTF-8. Unknown fields, diagnostics mixed into standard output,
-incomplete or reordered results, version drift, invalid JSON, and oversized input fail with one
-non-reflective error.
+duplicate object members at any depth, incomplete or reordered results, version drift, invalid JSON,
+and oversized input fail with one non-reflective error.
 
 Passing the verifier establishes compatibility with the Manifest v1 acceptance protocol only. It
 does not attest to the adapter's sandbox, implementation quality, runtime isolation, capability

@@ -101,6 +101,33 @@ test("fails closed without reflecting malformed, oversized, or invalid UTF-8 inp
   }
 });
 
+test("rejects duplicate JSON members at the root and inside results before parsing", async () => {
+  const { report } = await createValidReport();
+  const serialized = JSON.stringify(report);
+  const duplicateInputs = [
+    serialized.replace(
+      '"protocolVersion":"1.0.0"',
+      '"protocolVersion":"ts_conformance_sentinel","protocolVersion":"1.0.0"'
+    ),
+    serialized.replace('"actual":"accept"', '"actual":"ts_conformance_sentinel","actual":"accept"'),
+    serialized.replace(
+      '"actual":"accept"',
+      '"\\u0061ctual":"ts_conformance_sentinel","actual":"accept"'
+    )
+  ];
+
+  for (const input of duplicateInputs) {
+    const result = runVerifier(input);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout.toString("utf8"), "");
+    assert.equal(
+      result.stderr.toString("utf8"),
+      '{"error":"manifest-conformance-report-invalid"}\n'
+    );
+    assert.doesNotMatch(result.stderr.toString("utf8"), /sentinel|protocolVersion|actual/u);
+  }
+});
+
 test("wires the fail-closed pipe contract into Tier 1 and the public specification", async () => {
   const [workflow, specification] = await Promise.all(
     ["../.github/workflows/tier1.yml", "../docs/spec/manifest-v1.md"].map((path) =>
