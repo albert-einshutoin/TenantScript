@@ -8,9 +8,11 @@ import test from "node:test";
 import { buildPluginAuthoringJudgeImage } from "./plugin-authoring-judge-image-build.mjs";
 import { generatePluginAuthoringJudgeImageEvidence } from "./plugin-authoring-judge-image-evidence.mjs";
 import {
+  PLUGIN_AUTHORING_FAILURE_BY_JUDGE,
   computePluginAuthoringCorpusDigest,
   parsePluginAuthoringCorpus
 } from "./plugin-authoring-eval.mjs";
+import { PLUGIN_AUTHORING_JUDGE_IMAGE_FAILURE_SCENARIOS } from "./plugin-authoring-judge-image-failure-scenarios.mjs";
 import {
   buildIsolatedJudgeDockerInvocation,
   parseIsolatedRunnerRequest,
@@ -21,13 +23,14 @@ const repoRoot = resolve(import.meta.dirname, "..");
 const image = "tenantscript/plugin-authoring-judge:contract-test";
 const successContainer = "tenantscript-agent-eval-1111111111111111";
 const failureContainer = "tenantscript-agent-eval-2222222222222222";
+const scenarioContainer = "tenantscript-agent-eval-3333333333333333";
 const corpus = parsePluginAuthoringCorpus(
   JSON.parse(readFileSync(join(repoRoot, "evals", "plugin-authoring", "corpus.json"), "utf8"))
 );
 
 test(
   "builds and runs the known-good corpus in the least-authority container",
-  { timeout: 240_000 },
+  { timeout: 300_000 },
   async () => {
     const root = mkdtempSync(join(tmpdir(), "tenantscript-judge-image-test-"));
     const baselineRoot = join(root, "baseline");
@@ -44,7 +47,7 @@ test(
       assert.equal(build.sourceRevision, revision);
       assert.match(build.contextSha256, /^[0-9a-f]{64}$/u);
 
-      writeCandidateFixture({ baselineRoot, candidateRoot, requestPath });
+      writeJudgeFixture({ baselineRoot, candidateRoot, requestPath });
       const request = parseIsolatedRunnerRequest(
         JSON.parse(readFileSync(requestPath, "utf8")),
         corpus
@@ -85,6 +88,30 @@ test(
       assert.equal(failure.stdout, "");
       assert.equal(failure.stderr, "plugin authoring judge failed\n");
 
+      // One candidate tree places each fixed mutation on a different task. This preserves the full
+      // task/judge order while avoiding six redundant executions of every unaffected task.
+      const scenarioCandidateRoot = join(root, "failure-scenarios");
+      writeCandidateTree({
+        candidateRoot: scenarioCandidateRoot,
+        scenarios: PLUGIN_AUTHORING_JUDGE_IMAGE_FAILURE_SCENARIOS
+      });
+      const scenarioInvocation = productionInvocation({
+        request,
+        containerName: scenarioContainer,
+        baselineRoot,
+        candidateRoot: scenarioCandidateRoot,
+        requestPath
+      });
+      const scenarioExecution = run(scenarioInvocation.command, scenarioInvocation.args, {
+        timeout: scenarioInvocation.timeoutMs
+      });
+      assert.equal(scenarioExecution.stderr, "");
+      assertFailureScenarioOutput(
+        parseJudgeOutput(scenarioExecution.stdout, corpus),
+        PLUGIN_AUTHORING_JUDGE_IMAGE_FAILURE_SCENARIOS
+      );
+      run("docker", ["container", "rm", scenarioContainer]);
+
       const generated = await generatePluginAuthoringJudgeImageEvidence({
         repositoryRoot: repoRoot,
         outputDirectory: join(root, "evidence"),
@@ -105,14 +132,16 @@ test(
       spawnSync("docker", ["container", "rm", "--force", failureContainer], {
         encoding: "utf8"
       });
+      spawnSync("docker", ["container", "rm", "--force", scenarioContainer], {
+        encoding: "utf8"
+      });
       spawnSync("docker", ["image", "rm", "--force", image], { encoding: "utf8" });
     }
   }
 );
 
-function writeCandidateFixture({ baselineRoot, candidateRoot, requestPath }) {
+function writeJudgeFixture({ baselineRoot, candidateRoot, requestPath }) {
   mkdirSync(join(baselineRoot, "evals", "plugin-authoring"), { recursive: true });
-  mkdirSync(candidateRoot);
   writeFileSync(
     join(baselineRoot, "evals", "plugin-authoring", "corpus.json"),
     `${JSON.stringify(corpus)}\n`
@@ -134,6 +163,11 @@ function writeCandidateFixture({ baselineRoot, candidateRoot, requestPath }) {
       }
     })}\n`
   );
+  writeCandidateTree({ candidateRoot });
+}
+
+function writeCandidateTree({ candidateRoot, scenarios = [] }) {
+  mkdirSync(candidateRoot, { recursive: true });
   for (const task of corpus.tasks) {
     const taskRoot = join(candidateRoot, task.id);
     mkdirSync(join(taskRoot, "src"), { recursive: true });
@@ -144,6 +178,77 @@ function writeCandidateFixture({ baselineRoot, candidateRoot, requestPath }) {
       '{"scripts":{"test":"node --test"},"devDependencies":{"@tenantscript/plugin-sdk":"0.0.0"}}\n'
     );
   }
+  for (const scenario of scenarios) mutateCandidateTree(candidateRoot, scenario);
+}
+
+function mutateCandidateTree(candidateRoot, scenario) {
+  const taskRoot = join(candidateRoot, scenario.taskId);
+  const manifestPath = join(taskRoot, "src", "manifest.ts");
+  const sourcePath = join(taskRoot, "src", "index.ts");
+  const packagePath = join(taskRoot, "package.json");
+  switch (scenario.mutation) {
+    case "invalid-manifest-version":
+      replaceFileText(manifestPath, '"version":"0.1.0"', '"version":"invalid"');
+      break;
+    case "compile-type-error":
+      writeFileSync(
+        sourcePath,
+        `${readFileSync(sourcePath, "utf8")}const buildFailure: string = 1;\n`
+      );
+      break;
+    case "wrong-behavior-result":
+      replaceFileText(sourcePath, handlerBodies[scenario.taskId], "return undefined;");
+      break;
+    case "raw-egress-attempt":
+      replaceFileText(
+        sourcePath,
+        "async (payload, context) => { ",
+        'async (payload, context) => { await (globalThis as { fetch?: (url: string) => Promise<unknown> }).fetch?.("https://example.com"); '
+      );
+      break;
+    case "missing-test-script": {
+      const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+      packageJson.scripts = {};
+      writeFileSync(packagePath, `${JSON.stringify(packageJson)}\n`);
+      break;
+    }
+    case "unused-capability-grant":
+      replaceFileText(manifestPath, '"capabilities":{}', '"capabilities":{"slack.send":{}}');
+      break;
+    default:
+      assert.fail("unknown fixed failure mutation");
+  }
+}
+
+function replaceFileText(path, expected, replacement) {
+  const source = readFileSync(path, "utf8");
+  assert.equal(source.split(expected).length, 2);
+  writeFileSync(path, source.replace(expected, replacement));
+}
+
+function assertFailureScenarioOutput(taskResults, scenarios) {
+  const observed = taskResults.flatMap((taskResult) =>
+    taskResult.judges
+      .filter(({ status }) => status === "fail")
+      .map(({ name, failureCode }) => ({
+        taskId: taskResult.taskId,
+        judge: name,
+        failureCode
+      }))
+  );
+  const scenariosByTask = new Map(scenarios.map((scenario) => [scenario.taskId, scenario]));
+  const expected = taskResults.flatMap((taskResult) => {
+    const scenario = scenariosByTask.get(taskResult.taskId);
+    if (scenario === undefined) return [];
+    return taskResult.judges
+      .filter(({ name }) => scenario.expectedFailureJudges.includes(name))
+      .map(({ name }) => ({
+        taskId: taskResult.taskId,
+        judge: name,
+        failureCode: PLUGIN_AUTHORING_FAILURE_BY_JUDGE[name]
+      }));
+  });
+  assert.deepEqual(observed, expected, "known-bad failure matrix");
 }
 
 function productionInvocation({
