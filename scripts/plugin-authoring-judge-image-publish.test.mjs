@@ -212,6 +212,7 @@ test("publish workflow keeps privileged publication manual and digest-bound", as
   assert.match(workflow, /create-storage-record:\s*false/u);
   assert.doesNotMatch(workflow, /artifact-metadata:\s*write/u);
   assert.match(workflow, /uses:\s*actions\/upload-artifact@v6/u);
+  assert.equal(workflow.match(/include-hidden-files: true/gu)?.length, 2);
   assert.match(workflow, /node scripts\/plugin-authoring-judge-image-publish\.mjs write/u);
   assert.doesNotMatch(workflow, /--secret|ssh:/u);
   assert.equal(workflow.match(/packages: write/gu)?.length, 1);
@@ -224,7 +225,12 @@ test("publish workflow keeps privileged publication manual and digest-bound", as
     workflow.indexOf("\n  receipt:")
   );
   assert.doesNotMatch(publishJob, /actions\/checkout/u);
-  assert.doesNotMatch(publishJob, /^\s+- run:/mu);
+  assert.doesNotMatch(publishJob, /(?:node|pnpm|npm|yarn|bun)\s/u);
+  assert.deepEqual(publishJob.match(/^\s+- run:.*$/gmu), ["      - run: >-"]);
+  assert.match(publishJob, /test -f "\$ENTRYPOINT_PATH"/u);
+  assert.match(publishJob, /test ! -L "\$ENTRYPOINT_PATH"/u);
+  assert.match(publishJob, /chmod 0755 "\$ENTRYPOINT_PATH"/u);
+  assert.ok(publishJob.indexOf("chmod 0755") < publishJob.indexOf("docker/login-action"));
 
   assert.match(tier1, /node --test scripts\/plugin-authoring-judge-image-publish\.test\.mjs/u);
   assert.match(guide, /workflow_dispatch/u);
