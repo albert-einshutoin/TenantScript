@@ -97,6 +97,7 @@
 - [ ] **P3-T16**(S)performance regression CI(**Tier 2**: 実 Cloudflare、nightly)
   - 内容: Phase 0 ベンチハーネスを CI 化し、p95 warm の劣化(>20%)で fail
   - DoD: Tier 2 nightly で実行、ダッシュボード化
+  - Progress: Issue #348でPhase 0 harnessを明示enableのTier 2 deploy/measurement laneへ接続し、warm/cold absolute p95、sanitized artifact、redirect/timeout/schema境界を固定。paid-plan live baselineがないため20% regressionとdashboardは未完了
 
 ## チャンク E: self-host & docs(T17–T20)
 

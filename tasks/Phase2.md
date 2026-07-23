@@ -29,6 +29,7 @@
 - [ ] **P2-T03**(M)並行実行の負荷テスト(**Tier 2**: 実 Cloudflare、nightly)
   - 内容: 同一 tenant / 複数 tenant での同時 hook 実行(目標値は partner 実績から設定)。p95 レイテンシの劣化を計測。**実行コストを記録して予算管理する**
   - DoD: 負荷シナリオが Tier 2 CI(nightly)に入り、閾値超過で fail
+  - Progress: Issue #348で明示enable・保護environment・credential分離されたlive runtime benchmark lane、固定warm/coldシナリオ、closed evidence artifact、absolute p95 gateを実装。paid-planでの実run、partner負荷由来の並行tenant scenario、cost/baseline証跡は未完了
 
 - [ ] **P2-T04**(S)2つ目の example host app
   - 内容: 異なるドメイン(例: HR 系)の example app を追加し、hook schema が app 固有であることを実証

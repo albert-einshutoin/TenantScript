@@ -34,6 +34,7 @@ jobs:
       - run: pnpm test:release-policy
       - run: pnpm test:release-automation
       - run: node --test scripts/v1-launch-readiness.test.mjs
+      - run: node --test scripts/runtime-benchmark-live.test.mjs
       - run: node --test scripts/tier1-artifact-action-contract.test.mjs
       - run: pnpm test:agent-scaffold
       - run: pnpm test:agent-evals
