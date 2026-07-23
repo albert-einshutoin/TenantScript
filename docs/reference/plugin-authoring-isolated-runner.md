@@ -180,11 +180,12 @@ symlinkや既存artifactを上書きしません。
 `deploy/plugin-authoring-judge/Dockerfile`はlinux/amd64のNode baseをplatform manifest digestで固定し、
 multi-stage buildでlockfileから依存を`--ignore-scripts` installします。build contextは
 `plugin-authoring-judge-image-context.mjs`のallowlistで作り、`.git`、`.devloop`、`.tmp`、candidate、test source、
-local build artifactをdaemonへ渡しません。final imageはroot所有artifactをnon-rootの`node` userで読み、固定entrypointだけを
-起動します。
+local build artifactをdaemonへ渡しません。final imageへはprivate image workspaceのproduction dependency closureだけを
+deployし、root所有artifactをnon-rootの`node` userで読み、固定entrypointだけを起動します。
 
 actual image contract testは`--network=none`、read-only root、全capability drop、no-new-privileges、PID/memory/CPU上限、
-read-only input mount、node所有のbounded `/work` tmpfsを使い、known-good 10 task x 6 judgeと固定failureを実行します。
+read-only input mount、UID/GID 65532だけが書けるbounded `/tmp`・`/work` tmpfsを使い、production runnerと同じargvで
+known-good 10 task x 6 judgeと固定failureを実行します。
 
 ```sh
 # cwd: repository root
@@ -192,8 +193,31 @@ read-only input mount、node所有のbounded `/work` tmpfsを使い、known-good
 pnpm test:judge-image
 ```
 
-これはlocal source/build/runtime境界のrepository evidenceです。imageは未publish・未attestで、正式なsecurity review、
-SBOM、GHCR digest、provenance、real-agent品質の証拠ではありません。linux/amd64以外も検証済みとは主張しません。
+### Local SBOM candidate evidence
+
+`pnpm test:judge-image`は実imageをarchive化し、Syft 1.49.0のlinux/amd64 manifest digestを固定したscannerへ
+read-only mountしてCycloneDX 1.7 JSONを生成します。scanner containerはnetworkなし、read-only root、non-root、
+capabilityなしで動き、Docker socketやregistry credentialを受け取りません。validatorはcomponent/dependency上限、
+unique `bom-ref`、dependency参照、Node/TypeScript/esbuild/TenantScript runtime、base OS、development package非混入、
+secret-shaped valueとhost path非反射をfail-closedで確認します。
+
+```sh
+# cwd: repository root
+# expected-exit: 0
+pnpm judge-image:evidence
+```
+
+生成物は`.tmp/plugin-authoring-judge-image-evidence/`の`judge-image.cdx.json`と
+`judge-image-evidence.json`です。candidate evidenceはsource revision、Dockerfile/lockfile/allowlist context digest、
+local image ID、scan対象archive digest、SBOM digest、scanner digestを結びます。Tier 1は
+`plugin-authoring-judge-image-evidence-<commit SHA>`として14日保持します。raw SBOMのtimestamp、UUID、digestは
+対象scan artifactのidentityです。archiveは512 MiBをhard capにしますが、`docker save`のbyte表現とサイズはengine-localであり、
+別engine・別buildとのbyte-for-byte reproducibilityを主張しません。
+
+これはlocal source/build/runtimeとSBOM inventoryのrepository evidenceです。imageは未publish・未attestで、
+local image IDはGHCR registry digestではありません。candidate statusには`registry-digest`、`attestation`、
+`independent-review` blockerが残るため、review済みproduction image、provenance、脆弱性不存在、real-agent品質の
+証拠として扱いません。linux/amd64以外も検証済みとは主張しません。
 
 ## Verification and current limitation
 

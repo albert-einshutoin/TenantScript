@@ -5,7 +5,8 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { stagePluginAuthoringJudgeImageContext } from "./plugin-authoring-judge-image-context.mjs";
+import { buildPluginAuthoringJudgeImage } from "./plugin-authoring-judge-image-build.mjs";
+import { generatePluginAuthoringJudgeImageEvidence } from "./plugin-authoring-judge-image-evidence.mjs";
 import {
   computePluginAuthoringCorpusDigest,
   parsePluginAuthoringCorpus
@@ -27,34 +28,21 @@ const corpus = parsePluginAuthoringCorpus(
 test(
   "builds and runs the known-good corpus in the least-authority container",
   { timeout: 240_000 },
-  () => {
+  async () => {
     const root = mkdtempSync(join(tmpdir(), "tenantscript-judge-image-test-"));
-    const contextRoot = join(root, "context");
     const baselineRoot = join(root, "baseline");
     const candidateRoot = join(root, "candidate");
     const requestPath = join(root, "request.json");
     try {
-      stagePluginAuthoringJudgeImageContext({ repositoryRoot: repoRoot, outputRoot: contextRoot });
       const revision = run("git", ["rev-parse", "HEAD"], { cwd: repoRoot }).stdout.trim();
-      run(
-        "docker",
-        [
-          "build",
-          "--platform=linux/amd64",
-          `--build-arg=SOURCE_REVISION=${revision}`,
-          "--file=deploy/plugin-authoring-judge/Dockerfile",
-          `--tag=${image}`,
-          "."
-        ],
-        { cwd: contextRoot, timeout: 180_000 }
-      );
-      const inspected = JSON.parse(run("docker", ["image", "inspect", image]).stdout)[0];
-      assert.equal(inspected.Architecture, "amd64");
-      assert.equal(inspected.Config.User, "node");
-      assert.deepEqual(inspected.Config.Entrypoint, [
-        "/opt/tenantscript/bin/plugin-authoring-judge"
-      ]);
-      assert.equal(inspected.Config.Labels["org.opencontainers.image.revision"], revision);
+      const build = buildPluginAuthoringJudgeImage({
+        repositoryRoot: repoRoot,
+        image,
+        sourceRevision: revision
+      });
+      assert.equal(build.platform, "linux/amd64");
+      assert.equal(build.sourceRevision, revision);
+      assert.match(build.contextSha256, /^[0-9a-f]{64}$/u);
 
       writeCandidateFixture({ baselineRoot, candidateRoot, requestPath });
       const request = parseIsolatedRunnerRequest(
@@ -96,6 +84,19 @@ test(
       assert.equal(failure.status, 1);
       assert.equal(failure.stdout, "");
       assert.equal(failure.stderr, "plugin authoring judge failed\n");
+
+      const generated = await generatePluginAuthoringJudgeImageEvidence({
+        repositoryRoot: repoRoot,
+        outputDirectory: join(root, "evidence"),
+        build
+      });
+      assert.equal(generated.evidence.image.id, build.id);
+      assert.equal(generated.evidence.sourceRevision, revision);
+      assert.equal(generated.evidence.decision.status, "candidate");
+      assert.equal(
+        readFileSync(join(root, "evidence", "judge-image.cdx.json"), "utf8").length > 0,
+        true
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
       spawnSync("docker", ["container", "rm", "--force", successContainer], {
