@@ -131,6 +131,7 @@ function validateReleaseBlockers(value) {
     assert(Number.isSafeInteger(issue) && issue > previous && issue <= 1_000_000);
     previous = issue;
   }
+  if (value.openIssues.length === 0) assert(value.evidence.length > 0);
 }
 
 function validateReleaseMaterials(value) {

@@ -176,6 +176,10 @@ test("derives blockers and rejects widening, false approval, and unsafe evidence
   unsortedIssues.gates.releaseBlockers.openIssues = [3, 2];
   cases.push(unsortedIssues);
 
+  const approvedWithoutBlockerTriageEvidence = approvedFixture();
+  approvedWithoutBlockerTriageEvidence.gates.releaseBlockers.evidence = [];
+  cases.push(approvedWithoutBlockerTriageEvidence);
+
   const incompleteReviewCounts = blockedFixture();
   incompleteReviewCounts.gates.externalSecurityReview.criticalOpen = 0;
   cases.push(incompleteReviewCounts);
