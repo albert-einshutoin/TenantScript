@@ -154,14 +154,14 @@ export function validatePluginAuthoringJudgeImageEvidence(evidence, sbom, contra
       assert(digestPattern.test(evidence.inputs[field]));
     }
 
-    assertExactKeys(evidence.image, ["archiveSha256", "id", "reference", "sizeBytes"]);
+    assertExactKeys(evidence.image, ["archiveBytes", "archiveSha256", "id", "reference"]);
     assert(evidence.image.reference === "tenantscript/plugin-authoring-judge:evidence");
     assert(evidence.image.id === contract.imageId);
     assert(digestPattern.test(evidence.image.archiveSha256));
     assert(
-      Number.isSafeInteger(evidence.image.sizeBytes) &&
-        evidence.image.sizeBytes >= 1 &&
-        evidence.image.sizeBytes <= 256 * 1024 * 1024
+      Number.isSafeInteger(evidence.image.archiveBytes) &&
+        evidence.image.archiveBytes >= 1 &&
+        evidence.image.archiveBytes <= 256 * 1024 * 1024
     );
 
     assertExactKeys(evidence.sbom, [

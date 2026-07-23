@@ -96,7 +96,7 @@ export async function generatePluginAuthoringJudgeImageEvidence({
         reference: evidenceImage,
         id: build.id,
         archiveSha256,
-        sizeBytes: build.sizeBytes
+        archiveBytes: archive.size
       },
       sbom: {
         format: "CycloneDX",
@@ -267,7 +267,6 @@ function assertBuildRecord(build) {
   assert(/^[0-9a-f]{40}$/u.test(build?.sourceRevision));
   assert(/^[0-9a-f]{64}$/u.test(build?.contextSha256));
   assert(build?.platform === "linux/amd64");
-  assert(Number.isSafeInteger(build?.sizeBytes) && build.sizeBytes >= 1);
 }
 
 function assertMissing(path) {

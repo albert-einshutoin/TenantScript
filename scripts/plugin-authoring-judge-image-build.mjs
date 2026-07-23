@@ -69,14 +69,9 @@ export function buildPluginAuthoringJudgeImage({
     assert(record.Config?.Labels?.["org.opencontainers.image.revision"] === sourceRevision);
     phase = "image ID inspection";
     assert(/^sha256:[0-9a-f]{64}$/u.test(record.Id));
-    phase = "image size inspection";
-    assert(
-      Number.isSafeInteger(record.Size) && record.Size >= 1 && record.Size <= 256 * 1024 * 1024
-    );
     return Object.freeze({
       image,
       id: record.Id,
-      sizeBytes: record.Size,
       sourceRevision,
       contextSha256,
       platform: PLUGIN_AUTHORING_JUDGE_IMAGE_PLATFORM
