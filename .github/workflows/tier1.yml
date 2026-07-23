@@ -53,6 +53,17 @@ jobs:
       - run: pnpm test:template-catalog
       - id: template-gallery
         run: pnpm test:template-gallery
+      - name: Validate template gallery Workers Assets deployment
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        run: >-
+          pnpm exec wrangler deploy
+          --dry-run
+          --config apps/template-gallery/wrangler.jsonc
+          --outdir .tmp/template-gallery-assets
+          --strict
+          --autoconfig=false
+          --install-skills=false
       - uses: actions/upload-artifact@v6
         if: failure() && steps.template-gallery.outcome == 'failure'
         with:
