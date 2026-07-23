@@ -8,43 +8,170 @@
   "properties": {
     "protocolVersion": { "const": "1.0.0" },
     "corpusVersion": { "const": "1.0.0" },
-    "total": { "type": "integer", "minimum": 0 },
-    "passed": { "type": "integer", "minimum": 0 },
-    "failed": { "type": "integer", "minimum": 0 },
+    "total": { "const": 20 },
+    "passed": { "type": "integer", "minimum": 0, "maximum": 20 },
+    "failed": { "type": "integer", "minimum": 0, "maximum": 20 },
     "results": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "rule", "expected", "actual", "passed"],
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
-          },
-          "rule": {
-            "enum": [
-              "capability.key.syntax",
-              "config.default.type-match",
-              "config.required.non-empty",
-              "egress.allowlist.non-empty",
-              "hook.priority.integer",
-              "hook.schema-version-range.semver",
-              "hook.timeout.positive-integer",
-              "hook.type.enum",
-              "hooks.non-empty",
-              "hooks.unique-name",
-              "limits.positive-integer",
-              "manifest.valid",
-              "name.syntax",
-              "object.closed",
-              "version.syntax"
-            ]
-          },
-          "expected": { "enum": ["accept", "reject"] },
-          "actual": { "enum": ["accept", "reject"] },
-          "passed": { "type": "boolean" }
+      "minItems": 20,
+      "maxItems": 20,
+      "additionalItems": false,
+      "items": [
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "accept-allowlist" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "accept-capability-config-reference" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "accept-config-default" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "accept-minimal-deny" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "accept-priority" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-capability-key" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-config-default-type" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-config-required-empty" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-duplicate-hooks" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-empty-allowlist" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-empty-hooks" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-fractional-cpu" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-fractional-hook-priority" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-fractional-hook-timeout" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-invalid-hook-type" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-invalid-name" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-invalid-schema-range" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-invalid-version" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-unknown-field" } } }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            { "properties": { "id": { "const": "reject-zero-limit" } } }
+          ]
         }
+      ]
+    }
+  },
+  "definitions": {
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "rule", "expected", "actual", "passed"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+        },
+        "rule": {
+          "enum": [
+            "capability.key.syntax",
+            "config.default.type-match",
+            "config.required.non-empty",
+            "egress.allowlist.non-empty",
+            "hook.priority.integer",
+            "hook.schema-version-range.semver",
+            "hook.timeout.positive-integer",
+            "hook.type.enum",
+            "hooks.non-empty",
+            "hooks.unique-name",
+            "limits.positive-integer",
+            "manifest.valid",
+            "name.syntax",
+            "object.closed",
+            "version.syntax"
+          ]
+        },
+        "expected": { "enum": ["accept", "reject"] },
+        "actual": { "enum": ["accept", "reject"] },
+        "passed": { "type": "boolean" }
       }
     }
   }

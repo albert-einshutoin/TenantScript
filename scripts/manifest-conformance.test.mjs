@@ -43,15 +43,20 @@ test("publishes closed corpus and result schemas with the same stable rule set",
     MANIFEST_CONFORMANCE_RULES
   );
   assert.equal(resultSchema.additionalProperties, false);
-  assert.equal(resultSchema.properties.results.items.additionalProperties, false);
+  assert.equal(resultSchema.definitions.result.additionalProperties, false);
   assert.deepEqual(
-    new Set(resultSchema.properties.results.items.properties.rule.enum),
+    new Set(resultSchema.definitions.result.properties.rule.enum),
     MANIFEST_CONFORMANCE_RULES
   );
-  assert.deepEqual(resultSchema.properties.results.items.properties.actual.enum, [
-    "accept",
-    "reject"
-  ]);
+  assert.deepEqual(resultSchema.definitions.result.properties.actual.enum, ["accept", "reject"]);
+  assert.equal(resultSchema.properties.total.const, MANIFEST_CONFORMANCE_CASE_IDS.length);
+  assert.equal(resultSchema.properties.results.minItems, MANIFEST_CONFORMANCE_CASE_IDS.length);
+  assert.equal(resultSchema.properties.results.maxItems, MANIFEST_CONFORMANCE_CASE_IDS.length);
+  assert.equal(resultSchema.properties.results.additionalItems, false);
+  assert.deepEqual(
+    resultSchema.properties.results.items.map((item) => item.allOf[1].properties.id.const),
+    MANIFEST_CONFORMANCE_CASE_IDS
+  );
 });
 
 test("reference adapter matches every portable case without reflecting input or diagnostics", async () => {
