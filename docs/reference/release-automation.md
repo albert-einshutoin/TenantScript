@@ -14,10 +14,11 @@ version/CHANGELOG変更だけを作り、registry publishはstable tag・保護e
 
 1. tag commitが`origin/main`に含まれることを確認する
 2. `release:preflight`で8 public packageのfixed version、tag一致、`0.0.0`拒否、Changeset消化を確認する
-3. `pnpm verify`と`pnpm pack:check`を再実行する
-4. 検証済みtarball由来の`pnpm sbom:generate`を実行する
-5. `pnpm changeset publish`をGitHub OIDCで実行する
-6. package tagをpushし、SBOM付きGitHub Releaseを作成する
+3. 1.xでは[`v1-launch-readiness.json`](../releases/v1-launch-readiness.json)が`approved`であることを確認する
+4. `pnpm verify`と`pnpm pack:check`を再実行する
+5. 検証済みtarball由来の`pnpm sbom:generate`を実行する
+6. `pnpm changeset publish`をGitHub OIDCで実行する
+7. package tagをpushし、SBOM付きGitHub Releaseを作成する
 
 publish jobはGitHub-hosted `ubuntu-latest`、Node 24、npm 11.5.1以上、`id-token: write`、
 `npm-publish` environmentを固定します。長期registry tokenをworkflowへ追加してはいけません。
@@ -35,6 +36,11 @@ pnpm release:preflight -- v1.2.3
 
 通常のfeature branchには未消化Changesetがあるため、このcommandが失敗するのは正常です。fixtureとworkflow
 境界は`pnpm test:release-automation`でaccountlessに常設検証します。
+
+v1 readiness recordの現在の判定は`blocked`です。production adopter、external contributor、実
+advisory対応、独立security review、独立self-host検証、blocker triage、release materialsの公開証拠が
+すべて揃ったreview済み変更だけが`approved`になります。0.xはこの外部adoption gateの対象外です。
+2.x以降は、1.xの判定を流用せず専用のmajor release gateが必要です。
 
 ## External activation checklist
 

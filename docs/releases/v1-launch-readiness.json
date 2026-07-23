@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "kind": "tenantscript-v1-launch-readiness",
+  "repository": "albert-einshutoin/TenantScript",
+  "targetVersion": "1.0.0",
+  "gates": {
+    "productionAdopters": {
+      "required": 5,
+      "verified": 0,
+      "evidence": ["ADOPTERS.md"]
+    },
+    "externalContributors": {
+      "required": 10,
+      "verified": 0,
+      "evidence": []
+    },
+    "advisoryResponses": {
+      "required": 1,
+      "verified": 0,
+      "evidence": []
+    },
+    "externalSecurityReview": {
+      "completed": false,
+      "criticalOpen": null,
+      "highOpen": null,
+      "evidence": ["docs/security/community-review-packet.md"]
+    },
+    "selfHostValidators": {
+      "required": 2,
+      "verified": 0,
+      "evidence": ["docs/operations/self-host-production.md"]
+    },
+    "releaseBlockers": {
+      "openIssues": [2, 3, 4, 21, 23, 31, 32, 33, 34, 35],
+      "evidence": ["docs/reviews/phase0-gate-evidence.md"]
+    },
+    "releaseMaterials": {
+      "changelog": false,
+      "announcement": false,
+      "evidence": []
+    }
+  },
+  "decision": {
+    "status": "blocked",
+    "blockers": [
+      "production-adopters",
+      "external-contributors",
+      "advisory-response",
+      "external-security-review",
+      "independent-self-host",
+      "v1-blocker-issues",
+      "release-materials"
+    ]
+  }
+}
