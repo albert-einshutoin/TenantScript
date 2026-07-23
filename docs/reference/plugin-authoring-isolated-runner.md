@@ -211,7 +211,8 @@ pnpm judge-image:evidence
 `judge-image-evidence.json`です。candidate evidenceはsource revision、Dockerfile/lockfile/allowlist context digest、
 local image ID、scan対象archive digest、SBOM digest、scanner digestを結びます。Tier 1は
 `plugin-authoring-judge-image-evidence-<commit SHA>`として14日保持します。raw SBOMのtimestamp、UUID、digestは
-対象scan artifactのidentityであり、別buildとのbyte-for-byte reproducibilityを主張しません。
+対象scan artifactのidentityです。archiveは512 MiBをhard capにしますが、`docker save`のbyte表現とサイズはengine-localであり、
+別engine・別buildとのbyte-for-byte reproducibilityを主張しません。
 
 これはlocal source/build/runtimeとSBOM inventoryのrepository evidenceです。imageは未publish・未attestで、
 local image IDはGHCR registry digestではありません。candidate statusには`registry-digest`、`attestation`、

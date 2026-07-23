@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { PLUGIN_AUTHORING_JUDGE_IMAGE_BASE } from "./plugin-authoring-judge-image-context.mjs";
 
 export const PLUGIN_AUTHORING_JUDGE_SBOM_MAX_BYTES = 8 * 1024 * 1024;
+export const PLUGIN_AUTHORING_JUDGE_IMAGE_ARCHIVE_MAX_BYTES = 512 * 1024 * 1024;
 export const PLUGIN_AUTHORING_JUDGE_SBOM_MAX_COMPONENTS = 6_000;
 export const PLUGIN_AUTHORING_JUDGE_SBOM_MAX_DEPENDENCIES = 2_000;
 export const PLUGIN_AUTHORING_JUDGE_SBOM_SCANNER_IMAGE =
@@ -161,7 +162,7 @@ export function validatePluginAuthoringJudgeImageEvidence(evidence, sbom, contra
     assert(
       Number.isSafeInteger(evidence.image.archiveBytes) &&
         evidence.image.archiveBytes >= 1 &&
-        evidence.image.archiveBytes <= 256 * 1024 * 1024
+        evidence.image.archiveBytes <= PLUGIN_AUTHORING_JUDGE_IMAGE_ARCHIVE_MAX_BYTES
     );
 
     assertExactKeys(evidence.sbom, [

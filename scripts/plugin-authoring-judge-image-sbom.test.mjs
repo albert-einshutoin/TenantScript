@@ -12,6 +12,7 @@ import {
   preparePluginAuthoringJudgeEvidenceCliOutput
 } from "./plugin-authoring-judge-image-evidence.mjs";
 import {
+  PLUGIN_AUTHORING_JUDGE_IMAGE_ARCHIVE_MAX_BYTES,
   PLUGIN_AUTHORING_JUDGE_SBOM_MAX_COMPONENTS,
   validatePluginAuthoringJudgeImageEvidence,
   validatePluginAuthoringJudgeImageSbom
@@ -270,7 +271,11 @@ test("rejects evidence identity drift, approval claims, and unknown fields", () 
   const cases = [
     ["source drift", (evidence) => (evidence.sourceRevision = "c".repeat(40))],
     ["image drift", (evidence) => (evidence.image.id = `sha256:${"d".repeat(64)}`)],
-    ["archive over budget", (evidence) => (evidence.image.archiveBytes = 300 * 1024 * 1024)],
+    [
+      "archive over budget",
+      (evidence) =>
+        (evidence.image.archiveBytes = PLUGIN_AUTHORING_JUDGE_IMAGE_ARCHIVE_MAX_BYTES + 1)
+    ],
     ["SBOM drift", (evidence) => (evidence.sbom.sha256 = "e".repeat(64))],
     ["approval claim", (evidence) => (evidence.decision.status = "approved")],
     ["missing blocker", (evidence) => evidence.decision.blockers.pop()],

@@ -22,6 +22,7 @@ import { buildPluginAuthoringJudgeImage } from "./plugin-authoring-judge-image-b
 import { PLUGIN_AUTHORING_JUDGE_IMAGE_BASE } from "./plugin-authoring-judge-image-context.mjs";
 import {
   PLUGIN_AUTHORING_JUDGE_DOCKERFILE_FRONTEND,
+  PLUGIN_AUTHORING_JUDGE_IMAGE_ARCHIVE_MAX_BYTES,
   PLUGIN_AUTHORING_JUDGE_SBOM_MAX_BYTES,
   PLUGIN_AUTHORING_JUDGE_SBOM_SCANNER_IMAGE,
   PLUGIN_AUTHORING_JUDGE_SBOM_SCANNER_VERSION,
@@ -65,7 +66,11 @@ export async function generatePluginAuthoringJudgeImageEvidence({
     assert(archiveResult.stdout === "");
     phase = "image archive inspection";
     const archive = lstatSync(archivePath);
-    assert(archive.isFile() && archive.size >= 1 && archive.size <= 256 * 1024 * 1024);
+    assert(
+      archive.isFile() &&
+        archive.size >= 1 &&
+        archive.size <= PLUGIN_AUTHORING_JUDGE_IMAGE_ARCHIVE_MAX_BYTES
+    );
     // Docker engines do not preserve one portable output mode. The scanner runs as UID 65532,
     // so make only this owned immutable archive world-readable before the read-only bind mount.
     chmodSync(archivePath, 0o444);
