@@ -185,7 +185,21 @@ deployし、root所有artifactをnon-rootの`node` userで読み、固定entrypo
 
 actual image contract testは`--network=none`、read-only root、全capability drop、no-new-privileges、PID/memory/CPU上限、
 read-only input mount、UID/GID 65532だけが書けるbounded `/tmp`・`/work` tmpfsを使い、production runnerと同じargvで
-known-good 10 task x 6 judgeと固定failureを実行します。
+known-good 10 task x 6 judgeと固定failureを実行します。さらにjudge-ownedな6つのknown-bad mutationを互いに異なるtaskへ
+配置した1 container matrixを実行し、target failureを含む次のclosed failure vectorだけが返ることを検証します。
+
+| Target failure           | Judge-owned mutation        | Closed failure vector                          |
+| ------------------------ | --------------------------- | ---------------------------------------------- |
+| `manifest-invalid`       | invalid manifest version    | `manifest`, `audit`, `least-privilege`         |
+| `build-failed`           | compile-time type error     | `build`, `unit-test`, `security-test`, `audit` |
+| `unit-test-failed`       | wrong behavior result       | `unit-test`                                    |
+| `security-test-failed`   | raw egress attempt          | `unit-test`, `security-test`, `audit`          |
+| `audit-failed`           | missing package test script | `audit`                                        |
+| `least-privilege-failed` | unused capability grant     | `audit`, `least-privilege`                     |
+
+相関failureはbuild receipt、runtime loader、static audit、manifest/least-privilege評価のfail-closed依存を表します。
+fixture sourceとscenario contractはimage build contextへ含めず、test時のread-only candidate mountだけで渡します。
+production entrypointへfailure injection hookは追加しません。
 
 ```sh
 # cwd: repository root
