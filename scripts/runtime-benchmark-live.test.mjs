@@ -33,9 +33,14 @@ function response(value, init) {
   });
 }
 
+function accessChallenge() {
+  return new Response("", { status: 403 });
+}
+
 test("runs the fixed warm and cold scenarios and emits closed passing evidence", async () => {
   const requests = [];
   const responses = [
+    accessChallenge(),
     response({ ok: true }),
     response(benchmark("get", 80, 10, 49)),
     response(benchmark("load", 40, 0, 299))
@@ -56,21 +61,25 @@ test("runs the fixed warm and cold scenarios and emits closed passing evidence",
     requests.map(({ url }) => url),
     [
       `${baseUrl}/health`,
+      `${baseUrl}/health`,
       `${baseUrl}/bench?mode=get&iterations=80&warmup=10`,
       `${baseUrl}/bench?mode=load&iterations=40&warmup=0`
     ]
   );
+  assert.deepEqual(requests[0].init.headers, { accept: "application/json" });
   assert(
-    requests.every(
-      ({ init }) =>
-        init.method === "GET" &&
-        init.redirect === "error" &&
-        init.headers.accept === "application/json" &&
-        init.headers["CF-Access-Client-Id"] === accessClientId &&
-        init.headers["CF-Access-Client-Secret"] === accessClientSecret &&
-        init.credentials === "omit" &&
-        init.signal instanceof AbortSignal
-    )
+    requests
+      .slice(1)
+      .every(
+        ({ init }) =>
+          init.method === "GET" &&
+          init.redirect === "error" &&
+          init.headers.accept === "application/json" &&
+          init.headers["CF-Access-Client-Id"] === accessClientId &&
+          init.headers["CF-Access-Client-Secret"] === accessClientSecret &&
+          init.credentials === "omit" &&
+          init.signal instanceof AbortSignal
+      )
   );
   assert.deepEqual(evidence, {
     schemaVersion: 1,
@@ -106,6 +115,7 @@ test("runs the fixed warm and cold scenarios and emits closed passing evidence",
 
 test("records a closed failed decision when either absolute p95 threshold is reached", async () => {
   const responses = [
+    accessChallenge(),
     response({ ok: true }),
     response(benchmark("get", 80, 10, 50)),
     response(benchmark("load", 40, 0, 10))
@@ -136,7 +146,7 @@ test("rejects response widening, scenario drift, unsafe metrics, and secret-shap
   ];
 
   for (const value of invalid) {
-    const responses = [response({ ok: true }), response(value)];
+    const responses = [accessChallenge(), response({ ok: true }), response(value)];
     await assert.rejects(
       runRuntimeBenchmark({
         baseUrl,
@@ -209,6 +219,7 @@ test("requires bounded Access credentials without reflecting them into evidence"
   );
   assert.equal(requests, 0);
   const responses = [
+    accessChallenge(),
     response({ ok: true }),
     response(benchmark("get", 80, 10, 10)),
     response(benchmark("load", 40, 0, 10))
@@ -222,6 +233,26 @@ test("requires bounded Access credentials without reflecting them into evidence"
     fetchImpl: async () => responses.shift()
   });
   assert.doesNotMatch(JSON.stringify(evidence), /tier2-client/u);
+});
+
+test("fails closed when the benchmark origin is not protected by Access", async () => {
+  let requests = 0;
+  await assert.rejects(
+    runRuntimeBenchmark({
+      baseUrl,
+      sourceRevision,
+      measuredAt: "2026-07-23T00:00:00.000Z",
+      accessClientId,
+      accessClientSecret,
+      fetchImpl: async (_url, init) => {
+        requests += 1;
+        assert.deepEqual(init.headers, { accept: "application/json" });
+        return response({ ok: true });
+      }
+    }),
+    /runtime benchmark failed/u
+  );
+  assert.equal(requests, 1);
 });
 
 test("Tier 2 keeps credentials off PRs and preserves sanitized evidence", () => {

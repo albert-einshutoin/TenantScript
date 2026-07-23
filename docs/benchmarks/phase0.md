@@ -57,7 +57,9 @@ Set repository variable `TIER2_LIVE_ENABLED=true` only after those controls are 
 deploys from `main`, checks `/health`, runs the exact warm and cold/create scenarios above, and retains
 a closed sanitized JSON artifact for 30 days. It follows no redirects, sends only the Access service
 token to the prevalidated benchmark origin, never writes that token to evidence, bounds response size
-and request time, and fails when warm p95 reaches 50 ms or cold/create p95 reaches 300 ms.
+and request time, and first requires `/health` to reject an anonymous request so a missing Access
+policy cannot produce passing evidence. It fails when warm p95 reaches 50 ms or cold/create p95
+reaches 300 ms.
 
 This is an absolute Phase 0 Go/No-Go gate. A 20% regression claim requires a reviewed live baseline
 and is not inferred from repository tests. On failure, do not raise thresholds or enable a token

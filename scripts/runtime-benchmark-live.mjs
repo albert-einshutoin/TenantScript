@@ -99,6 +99,21 @@ function validateAccessCredential(value) {
   );
 }
 
+async function assertAccessProtected(fetchImpl, url) {
+  const response = await fetchImpl(url, {
+    method: "GET",
+    redirect: "manual",
+    credentials: "omit",
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  });
+  assert(response instanceof Response && !response.redirected);
+  // Credentials alone do not prove that the origin is protected. Require the same health route
+  // to reject an anonymous request before paid benchmark work can produce passing evidence.
+  assert([301, 302, 303, 307, 308, 401, 403].includes(response.status));
+  if (response.body !== null) await response.body.cancel();
+}
+
 async function fetchJson(fetchImpl, url, access) {
   const response = await fetchImpl(url, {
     method: "GET",
@@ -166,7 +181,9 @@ export async function runRuntimeBenchmark({
     validateAccessCredential(accessClientId);
     validateAccessCredential(accessClientSecret);
     const access = { clientId: accessClientId, clientSecret: accessClientSecret };
-    const health = await fetchJson(fetchImpl, new URL("health", origin), access);
+    const healthUrl = new URL("health", origin);
+    await assertAccessProtected(fetchImpl, healthUrl);
+    const health = await fetchJson(fetchImpl, healthUrl, access);
     exactKeys(health, ["ok"]);
     assert.equal(health.ok, true);
 
