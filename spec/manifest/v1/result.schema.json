@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/albert-einshutoin/TenantScript/main/spec/manifest/v1/result.schema.json",
+  "title": "TenantScript manifest conformance result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "corpusVersion", "total", "passed", "failed", "results"],
+  "properties": {
+    "protocolVersion": { "const": "1.0.0" },
+    "corpusVersion": { "const": "1.0.0" },
+    "total": { "type": "integer", "minimum": 0 },
+    "passed": { "type": "integer", "minimum": 0 },
+    "failed": { "type": "integer", "minimum": 0 },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rule", "expected", "actual", "passed"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "rule": {
+            "enum": [
+              "capability.key.syntax",
+              "config.default.type-match",
+              "config.required.non-empty",
+              "egress.allowlist.non-empty",
+              "hook.priority.integer",
+              "hook.schema-version-range.semver",
+              "hook.timeout.positive-integer",
+              "hook.type.enum",
+              "hooks.non-empty",
+              "hooks.unique-name",
+              "limits.positive-integer",
+              "manifest.valid",
+              "name.syntax",
+              "object.closed",
+              "version.syntax"
+            ]
+          },
+          "expected": { "enum": ["accept", "reject"] },
+          "actual": { "enum": ["accept", "reject"] },
+          "passed": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

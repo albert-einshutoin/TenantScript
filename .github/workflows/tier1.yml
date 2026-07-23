@@ -64,6 +64,11 @@ jobs:
           --strict
           --autoconfig=false
           --install-skills=false
+      - name: Validate portable manifest conformance
+        run: >-
+          pnpm --filter @tenantscript/manifest build &&
+          node --test scripts/manifest-conformance.test.mjs &&
+          node scripts/manifest-conformance.mjs
       - uses: actions/upload-artifact@v6
         if: failure() && steps.template-gallery.outcome == 'failure'
         with:
