@@ -139,6 +139,8 @@ test("binds CLI evidence to a clean revision while excluding user-owned runtime 
   assert.equal(calls.length, 3);
   assert.ok(calls[0].args.includes(":(exclude).devloop/**"));
   assert.ok(calls[0].args.includes(":(exclude).tmp/**"));
+  assert.ok(calls[2].args.includes(":(exclude).devloop/**"));
+  assert.ok(calls[2].args.includes(":(exclude).tmp/**"));
 
   assert.throws(
     () =>

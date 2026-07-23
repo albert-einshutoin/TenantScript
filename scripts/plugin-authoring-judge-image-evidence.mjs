@@ -268,10 +268,15 @@ export function assertPluginAuthoringJudgeEvidenceSource({
     });
     assert(result.error === undefined && result.signal === null && result.status === 0);
   }
-  const untracked = run(spawnSyncImpl, "git", ["ls-files", "--others", "--exclude-standard"], {
-    cwd: root,
-    timeout: 30_000
-  }).stdout;
+  const untracked = run(
+    spawnSyncImpl,
+    "git",
+    ["ls-files", "--others", "--exclude-standard", "--", ...diffPathspec],
+    {
+      cwd: root,
+      timeout: 30_000
+    }
+  ).stdout;
   assert(untracked.trim() === "");
 }
 
