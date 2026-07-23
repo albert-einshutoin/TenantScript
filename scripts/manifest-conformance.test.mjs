@@ -21,12 +21,16 @@ test("validates the closed, ordered manifest v1 corpus", async () => {
 
   assert.deepEqual(result, { ok: true, value: corpus });
   assert.equal(corpus.schemaVersion, "1.0.0");
-  assert.equal(corpus.cases.length, 20);
+  assert.equal(corpus.cases.length, 21);
   assert.deepEqual(
     corpus.cases.map(({ id }) => id),
     MANIFEST_CONFORMANCE_CASE_IDS
   );
   assert.deepEqual(new Set(corpus.cases.map(({ rule }) => rule)), MANIFEST_CONFORMANCE_RULES);
+  const nestedClosedObjectCase = corpus.cases.find(({ id }) => id === "reject-unknown-hook-field");
+  assert.notEqual(nestedClosedObjectCase, undefined);
+  assert.equal(Object.hasOwn(nestedClosedObjectCase.input, "unknown"), false);
+  assert.equal(nestedClosedObjectCase.input.hooks[0].unknown, "ts_conformance_sentinel");
 });
 
 test("publishes closed corpus and result schemas with the same stable rule set", async () => {
@@ -53,9 +57,25 @@ test("publishes closed corpus and result schemas with the same stable rule set",
   assert.equal(resultSchema.properties.results.minItems, MANIFEST_CONFORMANCE_CASE_IDS.length);
   assert.equal(resultSchema.properties.results.maxItems, MANIFEST_CONFORMANCE_CASE_IDS.length);
   assert.equal(resultSchema.properties.results.additionalItems, false);
+  assert.equal(Object.hasOwn(resultSchema.properties, "passed"), false);
+  assert.equal(Object.hasOwn(resultSchema.properties, "failed"), false);
+  assert.deepEqual(resultSchema.definitions.result.required, ["id", "rule", "expected", "actual"]);
+  assert.equal(Object.hasOwn(resultSchema.definitions.result.properties, "passed"), false);
+  const resultContracts = resultSchema.properties.results.items.map(
+    (item) => item.allOf[1].properties
+  );
   assert.deepEqual(
-    resultSchema.properties.results.items.map((item) => item.allOf[1].properties.id.const),
+    resultContracts.map(({ id }) => id.const),
     MANIFEST_CONFORMANCE_CASE_IDS
+  );
+  const corpus = await readCorpus();
+  assert.deepEqual(
+    resultContracts.map(({ id, rule, expected }) => ({
+      id: id.const,
+      rule: rule.const,
+      expected: expected.const
+    })),
+    corpus.cases.map(({ id, rule, expected }) => ({ id, rule, expected }))
   );
 });
 
@@ -63,22 +83,14 @@ test("reference adapter matches every portable case without reflecting input or 
   const corpus = await readCorpus();
   const report = runManifestConformance(corpus, parseManifest);
 
-  assert.deepEqual(Object.keys(report), [
-    "protocolVersion",
-    "corpusVersion",
-    "total",
-    "passed",
-    "failed",
-    "results"
-  ]);
+  assert.deepEqual(Object.keys(report), ["protocolVersion", "corpusVersion", "total", "results"]);
   assert.equal(report.protocolVersion, "1.0.0");
   assert.equal(report.corpusVersion, "1.0.0");
-  assert.equal(report.total, 20);
-  assert.equal(report.passed, 20);
-  assert.equal(report.failed, 0);
-  assert.equal(report.results.length, 20);
+  assert.equal(report.total, 21);
+  assert.equal(report.results.length, 21);
   for (const result of report.results) {
-    assert.deepEqual(Object.keys(result), ["id", "rule", "expected", "actual", "passed"]);
+    assert.deepEqual(Object.keys(result), ["id", "rule", "expected", "actual"]);
+    assert.equal(result.actual, result.expected);
   }
 
   const serialized = JSON.stringify(report);
@@ -130,10 +142,8 @@ test("reports expectation drift with only stable identifiers", async () => {
 
   const report = runManifestConformance(copy, parseManifest);
 
-  assert.equal(report.failed, 1);
-  assert.equal(report.passed, 19);
-  assert.equal(report.results[0].passed, false);
-  assert.deepEqual(Object.keys(report.results[0]), ["id", "rule", "expected", "actual", "passed"]);
+  assert.equal(report.results.filter((result) => result.actual !== result.expected).length, 1);
+  assert.deepEqual(Object.keys(report.results[0]), ["id", "rule", "expected", "actual"]);
 });
 
 test("fails closed when an adapter throws or returns an open result", async () => {

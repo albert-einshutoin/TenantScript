@@ -43,6 +43,7 @@ export const MANIFEST_CONFORMANCE_CASE_IDS = [
   "reject-invalid-schema-range",
   "reject-invalid-version",
   "reject-unknown-field",
+  "reject-unknown-hook-field",
   "reject-zero-limit"
 ];
 
@@ -119,18 +120,14 @@ export function runManifestConformance(corpusInput, parseManifest) {
       id: testCase.id,
       rule: testCase.rule,
       expected: testCase.expected,
-      actual,
-      passed: actual === testCase.expected
+      actual
     };
   });
-  const passed = results.filter((result) => result.passed).length;
 
   return {
     protocolVersion: "1.0.0",
     corpusVersion: corpusResult.value.schemaVersion,
     total: results.length,
-    passed,
-    failed: results.length - passed,
     results
   };
 }
@@ -154,7 +151,7 @@ async function main() {
   const { parseManifest } = await import("../packages/manifest/dist/index.js");
   const report = runManifestConformance(corpus, parseManifest);
   process.stdout.write(`${JSON.stringify(report)}\n`);
-  if (report.failed > 0) process.exitCode = 1;
+  if (report.results.some((result) => result.actual !== result.expected)) process.exitCode = 1;
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

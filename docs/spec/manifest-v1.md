@@ -90,8 +90,10 @@ expectations, empty corpora, and ordering drift before invoking its parser.
 For every case, the adapter applies its authoritative manifest validator to `input` and emits one
 closed result described by
 [`result.schema.json`](../../spec/manifest/v1/result.schema.json). A report contains only case ID,
-rule ID, expected/actual acceptance, pass state, and aggregate counts. It MUST NOT include manifest
-values, parser diagnostics, environment data, or absolute paths.
+rule ID, expected/actual acceptance, and the total case count. Consumers MUST derive conformance by
+comparing each `expected` value with its `actual` value; the protocol intentionally omits redundant
+pass/fail fields that could contradict those decisions. It MUST NOT include manifest values, parser
+diagnostics, environment data, or absolute paths.
 
 The repository reference adapter can be run without Cloudflare credentials:
 

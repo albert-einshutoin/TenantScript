@@ -413,6 +413,28 @@
       }
     },
     {
+      "id": "reject-unknown-hook-field",
+      "rule": "object.closed",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0",
+            "unknown": "ts_conformance_sentinel"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
       "id": "reject-zero-limit",
       "rule": "limits.positive-integer",
       "expected": "reject",
