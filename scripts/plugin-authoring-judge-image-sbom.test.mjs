@@ -116,7 +116,7 @@ test("preserves an unowned SBOM temporary directory before scanner execution", a
           assert.fail("Docker must not run for an unowned temporary root");
         }
       }),
-      /plugin authoring judge image evidence generation failed/u
+      /plugin authoring judge image evidence preflight failed/u
     );
     assert.equal(existsSync(marker), true);
     assert.equal(existsSync(output), false);

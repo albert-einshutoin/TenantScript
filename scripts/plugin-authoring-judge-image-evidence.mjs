@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   createReadStream,
   lstatSync,
   mkdirSync,
@@ -11,7 +12,6 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  statSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -42,6 +42,7 @@ export async function generatePluginAuthoringJudgeImageEvidence({
   let temporaryRoot;
   let temporaryRootOwned = false;
   let outputOwned = false;
+  let phase = "preflight";
   try {
     const root = resolve(repositoryRoot);
     const output = resolve(outputDirectory);
@@ -54,6 +55,7 @@ export async function generatePluginAuthoringJudgeImageEvidence({
     assertSafeTemporaryRoot(temporaryRoot);
     temporaryRootOwned = true;
     const archivePath = join(temporaryRoot, "image.tar");
+    phase = "image archive save";
     const archiveResult = run(
       spawnSyncImpl,
       "docker",
@@ -61,10 +63,16 @@ export async function generatePluginAuthoringJudgeImageEvidence({
       { timeout: 120_000 }
     );
     assert(archiveResult.stdout === "");
-    const archive = statSync(archivePath);
+    phase = "image archive inspection";
+    const archive = lstatSync(archivePath);
     assert(archive.isFile() && archive.size >= 1 && archive.size <= 256 * 1024 * 1024);
+    // Docker engines do not preserve one portable output mode. The scanner runs as UID 65532,
+    // so make only this owned immutable archive world-readable before the read-only bind mount.
+    chmodSync(archivePath, 0o444);
+    phase = "image archive digest";
     const archiveSha256 = await digestFile(archivePath);
 
+    phase = "SBOM scanner invocation";
     const scannerInvocation = buildPluginAuthoringJudgeSbomInvocation({
       archivePath,
       imageId: build.id
@@ -73,9 +81,11 @@ export async function generatePluginAuthoringJudgeImageEvidence({
       timeout: scannerInvocation.timeoutMs,
       maxBuffer: PLUGIN_AUTHORING_JUDGE_SBOM_MAX_BYTES
     });
+    phase = "SBOM response";
     const sbomBytes = Buffer.from(scanner.stdout, "utf8");
     assert(sbomBytes.length >= 1 && sbomBytes.length <= PLUGIN_AUTHORING_JUDGE_SBOM_MAX_BYTES);
     const sbom = JSON.parse(sbomBytes.toString("utf8"));
+    phase = "SBOM validation";
     const summary = validatePluginAuthoringJudgeImageSbom(sbom);
     const sbomSha256 = digestBytes(sbomBytes);
     const evidence = {
@@ -116,12 +126,14 @@ export async function generatePluginAuthoringJudgeImageEvidence({
         blockers: ["attestation", "independent-review", "registry-digest"]
       }
     };
+    phase = "evidence validation";
     validatePluginAuthoringJudgeImageEvidence(evidence, sbom, {
       sourceRevision: build.sourceRevision,
       imageId: build.id,
       sbomSha256
     });
 
+    phase = "evidence output";
     mkdirSync(output, { mode: 0o700 });
     outputOwned = true;
     writeFileSync(join(output, "judge-image.cdx.json"), sbomBytes, { flag: "wx", mode: 0o600 });
@@ -136,7 +148,7 @@ export async function generatePluginAuthoringJudgeImageEvidence({
     return Object.freeze({ outputDirectory: output, evidence });
   } catch {
     if (outputOwned) rmSync(resolve(outputDirectory), { recursive: true, force: true });
-    throw new Error("plugin authoring judge image evidence generation failed");
+    throw new Error(`plugin authoring judge image evidence ${phase} failed`);
   } finally {
     if (temporaryRootOwned) rmSync(temporaryRoot, { recursive: true, force: true });
   }
