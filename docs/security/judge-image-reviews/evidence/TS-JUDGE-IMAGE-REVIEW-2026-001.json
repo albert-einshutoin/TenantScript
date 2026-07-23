@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "kind": "plugin-authoring-judge-image-candidate",
+  "platform": "linux/amd64",
+  "sourceRevision": "5af8a882f0e1876e025d2ec776d280049e3b08fa",
+  "inputs": {
+    "baseImage": "node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9",
+    "dockerfileFrontend": "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+    "dockerfileSha256": "ee61757902dec73b0d6c8c371e276080d0fe5c61205da1db2b0df0128b146c93",
+    "lockfileSha256": "e09a0e6f64a282e6b0dff3328c51e328b765cc8cb1400dfd2f8ef76d7644e44a",
+    "contextSha256": "a3df78b3138c3fab846518b65ed764fc720afe4b51ddac335ca94758b8638655"
+  },
+  "image": {
+    "reference": "tenantscript/plugin-authoring-judge:evidence",
+    "id": "sha256:f1dde72c4b1eef597097b0e21b365d81922c2452e03cd8964c023892d4cb2e69",
+    "archiveSha256": "f98c7841a5967365f76c4001a52e34d0b2223aa21efd658b0fcfa3f820d2c1d5",
+    "archiveBytes": 277344256
+  },
+  "sbom": {
+    "format": "CycloneDX",
+    "specVersion": "1.7",
+    "sha256": "e49020126f12fc9d1f72c8e0dea85fc9a52b3a0ba5802168054326ade7a7fcdb",
+    "bytes": 1398931,
+    "components": 3536,
+    "dependencies": 81,
+    "scanner": {
+      "name": "syft",
+      "version": "1.49.0",
+      "image": "anchore/syft@sha256:9a9f85314017f1ea798fb012edfa7fe9259923910f82c8d4bc983ab5c765e60b"
+    }
+  },
+  "decision": {
+    "status": "candidate",
+    "blockers": [
+      "attestation",
+      "independent-review",
+      "registry-digest"
+    ]
+  }
+}

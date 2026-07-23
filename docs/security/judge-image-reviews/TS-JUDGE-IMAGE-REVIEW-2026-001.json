@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "plugin-authoring-judge-image-review",
+  "id": "TS-JUDGE-IMAGE-REVIEW-2026-001",
+  "source": {
+    "repository": "albert-einshutoin/TenantScript",
+    "pullRequest": 337,
+    "headSha": "14cf79f31ff4d01f7ea9b848b87ae02f24fab56d"
+  },
+  "workflow": {
+    "event": "pull_request",
+    "runId": 29971113794,
+    "jobId": 89093143431,
+    "mergeSha": "5af8a882f0e1876e025d2ec776d280049e3b08fa",
+    "conclusion": "success",
+    "completedAt": "2026-07-23T01:21:07.000Z",
+    "url": "https://github.com/albert-einshutoin/TenantScript/actions/runs/29971113794"
+  },
+  "artifact": {
+    "id": 8549777257,
+    "name": "plugin-authoring-judge-image-evidence-5af8a882f0e1876e025d2ec776d280049e3b08fa",
+    "digest": "sha256:07ad87a23c7fb5af3ed5574fcec6e09f813a208afca0a8c49b945eea4b1d9598",
+    "sizeBytes": 307742,
+    "createdAt": "2026-07-23T01:15:34.000Z",
+    "expiresAt": "2026-08-06T01:15:33.000Z",
+    "evidenceSha256": "71e0299ca738697fb732eb56ed9cac7be7acd71ba7dc42f65fd4fd18b9f43c26",
+    "sbomSha256": "e49020126f12fc9d1f72c8e0dea85fc9a52b3a0ba5802168054326ade7a7fcdb"
+  },
+  "review": {
+    "provider": "codex",
+    "reviewedCommit": "14cf79f31ff4d01f7ea9b848b87ae02f24fab56d",
+    "outcome": "no-major-issues",
+    "url": "https://github.com/albert-einshutoin/TenantScript/pull/337#issuecomment-5053261370"
+  },
+  "decision": {
+    "status": "candidate",
+    "blockers": ["attestation", "independent-review", "registry-digest"]
+  }
+}

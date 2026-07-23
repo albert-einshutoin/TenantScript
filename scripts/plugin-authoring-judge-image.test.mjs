@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -96,9 +97,22 @@ test("wires the actual image contract into Tier 1 and documents its evidence bou
     "security-test-failed",
     "audit-failed",
     "least-privilege-failed",
+    "judge-image-reviews",
     "未publish",
     "未attest"
   ]) {
     assert.ok(guide.includes(required), `image guide must include ${required}`);
   }
 });
+
+test("checks the committed candidate review record against the current image inputs", () => {
+  const result = spawnSync(
+    process.execPath,
+    [join(repoRoot, "scripts", "check-judge-image-review-records.mjs"), repoRoot],
+    { encoding: "utf8" }
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Judge image review record check passed \(1 record\)/u);
+});
+
+import "./plugin-authoring-judge-image-review-record.test.mjs";
