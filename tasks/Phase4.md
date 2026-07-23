@@ -70,6 +70,7 @@
 - [ ] **P4-T10**(M)manifest / capability model の独立仕様化
   - 内容: 実装から独立した仕様文書(他 runtime でも実装可能な形式)。標準化が「Cloudflare 公式化リスク」への最終的な答えになる
   - DoD: spec 文書公開、適合テストスイート(実装非依存)の骨子
+  - Progress: Issue #352でManifest v1のruntime非依存規則、stable rule ID、closed JSON fixture/result protocol、既存parser reference adapterを追加。capability runtime適合、WASM/Extism PoC、外部実装による独立conformanceは未実施
 
 - [ ] **P4-T11**(L→分割)Extism / WASM PoC
   - 内容: capability broker インターフェースを WASM 境界で再現できるかの検証(Rust 再評価はここで実施 — D-017 の見直し条件)
