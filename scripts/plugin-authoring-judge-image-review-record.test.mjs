@@ -92,6 +92,27 @@ test("rejects evidence and chronology drift without reflecting attacker values",
   }
 });
 
+test("rejects a self-consistent record that conflates PR head and workflow merge revisions", () => {
+  const evidence = validEvidence();
+  evidence.sourceRevision = headSha;
+  const evidenceBytes = Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`);
+  const record = validRecord(evidenceBytes);
+  record.workflow.mergeSha = headSha;
+  record.artifact.name = `plugin-authoring-judge-image-evidence-${headSha}`;
+  const artifactMetadata = validArtifactMetadata();
+  artifactMetadata.artifact.name = record.artifact.name;
+
+  assert.throws(
+    () =>
+      validatePluginAuthoringJudgeImageReviewRecord(record, {
+        artifactMetadata,
+        evidence,
+        evidenceBytes
+      }),
+    /judge image review record is invalid/u
+  );
+});
+
 function validRecord(evidenceBytes) {
   return {
     schemaVersion: 1,

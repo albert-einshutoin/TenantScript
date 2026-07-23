@@ -62,6 +62,9 @@ export function validatePluginAuthoringJudgeImageReviewRecord(
     assertPositiveId(record.workflow.runId);
     assertPositiveId(record.workflow.jobId);
     assert(revisionPattern.test(record.workflow.mergeSha));
+    // pull_request runs build GitHub's temporary merge revision, while review targets the PR head.
+    // Keeping them distinct prevents a self-consistent record from erasing that provenance boundary.
+    assert(record.workflow.mergeSha !== record.source.headSha);
     assert(record.workflow.mergeSha === evidence.sourceRevision);
     assert(record.workflow.runId === artifactMetadata.workflowRun.id);
     const completedAt = parseTimestamp(record.workflow.completedAt);
