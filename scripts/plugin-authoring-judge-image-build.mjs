@@ -52,16 +52,24 @@ export function buildPluginAuthoringJudgeImage({
       { cwd: contextRoot, timeout: 180_000 }
     );
     phase = "image inspection";
-    const inspection = JSON.parse(
-      run(spawnSyncImpl, "docker", ["image", "inspect", image], { timeout: 30_000 }).stdout
-    );
+    const inspectionOutput = run(spawnSyncImpl, "docker", ["image", "inspect", image], {
+      timeout: 30_000
+    }).stdout;
+    phase = "image inspection response";
+    const inspection = JSON.parse(inspectionOutput);
     assert(Array.isArray(inspection) && inspection.length === 1);
     const record = inspection[0];
+    phase = "image platform inspection";
     assert(record.Architecture === "amd64" && record.Os === "linux");
+    phase = "image user inspection";
     assert(record.Config?.User === "node");
+    phase = "image entrypoint inspection";
     assert.deepEqual(record.Config?.Entrypoint, [PLUGIN_AUTHORING_JUDGE_IMAGE_ENTRYPOINT]);
+    phase = "image revision inspection";
     assert(record.Config?.Labels?.["org.opencontainers.image.revision"] === sourceRevision);
+    phase = "image ID inspection";
     assert(/^sha256:[0-9a-f]{64}$/u.test(record.Id));
+    phase = "image size inspection";
     assert(
       Number.isSafeInteger(record.Size) && record.Size >= 1 && record.Size <= 256 * 1024 * 1024
     );
