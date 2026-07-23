@@ -233,6 +233,13 @@ local image IDはGHCR registry digestではありません。candidate statusに
 `independent-review` blockerが残るため、review済みproduction image、provenance、脆弱性不存在、real-agent品質の
 証拠として扱いません。linux/amd64以外も検証済みとは主張しません。
 
+PR head、`pull_request` workflowの一時merge SHA、成功run、GitHub artifact digest、上記candidate evidence、
+SBOM digest、Codex review判断は
+[`TS-JUDGE-IMAGE-REVIEW-2026-001`](../security/judge-image-reviews/TS-JUDGE-IMAGE-REVIEW-2026-001.json)
+で別々のidentityとして固定し、repository gateでcurrent image inputとのdriftを検証します。artifactの期限切れは
+download可用性だけに影響し、candidateをapprovedへ昇格しません。record formatと3つの残存blockerは
+[`judge-image-reviews`](../security/judge-image-reviews/README.md)を参照してください。
+
 ## Verification and current limitation
 
 ```sh
