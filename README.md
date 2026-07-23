@@ -109,6 +109,7 @@ pnpm --filter @tenantscript/runtime-bench exec wrangler deploy --config wrangler
 - [Audience別ドキュメント入口](docs/README.md) — adopter、plugin author、host developer、operator、security reviewer、contributor
 - [Operator troubleshooting index](docs/operations/README.md) — 症状、安全な観測、復旧runbook、禁止操作
 - [SDK reference](docs/reference/sdk.md) — public TypeScript surfaceとcapability境界
+- [Manifest v1 portable spec](docs/spec/manifest-v1.md) — 他言語実装向けsemantic規則とconformance fixture
 - [Canonical glossary](docs/reference/glossary.md) — app、tenant、plugin、installation、capabilityの権限境界
 - [Public configuration](docs/reference/configuration.md) — Worker binding、環境変数、default、secret
 - [Control Plane errors](docs/reference/control-plane-errors.md) — stable code、retryability、safe client action

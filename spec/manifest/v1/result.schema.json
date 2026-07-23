@@ -1,0 +1,307 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/albert-einshutoin/TenantScript/main/spec/manifest/v1/result.schema.json",
+  "title": "TenantScript manifest conformance result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "corpusVersion", "total", "results"],
+  "properties": {
+    "protocolVersion": { "const": "1.0.0" },
+    "corpusVersion": { "const": "1.0.0" },
+    "total": { "const": 21 },
+    "results": {
+      "type": "array",
+      "minItems": 21,
+      "maxItems": 21,
+      "additionalItems": false,
+      "items": [
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "accept-allowlist" },
+                "rule": { "const": "egress.allowlist.non-empty" },
+                "expected": { "const": "accept" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "accept-capability-config-reference" },
+                "rule": { "const": "capability.key.syntax" },
+                "expected": { "const": "accept" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "accept-config-default" },
+                "rule": { "const": "config.default.type-match" },
+                "expected": { "const": "accept" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "accept-minimal-deny" },
+                "rule": { "const": "manifest.valid" },
+                "expected": { "const": "accept" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "accept-priority" },
+                "rule": { "const": "hook.priority.integer" },
+                "expected": { "const": "accept" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-capability-key" },
+                "rule": { "const": "capability.key.syntax" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-config-default-type" },
+                "rule": { "const": "config.default.type-match" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-config-required-empty" },
+                "rule": { "const": "config.required.non-empty" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-duplicate-hooks" },
+                "rule": { "const": "hooks.unique-name" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-empty-allowlist" },
+                "rule": { "const": "egress.allowlist.non-empty" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-empty-hooks" },
+                "rule": { "const": "hooks.non-empty" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-fractional-cpu" },
+                "rule": { "const": "limits.positive-integer" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-fractional-hook-priority" },
+                "rule": { "const": "hook.priority.integer" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-fractional-hook-timeout" },
+                "rule": { "const": "hook.timeout.positive-integer" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-invalid-hook-type" },
+                "rule": { "const": "hook.type.enum" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-invalid-name" },
+                "rule": { "const": "name.syntax" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-invalid-schema-range" },
+                "rule": { "const": "hook.schema-version-range.semver" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-invalid-version" },
+                "rule": { "const": "version.syntax" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-unknown-field" },
+                "rule": { "const": "object.closed" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-unknown-hook-field" },
+                "rule": { "const": "object.closed" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            { "$ref": "#/definitions/result" },
+            {
+              "properties": {
+                "id": { "const": "reject-zero-limit" },
+                "rule": { "const": "limits.positive-integer" },
+                "expected": { "const": "reject" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "rule", "expected", "actual"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+        },
+        "rule": {
+          "enum": [
+            "capability.key.syntax",
+            "config.default.type-match",
+            "config.required.non-empty",
+            "egress.allowlist.non-empty",
+            "hook.priority.integer",
+            "hook.schema-version-range.semver",
+            "hook.timeout.positive-integer",
+            "hook.type.enum",
+            "hooks.non-empty",
+            "hooks.unique-name",
+            "limits.positive-integer",
+            "manifest.valid",
+            "name.syntax",
+            "object.closed",
+            "version.syntax"
+          ]
+        },
+        "expected": { "enum": ["accept", "reject"] },
+        "actual": { "enum": ["accept", "reject"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,459 @@
+{
+  "schemaVersion": "1.0.0",
+  "manifestSchemaId": "https://raw.githubusercontent.com/albert-einshutoin/TenantScript/main/docs/reference/tenantscript-manifest.schema.json",
+  "cases": [
+    {
+      "id": "accept-allowlist",
+      "rule": "egress.allowlist.non-empty",
+      "expected": "accept",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "allowlist", "hosts": ["api.example.com"] },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "accept-capability-config-reference",
+      "rule": "capability.key.syntax",
+      "expected": "accept",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": { "message.send": { "channel": "$config.channel" } },
+        "configSchema": {
+          "properties": { "channel": { "type": "string" } },
+          "required": ["channel"]
+        },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "accept-config-default",
+      "rule": "config.default.type-match",
+      "expected": "accept",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": {
+          "properties": { "dryRun": { "type": "boolean", "default": false } },
+          "required": []
+        },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "accept-minimal-deny",
+      "rule": "manifest.valid",
+      "expected": "accept",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "accept-priority",
+      "rule": "hook.priority.integer",
+      "expected": "accept",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0",
+            "priority": -10
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-capability-key",
+      "rule": "capability.key.syntax",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": { "messageSend": {} },
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-config-default-type",
+      "rule": "config.default.type-match",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": {
+          "properties": { "dryRun": { "type": "boolean", "default": "false" } },
+          "required": []
+        },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-config-required-empty",
+      "rule": "config.required.non-empty",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [""] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-duplicate-hooks",
+      "rule": "hooks.unique-name",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          },
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 200,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-empty-allowlist",
+      "rule": "egress.allowlist.non-empty",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "allowlist", "hosts": [] },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-empty-hooks",
+      "rule": "hooks.non-empty",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-fractional-cpu",
+      "rule": "limits.positive-integer",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 1.5, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-fractional-hook-priority",
+      "rule": "hook.priority.integer",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0",
+            "priority": 1.5
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-fractional-hook-timeout",
+      "rule": "hook.timeout.positive-integer",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 1.5,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-invalid-hook-type",
+      "rule": "hook.type.enum",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "background",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-invalid-name",
+      "rule": "name.syntax",
+      "expected": "reject",
+      "input": {
+        "name": "Portable_Plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-invalid-schema-range",
+      "rule": "hook.schema-version-range.semver",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "latest"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-invalid-version",
+      "rule": "version.syntax",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "v1",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-unknown-field",
+      "rule": "object.closed",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 },
+        "unknown": "ts_conformance_sentinel"
+      }
+    },
+    {
+      "id": "reject-unknown-hook-field",
+      "rule": "object.closed",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0",
+            "unknown": "ts_conformance_sentinel"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 50, "timeoutMs": 500 }
+      }
+    },
+    {
+      "id": "reject-zero-limit",
+      "rule": "limits.positive-integer",
+      "expected": "reject",
+      "input": {
+        "name": "portable-plugin",
+        "version": "1.0.0",
+        "hooks": [
+          {
+            "name": "event.received",
+            "type": "event",
+            "timeoutMs": 100,
+            "schemaVersionRange": "^1.0.0"
+          }
+        ],
+        "capabilities": {},
+        "configSchema": { "properties": {}, "required": [] },
+        "egress": { "mode": "deny" },
+        "limits": { "cpuMs": 0, "timeoutMs": 500 }
+      }
+    }
+  ]
+}
