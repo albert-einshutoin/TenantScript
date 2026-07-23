@@ -274,6 +274,7 @@ test("Tier 2 keeps credentials off PRs and preserves sanitized evidence", () => 
   assert.match(workflow, /node scripts\/runtime-benchmark-live\.mjs check-url/u);
   assert.match(workflow, /node scripts\/runtime-benchmark-live\.mjs run/u);
   assert.match(workflow, /actions\/upload-artifact@v6/u);
+  assert.match(workflow, /include-hidden-files:\s*true/u);
   assert.match(workflow, /if-no-files-found:\s*error/u);
   assert.doesNotMatch(workflow, /pull_request:/u);
   assert.match(guide, /TIER2_LIVE_ENABLED/u);

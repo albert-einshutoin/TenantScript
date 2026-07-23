@@ -49,6 +49,7 @@ jobs:
         with:
           name: runtime-benchmark-evidence-${{ github.sha }}
           path: .tmp/tier2/runtime-benchmark-evidence.json
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
 
