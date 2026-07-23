@@ -2,6 +2,7 @@
 
 import { lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const PLUGIN_AUTHORING_JUDGE_IMAGE_BASE =
   "node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9";
@@ -149,4 +150,23 @@ function compareText(left, right) {
 
 function assert(condition) {
   if (!condition) throw new Error("assertion failed");
+}
+
+const isMain =
+  process.argv[1] !== undefined && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
+
+if (isMain) {
+  try {
+    assert(process.argv.length === 3);
+    const result = stagePluginAuthoringJudgeImageContext({
+      repositoryRoot: process.cwd(),
+      outputRoot: resolve(process.argv[2])
+    });
+    process.stdout.write(
+      `${JSON.stringify({ files: result.files, totalBytes: result.totalBytes })}\n`
+    );
+  } catch {
+    process.stderr.write("plugin authoring judge image context is invalid\n");
+    process.exitCode = 1;
+  }
 }

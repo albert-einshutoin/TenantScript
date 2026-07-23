@@ -240,6 +240,10 @@ SBOM digest、Codex review判断は
 download可用性だけに影響し、candidateをapprovedへ昇格しません。record formatと3つの残存blockerは
 [`judge-image-reviews`](../security/judge-image-reviews/README.md)を参照してください。
 
+固定main revisionからGHCR digestとartifact attestationを生成するmanual workflowと検証手順は
+[`Plugin authoring judge image publication`](../operations/plugin-authoring-judge-image-publication.md)にあります。
+workflowの存在は公開成功の証拠ではなく、`published-candidate` receiptにも`independent-review` blockerが残ります。
+
 ## Verification and current limitation
 
 ```sh

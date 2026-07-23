@@ -1,0 +1,151 @@
+name: Publish plugin authoring judge image
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: Full lowercase commit SHA equal to the current main head
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: publish-plugin-authoring-judge-image
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/albert-einshutoin/tenantscript-plugin-authoring-judge
+  ENTRYPOINT_PATH: .tmp/plugin-authoring-judge-publish-context/deploy/plugin-authoring-judge/plugin-authoring-judge
+
+jobs:
+  verify:
+    name: verify immutable source and stage context
+    if: >-
+      github.repository == 'albert-einshutoin/TenantScript' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      source_revision: ${{ steps.revision.outputs.source_revision }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_revision }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: revision
+        name: Verify immutable main revision
+        env:
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+        run: |
+          test "${#SOURCE_REVISION}" -eq 40
+          case "$SOURCE_REVISION" in
+            *[!0-9a-f]*) exit 1 ;;
+          esac
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$SOURCE_REVISION" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_REVISION"
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor "$SOURCE_REVISION" origin/main
+          printf 'source_revision=%s\n' "$SOURCE_REVISION" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node --test scripts/plugin-authoring-judge-image-publish.test.mjs
+      - run: pnpm test:judge-image
+      - run: pnpm test:security
+      - run: pnpm judge-image:evidence
+      - run: node scripts/check-judge-image-review-records.mjs
+      - run: >-
+          node scripts/plugin-authoring-judge-image-context.mjs
+          .tmp/plugin-authoring-judge-publish-context
+      - uses: actions/upload-artifact@v6
+        with:
+          name: plugin-authoring-judge-image-context-${{ inputs.source_revision }}
+          path: .tmp/plugin-authoring-judge-publish-context
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  publish:
+    name: publish digest and attestation
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: judge-image-publish
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image_digest: ${{ steps.publish.outputs.digest }}
+      attestation_id: ${{ steps.attest.outputs.attestation-id }}
+      attestation_url: ${{ steps.attest.outputs.attestation-url }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: plugin-authoring-judge-image-context-${{ needs.verify.outputs.source_revision }}
+          path: .tmp/plugin-authoring-judge-publish-context
+      - run: >-
+          test -f "$ENTRYPOINT_PATH" &&
+          test ! -L "$ENTRYPOINT_PATH" &&
+          chmod 0755 "$ENTRYPOINT_PATH"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: publish
+        name: Build and push immutable image
+        uses: docker/build-push-action@v7
+        with:
+          context: .tmp/plugin-authoring-judge-publish-context
+          file: .tmp/plugin-authoring-judge-publish-context/deploy/plugin-authoring-judge/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:sha-${{ inputs.source_revision }}
+          build-args: SOURCE_REVISION=${{ inputs.source_revision }}
+          provenance: false
+          sbom: false
+      - id: attest
+        name: Attest registry digest
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+  receipt:
+    name: publish closed receipt
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.verify.outputs.source_revision }}
+          persist-credentials: false
+      - name: Write publication receipt
+        env:
+          SOURCE_REVISION: ${{ needs.verify.outputs.source_revision }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+          ATTESTATION_ID: ${{ needs.publish.outputs.attestation_id }}
+          ATTESTATION_URL: ${{ needs.publish.outputs.attestation_url }}
+        run: >-
+          node scripts/plugin-authoring-judge-image-publish.mjs write
+          .tmp/plugin-authoring-judge-image-publication/receipt.json
+      - uses: actions/upload-artifact@v6
+        with:
+          name: plugin-authoring-judge-image-publication-${{ needs.verify.outputs.source_revision }}
+          path: .tmp/plugin-authoring-judge-image-publication/receipt.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
