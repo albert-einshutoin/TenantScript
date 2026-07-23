@@ -43,20 +43,25 @@ repository/package ownerが明示的に判断します。
 ghcr.io/albert-einshutoin/tenantscript-plugin-authoring-judge@sha256:<64 lowercase hex>
 ```
 
-tagではなくreceiptのdigestを指定してpull・inspectします。
+tagではなくreceiptのdigestを指定して検証します。repository rootから次のverifierを実行すると、receiptを
+closed schemaで再検証し、空の一時`DOCKER_CONFIG`と`GH_CONFIG_DIR`を使って未認証pull、完全一致する
+`RepoDigests`、source-bound provenanceを固定順序で確認します。ambientなDocker/GitHub credential、`HOME`、
+token環境変数は子processへ渡しません。
 
 ```sh
+# cwd: repository root
 # expected-exit: 0
-gh auth token | docker login ghcr.io --username "<github-user>" --password-stdin
-docker pull "<image.reference>"
-docker image inspect "<image.reference>" --format '{{json .RepoDigests}}'
+node scripts/plugin-authoring-judge-image-verify.mjs path/to/receipt.json
 ```
 
-inspect結果に完全一致する`image.reference`がない場合は停止します。local image IDやSHA tagへの一致で代用しません。
+verifierが成功しない限り公開済みとして扱いません。空credentialでpullできない、inspect結果に完全一致する
+`image.reference`がない、attestation subjectがreceipt digestと一致しない場合は停止します。local image IDやSHA tagへの
+一致で代用しません。成功時のclosed JSONも`verified-publication-candidate`であり、`independent-review` blockerを維持します。
 
 ## 3. Attestationを検証する
 
-GitHub CLIでsubject digest、repository owner、workflow identityを検証します。
+verifierは内部でGitHub CLIをshellなしの固定argvで呼び、subject digest、repository owner、workflow identityを検証します。
+調査時に同じ境界を手動確認する場合の正本コマンドは次です。
 
 ```sh
 # expected-exit: 0
