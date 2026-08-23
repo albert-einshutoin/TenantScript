@@ -30,6 +30,9 @@ interface BenchmarkResponse {
   iterations: number;
   warmup: number;
   measured: number;
+  tenantCount: number;
+  concurrency: number;
+  loaderCalls: number;
   addedLatencyMs: PercentileSummary;
   dynamicLatencyMs: PercentileSummary;
   baselineLatencyMs: PercentileSummary;
@@ -80,7 +83,26 @@ export default {
     const mode = url.searchParams.get("mode") === "load" ? "load" : "get";
     const iterations = boundedInteger(url.searchParams.get("iterations"), 80, 1, 300);
     const warmup = boundedInteger(url.searchParams.get("warmup"), 10, 0, iterations - 1);
-    const result = await runBenchmark({ env, mode, iterations, warmup });
+    const tenantCount = boundedInteger(
+      url.searchParams.get("tenants"),
+      1,
+      1,
+      Math.min(iterations, 50)
+    );
+    const concurrency = boundedInteger(
+      url.searchParams.get("concurrency"),
+      1,
+      1,
+      Math.min(iterations, 50)
+    );
+    const result = await runBenchmark({
+      env,
+      mode,
+      iterations,
+      warmup,
+      tenantCount,
+      concurrency
+    });
 
     return Response.json(result);
   }
@@ -91,24 +113,44 @@ async function runBenchmark(params: {
   mode: "get" | "load";
   iterations: number;
   warmup: number;
+  tenantCount: number;
+  concurrency: number;
 }): Promise<BenchmarkResponse> {
   const baselineDurations: number[] = [];
   const dynamicDurations: number[] = [];
   const addedDurations: number[] = [];
-  const cachedWorker =
-    params.mode === "get"
-      ? params.env.LOADER.get("payload-transformer:v1", () => dynamicWorkerCode)
-      : undefined;
+  const cachedWorkers = new Map<number, DynamicWorkerStub>();
+  if (params.mode === "get") {
+    for (let tenant = 0; tenant < params.tenantCount; tenant += 1) {
+      cachedWorkers.set(
+        tenant,
+        params.env.LOADER.get(
+          `tenant-${String(tenant)}:payload-transformer:v1`,
+          () => dynamicWorkerCode
+        )
+      );
+    }
+  }
 
-  for (let index = 0; index < params.iterations; index += 1) {
-    const measurement = await measureIteration({
-      env: params.env,
-      mode: params.mode,
-      cachedWorker,
-      payload: createPayload(index)
-    });
+  for (let start = 0; start < params.iterations; start += params.concurrency) {
+    const measurements = await Promise.all(
+      Array.from(
+        { length: Math.min(params.concurrency, params.iterations - start) },
+        (_, offset) => {
+          const index = start + offset;
+          const tenant = index % params.tenantCount;
+          return measureIteration({
+            env: params.env,
+            mode: params.mode,
+            cachedWorker: cachedWorkers.get(tenant),
+            payload: createPayload(index, tenant)
+          });
+        }
+      )
+    );
 
-    if (index >= params.warmup) {
+    for (const [offset, measurement] of measurements.entries()) {
+      if (start + offset < params.warmup) continue;
       baselineDurations.push(measurement.baselineDuration);
       dynamicDurations.push(measurement.dynamicDuration);
       addedDurations.push(Math.max(0, measurement.dynamicDuration - measurement.baselineDuration));
@@ -120,6 +162,9 @@ async function runBenchmark(params: {
     iterations: params.iterations,
     warmup: params.warmup,
     measured: addedDurations.length,
+    tenantCount: params.tenantCount,
+    concurrency: params.concurrency,
+    loaderCalls: params.mode === "load" ? params.iterations : cachedWorkers.size,
     addedLatencyMs: summarize(addedDurations),
     dynamicLatencyMs: summarize(dynamicDurations),
     baselineLatencyMs: summarize(baselineDurations)
@@ -157,11 +202,12 @@ async function measureIteration(params: {
   };
 }
 
-function createPayload(index: number): WebhookPayload {
+function createPayload(index: number, tenant: number): WebhookPayload {
   return {
     headers: { "content-type": "application/json" },
     body: {
       invoiceId: `inv_${String(index)}`,
+      tenantId: `tenant_${String(tenant)}`,
       amountCents: 150000
     }
   };
