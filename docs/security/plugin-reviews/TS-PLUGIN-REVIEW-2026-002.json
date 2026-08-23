@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-002",
-  "baselineCommit": "0f9b95fb0f348ddde51c640933f9ca8deea44f3f",
+  "baselineCommit": "25be68072a2acd01b022ea98a2bd7faf8ddbfedc",
   "target": {
     "name": "Simulated ticket priority normalizer template submission",
     "scope": [
@@ -25,7 +25,7 @@
     "identity": "TenantScript maintainers",
     "relationship": "First-party review of a repository-owned simulated community submission"
   },
-  "reviewedAt": "2026-07-22T11:14:59.000Z",
+  "reviewedAt": "2026-08-23T14:04:33.000Z",
   "domains": [
     {
       "name": "security",
@@ -104,7 +104,7 @@
     "scripts/check-template-submissions.mjs": "4874d1a8fa0bcf923cda2c2947f4779cd19519d616429f031249cd44e1e06126",
     "scripts/check-template-submissions.test.mjs": "a05c9900e9b4e5164b6001af91c4a5a0f305ef4cae0f2427c571f25e5652c936",
     "scripts/template-submission-bundle-runner.mjs": "f55b8aa1616c8fdab4c4873c4a2fbe8567f5aefe0f0da86f89e9b3a419289670",
-    "scripts/template-submission-e2e.test.mjs": "7ec2ff48a8b0c39f24fb2a0b361e2358f2706bf463210e6d19a065ce749fbfac",
+    "scripts/template-submission-e2e.test.mjs": "659c3e8937cd5c33eea9e61a03c913b38e409a4fde05f9971623923c8628f244",
     "templates/submission.schema.json": "d9fba423319ec7364f72e852580bb5a75caf295ebc6587d037cb52fa467e6700",
     "templates/submissions/ticket-priority-normalizer/SECURITY.md": "9010b64595c740a62226f3751f8d63d63aaf0834df32f17bfd36ee2513641638",
     "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",

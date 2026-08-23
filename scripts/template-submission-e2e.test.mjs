@@ -489,15 +489,11 @@ async function exerciseSubmission(submission) {
       manifestTarball,
       pluginSdkTarball
     );
+    const vitestOverrides = await installedDependencyVersions("vitest");
     packageJson.pnpm = {
       overrides: {
         "@tenantscript/manifest": `file:${manifestTarball}`,
-        vite: JSON.parse(
-          await readFile(
-            join(repoRoot, "node_modules/.pnpm/node_modules/vite/package.json"),
-            "utf8"
-          )
-        ).version
+        ...vitestOverrides
       }
     };
     await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
@@ -838,6 +834,28 @@ function runSubmissionCommand(command, args, options = {}) {
     throw new Error(`${label} failed`);
   }
   return child.stdout;
+}
+
+async function installedPackageVersion(name) {
+  const packageJson = await readFile(
+    join(repoRoot, "node_modules/.pnpm/node_modules", name, "package.json"),
+    "utf8"
+  );
+  return JSON.parse(packageJson).version;
+}
+
+async function installedDependencyVersions(name) {
+  const packageJson = JSON.parse(
+    await readFile(join(repoRoot, "node_modules", name, "package.json"), "utf8")
+  );
+  return Object.fromEntries(
+    await Promise.all(
+      Object.keys(packageJson.dependencies).map(async (dependency) => [
+        dependency,
+        await installedPackageVersion(dependency)
+      ])
+    )
+  );
 }
 
 function terminateSubmissionProcessGroup(pid) {
