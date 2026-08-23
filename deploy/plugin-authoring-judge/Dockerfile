@@ -29,12 +29,11 @@ COPY --from=build --chown=root:root /runtime/node_modules ./node_modules
 COPY --from=build --chown=root:root /build/packages ./packages
 COPY --chown=root:root scripts ./scripts
 COPY --chown=root:root evals ./evals
-COPY --from=runtime --chown=root:root /nodejs/bin/node /opt/tenantscript/bin/plugin-authoring-judge
 
 ENV HOME=/nonexistent \
     NODE_ENV=production \
     NO_COLOR=1 \
     TZ=UTC
 USER 65532:65532
-ENTRYPOINT ["/opt/tenantscript/bin/plugin-authoring-judge"]
+ENTRYPOINT ["/nodejs/bin/node"]
 CMD ["/opt/tenantscript/repository/scripts/plugin-authoring-judge-entrypoint.mjs"]

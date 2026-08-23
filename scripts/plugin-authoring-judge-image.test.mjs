@@ -28,7 +28,8 @@ test("pins a linux amd64 non-root image with the fixed judge entrypoint", () => 
     /^FROM --platform=linux\/amd64 gcr\.io\/distroless\/nodejs24-debian13@sha256:[0-9a-f]{64} AS runtime$/mu
   );
   assert.match(dockerfile, /^USER 65532:65532$/mu);
-  assert.match(dockerfile, /^ENTRYPOINT \["\/opt\/tenantscript\/bin\/plugin-authoring-judge"\]$/mu);
+  assert.match(dockerfile, /^ENTRYPOINT \["\/nodejs\/bin\/node"\]$/mu);
+  assert.doesNotMatch(dockerfile, /COPY --from=runtime .*\/nodejs\/bin\/node/u);
   assert.match(
     dockerfile,
     /^CMD \["\/opt\/tenantscript\/repository\/scripts\/plugin-authoring-judge-entrypoint\.mjs"\]$/mu

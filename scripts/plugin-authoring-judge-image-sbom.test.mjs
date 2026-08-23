@@ -45,7 +45,7 @@ test("builds from the reviewed context with one fixed linux amd64 Docker contrac
               Size: 900_000_000,
               Config: {
                 User: "65532:65532",
-                Entrypoint: ["/opt/tenantscript/bin/plugin-authoring-judge"],
+                Entrypoint: ["/nodejs/bin/node"],
                 Labels: { "org.opencontainers.image.revision": revision }
               }
             }

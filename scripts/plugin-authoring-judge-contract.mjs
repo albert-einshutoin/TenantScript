@@ -1,4 +1,4 @@
-export const PLUGIN_AUTHORING_JUDGE_ENTRYPOINT = "/opt/tenantscript/bin/plugin-authoring-judge";
+export const PLUGIN_AUTHORING_JUDGE_ENTRYPOINT = "/nodejs/bin/node";
 export const PLUGIN_AUTHORING_JUDGE_PROGRAM =
   "/opt/tenantscript/repository/scripts/plugin-authoring-judge-entrypoint.mjs";
 
