@@ -306,8 +306,8 @@ export async function runRuntimeBenchmark({
       measuredAt,
       scenarios: evidenceScenarios,
       costObservation: {
-        measuredInvocations: evidenceScenarios.reduce(
-          (total, scenario) => total + scenario.measured,
+        totalInvocations: evidenceScenarios.reduce(
+          (total, scenario) => total + scenario.iterations,
           0
         ),
         loaderCalls: evidenceScenarios.reduce((total, scenario) => total + scenario.loaderCalls, 0),

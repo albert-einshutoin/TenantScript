@@ -59,7 +59,7 @@ evidence**. Keep `TIER2_LIVE_ENABLED` unset until a maintainer has all of the fo
 Set repository variable `TIER2_LIVE_ENABLED=true` only after those controls are reviewed. The workflow
 deploys from `main`, checks `/health`, runs the exact warm and cold/create scenarios above, and retains
 a closed sanitized JSON artifact for 30 days. It also records the two fixed concurrency observations,
-their measured invocation counts, and Worker Loader call counts. Those observations have no pass/fail
+total invocation counts including warmup, and Worker Loader call counts. Those observations have no pass/fail
 threshold until a design partner supplies a reviewed load target. The evidence leaves the USD estimate
 `null` until Cloudflare billing evidence is available instead of inventing a cost from request counts.
 It follows no redirects, sends only the Access service

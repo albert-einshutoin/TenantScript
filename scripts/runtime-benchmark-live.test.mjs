@@ -153,7 +153,7 @@ test("runs the fixed warm and cold scenarios and emits closed passing evidence",
       }
     ],
     costObservation: {
-      measuredInvocations: 190,
+      totalInvocations: 200,
       loaderCalls: 52,
       estimatedUsd: null,
       status: "provider-billing-evidence-required"
