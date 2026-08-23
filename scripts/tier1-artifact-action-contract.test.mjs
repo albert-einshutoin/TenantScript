@@ -27,3 +27,19 @@ test("Tier 1 uploads artifacts with the Node.js 24 action without widening artif
     /uses: actions\/upload-artifact@v6\n\s+with:\n\s+name: tenantscript-sbom-\$\{\{ github\.sha \}\}\n\s+path: \.tmp\/release-artifacts\/tenantscript\.cdx\.json\n\s+if-no-files-found: error\n\s+retention-days: 14/u
   );
 });
+
+test("Tier 1 scans both the workspace lockfile and judge image SBOM with OSV", async () => {
+  const workflow = await readFile(workflowUrl, "utf8");
+
+  assert.match(
+    workflow,
+    /google\/osv-scanner-action\/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67/u
+  );
+  assert.match(workflow, /--lockfile=pnpm-lock\.yaml/u);
+  assert.match(
+    workflow,
+    /--lockfile=\.tmp\/plugin-authoring-judge-image-evidence\/judge-image\.cdx\.json/u
+  );
+  assert.equal(workflow.match(/--lockfile=/gu)?.length, 2);
+  assert.doesNotMatch(workflow, /--sbom=/u);
+});

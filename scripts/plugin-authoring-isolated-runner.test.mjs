@@ -155,11 +155,16 @@ test("builds a fixed least-authority Docker invocation", () => {
     "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m,uid=65532,gid=65532,mode=0700",
     "--tmpfs=/work:rw,nosuid,nodev,size=64m,uid=65532,gid=65532,mode=0700",
     "--workdir=/work",
-    "--entrypoint=/opt/tenantscript/bin/plugin-authoring-judge"
+    "--entrypoint=/nodejs/bin/node"
   ]) {
     assert.ok(invocation.args.includes(required), `missing ${required}`);
   }
   assert.ok(invocation.args.includes(requestFixture().sandbox.image));
+  assert.ok(
+    invocation.args.includes(
+      "/opt/tenantscript/repository/scripts/plugin-authoring-judge-entrypoint.mjs"
+    )
+  );
   assert.ok(
     invocation.args.includes("--mount=type=bind,src=/tmp/candidate,dst=/candidate,readonly")
   );

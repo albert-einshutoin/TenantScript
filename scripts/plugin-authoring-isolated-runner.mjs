@@ -24,7 +24,8 @@ import {
 } from "./plugin-authoring-eval.mjs";
 import {
   PLUGIN_AUTHORING_JUDGE_ARGV,
-  PLUGIN_AUTHORING_JUDGE_ENTRYPOINT
+  PLUGIN_AUTHORING_JUDGE_ENTRYPOINT,
+  PLUGIN_AUTHORING_JUDGE_PROGRAM
 } from "./plugin-authoring-judge-contract.mjs";
 
 const SHA40_PATTERN = /^[0-9a-f]{40}$/u;
@@ -290,6 +291,7 @@ export function buildIsolatedJudgeDockerInvocation({
     "--workdir=/work",
     `--entrypoint=${PLUGIN_AUTHORING_JUDGE_ENTRYPOINT}`,
     request.sandbox.image,
+    PLUGIN_AUTHORING_JUDGE_PROGRAM,
     ...PLUGIN_AUTHORING_JUDGE_ARGV
   ];
   return {

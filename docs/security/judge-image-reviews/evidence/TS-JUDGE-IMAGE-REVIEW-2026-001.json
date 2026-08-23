@@ -2,27 +2,27 @@
   "schemaVersion": 1,
   "kind": "plugin-authoring-judge-image-candidate",
   "platform": "linux/amd64",
-  "sourceRevision": "5af8a882f0e1876e025d2ec776d280049e3b08fa",
+  "sourceRevision": "cb7323031a08705864480899f769184b64198a90",
   "inputs": {
-    "baseImage": "node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9",
+    "baseImage": "gcr.io/distroless/nodejs24-debian13@sha256:e251b09ca1d32d7ae2dcba1721370cde41b5c69713edbb99bc644c6e4e101d2f",
     "dockerfileFrontend": "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
-    "dockerfileSha256": "ee61757902dec73b0d6c8c371e276080d0fe5c61205da1db2b0df0128b146c93",
-    "lockfileSha256": "e09a0e6f64a282e6b0dff3328c51e328b765cc8cb1400dfd2f8ef76d7644e44a",
-    "contextSha256": "a3df78b3138c3fab846518b65ed764fc720afe4b51ddac335ca94758b8638655"
+    "dockerfileSha256": "940892ef3b38941bf4748f77d50a6d103a3b8f756242f0a51af0ba5f0575045b",
+    "lockfileSha256": "392d9239582279377235545e577ace4e0c29763c69a7449fc05049201ef53a4d",
+    "contextSha256": "f047eb55a8de1489ea634c01c0fe3153d062bc0e80c8d1c2453a867884ca5b72"
   },
   "image": {
     "reference": "tenantscript/plugin-authoring-judge:evidence",
-    "id": "sha256:f1dde72c4b1eef597097b0e21b365d81922c2452e03cd8964c023892d4cb2e69",
-    "archiveSha256": "f98c7841a5967365f76c4001a52e34d0b2223aa21efd658b0fcfa3f820d2c1d5",
-    "archiveBytes": 277344256
+    "id": "sha256:748c701e98eb72b4d27a74253afcc4c66509eeebb1a0c7b9f63345a2dce80ab0",
+    "archiveSha256": "fbed0924a24a1d04dc02cb686e67b18b90644aa226605646648a2b2431aa869e",
+    "archiveBytes": 197375488
   },
   "sbom": {
     "format": "CycloneDX",
     "specVersion": "1.7",
-    "sha256": "e49020126f12fc9d1f72c8e0dea85fc9a52b3a0ba5802168054326ade7a7fcdb",
-    "bytes": 1398931,
-    "components": 3536,
-    "dependencies": 81,
+    "sha256": "3c5b9b01a136b6385b74ea95063c86f8c40126490ebc6b869f89e694cfc127e1",
+    "bytes": 397102,
+    "components": 1317,
+    "dependencies": 8,
     "scanner": {
       "name": "syft",
       "version": "1.49.0",

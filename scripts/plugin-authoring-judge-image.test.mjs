@@ -19,18 +19,29 @@ test("pins a linux amd64 non-root image with the fixed judge entrypoint", () => 
   );
   assert.equal(
     PLUGIN_AUTHORING_JUDGE_IMAGE_BASE,
-    "node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9"
+    "gcr.io/distroless/nodejs24-debian13@sha256:e251b09ca1d32d7ae2dcba1721370cde41b5c69713edbb99bc644c6e4e101d2f"
   );
   assert.match(dockerfile, /^# syntax=docker\/dockerfile:1\.7@sha256:[0-9a-f]{64}$/mu);
   assert.match(dockerfile, /^FROM --platform=linux\/amd64 node@sha256:[0-9a-f]{64} AS build$/mu);
-  assert.match(dockerfile, /^FROM --platform=linux\/amd64 node@sha256:[0-9a-f]{64}$/mu);
-  assert.match(dockerfile, /^USER node$/mu);
-  assert.match(dockerfile, /^ENTRYPOINT \["\/opt\/tenantscript\/bin\/plugin-authoring-judge"\]$/mu);
+  assert.match(
+    dockerfile,
+    /^FROM --platform=linux\/amd64 gcr\.io\/distroless\/nodejs24-debian13@sha256:[0-9a-f]{64} AS runtime$/mu
+  );
+  assert.match(dockerfile, /^USER 65532:65532$/mu);
+  assert.match(dockerfile, /^ENTRYPOINT \["\/nodejs\/bin\/node"\]$/mu);
+  assert.doesNotMatch(dockerfile, /COPY --from=runtime .*\/nodejs\/bin\/node/u);
+  assert.match(
+    dockerfile,
+    /^CMD \["\/opt\/tenantscript\/repository\/scripts\/plugin-authoring-judge-entrypoint\.mjs"\]$/mu
+  );
   assert.match(dockerfile, /pnpm install --frozen-lockfile --ignore-scripts/u);
   assert.match(
     dockerfile,
     /pnpm --filter @tenantscript\/plugin-authoring-judge-image deploy --prod --legacy \/runtime/u
   );
+  assert.match(dockerfile, /COPY --from=build --chown=root:root \/build\/scripts \.\/scripts/u);
+  assert.match(dockerfile, /COPY --from=build --chown=root:root \/build\/evals \.\/evals/u);
+  assert.doesNotMatch(dockerfile, /^COPY --chown=root:root (?:scripts|evals) /gmu);
   assert.doesNotMatch(dockerfile, /COPY --from=build .*\/build\/node_modules/u);
   assert.doesNotMatch(dockerfile, /(?:COPY|ADD)\s+\.\s/u);
   assert.doesNotMatch(dockerfile, /(?:latest|node:24|curl|wget)/u);
@@ -55,6 +66,10 @@ test("stages only reviewed regular files and excludes repository/user state", ()
       false
     );
     assert.equal(result.paths.includes("scripts/plugin-authoring-judge-entrypoint.mjs"), true);
+    assert.equal(
+      result.paths.includes("deploy/plugin-authoring-judge/plugin-authoring-judge"),
+      false
+    );
     assert.equal(
       result.paths.includes("scripts/plugin-authoring-judge-image-failure-scenarios.mjs"),
       false
@@ -85,6 +100,12 @@ test("wires the actual image contract into Tier 1 and documents its evidence bou
   assert.match(tier1, /pnpm judge-image:evidence/u);
   assert.match(tier1, /plugin-authoring-judge-image-evidence-\$\{\{ github\.sha \}\}/u);
   assert.match(tier1, /include-hidden-files: true/u);
+  assert.match(
+    tier1,
+    /google\/osv-scanner-action\/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67/u
+  );
+  assert.equal(tier1.match(/--lockfile=/gu)?.length, 2);
+  assert.doesNotMatch(tier1, /--sbom=/u);
   for (const required of [
     "linux/amd64",
     "allowlist",

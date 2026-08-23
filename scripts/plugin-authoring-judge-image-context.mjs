@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const PLUGIN_AUTHORING_JUDGE_IMAGE_BASE =
-  "node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9";
+  "gcr.io/distroless/nodejs24-debian13@sha256:e251b09ca1d32d7ae2dcba1721370cde41b5c69713edbb99bc644c6e4e101d2f";
 
 const MAX_FILES = 2_000;
 const MAX_FILE_BYTES = 1024 * 1024;
@@ -20,8 +20,7 @@ const rootFiles = [
 ];
 const deploymentFiles = [
   "deploy/plugin-authoring-judge/Dockerfile",
-  "deploy/plugin-authoring-judge/package.json",
-  "deploy/plugin-authoring-judge/plugin-authoring-judge"
+  "deploy/plugin-authoring-judge/package.json"
 ];
 const evalFiles = [
   "evals/plugin-authoring/behavior-cases.json",

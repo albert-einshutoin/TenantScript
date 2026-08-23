@@ -17,6 +17,7 @@ import test from "node:test";
 import {
   PLUGIN_AUTHORING_JUDGE_ARGV,
   PLUGIN_AUTHORING_JUDGE_ENTRYPOINT,
+  PLUGIN_AUTHORING_JUDGE_PROGRAM,
   PLUGIN_AUTHORING_JUDGE_PATHS
 } from "./plugin-authoring-judge-contract.mjs";
 import { createPluginAuthoringAuditAdapter } from "./plugin-authoring-audit-adapter.mjs";
@@ -506,10 +507,10 @@ test("keeps the CLI and runner on one fixed mount and argv contract", () => {
     `--entrypoint=${PLUGIN_AUTHORING_JUDGE_ENTRYPOINT}`
   );
   assert.notEqual(entrypointIndex, -1);
-  assert.deepEqual(
-    invocation.args.slice(-PLUGIN_AUTHORING_JUDGE_ARGV.length),
-    PLUGIN_AUTHORING_JUDGE_ARGV
-  );
+  assert.deepEqual(invocation.args.slice(-(PLUGIN_AUTHORING_JUDGE_ARGV.length + 1)), [
+    PLUGIN_AUTHORING_JUDGE_PROGRAM,
+    ...PLUGIN_AUTHORING_JUDGE_ARGV
+  ]);
 });
 
 test("writes exactly one JSON line on success and one fixed error on failure", async () => {

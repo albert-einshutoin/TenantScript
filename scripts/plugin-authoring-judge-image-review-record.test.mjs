@@ -182,7 +182,8 @@ function validEvidence() {
     platform: "linux/amd64",
     sourceRevision: mergeSha,
     inputs: {
-      baseImage: "node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9",
+      baseImage:
+        "gcr.io/distroless/nodejs24-debian13@sha256:e251b09ca1d32d7ae2dcba1721370cde41b5c69713edbb99bc644c6e4e101d2f",
       dockerfileFrontend:
         "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
       dockerfileSha256: "5".repeat(64),
