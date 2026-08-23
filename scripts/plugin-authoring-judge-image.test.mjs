@@ -39,6 +39,9 @@ test("pins a linux amd64 non-root image with the fixed judge entrypoint", () => 
     dockerfile,
     /pnpm --filter @tenantscript\/plugin-authoring-judge-image deploy --prod --legacy \/runtime/u
   );
+  assert.match(dockerfile, /COPY --from=build --chown=root:root \/build\/scripts \.\/scripts/u);
+  assert.match(dockerfile, /COPY --from=build --chown=root:root \/build\/evals \.\/evals/u);
+  assert.doesNotMatch(dockerfile, /^COPY --chown=root:root (?:scripts|evals) /gmu);
   assert.doesNotMatch(dockerfile, /COPY --from=build .*\/build\/node_modules/u);
   assert.doesNotMatch(dockerfile, /(?:COPY|ADD)\s+\.\s/u);
   assert.doesNotMatch(dockerfile, /(?:latest|node:24|curl|wget)/u);
