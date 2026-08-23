@@ -44,7 +44,7 @@ test("builds from the reviewed context with one fixed linux amd64 Docker contrac
               // enforced against the saved archive that the scanner actually consumes.
               Size: 900_000_000,
               Config: {
-                User: "node",
+                User: "65532:65532",
                 Entrypoint: ["/opt/tenantscript/bin/plugin-authoring-judge"],
                 Labels: { "org.opencontainers.image.revision": revision }
               }
@@ -315,7 +315,7 @@ test("rejects evidence identity drift, approval claims, and unknown fields", () 
 
 function validSbom() {
   const components = [
-    component("node", "24.2.0", "application", "pkg:generic/node@24.2.0"),
+    component("node", "24.19.0", "application", "pkg:generic/node@24.19.0"),
     component("typescript", "5.9.3"),
     component("esbuild", "0.28.1"),
     component("@tenantscript/cli", "0.0.0"),
@@ -358,7 +358,8 @@ function validEvidence(sbom) {
     platform: "linux/amd64",
     sourceRevision: revision,
     inputs: {
-      baseImage: "node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9",
+      baseImage:
+        "gcr.io/distroless/nodejs24-debian13@sha256:e251b09ca1d32d7ae2dcba1721370cde41b5c69713edbb99bc644c6e4e101d2f",
       dockerfileFrontend:
         "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
       dockerfileSha256: "2".repeat(64),

@@ -31,9 +31,15 @@ test("Tier 1 uploads artifacts with the Node.js 24 action without widening artif
 test("Tier 1 scans both the workspace lockfile and judge image SBOM with OSV", async () => {
   const workflow = await readFile(workflowUrl, "utf8");
 
+  assert.match(
+    workflow,
+    /google\/osv-scanner-action\/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67/u
+  );
   assert.match(workflow, /--lockfile=pnpm-lock\.yaml/u);
   assert.match(
     workflow,
-    /--sbom=\.tmp\/plugin-authoring-judge-image-evidence\/judge-image\.cdx\.json/u
+    /--lockfile=\.tmp\/plugin-authoring-judge-image-evidence\/judge-image\.cdx\.json/u
   );
+  assert.equal(workflow.match(/--lockfile=/gu)?.length, 2);
+  assert.doesNotMatch(workflow, /--sbom=/u);
 });

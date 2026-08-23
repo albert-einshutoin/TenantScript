@@ -62,7 +62,7 @@ export function buildPluginAuthoringJudgeImage({
     phase = "image platform inspection";
     assert(record.Architecture === "amd64" && record.Os === "linux");
     phase = "image user inspection";
-    assert(record.Config?.User === "node");
+    assert(record.Config?.User === "65532:65532");
     phase = "image entrypoint inspection";
     assert.deepEqual(record.Config?.Entrypoint, [PLUGIN_AUTHORING_JUDGE_IMAGE_ENTRYPOINT]);
     phase = "image revision inspection";

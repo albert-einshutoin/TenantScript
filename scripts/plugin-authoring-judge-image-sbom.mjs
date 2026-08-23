@@ -13,7 +13,7 @@ export const PLUGIN_AUTHORING_JUDGE_DOCKERFILE_FRONTEND =
   "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e";
 
 const requiredComponents = new Map([
-  ["node", "24.2.0"],
+  ["node", "24.19.0"],
   ["typescript", "5.9.3"],
   ["esbuild", "0.28.1"],
   ["@tenantscript/cli", "0.0.0"],

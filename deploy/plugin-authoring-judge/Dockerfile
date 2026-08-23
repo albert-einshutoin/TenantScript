@@ -14,7 +14,9 @@ RUN rm -rf packages/test-config && \
     find packages -type f -name 'tsconfig*.json' -delete && \
     chmod -R a+rX packages /runtime/node_modules
 
-FROM --platform=linux/amd64 node@sha256:1a6a7b2e2e2c80a6973f57aa8b0c6ad67a961ddbc5ef326c448e133f93564ff9
+FROM --platform=linux/amd64 gcr.io/distroless/nodejs24-debian13@sha256:e251b09ca1d32d7ae2dcba1721370cde41b5c69713edbb99bc644c6e4e101d2f AS runtime
+
+FROM runtime
 
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.source="https://github.com/albert-einshutoin/TenantScript" \
@@ -27,14 +29,12 @@ COPY --from=build --chown=root:root /runtime/node_modules ./node_modules
 COPY --from=build --chown=root:root /build/packages ./packages
 COPY --chown=root:root scripts ./scripts
 COPY --chown=root:root evals ./evals
-COPY --chown=root:root deploy/plugin-authoring-judge/plugin-authoring-judge /opt/tenantscript/bin/plugin-authoring-judge
-RUN rm -rf /usr/local/lib/node_modules/npm && \
-    rm -f /usr/local/bin/npm /usr/local/bin/npx && \
-    chmod -R a+rX ./scripts ./evals /opt/tenantscript/bin
+COPY --from=runtime --chown=root:root /nodejs/bin/node /opt/tenantscript/bin/plugin-authoring-judge
 
 ENV HOME=/nonexistent \
     NODE_ENV=production \
     NO_COLOR=1 \
     TZ=UTC
-USER node
+USER 65532:65532
 ENTRYPOINT ["/opt/tenantscript/bin/plugin-authoring-judge"]
+CMD ["/opt/tenantscript/repository/scripts/plugin-authoring-judge-entrypoint.mjs"]

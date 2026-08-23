@@ -1,5 +1,0 @@
-#!/bin/sh
-set -eu
-
-exec /usr/local/bin/node \
-  /opt/tenantscript/repository/scripts/plugin-authoring-judge-entrypoint.mjs "$@"

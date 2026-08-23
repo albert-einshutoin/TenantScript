@@ -161,6 +161,11 @@ test("builds a fixed least-authority Docker invocation", () => {
   }
   assert.ok(invocation.args.includes(requestFixture().sandbox.image));
   assert.ok(
+    invocation.args.includes(
+      "/opt/tenantscript/repository/scripts/plugin-authoring-judge-entrypoint.mjs"
+    )
+  );
+  assert.ok(
     invocation.args.includes("--mount=type=bind,src=/tmp/candidate,dst=/candidate,readonly")
   );
   assert.ok(invocation.args.includes("--workspace=/work"));

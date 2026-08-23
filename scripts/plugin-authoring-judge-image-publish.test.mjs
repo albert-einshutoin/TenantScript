@@ -226,11 +226,8 @@ test("publish workflow keeps privileged publication manual and digest-bound", as
   );
   assert.doesNotMatch(publishJob, /actions\/checkout/u);
   assert.doesNotMatch(publishJob, /(?:node|pnpm|npm|yarn|bun)\s/u);
-  assert.deepEqual(publishJob.match(/^\s+- run:.*$/gmu), ["      - run: >-"]);
-  assert.match(publishJob, /test -f "\$ENTRYPOINT_PATH"/u);
-  assert.match(publishJob, /test ! -L "\$ENTRYPOINT_PATH"/u);
-  assert.match(publishJob, /chmod 0755 "\$ENTRYPOINT_PATH"/u);
-  assert.ok(publishJob.indexOf("chmod 0755") < publishJob.indexOf("docker/login-action"));
+  assert.equal(publishJob.match(/^\s+- run:.*$/gmu), null);
+  assert.doesNotMatch(workflow, /ENTRYPOINT_PATH/u);
 
   assert.match(tier1, /node --test scripts\/plugin-authoring-judge-image-publish\.test\.mjs/u);
   assert.match(guide, /workflow_dispatch/u);
