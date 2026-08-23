@@ -40,7 +40,7 @@ Changesetsが生成し、このファイルは導入・migration・security・�
 ### Migration notes
 
 - Node.js 24、Corepack、pnpm 10.12.1を使用し、`pnpm install --frozen-lockfile`で導入します。
-- self-host更新前に[upgrade runbook](docs/operations/upgrade.md)でmigration順序、backup、rollback、
+- self-host更新前に[upgrade runbook](docs/operations/control-plane-upgrades.md)でmigration順序、backup、rollback、
   compatibilityを確認してください。
 - Control Plane D1 migrationはpinned manifestとexact-prefix remote historyを検証し、未適用suffixだけを
   適用します。履歴を書き換えたりdown migrationを自動実行したりしません。
