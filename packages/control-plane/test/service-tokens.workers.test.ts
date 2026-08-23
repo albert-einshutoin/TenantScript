@@ -27,7 +27,7 @@ describe("Worker service token lifecycle", () => {
         label: "worker read bot",
         role: "viewer",
         scopes: ["session:read"],
-        expiresAt: "2026-08-20T00:00:00.000Z"
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       })
     );
     expect(issue.status).toBe(201);
