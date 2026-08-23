@@ -35,9 +35,9 @@
       "evidence": ["docs/reviews/phase0-gate-evidence.md"]
     },
     "releaseMaterials": {
-      "changelog": false,
-      "announcement": false,
-      "evidence": []
+      "changelog": true,
+      "announcement": true,
+      "evidence": ["CHANGELOG.md", "docs/releases/v1-announcement.md"]
     }
   },
   "decision": {
@@ -48,8 +48,7 @@
       "advisory-response",
       "external-security-review",
       "independent-self-host",
-      "v1-blocker-issues",
-      "release-materials"
+      "v1-blocker-issues"
     ]
   }
 }

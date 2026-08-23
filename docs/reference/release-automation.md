@@ -37,9 +37,9 @@ pnpm release:preflight -- v1.2.3
 通常のfeature branchには未消化Changesetがあるため、このcommandが失敗するのは正常です。fixtureとworkflow
 境界は`pnpm test:release-automation`でaccountlessに常設検証します。
 
-v1 readiness recordの現在の判定は`blocked`です。production adopter、external contributor、実
-advisory対応、独立security review、独立self-host検証、blocker triage、release materialsの公開証拠が
-すべて揃ったreview済み変更だけが`approved`になります。0.xはこの外部adoption gateの対象外です。
+v1 readiness recordの現在の判定は`blocked`です。release materialsのdraftは準備済みですが、production
+adopter、external contributor、実advisory対応、独立security review、独立self-host検証、blocker triageの
+公開証拠がすべて揃ったreview済み変更だけが`approved`になります。0.xはこの外部adoption gateの対象外です。
 2.x以降は、1.xの判定を流用せず専用のmajor release gateが必要です。
 
 ## External activation checklist

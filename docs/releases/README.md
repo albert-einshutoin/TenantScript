@@ -8,6 +8,10 @@ machine-checkする閉じた判定レコードです。現在の正直な判定�
 security advisory対応、critical/high未解決が0件の独立security review、2件の独立self-host検証、
 v1 blocker issue 0件、CHANGELOGと告知文の全条件が必要です。
 
+release materialsのdraftは[CHANGELOG](../../CHANGELOG.md)と
+[announcement draft](v1-announcement.md)にあります。これは文面準備の証拠であり、tag、npm publish、
+GitHub Release、announcement公開の証拠ではありません。
+
 - synthetic drillは実security advisory対応に数えません。
 - maintainerまたはbotだけの変更をexternal contributorに数えません。
 - 自己レビューやCIを独立security reviewとして扱いません。

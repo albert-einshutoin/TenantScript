@@ -206,7 +206,7 @@ test("reads the committed record as bounded blocked evidence", () => {
     { repositoryRoot: new URL("..", import.meta.url) }
   );
   assert.equal(record.decision.status, "blocked");
-  assert.deepEqual(record.decision.blockers, blockerIds);
+  assert.deepEqual(record.decision.blockers, blockerIds.slice(0, -1));
 });
 
 test("rejects evidence reached through a symlinked repository directory", () => {
