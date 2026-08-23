@@ -10,6 +10,10 @@ Harness:
 - Worker: `tenantscript-phase0-runtime-bench`
 - Warm candidate: `GET /bench?mode=get&iterations=80&warmup=10`
 - Cold/create candidate: `GET /bench?mode=load&iterations=40&warmup=0`
+- Same-tenant concurrency observation:
+  `GET /bench?mode=get&iterations=40&warmup=0&tenants=1&concurrency=10`
+- Multi-tenant concurrency observation:
+  `GET /bench?mode=get&iterations=40&warmup=0&tenants=10&concurrency=10`
 - Metric: `addedLatencyMs.p95`, measured as Dynamic Worker transform latency minus local
   baseline transform latency for the same payload.
 
@@ -54,7 +58,11 @@ evidence**. Keep `TIER2_LIVE_ENABLED` unset until a maintainer has all of the fo
 
 Set repository variable `TIER2_LIVE_ENABLED=true` only after those controls are reviewed. The workflow
 deploys from `main`, checks `/health`, runs the exact warm and cold/create scenarios above, and retains
-a closed sanitized JSON artifact for 30 days. It follows no redirects, sends only the Access service
+a closed sanitized JSON artifact for 30 days. It also records the two fixed concurrency observations,
+their measured invocation counts, and Worker Loader call counts. Those observations have no pass/fail
+threshold until a design partner supplies a reviewed load target. The evidence leaves the USD estimate
+`null` until Cloudflare billing evidence is available instead of inventing a cost from request counts.
+It follows no redirects, sends only the Access service
 token to the prevalidated benchmark origin, never writes that token to evidence, bounds response size
 and request time, and first requires `/health` to reject an anonymous request so a missing Access
 policy cannot produce passing evidence. It fails when warm p95 reaches 50 ms or cold/create p95
@@ -65,6 +73,7 @@ API origin for the authenticated account's `workers.dev` subdomain and combines 
 reviewed Worker name. Access credentials are sent only to that derived origin.
 
 This is an absolute Phase 0 Go/No-Go gate. A 20% regression claim requires a reviewed live baseline
-and is not inferred from repository tests. On failure, do not raise thresholds or enable a token
+and is not inferred from repository tests. The concurrency observations likewise do not satisfy the
+partner-derived load or provider-billing gates on their own. On failure, do not raise thresholds or enable a token
 fallback. Review the sanitized artifact and Cloudflare deployment separately, leaving credentials,
 account identifiers, and raw provider responses out of issues and logs.

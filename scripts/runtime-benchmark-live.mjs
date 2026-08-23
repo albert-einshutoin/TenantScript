@@ -10,7 +10,25 @@ const EVIDENCE_PATH = resolve(".tmp/tier2/runtime-benchmark-evidence.json");
 const RUNTIME_BENCHMARK_WORKER_NAME = "tenantscript-phase0-runtime-bench";
 const scenarios = [
   { name: "warm-get", mode: "get", iterations: 80, warmup: 10, thresholdP95Ms: 50 },
-  { name: "cold-load", mode: "load", iterations: 40, warmup: 0, thresholdP95Ms: 300 }
+  { name: "cold-load", mode: "load", iterations: 40, warmup: 0, thresholdP95Ms: 300 },
+  {
+    name: "same-tenant-concurrency",
+    mode: "get",
+    iterations: 40,
+    warmup: 0,
+    tenantCount: 1,
+    concurrency: 10,
+    thresholdP95Ms: null
+  },
+  {
+    name: "multi-tenant-concurrency",
+    mode: "get",
+    iterations: 40,
+    warmup: 0,
+    tenantCount: 10,
+    concurrency: 10,
+    thresholdP95Ms: null
+  }
 ];
 const secretLike =
   /(?:bearer\s+|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|(?:token|password|secret|api[_-]?key)\s*[=:])/iu;
@@ -75,16 +93,25 @@ function validateBenchmarkResponse(value, scenario) {
   exactKeys(value, [
     "addedLatencyMs",
     "baselineLatencyMs",
+    "concurrency",
     "dynamicLatencyMs",
     "iterations",
+    "loaderCalls",
     "measured",
     "mode",
+    "tenantCount",
     "warmup"
   ]);
   assert.equal(value.mode, scenario.mode);
   assert.equal(value.iterations, scenario.iterations);
   assert.equal(value.warmup, scenario.warmup);
   assert.equal(value.measured, scenario.iterations - scenario.warmup);
+  assert.equal(value.tenantCount, scenario.tenantCount ?? 1);
+  assert.equal(value.concurrency, scenario.concurrency ?? 1);
+  assert.equal(
+    value.loaderCalls,
+    scenario.mode === "load" ? scenario.iterations : (scenario.tenantCount ?? 1)
+  );
   const addedLatencyMs = validateSummary(value.addedLatencyMs);
   validateSummary(value.dynamicLatencyMs);
   validateSummary(value.baselineLatencyMs);
@@ -244,6 +271,12 @@ export async function runRuntimeBenchmark({
       url.searchParams.set("mode", scenario.mode);
       url.searchParams.set("iterations", String(scenario.iterations));
       url.searchParams.set("warmup", String(scenario.warmup));
+      if (scenario.tenantCount !== undefined) {
+        url.searchParams.set("tenants", String(scenario.tenantCount));
+      }
+      if (scenario.concurrency !== undefined) {
+        url.searchParams.set("concurrency", String(scenario.concurrency));
+      }
       const addedLatencyMs = validateBenchmarkResponse(
         await fetchJson(fetchImpl, url, access),
         scenario
@@ -251,20 +284,37 @@ export async function runRuntimeBenchmark({
       evidenceScenarios.push({
         ...scenario,
         measured: scenario.iterations - scenario.warmup,
+        tenantCount: scenario.tenantCount ?? 1,
+        concurrency: scenario.concurrency ?? 1,
+        loaderCalls: scenario.mode === "load" ? scenario.iterations : (scenario.tenantCount ?? 1),
         addedLatencyMs,
         // The absolute Phase 0 threshold is evidence-backed. A percentage regression gate must
         // wait for a reviewed live baseline instead of inventing one from repository fixtures.
-        status: addedLatencyMs.p95 < scenario.thresholdP95Ms ? "pass" : "fail"
+        status:
+          scenario.thresholdP95Ms === null
+            ? "observed"
+            : addedLatencyMs.p95 < scenario.thresholdP95Ms
+              ? "pass"
+              : "fail"
       });
     }
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       kind: "tenantscript-runtime-benchmark-evidence",
       repository: "albert-einshutoin/TenantScript",
       sourceRevision,
       measuredAt,
       scenarios: evidenceScenarios,
-      decision: evidenceScenarios.every(({ status }) => status === "pass") ? "pass" : "fail"
+      costObservation: {
+        measuredInvocations: evidenceScenarios.reduce(
+          (total, scenario) => total + scenario.measured,
+          0
+        ),
+        loaderCalls: evidenceScenarios.reduce((total, scenario) => total + scenario.loaderCalls, 0),
+        estimatedUsd: null,
+        status: "provider-billing-evidence-required"
+      },
+      decision: evidenceScenarios.some(({ status }) => status === "fail") ? "fail" : "pass"
     };
   } catch {
     throw new Error("runtime benchmark failed");

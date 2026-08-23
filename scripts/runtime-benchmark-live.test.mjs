@@ -17,12 +17,15 @@ function summary(p95) {
   return { min: 1, p50: 2, p95, max: p95 + 1 };
 }
 
-function benchmark(mode, iterations, warmup, p95) {
+function benchmark(mode, iterations, warmup, p95, tenantCount = 1, concurrency = 1) {
   return {
     mode,
     iterations,
     warmup,
     measured: iterations - warmup,
+    tenantCount,
+    concurrency,
+    loaderCalls: mode === "load" ? iterations : tenantCount,
     addedLatencyMs: summary(p95),
     dynamicLatencyMs: summary(p95 + 5),
     baselineLatencyMs: summary(3)
@@ -47,7 +50,9 @@ test("runs the fixed warm and cold scenarios and emits closed passing evidence",
     accessChallenge(),
     response({ ok: true }),
     response(benchmark("get", 80, 10, 49)),
-    response(benchmark("load", 40, 0, 299))
+    response(benchmark("load", 40, 0, 299)),
+    response(benchmark("get", 40, 0, 200, 1, 10)),
+    response(benchmark("get", 40, 0, 200, 10, 10))
   ];
   const evidence = await runRuntimeBenchmark({
     baseUrl,
@@ -67,7 +72,9 @@ test("runs the fixed warm and cold scenarios and emits closed passing evidence",
       `${baseUrl}/health`,
       `${baseUrl}/health`,
       `${baseUrl}/bench?mode=get&iterations=80&warmup=10`,
-      `${baseUrl}/bench?mode=load&iterations=40&warmup=0`
+      `${baseUrl}/bench?mode=load&iterations=40&warmup=0`,
+      `${baseUrl}/bench?mode=get&iterations=40&warmup=0&tenants=1&concurrency=10`,
+      `${baseUrl}/bench?mode=get&iterations=40&warmup=0&tenants=10&concurrency=10`
     ]
   );
   assert.deepEqual(requests[0].init.headers, { accept: "application/json" });
@@ -86,7 +93,7 @@ test("runs the fixed warm and cold scenarios and emits closed passing evidence",
       )
   );
   assert.deepEqual(evidence, {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: "tenantscript-runtime-benchmark-evidence",
     repository: "albert-einshutoin/TenantScript",
     sourceRevision,
@@ -98,6 +105,9 @@ test("runs the fixed warm and cold scenarios and emits closed passing evidence",
         iterations: 80,
         warmup: 10,
         measured: 70,
+        tenantCount: 1,
+        concurrency: 1,
+        loaderCalls: 1,
         addedLatencyMs: summary(49),
         thresholdP95Ms: 50,
         status: "pass"
@@ -108,11 +118,46 @@ test("runs the fixed warm and cold scenarios and emits closed passing evidence",
         iterations: 40,
         warmup: 0,
         measured: 40,
+        tenantCount: 1,
+        concurrency: 1,
+        loaderCalls: 40,
         addedLatencyMs: summary(299),
         thresholdP95Ms: 300,
         status: "pass"
+      },
+      {
+        name: "same-tenant-concurrency",
+        mode: "get",
+        iterations: 40,
+        warmup: 0,
+        measured: 40,
+        tenantCount: 1,
+        concurrency: 10,
+        loaderCalls: 1,
+        addedLatencyMs: summary(200),
+        thresholdP95Ms: null,
+        status: "observed"
+      },
+      {
+        name: "multi-tenant-concurrency",
+        mode: "get",
+        iterations: 40,
+        warmup: 0,
+        measured: 40,
+        tenantCount: 10,
+        concurrency: 10,
+        loaderCalls: 10,
+        addedLatencyMs: summary(200),
+        thresholdP95Ms: null,
+        status: "observed"
       }
     ],
+    costObservation: {
+      measuredInvocations: 190,
+      loaderCalls: 52,
+      estimatedUsd: null,
+      status: "provider-billing-evidence-required"
+    },
     decision: "pass"
   });
 });
@@ -122,7 +167,9 @@ test("records a closed failed decision when either absolute p95 threshold is rea
     accessChallenge(),
     response({ ok: true }),
     response(benchmark("get", 80, 10, 50)),
-    response(benchmark("load", 40, 0, 10))
+    response(benchmark("load", 40, 0, 10)),
+    response(benchmark("get", 40, 0, 10, 1, 10)),
+    response(benchmark("get", 40, 0, 10, 10, 10))
   ];
   const evidence = await runRuntimeBenchmark({
     baseUrl,
@@ -279,7 +326,9 @@ test("requires bounded Access credentials without reflecting them into evidence"
     accessChallenge(),
     response({ ok: true }),
     response(benchmark("get", 80, 10, 10)),
-    response(benchmark("load", 40, 0, 10))
+    response(benchmark("load", 40, 0, 10)),
+    response(benchmark("get", 40, 0, 10, 1, 10)),
+    response(benchmark("get", 40, 0, 10, 10, 10))
   ];
   const evidence = await runRuntimeBenchmark({
     baseUrl,
