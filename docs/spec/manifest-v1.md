@@ -101,12 +101,25 @@ The repository reference adapter can be run without Cloudflare credentials:
 # cwd: repository root
 # expected-exit: 0
 pnpm --filter @tenantscript/manifest build
-node --test scripts/manifest-conformance.test.mjs
-node scripts/manifest-conformance.mjs
+node --test scripts/manifest-conformance.test.mjs scripts/manifest-conformance-verify.test.mjs
+set -o pipefail
+node scripts/manifest-conformance.mjs | node scripts/manifest-conformance-verify.mjs
 ```
 
 Exit code `0` means every expected acceptance decision matched. Corpus validation failure, adapter
 failure, or any mismatch MUST produce a non-zero exit.
+
+An independent adapter MAY replace the command on the left side of the pipe. It MUST write exactly
+one report matching `result.schema.json` to standard output. The verifier does not execute the
+adapter or trust its declared expectations: it binds all 21 ordered `id`, `rule`, and `expected`
+values to the canonical corpus, then requires every `actual` decision to match. Input is limited to
+64 KiB and decoded as strict UTF-8. Unknown fields, diagnostics mixed into standard output,
+duplicate object members at any depth, incomplete or reordered results, version drift, invalid JSON,
+and oversized input fail with one non-reflective error.
+
+Passing the verifier establishes compatibility with the Manifest v1 acceptance protocol only. It
+does not attest to the adapter's sandbox, implementation quality, runtime isolation, capability
+enforcement, performance, or production safety.
 
 ## Versioning
 
