@@ -27,6 +27,7 @@ const forbiddenComponents = new Set([
   "@playwright/test",
   "@tenantscript/test-config",
   "eslint",
+  "npm",
   "playwright",
   "prettier",
   "vitest",

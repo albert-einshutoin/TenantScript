@@ -232,6 +232,18 @@ test("accepts a bounded CycloneDX inventory and source-bound candidate evidence"
   );
 });
 
+test("rejects the runtime npm toolchain from the judge image inventory", () => {
+  const sbom = validSbom();
+  sbom.components.push({
+    type: "library",
+    name: "npm",
+    version: "11.3.0",
+    "bom-ref": "pkg:npm/npm@11.3.0"
+  });
+
+  assert.throws(() => validatePluginAuthoringJudgeImageSbom(sbom), /SBOM is invalid/u);
+});
+
 test("rejects malformed, incomplete, development, and unsafe SBOM inventories", () => {
   const cases = [
     ["unsupported version", (sbom) => (sbom.specVersion = "1.6")],

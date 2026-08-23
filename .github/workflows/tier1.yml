@@ -106,10 +106,12 @@ jobs:
           retention-days: 14
       - run: pnpm test:coverage
       - run: pnpm test:security
-      # npm retired the audit endpoint used by pnpm 10, so scan the committed lockfile directly.
+      # npm retired the audit endpoint used by pnpm 10, so scan the committed lockfile and the
+      # generated judge image SBOM directly.
       # Pinning OSV-Scanner keeps this accountless and reproducible for fork pull requests.
       - uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
+            --sbom=.tmp/plugin-authoring-judge-image-evidence/judge-image.cdx.json
       - run: pnpm format

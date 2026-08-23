@@ -28,7 +28,9 @@ COPY --from=build --chown=root:root /build/packages ./packages
 COPY --chown=root:root scripts ./scripts
 COPY --chown=root:root evals ./evals
 COPY --chown=root:root deploy/plugin-authoring-judge/plugin-authoring-judge /opt/tenantscript/bin/plugin-authoring-judge
-RUN chmod -R a+rX ./scripts ./evals /opt/tenantscript/bin
+RUN rm -rf /usr/local/lib/node_modules/npm && \
+    rm -f /usr/local/bin/npm /usr/local/bin/npx && \
+    chmod -R a+rX ./scripts ./evals /opt/tenantscript/bin
 
 ENV HOME=/nonexistent \
     NODE_ENV=production \
