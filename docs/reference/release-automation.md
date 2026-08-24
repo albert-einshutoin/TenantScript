@@ -42,6 +42,17 @@ adopter、external contributor、実advisory対応、独立security review、独
 公開証拠がすべて揃ったreview済み変更だけが`approved`になります。0.xはこの外部adoption gateの対象外です。
 2.x以降は、1.xの判定を流用せず専用のmajor release gateが必要です。
 
+## npm scope verification
+
+[`npm-scope-verify.yml`](../../.github/workflows/npm-scope-verify.yml)は`main`からの手動実行だけを許可し、
+`@tenantscript`のowner/admin権限と8 public package名のregistry stateをJSON artifactへ記録します。
+publish commandとOIDC permissionは持ちません。
+
+GitHub Actions secret `NPM_TOKEN`には、この検証専用の期限付きgranular tokenだけを登録します。
+organizationとpackage/scopeの権限はどちらもread-onlyにし、publish可能なtokenや他用途のtokenを使っては
+いけません。期限切れまたは検証完了後はrevokeし、同名secretも削除します。artifactを確認してIssue #3、
+ADR-002、Phase0 taskへ結果を反映するまで、scope確保は完了扱いにしません。
+
 ## External activation checklist
 
 repository実装だけではpublish完了を主張しません。Issue #3のnpm scope確保後、maintainerが次を行います。

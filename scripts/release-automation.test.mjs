@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { fileURLToPath, URL } from "node:url";
+import { verifyNpmScope } from "./npm-scope-verification.mjs";
 import { validateReleaseCandidate } from "./release-preflight.mjs";
 
 const publicPackageNames = [
@@ -207,6 +209,77 @@ test("release PR and publish workflows preserve the no-token OIDC boundary", asy
   assert.match(guide, /provenance/u);
   assert.match(guide, /再実行/u);
 });
+
+test("npm scope verification is manual, read-only, and isolated from publishing", async () => {
+  const workflow = await readFile(
+    new URL("../.github/workflows/npm-scope-verify.yml", import.meta.url),
+    "utf8"
+  );
+  const guide = await readFile(
+    new URL("../docs/reference/release-automation.md", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(workflow, /on:\s*\n\s*workflow_dispatch:/u);
+  assert.doesNotMatch(workflow, /^ {2}(?:push|pull_request|schedule):/mu);
+  assert.match(workflow, /permissions:\s*\n\s*contents:\s*read/u);
+  assert.match(workflow, /github\.ref == 'refs\/heads\/main'/u);
+  assert.match(workflow, /secrets\.NPM_TOKEN/u);
+  assert.match(workflow, /node scripts\/npm-scope-verification\.mjs/u);
+  assert.match(workflow, /actions\/upload-artifact@v6/u);
+  assert.doesNotMatch(workflow, /npm publish|changeset publish|id-token:\s*write/u);
+  assert.match(guide, /NPM_TOKEN/u);
+  assert.match(guide, /organization.*package\/scope.*read-only/su);
+  assert.match(guide, /publish可能なtoken.*使っては\s*いけません/su);
+  assert.match(guide, /Issue #3.*ADR-002.*Phase0 task/su);
+});
+
+test("npm scope verification accepts owner membership and closed package states", async () => {
+  const commands = [];
+  const result = await verifyNpmScope({
+    rootDirectory: fileURLToPath(new URL("..", import.meta.url)),
+    executeNpm: async (args) => {
+      commands.push(args);
+      if (args[0] === "whoami") return npmResult(0, "maintainer\n");
+      if (args[0] === "org") return npmResult(0, '{"maintainer":"owner"}');
+      const packageName = args[1];
+      return packageName === "@tenantscript/cli"
+        ? npmResult(0, JSON.stringify(packageName))
+        : npmResult(1, "", "npm error code E404");
+    }
+  });
+
+  assert.equal(result.actor, "maintainer");
+  assert.equal(result.role, "owner");
+  assert.equal(result.packages.length, 8);
+  assert.deepEqual(
+    result.packages.find(({ name }) => name === "@tenantscript/cli"),
+    { name: "@tenantscript/cli", status: "published" }
+  );
+  assert.ok(
+    commands.every((args) => !args.includes("publish") && !args.join(" ").includes("token"))
+  );
+});
+
+test("npm scope verification fails closed without reflecting registry errors", async () => {
+  const secret = "secret-sentinel-provider-error";
+  await assert.rejects(
+    verifyNpmScope({
+      rootDirectory: fileURLToPath(new URL("..", import.meta.url)),
+      executeNpm: async (args) =>
+        args[0] === "whoami" ? npmResult(0, "maintainer\n") : npmResult(1, "", secret)
+    }),
+    (error) => {
+      assert.equal(error.message, "npm scope ownership verification failed");
+      assert.doesNotMatch(error.message, /secret-sentinel/u);
+      return true;
+    }
+  );
+});
+
+function npmResult(code, stdout = "", stderr = "") {
+  return { code, stdout, stderr };
+}
 
 function versioned(version) {
   return publicPackageNames.map((name) => ({ name, version }));
