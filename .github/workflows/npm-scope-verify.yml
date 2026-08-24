@@ -1,0 +1,40 @@
+name: Verify npm Scope
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: npm-scope-verification
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify npm scope ownership and package names
+    if: >-
+      github.repository_owner == 'albert-einshutoin' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Verify scope without publishing
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN"
+          mkdir -p .tmp
+          node scripts/npm-scope-verification.mjs > .tmp/npm-scope-verification.json
+      - uses: actions/upload-artifact@v6
+        with:
+          name: npm-scope-verification-${{ github.sha }}
+          path: .tmp/npm-scope-verification.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

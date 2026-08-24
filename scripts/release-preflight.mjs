@@ -16,11 +16,16 @@ const expectedPublicPackages = [
 ];
 const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
 
-export function validateReleaseCandidate({ tag, packages, changesetFiles, v1Readiness }) {
+export function validatePublicPackageSet(packages) {
   const actualNames = packages.map(({ name }) => name).sort();
   if (JSON.stringify(actualNames) !== JSON.stringify(expectedPublicPackages)) {
     throw new Error("public package set does not match the release contract");
   }
+  return actualNames;
+}
+
+export function validateReleaseCandidate({ tag, packages, changesetFiles, v1Readiness }) {
+  const actualNames = validatePublicPackageSet(packages);
   const versions = new Set(packages.map(({ version }) => version));
   if (versions.size !== 1) {
     throw new Error("public package versions must match before release");
