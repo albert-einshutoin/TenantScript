@@ -5,11 +5,16 @@ import process from "node:process";
 import { clearTimeout, setTimeout } from "node:timers";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { discoverPublicPackages } from "./publishable-packages.mjs";
+import { validatePublicPackageSet } from "./release-preflight.mjs";
 
 const registry = "https://registry.npmjs.org/";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-export async function verifyNpmScope({ rootDirectory = repositoryRoot, executeNpm = runNpm } = {}) {
+export async function verifyNpmScope({
+  rootDirectory = repositoryRoot,
+  executeNpm = runNpm,
+  discoverPackages = discoverPublicPackages
+} = {}) {
   const actorResult = await executeNpm(["whoami", `--registry=${registry}`]);
   const actor = actorResult.stdout.trim();
   if (actorResult.code !== 0 || !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(actor)) {
@@ -29,12 +34,14 @@ export async function verifyNpmScope({ rootDirectory = repositoryRoot, executeNp
     throw new Error("npm scope ownership verification failed");
   }
 
-  const packages = await discoverPublicPackages(rootDirectory);
+  let packageNames;
+  try {
+    packageNames = validatePublicPackageSet(await discoverPackages(rootDirectory));
+  } catch {
+    throw new Error("npm package inventory verification failed");
+  }
   const packageStates = [];
-  for (const { name } of packages) {
-    if (!name.startsWith("@tenantscript/")) {
-      throw new Error("npm package inventory verification failed");
-    }
+  for (const name of packageNames) {
     const result = await executeNpm(["view", name, "name", "--json", `--registry=${registry}`]);
     if (result.code === 0) {
       if (parseJson(result.stdout) !== name) {

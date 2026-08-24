@@ -277,6 +277,30 @@ test("npm scope verification fails closed without reflecting registry errors", a
   );
 });
 
+test("npm scope verification rejects package inventory drift before registry queries", async () => {
+  const commands = [];
+  await assert.rejects(
+    verifyNpmScope({
+      discoverPackages: async () =>
+        publicPackageNames
+          .slice(1)
+          .map((name) => ({ name }))
+          .concat({ name: "@tenantscript/wrong" }),
+      executeNpm: async (args) => {
+        commands.push(args);
+        return args[0] === "whoami"
+          ? npmResult(0, "maintainer\n")
+          : npmResult(0, '{"maintainer":"owner"}');
+      }
+    }),
+    /npm package inventory verification failed/u
+  );
+  assert.deepEqual(
+    commands.map(([command]) => command),
+    ["whoami", "org"]
+  );
+});
+
 function npmResult(code, stdout = "", stderr = "") {
   return { code, stdout, stderr };
 }
