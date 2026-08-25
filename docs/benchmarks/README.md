@@ -1,21 +1,21 @@
 # Benchmarks
 
-Phase gate evidence and operator drill results for TenantScript.
+Version gate evidence and legacy operator drill results for TenantScript.
 
 ## Index
 
-| Phase | Topic           | Status                                                                                              | Doc                                                |
-| ----- | --------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| 0     | Runtime latency | **blocked** — live measurements require a Cloudflare paid Workers plan (see [phase0.md](phase0.md)) | [Phase 0 runtime latency](phase0.md)               |
-| 1     | Rollback drill  | completed                                                                                           | [Phase 1 rollback drill](phase1-rollback-drill.md) |
+| Version | Topic            | Status                                                                                              | Doc                                                     |
+| ------- | ---------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| v0.2    | Runtime latency  | **blocked** — live measurements require a Cloudflare paid Workers plan (see [phase0.md](phase0.md)) | [v0.2 Live Edge runtime latency](phase0.md)             |
+| v0.3    | Rollback fixture | **not partner evidence** — repository fixture only; qualified partner evidence is not recorded      | [v0.3 rollback drill fixture](phase1-rollback-drill.md) |
 
-## Phase 0 runtime latency
+## v0.2 Live Edge runtime latency
 
 Live latency evidence is **blocked** on the Cloudflare paid Workers plan. The harness and local validation are documented in [phase0.md](phase0.md); the recorded deploy attempt failed with Cloudflare API code 10195 until that blocker is removed.
 
-## Phase 1 rollback drill
+## v0.3 rollback drill fixture
 
-Operator rollback path and MTTR measurement are documented in [phase1-rollback-drill.md](phase1-rollback-drill.md).
+The operator rollback path and MTTR calculation fixture are documented in [phase1-rollback-drill.md](phase1-rollback-drill.md). This fixture validates timestamp calculation only; it does not provide qualified design-partner or production evidence and does not close the v0.3 gate.
 Regenerate the sample result from a repository checkout with the package script wrapper:
 
 ```sh
@@ -39,7 +39,7 @@ When you add a new benchmark document, update this README index and include the 
 
 | Field                   | Where         | Notes                                                                                                               |
 | ----------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **phase**               | Index table   | Gate phase number (e.g. `0`, `1`).                                                                                  |
+| **version**             | Index table   | Version gate (e.g. `v0.2`, `v0.3`).                                                                                 |
 | **topic**               | Index table   | Short label for the measurement (e.g. `Runtime latency`).                                                           |
 | **status**              | Index table   | One of `completed`, `blocked`, or `in progress`. If blocked, state the blocker (e.g. Cloudflare paid Workers plan). |
 | **doc link**            | Index table   | Link to the benchmark markdown file in `docs/benchmarks/`.                                                          |

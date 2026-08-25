@@ -1,8 +1,10 @@
-# Phase 0: Prototype(2〜4週)
+# Legacy Phase 0 Track: Prototype(2〜4週)
 
-**ゴール:** Cloudflare 上で tenant plugin を「安全に」実行できることを、テストとベンチで証明する。
+**現行version対応:** v0.1 Repository MVPとv0.2 Live Edge Alphaに分割する。現行の製品scopeとExit Gateは [tasks/README.md](README.md) と [Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361)を正本とし、このファイルは既存実装タスクのlegacy inventoryとして扱う。
 
-**Exit Gate(プロダクトドキュメント §12 準拠):** 公開証跡と未完了理由は [Phase 0 Gate Evidence](../docs/reviews/phase0-gate-evidence.md) を正とする。
+**Legacy goal:** Cloudflare 上で tenant plugin を「安全に」実行できることを、テストとベンチで証明する。
+
+**Legacy evidence index:** [phase0-gate-evidence.md](../docs/reviews/phase0-gate-evidence.md) にrepository evidenceと外部依存を記録する。現行versionのExit Gateは [tasks/README.md](README.md) と [Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361) に従う。
 
 - [x] E2E デモ成立: example-saas の `invoice.created` → installed plugin → モック Slack 通知
 - [ ] blocking hook(transform)の p95 added latency(warm)が実測され docs/benchmarks/ に記録されている。目標 50ms に対する **Go/No-Go 判断が完了**している(未達の場合は原因分析と対策方針を含む)
@@ -13,7 +15,7 @@
 
 2026-07-20 reconciliation: checked rows have reproducible repository evidence. The remaining rows depend on open #4 or the npm portion of #3; fork independence is tracked separately in #2. The phase is not complete while any row remains unchecked.
 
-**スコープ外(Phase 1 に送る):** approval、rollback、budget cap、proxy mode、CLI、Admin UI、実 Slack OAuth。
+**Legacy scope boundary(当時Phase 1に送った項目):** approval、rollback、budget cap、proxy mode、CLI、Admin UI、実 Slack OAuth。現行versionのscopeは [Product PRD §11](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md#11-true-mvp--v010-repository-mvp)を優先する。
 
 **並行トラック:** P0-T14(runtime スパイク)は最大の不確実性であり、T01 の scaffold を待たずに **Day 1 から prototype branch で開始する**(最大リスクを最初に潰す)。
 

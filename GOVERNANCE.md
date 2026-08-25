@@ -5,7 +5,7 @@ TenantScript uses lightweight maintainer governance appropriate for a pre-v1, se
 ## Principles
 
 - Protect tenant isolation, least-privilege capabilities, secret confidentiality, and auditable operations before optimizing convenience.
-- Keep technical decisions, phase plans, issues, and pull requests public whenever disclosure is safe.
+- Keep technical decisions, version plans, legacy tracks, issues, and pull requests public whenever disclosure is safe.
 - Prefer reversible, evidence-backed changes and small GitHub Flow pull requests.
 - Separate implemented behavior, runtime evidence, and release readiness.
 - Do not present blocked external validation as completed.

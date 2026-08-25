@@ -70,4 +70,4 @@ scope未確保中にtoken publishへfallbackしてはいけません。
 version変更、Changeset、SBOM、GitHub Releaseのrepository orchestrationは
 [Release automation](release-automation.md)に実装されています。npm scope、初回package bootstrap、trusted
 publisher、保護environment、registry provenanceは外部activationが必要です。tarball gateがgreenでも、
-公開v1.0のrelease-readyを単独では証明しません。
+v0.2の0.x package公開やv1.0のrelease-readyを単独では証明しません。

@@ -1,6 +1,8 @@
-# Phase 4: Ecosystem(6ヶ月〜、継続)
+# Legacy Phase 4 Track: Ecosystem(6ヶ月〜、継続)
 
-**ゴール:** 再利用可能な plugin supply が community から生まれる状態を作る。完成(v1.0)後の継続フェーズであり、終了日を持たない。
+**現行version対応:** v1.1 Ecosystem、v1.2 AI Authoring、v2.0 Runtime portability。現行の製品scopeとExit Gateは [tasks/README.md](README.md) と [Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361)を正本とし、このファイルは既存実装タスクのlegacy inventoryとして扱う。
+
+**Legacy goal:** 再利用可能な plugin supply が community から生まれる状態を作る。完成(v1.0)後の継続フェーズであり、終了日を持たない。
 
 **Exit Gate(四半期ごとに見直し):**
 

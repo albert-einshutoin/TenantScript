@@ -1,10 +1,31 @@
-# TenantScript 開発プラン(設計 & フェーズ別タスク)
+# TenantScript 開発プラン(設計・version gate・package boundaries)
 
-[プロダクトドキュメント v0.4](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md) を実装に落とすための、TDDベース・フェーズ分割の開発計画。
+[Product Thesis and Versioned MVP Plan](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md) と Issue [#361](https://github.com/albert-einshutoin/TenantScript/issues/361) を実装に落とすための、TDDベースの開発計画。公開Issueの入口は [#41](https://github.com/albert-einshutoin/TenantScript/issues/41) とする。
 
 ## 完成の定義
 
-**「完成」= Phase 3 の Exit Gate を満たす v1.0 リリース**(第三者が支援なしで self-host し、本番運用できる状態)。Phase 4 は完成後の継続的な ecosystem 育成フェーズとして扱う。
+**「完成」= v1.0.0 Stable OSS の Exit Gate を満たすこと**(第三者が支援なしでself-hostし、本番運用できる状態)。v1.1以降は完成後のecosystem育成・AI authoring・runtime portabilityとして扱う。
+
+## Version gate map
+
+Issue #361がversion、製品価値、ICP、success metricsの正本である。後続versionのfeature Issueは、前versionのcheckpointが明示的に進行を許可するまで着手しない。
+
+| Version | 目的 | Exit evidence | 詳細 |
+|---|---|---|---|
+| v0.1.0 Repository MVP | credentialなしでtenant-specific Webhook transformation lifecycleを証明する | packed install、2 tenant、pinned transform、enable/disable/version/rollback、fail-closed E2E | [Product PRD §11](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md#11-true-mvp--v010-repository-mvp) |
+| v0.2.0 Live Edge Alpha | Cloudflare primitiveとself-host pathを実accountで検証する | paid-plan runtime、p95、concurrency、cost、protected Tier 2、clean-account、0.x package | [Product PRD §12](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md#12-version-plan) |
+| v0.3.0 Design Partner MVP | 一つの狭いuse-case familyで製品価値を検証する | 1 partner、3 plugins、4週間、lead time -50%、rollback MTTR ≤5分 | [Product PRD §12](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md#12-version-plan) |
+| v0.4.0 Private Beta | 複数環境とcapability/approvalのlive運用を検証する | 3環境、20 installations、live secret/capability、approval、reliability window | [Product PRD §12](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md#12-version-plan) |
+| v0.5.0 Public Beta | 独立install、security review、fork CIを検証する | public package、CRITICAL/HIGH zero、独立self-host、known limitations | [Product PRD §12](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md#12-version-plan) |
+| v1.0.0 Stable OSS | API安定性と持続可能なadoptionを確立する | 5 adopters、3 external contributors、独立self-host、release evidence、v1 blocker zero | [Product PRD §12](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md#12-version-plan) |
+
+`Phase0.md`〜`Phase4.md`は過去の実装タスクを保持するlegacy trackであり、現在の製品versionやExit Gateを単独では定義しない。既存タスクを再開するときは、Issue #41 / #361のversion、scope、evidenceへ明示的に対応付ける。
+
+## Roadmap governance
+
+- Issue #41を実装Issueの入口とし、無関係なIssueから着手しない。
+- 各versionのExit Reviewをcheckpointにし、前versionのevidenceなしに後続versionの実装へ進まない。
+- 既存Phaseの未完了項目は、現versionのscopeを直接unblockするものだけを対応付け、外部証跡は別のblockerとして記録する。
 
 ## 言語選定
 
@@ -13,7 +34,7 @@
 | 候補 | 評価 |
 |---|---|
 | **TypeScript** | ◎ 採用。Workers runtime(V8 isolate)のネイティブ言語。Dynamic Worker Loader / D1 / R2 / DO / Workflows の bindings が第一級。plugin author(SE / AI agent)と host SDK 導入先の主要言語。SDK / loader / control plane / CLI / UI を単一言語で構築でき、テスト資産も共有できる。 |
-| Rust | △ 不採用(現時点)。workers-rs はあるが bindings が二級で、plugin が JS bundle である以上 loader 周りは結局 JS 境界を持つ。WASM sandbox や manifest 検証の高速化用途として Phase 4 の portability 検討(Extism 互換)時に再評価。 |
+| Rust | △ 不採用(現時点)。workers-rs はあるが bindings が二級で、plugin が JS bundle である以上 loader 周りは結局 JS 境界を持つ。WASM sandbox や manifest 検証の高速化用途として v2.0 portability 検討(Extism 互換)時に再評価。 |
 | Go | × 不採用。Workers の第一級サポートがない(TinyGo/WASM は制約大)。control plane を Workers 外に出すことになり、D-009(Cloudflare-native 集中)と矛盾する。 |
 
 判断基準は「どの言語が好きか」ではなく、(1) 実行基盤が Workers であること、(2) plugin の書き手が TS を書くこと、(3) OSS 貢献者プール(Cloudflare コミュニティ ≒ TS コミュニティ)の3点。
@@ -31,7 +52,7 @@
 | Lint / Format | ESLint + Prettier | PostToolUse hook と整合 |
 | CI | GitHub Actions(2層: Tier 1 accountless / Tier 2 live) | Tier 1: typecheck → lint → test → audit → coverage(全 PR)。Tier 2: 実機・ベンチ(nightly) |
 | バンドル | esbuild | plugin bundle(決定論的 hash)、CLI |
-| UI | React + Vite | Admin UI(Phase 1〜) |
+| UI | React + Vite | Admin UI(v0.4〜) |
 | 計測 | Workers Analytics Engine | usage meter |
 
 ## リポジトリ構成(目標)
@@ -45,11 +66,11 @@ tenantscript/
 │   ├── loader/          # Dynamic Worker loader、scoped bindings、egress 制御、limits
 │   ├── capabilities/    # capability broker(slack.send、approvals.request、invoice.read、…)
 │   ├── control-plane/   # Control Plane API(D1 / R2 / DO / Workflows)
-│   ├── proxy/           # webhook proxy mode(Phase 1、D-015)
+│   ├── proxy/           # webhook proxy mode(v0.1 Repository MVP、D-015)
 │   └── cli/             # ext CLI(init / dev / build / replay / schema diff / deploy)
 ├── apps/
 │   ├── example-saas/    # デモ用 host app(E2E とベンチの基盤)
-│   └── admin-ui/        # Admin UI(Phase 1〜)
+│   └── admin-ui/        # Admin UI(v0.4〜)
 ├── docs/                # プロダクトドキュメント、ADR、benchmarks
 └── tasks/               # 本計画
 ```
@@ -73,10 +94,10 @@ tenantscript/
 - flaky なタイムアウト待ちを書かない。決定論的な待機のみ
 - TDD は「振る舞い」に適用する。インフラ・設定系タスク(scaffold、CI、リリース作業)は RED の代わりに**検証手順(verification checklist)**を DoD に定義する(形式的な設定テストで TDD を装わない)
 
-## 品質ゲート(全 Phase 共通、CI で強制)
+## 品質ゲート(全 version gate 共通、CI で強制)
 
 - typecheck / lint / test 全 green
-- カバレッジ 80% 以上(package 単位。**計測は Day 1 から、ゲート強制は Phase 0 チャンク B 完了時から段階導入** — 空に近い package での閾値ノイズを避ける)
+- カバレッジ 80% 以上(package 単位。**計測は Day 1 から、gate強制はrepository MVPの基盤整備完了時から段階導入** — 空に近いpackageでの閾値ノイズを避ける)
 - 依存脆弱性スキャン(pnpm audit 相当)green
 - adversarial security suite green
 - 各チャンク末尾の refactor タスク完了(コードレビュー込み)
@@ -93,19 +114,19 @@ tenantscript/
 
 ## タスク表記
 
-- ID: `P<phase>-T<番号>`。サイズ: **S**(〜半日)/ **M**(〜1日)/ **L**(2〜3日。L は原則着手前にさらに分割)
+- ID: legacy trackでは`P<phase>-T<番号>`を使用する。新規Issueはversionとrelease gateを本文に明記する。サイズ: **S**(〜半日)/ **M**(〜1日)/ **L**(2〜3日。L は原則着手前にさらに分割)
 - 各タスクは RED(最初に書くテスト。設定系タスクは検証手順で代替)→ GREEN(実装内容)→ DoD(完了条件)を持つ
 - チェックボックスで進捗管理する
 - タスク番号は**追加順のラベル**であり、ファイル内の記載順が推奨実行順(セルフレビュー反映 v1.1 で追加されたタスクは末尾番号を持つことがある)
 
-## フェーズ一覧
+## Legacy phase track map
 
-| Phase | 目的 | 期間目安 | Exit Gate(要約) | ファイル |
+| Legacy track | 現versionへの対応 | 役割 | ファイル |
 |---|---|---|---|---|
-| 0 | Prototype — 安全に tenant plugin を実行できる証明 | 2〜4週 | E2E デモ成立、p95 実測 + Go/No-Go 判断完了、secret/egress 逸脱ゼロ、runtime 選定 ADR、LICENSE 整備 | [Phase0.md](Phase0.md) |
-| 1 | MVP — 本番運用形(version / rollback / approval / budget / proxy / CLI / UI最小) | 1〜2ヶ月 | design partner 1社で plugin 3つ×4週稼働、rollback MTTR < 5分 | [Phase1.md](Phase1.md) |
-| 2 | Private Beta — 複数 app / tenant、RBAC、信頼性、community 開始 | 2〜3ヶ月 | host app 3社、active installation 20+、重大 incident 0 | [Phase2.md](Phase2.md) |
-| 3 | v1.0 — production-ready OSS | 3〜6ヶ月 | adopter 5社、外部 contributor PR 10件、advisory 運用実績 | [Phase3.md](Phase3.md) |
-| 4 | Ecosystem — community supply とポータビリティ | 6ヶ月〜 | template 再利用の発生、community connector の成立 | [Phase4.md](Phase4.md) |
+| Phase 0 | v0.1 repository evidence + v0.2 live runtime evidence | 既存prototype、security、benchmark、runtimeの実装履歴 | [Phase0.md](Phase0.md) |
+| Phase 1 | v0.1 lifecycle、v0.3 partner、v0.4 capability/approvalへ分割 | 既存MVP実装の詳細track | [Phase1.md](Phase1.md) |
+| Phase 2 | v0.4 Private Beta | 複数app/tenant、RBAC、reliabilityの詳細track | [Phase2.md](Phase2.md) |
+| Phase 3 | v0.5 Public Beta + v1.0 Stable OSS | self-host、security、release engineeringの詳細track | [Phase3.md](Phase3.md) |
+| Phase 4 | v1.1 Ecosystem、v1.2 AI、v2.0 portability | version gate後の継続track | [Phase4.md](Phase4.md) |
 
-前提: founding engineer 2名(1名なら期間約2倍)。Phase 2 以降のタスクはローリングウェーブ計画とし、**前 Phase の終盤に詳細化・再分割する**(後続 Phase ほど粒度が粗いのは意図的)。
+前提: founding engineer 2名(1名なら期間約2倍)。v0.3以降のタスクはローリングウェーブ計画とし、**前versionのcheckpoint前に詳細化・再分割する**(後続versionほど粒度が粗いのは意図的)。

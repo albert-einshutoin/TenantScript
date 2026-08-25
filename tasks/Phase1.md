@@ -1,6 +1,8 @@
-# Phase 1: MVP(1〜2ヶ月)
+# Legacy Phase 1 Track: MVP(1〜2ヶ月)
 
-**ゴール:** プロダクトドキュメント §11 MVP v0.1 の達成 —「1つの B2B SaaS が invoice.created hook に顧客別 plugin を install し、Slack 通知と manager approval を安全に実行し、ログを見て rollback できる」。加えて proxy mode(D-015)で zero-integration の導入パスを成立させる。
+**現行version対応:** v0.1 Repository MVP、v0.3 Design Partner MVP、v0.4 Private Betaへ分割する。現行の製品scopeとExit Gateは [tasks/README.md](README.md) と [Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361)を正本とし、このファイルは既存実装タスクのlegacy inventoryとして扱う。
+
+**Legacy goal:** 旧プロダクトドキュメントに記録された invoice.created、Slack通知、manager approvalのjourneyと、proxy mode(D-015)の実装タスクを保持する。現行v0.1のscopeは [Product PRD §11](../docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md#11-true-mvp--v010-repository-mvp)を優先する。
 
 **Exit Gate:**
 

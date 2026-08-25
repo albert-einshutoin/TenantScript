@@ -1,6 +1,8 @@
-# Phase 2: Private Beta(2〜3ヶ月)
+# Legacy Phase 2 Track: Private Beta(2〜3ヶ月)
 
-**ゴール:** 複数 host app・複数 tenant での実運用に耐える信頼性・権限・監査を作り、community 活動を開始する。
+**現行version対応:** v0.4 Private Beta。現行の製品scopeとExit Gateは [tasks/README.md](README.md) と [Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361)を正本とし、このファイルは既存実装タスクのlegacy inventoryとして扱う。
+
+**Legacy goal:** 複数 host app・複数 tenant での実運用に耐える信頼性・権限・監査を作り、community 活動を開始する。
 
 **Exit Gate:**
 

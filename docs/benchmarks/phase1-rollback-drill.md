@@ -1,11 +1,16 @@
-# Phase 1 Rollback Drill
+# v0.3 Rollback Drill Fixture
 
 Date: 2026-06-13
 
+> This is a deterministic repository fixture for validating the rollback timestamp calculator and
+> operator contract. It is not qualified design-partner or production evidence and does not satisfy
+> the v0.3 Design Partner MVP gate.
+
 ## Goal
 
-Measure the operator path from a broken plugin version reaching production to rollback completion.
-The Phase 1 gate is MTTR `< 5 minutes`.
+Measure the modeled operator path from a broken plugin version reaching production to rollback
+completion as a deterministic fixture. The legacy Phase 1 target is MTTR `< 5 minutes`; this fixture
+does not close that gate.
 
 ## Drill Scenario
 
@@ -53,7 +58,8 @@ pnpm --filter @tenantscript/cli run rollback:drill -- \
 }
 ```
 
-Decision: pass. The measured MTTR was 3m20s, below the 5m Phase 1 gate.
+Decision: fixture validation passed. The calculated MTTR was 3m20s, below the 5m target; this does
+not satisfy the v0.3 Design Partner MVP gate.
 
 ## Admin UI Evidence Record
 

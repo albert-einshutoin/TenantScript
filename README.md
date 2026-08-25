@@ -1,15 +1,24 @@
 # TenantScript
 
-TenantScriptは、B2B SaaSが顧客ごとのplugin、automation、approval、Webhook変換、API
-policyを、安全に実行・監査・version管理するためのCloudflare-nativeなSaaS Extension Control
-Planeです。host SaaSへtyped hookまたはproxyを接続し、pluginにはraw credentialではなくtenant-scoped
-capabilityだけを渡します。
+TenantScriptは、B2B SaaSが顧客別のWebhook変換・policy・notification・approvalを安全に運用するための、
+open-source **Tenant Extension Control Plane**です。Cloudflareのnetwork/runtime primitiveを利用し、
+host SaaSへtyped hookまたはProxyを接続します。pluginにはraw credentialではなくtenant-scoped capabilityだけを渡します。
 
-**Status: Public Alpha — Repository verified.** 公開source、accountless E2E、security suite、package
-build、Cloudflare Worker dry-runは継続検証されています。一方、v1.0、npm公開、maintainer環境での
-credentialed live運用は未完了です。repositoryの成功を本番稼働実績とは扱いません。
+**Status: Public Alpha — Repository verified.** v0.1のtrue MVPは、外部credentialなしのtenant-specific
+Webhook transformation lifecycleです。公開source、accountless E2E、security suite、package build、
+Cloudflare Worker dry-runは継続検証されています。v0.2以降のlive Cloudflare、0.x npm package、partner adoptionは
+別version gateであり、repositoryの成功を本番稼働実績とは扱いません。
 
 Pure OSS（Apache-2.0）で、運用形態はself-hostです。
+
+製品境界・ICP・version別success metricsの正本は[Product Thesis and Versioned MVP Plan](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md)と
+[Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361)、公開roadmapの入口は
+[Issue #41](https://github.com/albert-einshutoin/TenantScript/issues/41)です。
+
+## v0.1 Repository MVP
+
+最初のjourneyは `Host SaaS event → TenantScript Proxy → tenant installationのpinned transform → validated delivery → execution evidence` です。
+install、enable、execute、observe、version update、rollbackをaccountless E2Eで証明します。provider OAuth、human approval、marketplace、AI authoring、WASM、live Cloudflareは後続versionです。
 
 ## できること
 
@@ -83,16 +92,16 @@ securityの設計と報告先は[Threat model](docs/security/threat-model.md)と
 
 ## 既知の環境制約
 
-公開前blockerの正本は[Phase 0 gate evidence](docs/reviews/phase0-gate-evidence.md)です。実装済みの
-accountless経路と、maintainerだけが取得できるlive evidenceを分けています。
+外部evidenceの正本は[Legacy Phase 0 gate evidence](docs/reviews/phase0-gate-evidence.md)です。現在の
+version gateは[Product PRD](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md)に定義し、実装済みのaccountless経路と、maintainerだけが取得できるlive evidenceを分けています。
 
-| Blocker                                                                             | Repository内で完了している範囲                    | 残る外部証跡                                                                                                                    |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| [fork-safe CI #2](https://github.com/albert-einshutoin/TenantScript/issues/2)       | Tier 1 workflowとaccountless gates                | maintainer以外のfork PR完走                                                                                                     |
-| [npm scope #3](https://github.com/albert-einshutoin/TenantScript/issues/3)          | tarball、SBOM、OIDC publish workflow              | npm `@tenantscript` authentication、scope予約・初回publish・provenance                                                          |
-| [Cloudflare runtime #4](https://github.com/albert-einshutoin/TenantScript/issues/4) | workerd testsとWrangler dry-run                   | paid planでのlive deploy・benchmark。詳細は[ADR-001](docs/adr/001-runtime-primitive.md)と[benchmark](docs/benchmarks/phase0.md) |
-| [security review #32](https://github.com/albert-einshutoin/TenantScript/issues/32)  | threat model、review packet、fuzz、advisory drill | 独立reviewのCRITICAL/HIGH解消証跡                                                                                               |
-| [v1.0 launch #35](https://github.com/albert-einshutoin/TenantScript/issues/35)      | release gatesと公開runbook                        | adopter、external contributor、self-host検証者、release実行                                                                     |
+| Version gate | Blocker                                                                             | Repository内で完了している範囲                    | 残る外部証跡                                                                                                                    |
+| ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| v0.5         | [fork-safe CI #2](https://github.com/albert-einshutoin/TenantScript/issues/2)       | Tier 1 workflowとaccountless gates                | maintainer以外のfork PR完走                                                                                                     |
+| v0.2         | [npm scope #3](https://github.com/albert-einshutoin/TenantScript/issues/3)          | tarball、SBOM、OIDC publish workflow              | npm `@tenantscript` authentication、scope予約・初回publish・provenance                                                          |
+| v0.2         | [Cloudflare runtime #4](https://github.com/albert-einshutoin/TenantScript/issues/4) | workerd testsとWrangler dry-run                   | paid planでのlive deploy・benchmark。詳細は[ADR-001](docs/adr/001-runtime-primitive.md)と[benchmark](docs/benchmarks/phase0.md) |
+| v0.5         | [security review #32](https://github.com/albert-einshutoin/TenantScript/issues/32)  | threat model、review packet、fuzz、advisory drill | 独立reviewのCRITICAL/HIGH解消証跡                                                                                               |
+| v1.0         | [v1.0 launch #35](https://github.com/albert-einshutoin/TenantScript/issues/35)      | release gatesと公開runbook                        | adopter、external contributor、self-host検証者、release実行                                                                     |
 
 外部credentialや有料planを必要とする作業を、通常のfork開発やローカル検証の前提にはしません。
 deployment bundleまでは次のaccountless経路で確認できます。
@@ -115,7 +124,7 @@ pnpm --filter @tenantscript/runtime-bench exec wrangler deploy --config wrangler
 - [Control Plane errors](docs/reference/control-plane-errors.md) — stable code、retryability、safe client action
 - [Production self-host baseline](docs/operations/self-host-production.md) — binding、migration、secret、RBAC、budget、retention
 - [CLI reference](docs/reference/cli.md) — command、引数、JSON、exit code
-- [Roadmap and package boundaries](tasks/README.md) — Phase 0〜4、TDD、dependency direction
+- [Versioned roadmap and package boundaries](tasks/README.md) — Issue #361のversion gate、legacy phase track、TDD、dependency direction
 - [Agent onboarding](llms.txt) — coding agent向けの短い索引
 
 ## Contributing
