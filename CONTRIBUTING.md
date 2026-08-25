@@ -1,12 +1,12 @@
 # Contributing to TenantScript
 
-Thank you for improving TenantScript. The project welcomes focused bug fixes, tests, documentation, security hardening, and features that advance the published phase plan without weakening tenant isolation or capability boundaries.
+Thank you for improving TenantScript. The project welcomes focused bug fixes, tests, documentation, security hardening, and features that advance the published version plan without weakening tenant isolation or capability boundaries.
 
 ## Start here
 
 Before changing code, read:
 
-- [Development plan](tasks/README.md): canonical package boundaries, TDD workflow, phase gates, and quality requirements.
+- [Development plan](tasks/README.md): canonical package boundaries, TDD workflow, version gates, legacy tracks, and quality requirements.
 - [Architecture Decision Records](docs/adr/README.md): canonical decisions that constrain runtime, licensing, approval flow, and future architecture.
 - [Benchmark evidence](docs/benchmarks/README.md): measured, blocked, and planned validation with reproducibility requirements.
 - [Security policy](SECURITY.md): private vulnerability reporting and sensitive-data rules.

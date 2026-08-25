@@ -1,8 +1,10 @@
-# Phase 0 Gate Evidence
+# Legacy Phase 0 Gate Evidence
 
 Last reconciled: 2026-07-20
 
-This is the canonical public snapshot for the Phase 0 exit gate. A completed row has repository evidence that can be reproduced without maintainer credentials. A blocked row names the external action and open issue; it must not be interpreted as release-ready evidence.
+This is the canonical public snapshot for the legacy Phase 0 external evidence track. A completed row has repository evidence that can be reproduced without maintainer credentials. A blocked row names the external action and open issue; it must not be interpreted as release-ready evidence.
+
+The current product gates are defined by [Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361). The repository-only v0.1 gate may close without the paid-plan, npm, fork-owner, or design-partner evidence listed here; those rows belong to later version gates.
 
 ## Gate status
 
@@ -33,4 +35,4 @@ pnpm --filter @tenantscript/runtime-bench exec wrangler deploy --config wrangler
 
 The public repository may contain selection criteria, anonymized status totals, consented adopter stories, and reproducible technical evidence. Candidate company names, individual contact details, outreach notes, commercial context, and unannounced pilot dates belong in a private system controlled by maintainers. The private record must retain, at minimum, company/team, contact owner, outreach status, profile match, first-plugin hypothesis, next action, and due date.
 
-Until #2, #3, #4, and the private design-partner record are completed, Phase 0 remains evidence-incomplete even though the accountless product implementation and tests are green.
+Until #2, #3, #4, and the private design-partner record are completed, legacy Phase 0 remains evidence-incomplete even though the accountless product implementation and tests are green. This does not block the current v0.1 Repository MVP gate.

@@ -10,8 +10,10 @@ TenantScriptのドキュメントを、フォルダー構成ではなく「何�
 - **Live verified** — maintainer管理の外部環境で取得した証跡が、リンク先へ明示的に記録されています。この索引では、証跡のない機能をこのstatusにしません。
 - **Blocked** — 実装とは別に、外部account、paid plan、registry、または第三者確認が必要です。
 
-Roadmap and phase plans describe intended work, not available functionality. 現在の実装・repository
-証跡・live証跡は[Phase 2 gate evidence](reviews/phase2-gate-evidence.md)で分けて確認できます。
+Roadmap and legacy phase plans describe intended work, not available functionality. 現在の製品境界、true MVP、ICP、
+version別success metricsは[Product Thesis and Versioned MVP Plan](Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md)と
+[Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361)を正本とし、実装・repository証跡・live証跡は
+[Phase 2 gate evidence](reviews/phase2-gate-evidence.md)で分けて確認できます。
 
 ## Adopter / evaluator
 
@@ -20,7 +22,7 @@ TenantScriptが自分のSaaSに合うかを、最小構成と公開証跡から�
 - **Repository verified** — [Proxy mode quickstart](quickstarts/zero-integration-proxy-mode.md)で、host改修なしのwebhook変換と安全な転送境界を再現できます。
 - **Repository verified** — [SDK integration quickstart](quickstarts/sdk-integration.md)で、typed hook、capability、plugin bundle、dry-run deployを一巡できます。
 - **Repository verified / Blocked** — [Phase 2 gate evidence](reviews/phase2-gate-evidence.md)で、repository内の完了証跡と外部運用blockerを区別できます。
-- **Blocked** — [Phase 0 benchmark status](benchmarks/phase0.md)で、paid Cloudflare環境が必要なlive benchmarkの未完了範囲を確認できます。
+- **Blocked** — [v0.2 Live Edge benchmark status](benchmarks/phase0.md)で、paid Cloudflare環境が必要なlive benchmarkの未完了範囲を確認できます。
 
 ## Plugin author
 
@@ -88,7 +90,7 @@ self-host環境を設定し、失敗を安全に診断・復旧・監査する�
 
 - **Repository verified** — [Contributing guide](../CONTRIBUTING.md)で、GitHub Flow、TDD、security checks、PR手順を確認できます。
 - **Implemented** — [Good first issues](community/good-first-issues.md)で、境界・実装手順・DoDが明確な入門タスクを選べます。
-- **Implemented** — [Phase plan and package boundaries](../tasks/README.md)で、依存方向とplanned scopeを確認できます。計画項目は利用可能機能を意味しません。
+- **Implemented** — [Versioned roadmap and package boundaries](../tasks/README.md)で、Issue #361のversion gate、依存方向、legacy phase trackを確認できます。計画項目は利用可能機能を意味しません。
 - **Implemented** — [Architecture Decision Records](adr/README.md)で、runtime、license、approval、database routingの意思決定を確認できます。
 - **Repository verified** — `pnpm verify`で、typecheck、lint、tests、coverage、security suite、dependency audit、formatを一括実行できます。
 - **Repository verified** — [Public API stability](reference/public-api-stability.md)で、公開package exportとControl Plane REST route/成功bodyのsnapshot gate、semver判断、更新手順を確認できます。

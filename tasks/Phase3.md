@@ -1,6 +1,8 @@
-# Phase 3: v1.0 Production-ready(3〜6ヶ月)
+# Legacy Phase 3 Track: v1.0 Production-ready(3〜6ヶ月)
 
-**ゴール:** 第三者が支援なしで self-host し、本番運用できる v1.0 を出す。security・release engineering・ドキュメントを「OSS インフラとして信頼される水準」に引き上げる。
+**現行version対応:** v0.5 Public Betaとv1.0 Stable OSS。現行の製品scopeとExit Gateは [tasks/README.md](README.md) と [Issue #361](https://github.com/albert-einshutoin/TenantScript/issues/361)を正本とし、このファイルは既存実装タスクのlegacy inventoryとして扱う。
+
+**Legacy goal:** 第三者が支援なしで self-host し、本番運用できる v1.0 を出す。security・release engineering・ドキュメントを「OSS インフラとして信頼される水準」に引き上げる。
 
 **Exit Gate:**
 

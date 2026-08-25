@@ -1,8 +1,8 @@
 # TenantScript
 
-> TenantScript is a Cloudflare-native, self-hosted OSS control plane for running tenant-scoped
-> plugins, webhook transformations, approval workflows, notification rules, and API policies with
-> explicit capabilities, audit evidence, versioning, and rollback.
+> TenantScript is an open-source Tenant Extension Control Plane for B2B SaaS. Its v0.1 repository
+> MVP runs tenant-specific Webhook transformations with explicit evidence, versioning, and rollback;
+> Cloudflare live runtime, capabilities, approvals, and ecosystem work are versioned follow-ups.
 
 This file is a compact map for coding agents and contributors. Follow the linked public repository
 sources instead of inferring architecture or live deployment details.
@@ -18,20 +18,23 @@ sources instead of inferring architecture or live deployment details.
 - [Repository agent guardrails](AGENTS.md)
 - [Security reporting policy](SECURITY.md)
 - [Product direction and decisions](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md)
-- [Phase plan and package boundaries](tasks/README.md)
+- [Versioned roadmap and package boundaries](tasks/README.md)
+- Roadmap issue index: GitHub Issue #41 (https://github.com/albert-einshutoin/TenantScript/issues/41)
+- Normative product PRD: GitHub Issue #361 (https://github.com/albert-einshutoin/TenantScript/issues/361)
 - [Architecture Decision Records](docs/adr/README.md)
 
 ## Runtime posture
 
-TenantScript targets TypeScript on Cloudflare Workers. Dynamic Workers is the preferred Phase 0
+TenantScript targets TypeScript on Cloudflare Workers. Dynamic Workers is the preferred v0.2
 candidate, but the final runtime decision is blocked until paid-plan live benchmark evidence is
 available. Local tests, workerd-backed security tests, dry-run deployment, and Tier 1 CI remain
 accountless. Do not claim the runtime ADR is accepted or invent live performance results.
 
-Use these sources for the current boundary:
+Use these sources for the current boundary and version gate:
 
+- [Product PRD and version plan](docs/Cloudflare-native_SaaS_Extension_Control_Plane_Product_Document.md)
 - [Runtime primitive ADR](docs/adr/001-runtime-primitive.md)
-- [Phase 0 benchmark status](docs/benchmarks/phase0.md)
+- [v0.2 benchmark status](docs/benchmarks/phase0.md)
 - [Security suite threat map](docs/security/security-suite-v2.md)
 - [Known environment limitations](README.md#既知の環境制約)
 
@@ -74,7 +77,7 @@ copy snippets into a second source of truth.
 - [Admin UI composition root](apps/admin-ui/src/App.tsx)
 
 Import public package exports. Do not reach into another workspace's private source path or reverse
-the dependency direction documented in the phase plan.
+the dependency direction documented in the versioned roadmap.
 
 ## Safe contribution workflow
 

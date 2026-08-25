@@ -1,18 +1,21 @@
-# Cloudflare-native SaaS Extension Control Plane
+# TenantScript Product Thesis and Versioned MVP Plan
 
-**Product Strategy & MVP Spec**  
-**推奨名称:** Cloudflare-native Extension Control Plane for B2B SaaS(working title: TenantScript、旧称: SaaS Extension Runtime)  
-**作成日:** 2026-06-11  
-**更新日:** 2026-06-12 — v0.4: 実装言語決定(D-017: TypeScript)、開発計画は[tasks/](../tasks/README.md)参照。v0.3: pure OSS戦略(D-008改訂)、proxy mode(D-015)、AI coding agent前提(D-016)。v0.2: レビュー指摘反映(実行モデル、config、failure policy、KPIほか)  
-**ステータス:** Working Draft — OSSプロジェクトのMVP定義に使えるレベル
+**Product Strategy & Normative PRD**<br>
+**カテゴリ:** Tenant Extension Control Plane for B2B SaaS<br>
+**プロダクト名:** TenantScript<br>
+**作成日:** 2026-06-11<br>
+**更新日:** 2026-08-25 — Issue [#361](https://github.com/albert-einshutoin/TenantScript/issues/361) の製品境界、true MVP、ICP、version別success metricsを反映<br>
+**ステータス:** Normative product PRD — roadmapと実装Issueはこの文書および[#360](https://github.com/albert-einshutoin/TenantScript/issues/360)に従う
 
 ---
 
 ## 最終方針
 
-CloudflareのRuntimeを再発明しない。Dynamic Workers / Workers for Platforms / Workflowsをkernelとして使い、その上に「SaaS向け拡張機能の制御面・運用面・UX」を作る。
+Cloudflareはネットワークと実行primitiveを提供する。TenantScriptはその上に、B2B SaaSの顧客別extensionのライフサイクルとガバナンスを提供する。
 
-このプロダクトは、B2B SaaSが顧客ごとのコード・自動化・承認フロー・Webhook変換・API policy・通知ルール・AI agent toolを、安全に、監査可能に、version管理された形で実行できるようにするための **Extension Control Plane / Plugin OS** である。
+TenantScriptは、tenant / host app / installationのidentity、hookとmanifest、version・enable/disable・rollback、capability grant、provider-secret境界、approvalとfailure policy、execution evidence、audit、usage、operator workflowを所有する。
+
+TenantScriptはCDN、Cloudflareの代替、汎用workflow builder、汎用runtimeではない。MVPでは、顧客別Webhook変換を安全に運用する一つの狭いjourneyに集中する。
 
 ---
 
@@ -27,25 +30,44 @@ Cloudflare Dynamic Workers / Workers for Platforms / D1 / R2 / Durable Objects /
 | 市場性 | エンタープライズ顧客ごとの例外実装・自動化・連携要望は強い。Solutions Engineering工数削減に直結する。 |
 | 技術タイミング | Cloudflareが必要なkernelを揃えつつある。上位レイヤーはまだプロダクト化余地がある。 |
 | 最大リスク | メンテナの持続可能性(bus factor)。Cloudflare公式の上位レイヤー進出は非商用OSSには致命傷でなく、manifest / capability modelが標準として残れば成果と見なす。 |
-| 初期勝ち筋 | Webhook transformation / notification rules / approval workflow / API policyを、SaaS運営者のSEが書くユースケースから始める。 |
-| やらないこと | 最初からmarketplace、Zapier代替、汎用workflow builder、AI自動生成を中心にしない。 |
+| 初期勝ち筋 | SaaSのcoreへtenant別分岐を追加せず、Solutions EngineerやPlatform Engineerが顧客別Webhook変換を出荷できること。 |
+| やらないこと | CDN、汎用workflow builder、marketplace、AI authoring、WASM、multi-cloud、hosted commercial serviceをMVPの価値にしない。 |
+
+## Problem statement
+
+B2B SaaSが顧客ごとの小さなbackend差分を提供しようとすると、次のいずれかを選びやすい。
+
+- Webhookを顧客固有のschemaへ変換する
+- 閾値を超えた操作に追加承認を要求する
+- イベントを会社固有のdestinationへrouteする
+- tenantごとのpolicyでAPI actionをdenyする
+- Slack、Jira、GitHubなどの顧客固有workflowへ通知する
+
+この種の要望に対して、実装の選択肢は次のいずれかになりやすい。
+
+- SaaS coreへtenant-specificなif分岐、feature flag、権限例外を追加する
+- 顧客専用forkまたはone-off deployを維持する
+- Lambda / Workerなどの個別関数を運用し、tenant・secret・rollbackの境界を別々に持つ
+- embedded iPaaSや汎用workflow builderへ寄せ、SaaS domainのinstallation・permission・evidenceを自前で補う
+
+これらは顧客別要件を満たしても、coreの変更負債、運用経路の分散、tenant越境・secret露出・rollback不能のリスクを増やす。TenantScriptは、顧客別extensionをSaaS coreから分離しながら、SaaS運営者が必要とするidentity、権限、version、evidence、rollbackを一つのcontrol planeに集約する。
 
 ---
 
 ## 2. Product Thesis / Positioning
 
-現在の名前「Cloudflare-native SaaS Extension Runtime」は方向性として良いが、「Runtime」という言葉はCloudflare公式と競合しやすい。プロダクトとしては、RuntimeではなくControl Planeとして再定義する。
+TenantScriptはCloudflareのruntimeを再実装するのではなく、SaaS domainのextension control planeとして位置づける。
 
 | 項目 | 推奨方針 |
 |---|---|
-| カテゴリ | SaaS Extension Control Plane / Plugin OS |
-| 一言説明 | B2B SaaSが顧客ごとの小さなコード・自動化・policy・承認を安全に実行するためのSDK + Control Plane + Admin UI。 |
-| 英語コピー | Stop hardcoding enterprise customer workflows. |
-| 日本語コピー | エンタープライズ顧客ごとの例外ロジックを、もう本体にハードコードしない。 |
-| Cloudflareとの関係 | Cloudflare primitives are the kernel. This product is the SaaS extension operating system. |
-| 類比 | Shopify Apps / Salesforce Apex / Zapier / WordPress Plugins の現代版。ただしB2B SaaS本体に埋め込む顧客別extension基盤。 |
+| カテゴリ | Tenant Extension Control Plane for B2B SaaS |
+| 一言説明 | 顧客別のWebhook変換・policy・通知・approvalを、SaaS coreへのtenant別分岐なしに、安全に運用するOSS control plane。 |
+| 英語コピー | Ship customer-specific Webhook logic without adding tenant-specific branches to the SaaS core. |
+| 日本語コピー | SaaS本体に顧客別分岐を増やさず、顧客別Webhookロジックを安全に出荷する。 |
+| Cloudflareとの関係 | Cloudflareはnetworkとexecution primitiveを提供し、TenantScriptはSaaS-domainのlifecycleとgovernanceを提供する。 |
+| 類比 | B2B SaaSに埋め込むextension control plane。CDN、汎用iPaaS、general-purpose runtimeの代替ではない。 |
 | 事業形態 | pure OSS(D-008)。収益化を目的とせず、self-hostを唯一の運用形態とする。 |
-| AI Coding時代の位置づけ | 顧客別コードを書くコストはAIで急落する。書くコストが下がるほど「安全に実行する場所」の需要は増える。本プロダクトはAI生成されたtenant codeのguardrail layerであり、AI時代に価値が増す側に立つ。 |
+| AI Coding時代の位置づけ | AI authoringは後続versionの入力手段であり、MVPの製品価値や安全性の証明とは分離する。 |
 
 ---
 
@@ -53,9 +75,9 @@ Cloudflare Dynamic Workers / Workers for Platforms / D1 / R2 / Durable Objects /
 
 | ID | 決定 | 理由 / 影響 |
 |---|---|---|
-| D-001 | Control Planeとして位置づける | RuntimeそのものはCloudflareが公式に進化させる。自社の価値はmanifest、permission、logs、versioning、rollback、approval、billing、local devに置く。 |
+| D-001 | Tenant Extension Control Planeとして位置づける | Cloudflareのnetwork/runtimeを再実装せず、manifest、installation、permission、evidence、versioning、rollback、operator workflowを所有する。 |
 | D-002 | 初期ユーザーはSaaS運営者・SE | 最初から顧客自身が自由にコードを書く前提にしない。Solutions Engineerが顧客別extensionを書く痛みから入る。 |
-| D-003 | 初期ユースケースは4つに絞る | Webhook transformation、notification rules、approval workflows、API policyをMVPの主軸にする。AI agent toolは拡張先として扱う。 |
+| D-003 | true MVPはtenant-specific Webhook transformationに絞る | notification、approval、API policy、AI agent toolは後続versionの候補として保持し、MVPへ混ぜない。 |
 | D-004 | Capability-first SDK | Pluginにraw secretやDBを直接渡さない。ctx.slack.send / ctx.invoice.readのようなscoped capabilityだけを渡す。 |
 | D-005 | Egress deny-by-default | untrusted codeの外部通信は原則禁止。必要な場合はallowlist、gateway injection、auditを通す。 |
 | D-006 | Version pinning / rollbackをMVPに入れる | 顧客別extensionは事故時に即時停止・rollbackできる必要がある。運用品質の中核。 |
@@ -67,9 +89,9 @@ Cloudflare Dynamic Workers / Workers for Platforms / D1 / R2 / Durable Objects /
 | D-012 | hookに型(event / transform / policy)を導入する | 型ごとに実行モード(並列/直列)、戻り値契約、failure policyが決まる。一律fail-closedはevent系hookで本体をブロックするため採用しない。 |
 | D-013 | per-installation configを1st-classにする | 通知チャンネルや金額閾値のテナント差分をコードフォークで吸収させない。manifestのconfigSchemaで宣言し、install時に設定し、ctx.configで参照する。 |
 | D-014 | capability callをexecution journalで冪等化する | retry時の二重送信(Slack二重通知など)を防ぐ。journalはDurable Objectに記録し、replay時は完了済みcallをskipする。 |
-| D-015 | Proxy modeを導入の入口にする | SDK統合(本体へのhook工事)は最大の採用障壁。outbound webhookの向き先を変えるだけで使えるzero-integrationモードを用意し、webhook transformation / notification rulesを工事なしで体験させてからSDK統合に誘導する。 |
+| D-015 | Proxy modeを導入の入口にする | SDK統合(本体へのhook工事)は最大の採用障壁。v0.1ではoutbound webhook transformationに絞り、後続versionでnotification rulesを追加できる境界を保つ。 |
 | D-016 | AI coding agentを前提に設計する | pluginの書き手は人間のSEだけでなくAIになる。typed SDK、manifest validation、capability sandbox、local replayはAI生成コードの安全装置として機能する。docs / llms.txt / scaffoldをagent-friendlyに整備し、配布チャネルとしても扱う。 |
-| D-017 | 実装言語はTypeScriptに統一する | Workers runtime(V8 isolate)のネイティブ言語であり、Dynamic Worker Loader / D1 / R2 / DO / Workflowsのbindingsが第一級。plugin author(SE / AI agent)とhost SDK導入先の主要言語でもある。SDK / loader / control plane / CLI / UIを単一言語にしてOSS貢献障壁を下げる(D-008と整合)。Rust/WASMはPhase 4のportability検討時に再評価。GoはWorkers第一級サポートがなくD-009と矛盾するため不採用。 |
+| D-017 | 実装言語はTypeScriptに統一する | Workers runtime(V8 isolate)のネイティブ言語であり、Dynamic Worker Loader / D1 / R2 / DO / Workflowsのbindingsが第一級。plugin author(SE / AI agent)とhost SDK導入先の主要言語でもある。SDK / loader / control plane / CLI / UIを単一言語にしてOSS貢献障壁を下げる(D-008と整合)。Rust/WASMはv2.0のportability検討時に再評価。GoはWorkers第一級サポートがなくD-009と矛盾するため不採用。 |
 
 ---
 
@@ -91,45 +113,52 @@ Cloudflare Dynamic Workers / Workers for Platforms / D1 / R2 / Durable Objects /
 
 ### 初期ICP
 
-| ICP | 刺さる理由 | 初期メッセージ |
-|---|---|---|
-| Vertical B2B SaaS | 業界・顧客ごとの業務ルールが多く、例外対応が発生しやすい。 | 顧客別の業務ルールを安全なextensionに分離。 |
-| FinOps / Billing / Procurement SaaS | 金額閾値、承認、Slack通知、請求・購買policyが多い。 | 請求・購買まわりの例外ロジックを本体にハードコードしない。 |
-| HR / ATS / RevOps / CRM-adjacent SaaS | 顧客別通知、ワークフロー、外部同期、Webhook変換が多い。 | 顧客別workflowを短いコードで導入。 |
-| Security / Compliance SaaS | tenantごとのpolicy-as-code需要がある。 | 顧客別policyを監査可能に実行。 |
-| AI agent SaaS | 顧客ごとのtools、secret、approval、egress controlが必要。 | agent toolをtenant-scoped capabilityとして安全に提供。 |
-| Developer-facing SaaS | 顧客側にdeveloper/adminがおり、コードベースのcustomizationを受け入れやすい。 | typed hooksで自社SaaSをprogrammableにする。 |
+Initial design partners must meet all of the following:
 
-OSSとしての初期採用は、OSS導入への抵抗が最も低いDeveloper-facing SaaSと、capability / approval / egress制御の需要が最も切実なAI agent SaaSから始まる可能性が高い。メッセージングはSEの痛みを軸に保ちつつ、この2セグメントをearly adopter候補として優先する。
+- B2B SaaS with enterprise or upper-mid-market customers
+- 年5件以上の顧客別backend変更
+- 顧客ごとにWebhook、policy、approval、routing、notificationの差分がある
+- engineering、platform、またはSolutions Engineeringのownerがいる
+- Cloudflare-backed self-host infrastructureを運用する意思がある
+- 過去の実装リードタイムを計測できる
+
+優先segmentは次の順序とする。
+
+| 順位 | Segment | 初期メッセージ |
+|---|---|---|
+| 1 | Developer-facing SaaS | typed hooksで顧客別のextensionを安全に出荷する。 |
+| 2 | FinOps / Billing / Procurement SaaS | 顧客別の請求・購買ロジックをcoreへハードコードしない。 |
+| 3 | Vertical SaaS | 顧客固有の業務ルールを監査可能なextensionへ分離する。 |
+| 4 | Security / Compliance SaaS | tenant別policyを明示的な権限とevidence付きで運用する。 |
+| 5 | AI-agent SaaS | tenant-scoped business actionを安全に実行する。 |
 
 ### Personas
 
 | Persona | 役割 | 痛み / 評価基準 |
 |---|---|---|
-| Economic buyer: VP Engineering / CTO(従業員50〜500名のB2B SaaS) | 予算決裁。内製との比較判断。 | エンタープライズ案件の個別要望がロードマップと採用計画を圧迫している。time-to-marketと運用リスクで判断する。 |
-| Champion / 主要ユーザー: Solutions Engineer / Forward-deployed engineer | pluginを書き、顧客別に出荷する。 | 顧客別実装がbackend deploy待ちで数週間かかる。自分のコードが本体を壊す事故への恐怖。 |
-| 副次: Product Manager | 例外要望のトリアージ。 | 「本体機能化するか、extensionで逃がすか」の判断材料が欲しい。 |
-| 副次: Security / Compliance担当 | capability grantの審査、audit確認。 | 顧客別コードが何にアクセスできるかを説明できないと審査を通せない。 |
-| 副次: Tenant admin(顧客側) | installの承認、approval対応。 | 自社向けロジックの権限と動作履歴が見えること。 |
+| Champion | Solutions Engineer、Forward-Deployed Engineer、Platform Engineer、またはenterprise customizationを担当するbackend engineer | 顧客別実装をSaaS coreのdeployなしに出荷し、権限・test・audit・rollbackを保ちたい。 |
+| Economic buyer | CTO、VP Engineering、Head of Product | 顧客別保守とroadmap interruptionを減らしたい。 |
 
 ### Jobs to be Done
 
-- エンタープライズ見込み客が契約条件として個別承認フローを要求したとき、本体をフォークせずに出荷し、ロードマップを担保に入れずに受注したい。
-- 顧客固有の自動化が深夜に壊れたとき、その顧客のロジックだけを止めて巻き戻し、影響範囲を1テナントに閉じたい。
-- 顧客のセキュリティ審査で「この顧客別コードは何にアクセスできるのか」と問われたとき、manifestとgrantとaudit logで即答して調達を通過したい。
+> When an enterprise customer requests a small backend rule or integration difference, I need to deliver it for only that tenant, with explicit permissions, tests, audit, and rollback, without modifying or redeploying the SaaS core for every exception.
+
+- 顧客別Webhook変換をSaaS coreのtenant-specific branchなしに出荷したい。
+- 顧客固有のロジックが壊れたとき、そのtenantだけを停止して既知のversionへ戻したい。
+- 顧客別codeの権限と実行結果をmanifest、grant、audit evidenceで説明したい。
 
 ---
 
 ## 6. Scope / Use Cases
 
-| 優先度 | Use Case | 理由 | MVP対応 |
+| Version | Use Case | Scope |
 |---|---|---|---|
-| P0 | Webhook transformation | 導入が最も軽く、顧客別変換ロジックの痛みが明確。 | Yes |
-| P0 | Notification rules | Slack/Teams/Email通知はcapability modelを説明しやすい。 | Yes |
-| P0 | Approval workflows | 金額や状態に応じた人間の承認待ちはB2B SaaSで頻出。 | Yes, basic |
-| P1 | API policy | tenantごとのAPI allow/deny/modifyを実装できるとsecurity/compliance系に刺さる。 | Partial |
-| P1 | AI agent tool | 将来的に強いが、初期メッセージにしすぎると流行語に見える。 | Later |
-| P2 | Public marketplace | 配布面は強いが初期は供給側不足になりやすい。 | No |
+| v0.1.0 | Tenant-specific Webhook transformation through Proxy Mode | 必須のtrue MVP。install、enable、execute、observe、version update、rollbackを含む。 |
+| v0.2.0 | Live Cloudflare runtime and self-host path | v0.1のrepository journeyを実accountで検証する。 |
+| v0.3.0 | Design-partner validation | 一つの狭いuse-case familyで3 pluginsを4週間検証する。 |
+| v0.4.0 | Provider capability and approval | partner evidenceに基づき、private betaへ拡張する。 |
+| v0.5.0 | Public beta and independent operation | package、self-host、security review、fork CIを独立検証する。 |
+| v1.0.0+ | Stable OSS and ecosystem | API stability、adoption、community、AI、portabilityを証拠に基づき進める。 |
 
 ---
 
@@ -316,7 +345,7 @@ Execution Logs / Usage Meter / Admin UI
 
 ### Blocking hookのレイテンシ予算
 
-transform / policy hookはhost本体のrequest pathに入るため、SLOを設けてPhase 0で実測検証する。
+transform / policy hookはhost本体のrequest pathに入るため、SLOを設けてv0.2 Live Edge Alphaで実測検証する。
 
 - 目標: plugin 1段あたりのadded latencyをp95でwarm < 50ms、cold < 300msに収める。
 - 対策: stable worker ID + version hashによるisolate再利用、artifactのcolo cache、capability brokerのsame-colo配置、deploy時のpre-warm。
@@ -339,61 +368,181 @@ transform / policy hookはhost本体のrequest pathに入るため、SLOを設�
 
 ---
 
-## 11. MVP v0.1
+## 11. True MVP / v0.1.0 Repository MVP
 
-MVPのゴール:
+最初に検証する製品価値は、**tenant-specific Webhook transformation through Proxy Mode**である。
 
-> 1つのB2B SaaSが、自社のinvoice.created hookに顧客別pluginをinstallし、Slack通知とmanager approvalを安全に実行し、ログを見てrollbackできる。
+```text
+Host SaaS canonical event
+  -> TenantScript Proxy
+  -> host app + tenant + installationを解決
+  -> pinned transform pluginを実行
+  -> outputを検証
+  -> installationが許可したdestinationへだけdelivery
+  -> execution evidenceを記録
+```
 
-| Priority | Feature | Deliverable | Acceptance Criteria |
-|---|---|---|---|
-| P0 | Host SDK | hook定義(型: event/transform/policy、failure policy、budgetMs)、tenantId付きrun、schema validation、result handling。 | サンプルSaaSからinvoice.createdを発火でき、schema違反payloadは拒否される。 |
-| P0 | Plugin SDK | definePlugin、typed event、ctx capability、ctx.config、continuation hook(resumeHook)。 | Plugin authorが型付きでhandlerとctx.configを使える。 |
-| P0 | Manifest schema | hooks(schema互換range)、configSchema、capabilities、egress、limitsを宣言。 | CI/CLIでinvalid manifestと必須config未充足を検出できる。 |
-| P0 | Dynamic Worker loader | plugin artifactをversion hashでloadし、scoped bindingsとctx.configを渡す。 | 同一versionはstable IDで再利用される。 |
-| P0 | Capability broker | slack.send、approvals.request、invoice.readの3つ。Slack OAuth app、tenant単位のworkspace接続フロー、token保管(broker内)を含む。 | raw secretをpluginに露出しない。tenant adminがSlack workspace接続を完了できる。 |
-| P0 | Approval decision API / CLI | approvals.requestで作られた承認をAPI/CLIでapprove/rejectし、resumeHookを起動する。 | API経由の承認決定でcontinuation hookが実行され、audit logに残る。 |
-| P0 | Execution logs | status、duration、error、capability calls、versionを保存・表示。 | adminがtenant/plugin/hookで検索できる。 |
-| P0 | Version pinning / rollback | installationごとにversion固定し、前versionへ戻せる。 | UIまたはCLIで即時rollbackできる。 |
-| P0 | Egress policy | deny-by-default。allowlistはv0.1では限定実装。 | 無許可fetchは失敗し、ログに残る。 |
-| P0 | Budget cap | tenant×pluginのdaily execution / CPU予算。超過時はauto-disableして管理者に通知(D-010のenforcement)。 | budget超過でpluginが自動停止し、Executionにbudget_exceededが記録される。 |
-| P1 | Approval UI | basic approval queue、approve/reject、audit log。 | manager roleに承認待ちを表示できる。 |
-| P1 | Local dev / replay | sample eventでlocal run、manifest lint、replay。 | 本番event sampleを使ってversion変更前にテストできる。 |
-| P1 | Usage meter | executions、cpuMs、subrequests、workflow runsを集計・可視化(enforcementはBudget capが担う)。 | tenant/plugin別COGSが見える。 |
+v0.1.0は外部credentialなしで、このextension lifecycleをrepository上で証明する。
 
-MVPで作らないもの:
+### Required scope
 
-- Public marketplace
-- 汎用workflow builder
-- 多数のexternal connectors
-- AI plugin generator
-- non-Cloudflare runtime対応
-- 顧客自身による自由編集UI
+- deterministic tenant resolution付きProxy Mode
+- `webhook.outbound` transformという一つのhook type
+- typed manifestとinput/output contract
+- deny-by-default egressとinstallation-owned destination
+- plugin artifact integrity
+- installation version pinning、enable / disable / rollback
+- timeout、payload、output、subrequestのbounded limits
+- stable execution statusとnon-reflective errors
+- operator debuggingに十分なexecution evidence
+- local/accountless E2Eとlive Cloudflare evidenceを分離したgate
+
+### Explicitly excluded from the true MVP
+
+- customer-authored arbitrary code upload UI
+- marketplaceとreuse counters
+- Slack/GitHub OAuth
+- human approval workflow
+- broad capability ecosystem
+- AI-assisted authoring
+- WASM / Extism runtime
+- multi-cloud runtime portability
+- billingとcommercial hosted service
+- visual workflow builder
+
+### v0.1.0 exit criteria
+
+- packed packagesがclean installできる
+- example SaaSが一つのcanonical Webhook eventを発火できる
+- 2 tenantが異なるpinned transformをdata crossoverなしに実行できる
+- installationのenable / disable / version update / rollback E2Eがgreenになる
+- malformed payload、undeclared egress、timeout、artifact mismatchがfail-closedになる
+- repository evidenceをlive production proofとして表現しない
 
 ---
 
-## 12. Roadmap
+## 12. Version plan
 
-前提: founding engineer 2名 + Phase 1以降はdesign partner 1社。1名体制の場合は期間を約2倍で見る。
+後続versionへ進む条件は、前versionのrepository evidenceと外部evidenceを混同せず、checkpoint Issueで再判定する。
 
-| Phase | 期間イメージ | 主なDeliverable | 検証したいこと |
-|---|---|---|---|
-| Phase 0: Prototype | 2〜4週間 | host SDK、plugin SDK、manifest、loader、1 hook、1 capability、basic logs。 | Cloudflare上で安全にtenant pluginを実行できるか。blocking hookのp95 overhead実測。Dynamic Workers vs Workers for Platformsの比較結論。 |
-| Phase 1: MVP | 1〜2ヶ月 | version pinning、rollback、permission UI、approval basic、local replay、usage meter、webhook proxy mode(zero-integration導入パス)。 | SaaS運営者が顧客別extensionを本番に近い形で運用できるか。proxy modeだけで価値を実感できるか。 |
-| Phase 2: Private Beta | 2〜3ヶ月 | 複数host app、複数tenant、audit retention、role model、more capabilities。 | 実顧客のcustomization痛みに対して継続利用されるか。 |
-| Phase 3: v1.0 Production-ready | 3〜6ヶ月 | self-host用admin UI完成、secret broker、外部security review、SECURITY.md / advisory process、upgrade guide、agent-friendly docs(llms.txt)。 | 第三者が支援なしでself-hostし、本番運用できるか。 |
-| Phase 4: Ecosystem | 6ヶ月以降 | community template gallery、plugin review guideline、AI-assisted plugin authoring。 | 再利用可能なplugin supplyがcommunityから生まれるか。 |
+### v0.1.0 — Repository MVP
 
-### 成功指標とPhase gates
+上記のProxy lifecycleを、packed packageとaccountless E2Eで証明する。
 
-North Star候補: **本番稼働中のactive installation数**(weekly executions > 0のinstallation)。OSSのため計測はopt-in telemetryとADOPTERS.md(自己申告)で近似する。
+### v0.2.0 — Live Edge Alpha
 
-| Phase | Gate(次フェーズに進む条件) |
-|---|---|
-| Phase 0 | E2Eデモが成立する。blocking hookのp95 added latencyがwarmで50ms未満。raw secret露出・egress逸脱の既知経路ゼロ。 |
-| Phase 1 | design partner 1社の本番hookでplugin 3つ以上が4週間連続稼働。SEの顧客別実装リードタイムがベースライン比50%短縮。rollback MTTR 5分未満。 |
-| Phase 2 | host app 3社、active installation 20以上、weekly executionsが4週連続で増加。重大security incident 0件。 |
-| Phase 3 | ADOPTERS.md記載の本番採用5社以上。外部contributorのmerged PR 10件以上。脆弱性報告への対応プロセスが少なくとも1回実運用されている。 |
+選定したCloudflare primitiveとself-host pathを実accountで検証する。
+
+- paid-plan runtimeをdeployする
+- warmおよびcold/create p95を記録する
+- same-tenant / multi-tenant concurrencyを記録する
+- request、loader-call、provider cost evidenceを記録する
+- Dynamic WorkersとWorkers for PlatformsのdecisionをADRでacceptする
+- credentialを露出しないprotected Tier 2 environmentを運用する
+- clean-account setup / apply / health / rollback / cleanupを完走する
+- `@tenantscript/*` 0.x packagesをprovenance付きでpublishする、またはbootstrap boundaryを明記する
+
+### v0.3.0 — Design Partner MVP
+
+追加のinfrastructure breadthではなく、製品価値を検証する。
+
+- qualified design partnerを1社得る
+- 一つの狭いuse-case familyで3つのproductionまたはproduction-equivalent pluginを運用する
+- 4週間連続で利用する
+- agreed baseline比でmedian extension lead timeを50%以上短縮する
+- rollback drillを5分以内で完了する
+- cross-tenantまたはsecret exposure incidentを0件にする
+- feedback-derived Issueを少なくとも3件作成してprioritizeする
+- partnerがcontinue、pause、stopのいずれかを明示する
+
+これは**true product MVP gate**である。
+
+### v0.4.0 — Private Beta
+
+- 3 host apps、または3つの独立したpartner environment
+- active installation合計20以上
+- provider capabilityとencrypted secret lifecycleのlive検証
+- approval use caseを一つlive検証
+- partner-derived load thresholdとrunaway isolation
+- incident / rollback / restore drillを一つ完了
+- unresolved critical incidentなしの4週間reliability window
+
+### v0.5.0 — Public Beta
+
+- public beta packageとreproducible install path
+- fork-origin CI greenとintentional RED evidence
+- independent security review完了、CRITICAL/HIGH解消
+- 2名のindependent operatorがguide-only self-hostを完走
+- quickstart、setup、doctor、upgrade、rollback、recovery journeyを検証
+- public known-limitationsがlive evidenceを正確に反映
+
+### v1.0.0 — Stable OSS
+
+- 少なくとも3 organizationにまたがるproduction adopter 5社
+- non-trivial contributionをmergeしたexternal contributor 3名
+- independent security reviewでCRITICAL/HIGH zero
+- release candidateのindependent self-host validation 2件
+- live performance regression baselineとcost envelope
+- release provenance、SBOM、clean install、upgrade、rollback evidence
+- open v1 blocker zero
+- benign reportによるvulnerability reporting pathの外部exercise
+- stable APIとmigration policyのacceptance
+
+### v1.1 — Ecosystem
+
+- live gallery
+- one-click template reuse
+- first community templateとconnector
+- trusted adoption / reuse counts
+- case studies
+
+### v1.2 — AI Authoring
+
+- published reviewed judge image
+- real isolated agent/model trials
+- pass@1 / pass@3、duration、cost evidence
+- monthly regression loop
+
+### v2.0 Discovery — Runtime portability
+
+- capability-runtime conformance
+- WASM / Extism PoC
+- theoretical lock-inではなくmeasured needに基づくadoption decision
+
+### Product success metrics
+
+Primary metrics:
+
+- median customer-specific extension lead time
+- core SaaS deployなしで出荷できたextensionの割合
+- rollback MTTR
+- 4週間後もretainedされるactive installationの割合
+
+Guardrails:
+
+- cross-tenant incident count
+- secret exposure count
+- plugin timeout / error rate
+- added p95 latency
+- installationあたりの月次operator hours
+- 1,000 executionsあたりのCloudflare cost
+
+v1.1以前のprimary metricではないもの:
+
+- GitHub stars
+- template count
+- AI pass rate
+- supported runtimes
+- connector count
+
+### Product decision rules
+
+- current version gateのadoption evidenceが揃う前に、新しいruntime、provider、templateを追加しない。ただしgateを直接解除する場合を除く。
+- design partner不足をv1.1のecosystem workで補填しない。
+- repository simulationをproduction evidenceと呼ばない。
+- broadなpartial integrationより、一つの狭いend-to-end journeyを優先する。
+- qualified companyを20社へ連絡してもnarrow Proxy pilotに同意がない場合、feature追加前にpivot checkpointを開く。
+- live added p95またはcostがinline executionに不適合なら、limitsを弱めずControl Planeを維持し、最初のuse caseをasynchronous webhook processingへ移す。
 
 ---
 
@@ -406,9 +555,9 @@ Primary message:
 
 初期デモ:
 
-1. Webhook transformer: 顧客ごとにpayloadを変換する。
-2. Invoice approval workflow: 金額条件でSlack通知し、manager approvalを待つ。
-3. API policy hook: tenantごとにAPI requestを許可・拒否・修正する。
+1. v0.1 Repository MVP: 2 tenantのWebhook payloadを別々のpinned transformで変換し、version updateとrollbackを確認する。
+2. v0.2 Live Edge Alpha: 同じProxy journeyをCloudflare account上でsetup、benchmark、rollback、cleanupまで検証する。
+3. v0.3 Design Partner MVP以降: partner evidenceに基づき、provider capability、approval、API policyを追加する。
 
 配布はすべてOSSとし、収益化を目的としない(D-008)。運用形態は導入者自身のCloudflareアカウントでのself-hostのみ。これによりhosted版で生じるsub-processor / DPA / SOC2 / data residencyの問題は構造的に発生せず、エンタープライズSaaSも調達審査なしで採用できる。
 
@@ -416,7 +565,7 @@ Primary message:
 
 | 段階 | 統合コスト | 提供価値 |
 |---|---|---|
-| ① Proxy mode | ほぼゼロ。outbound webhookの向き先を変えるだけ。 | webhook transformationとnotification rulesをコード変更なしで導入。価値の実感が先、工事は後。 |
+| ① Proxy mode | ほぼゼロ。outbound webhookの向き先を変えるだけ。 | v0.1ではWebhook transformationをコード変更なしで導入し、後続versionでnotification rulesへ拡張できる。 |
 | ② SDK hooks | 本体にhookを定義する工事。 | transform / policy / approvalを含む全hook型。 |
 | ③ Full control plane | self-host一式の運用。 | admin UI、audit、budget、version管理を含む全機能。 |
 
@@ -436,7 +585,7 @@ Primary message:
 | 資金 | GitHub Sponsors / Buy Me a Coffee。CloudflareのOSSスポンサー制度(credits提供)に応募する。収益目標は持たない。 |
 | 保守負荷 | coreを意図的に小さく保つ(D-007 / D-008)。connector追加要望はcapability interfaceの公開によりcommunityに委ねる。 |
 | セキュリティ | SECURITY.md、脆弱性開示プロセス、advisory対応をv1.0までに整備する。security-critical OSSとしての信頼が採用の前提条件。 |
-| Bus factor | governance文書とco-maintainer募集をPhase 2から開始する。 |
+| Bus factor | governance文書とco-maintainer募集をv0.4 Private Betaから開始する。 |
 
 ### 競合との差別化
 
@@ -457,9 +606,9 @@ Primary message:
 | Cloudflareが上位レイヤーを公式提供する | OSSの存在意義が縮小する。 | 非商用OSSのため事業上の致命傷にはならない。早期にcommunity標準の地位を取り、公式化の際は統合・コラボを働きかける。manifest / capability modelが標準として残れば成果と見なす。 |
 | 顧客がコードを書かない | self-serve marketplaceが伸びない。 | 初期はSolutions Engineer / SaaS運営者が書くprivate pluginから始める。 |
 | Security責任が重い | secret leak、tenant data leak、egress事故が致命傷になる。 | capability-first、raw secret禁止、deny-by-default、audit、least privilegeをMVPから実装。 |
-| メンテナの持続可能性(燃え尽き・bus factor 1) | security-criticalなインフラOSSは、保守が止まった時点で採用も止まる。 | coreを意図的に小さく保つ(D-007 / D-008)。CI自動化。SECURITY.mdと開示プロセス。GitHub Sponsors / Cloudflare OSSスポンサー制度。Phase 2からgovernance文書とco-maintainer募集。 |
+| メンテナの持続可能性(燃え尽き・bus factor 1) | security-criticalなインフラOSSは、保守が止まった時点で採用も止まる。 | coreを意図的に小さく保つ(D-007 / D-008)。CI自動化。SECURITY.mdと開示プロセス。GitHub Sponsors / Cloudflare OSSスポンサー制度。v0.4からgovernance文書とco-maintainer募集。 |
 | コスト事故 | Dynamic Worker生成、CPU、subrequest、workflow runがCOGSを押し上げる。 | stable ID、version reuse、budget、usage dashboard、runaway disableを実装。 |
-| Workflow / approval UIが複雑化 | MVPが肥大化する。 | v0.1ではapproval queueのみ。複雑なbranching UIは後回し。 |
+| Workflow / approval UIが複雑化 | MVPが肥大化する。 | v0.1はWebhook transformだけに限定し、approvalはv0.4以降へ送る。 |
 | Zapier/Pipedream等と比較される | connector数で負ける。 | 外部connector数では戦わず、SaaS本体hook内のtenant-specific untrusted codeに絞る。 |
 | Cloudflare専用への懸念 | 導入先が限定される。 | MVPは専用で良い。将来、manifestとcapability modelだけportableにする。 |
 
@@ -473,8 +622,8 @@ Primary message:
 | Authoring model | 誰がpluginを書くのか。SaaS SE、顧客developer、AI、third-party partnerのどれが最初か。 | SE-authoredを前提にユーザーインタビューする。 |
 | Permission UX | どの粒度までtenant adminに見せるか。 | Slack channel、invoice fields、workflow rolesの3例でpermission UIを試作。 |
 | Cloudflare primitive choice | Dynamic Workers中心かWorkers for Platforms中心か。 | prototypeで両方のdeveloper experience、pricing、limitsを比較する。 |
-| Data residency | tenant dataやlogsをどのregion / accountに置くか。 | v0.3で解消: pure OSS self-host前提のため、データは導入者自身のCloudflareアカウントから出ず、sub-processor / DPA問題は構造的に発生しない。 |
-| Marketplace timing | いつprivate template galleryからpublic marketplaceに進むか。 | 3社以上で同一plugin templateが再利用されたら検討。 |
+| Data residency | tenant dataやlogsをどのregion / accountに置くか。 | v0.2のclean-account/self-host検証で、導入者のaccount境界と保存先を明記する。 |
+| Marketplace timing | いつprivate template galleryからpublic marketplaceに進むか。 | v1.1でtrusted reuse evidenceが成立した場合だけ検討する。 |
 
 ---
 

@@ -1,4 +1,7 @@
-# Phase 0 Benchmarks
+# v0.2 Live Edge Benchmarks
+
+The filename is retained for compatibility with existing task links. This document is the v0.2
+live-runtime evidence track; it does not block the v0.1 repository MVP.
 
 ## Runtime Latency
 
@@ -72,7 +75,7 @@ The workflow does not accept a mutable benchmark URL. Before deployment it asks 
 API origin for the authenticated account's `workers.dev` subdomain and combines that value with the
 reviewed Worker name. Access credentials are sent only to that derived origin.
 
-This is an absolute Phase 0 Go/No-Go gate. A 20% regression claim requires a reviewed live baseline
+This is an absolute v0.2 Go/No-Go gate. A 20% regression claim requires a reviewed live baseline
 and is not inferred from repository tests. The concurrency observations likewise do not satisfy the
 partner-derived load or provider-billing gates on their own. On failure, do not raise thresholds or enable a token
 fallback. Review the sanitized artifact and Cloudflare deployment separately, leaving credentials,
