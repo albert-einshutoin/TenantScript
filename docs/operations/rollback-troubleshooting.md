@@ -92,7 +92,7 @@ pnpm --filter @tenantscript/cli rollback:drill -- \
   --completed-at 2026-06-13T00:03:20.000Z
 ```
 
-drill証跡には時刻、from/to version、audit ID、復旧確認execution IDだけを保存する。記録形式とPhase 1の5分gateは[Phase 1 rollback drill](../benchmarks/phase1-rollback-drill.md)を参照する。
+drill証跡には時刻、from/to version、audit ID、復旧確認execution IDだけを保存する。記録形式と5分目標のrepository fixtureは[v0.3 rollback drill fixture](../benchmarks/phase1-rollback-drill.md)を参照する。fixtureのpassはpartnerまたはproduction evidenceではない。
 
 ## 再発防止
 
