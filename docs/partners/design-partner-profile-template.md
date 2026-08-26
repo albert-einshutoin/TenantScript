@@ -31,7 +31,7 @@ candidate companies, contact owners, outreach status, and next actions are recor
    approval.
 3. Record baseline implementation lead time before TenantScript is introduced.
 4. Run weekly feedback for four weeks after the first production-equivalent plugin is active.
-5. Capture rollback drill evidence before counting the pilot toward the Phase 1 gate.
+5. Capture qualified partner rollback evidence before counting the pilot toward the v0.3 Design Partner MVP gate.
 
 ## Disqualifiers
 
