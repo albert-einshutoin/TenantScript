@@ -205,7 +205,7 @@ describe("loader security suite", () => {
           payload,
           context: { capability: vi.fn() }
         })
-      ).rejects.toThrow("handler payload must be lossless JSON");
+      ).rejects.toMatchObject({ code: "input_invalid" });
     }
   });
 
@@ -231,7 +231,7 @@ describe("loader security suite", () => {
         payload,
         context: { capability: vi.fn() }
       })
-    ).rejects.toThrow("handler payload must be lossless JSON");
+    ).rejects.toMatchObject({ code: "input_invalid" });
     expect(getterWasEvaluated).toBe(false);
   });
 
@@ -252,7 +252,7 @@ describe("loader security suite", () => {
         payload: {},
         context: { capability: vi.fn().mockResolvedValue({ value: undefined }) }
       })
-    ).rejects.toThrow("capability result must be lossless JSON");
+    ).rejects.toMatchObject({ code: "input_invalid" });
   });
 
   it("rejects capability inputs that JSON serialization would rewrite", async () => {
@@ -282,7 +282,7 @@ describe("loader security suite", () => {
           payload: { kind },
           context: { capability }
         })
-      ).rejects.toThrow("capability input must be lossless JSON");
+      ).rejects.toMatchObject({ code: "input_invalid" });
     }
     expect(capability).not.toHaveBeenCalled();
   });
@@ -319,7 +319,7 @@ describe("loader security suite", () => {
           payload: { kind },
           context: { capability: vi.fn() }
         })
-      ).rejects.toThrow("invalid TenantScript plugin return value");
+      ).rejects.toMatchObject({ code: "plugin_result_invalid" });
     }
 
     await expect(
@@ -354,7 +354,7 @@ describe("loader security suite", () => {
           }
         }
       })
-    ).rejects.toThrow("handler returned with outstanding capability calls");
+    ).rejects.toMatchObject({ code: "plugin_result_invalid" });
   });
 
   it("does not expose process, raw secret bindings, or global namespaces", async () => {

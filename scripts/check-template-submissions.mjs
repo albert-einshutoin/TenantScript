@@ -19,6 +19,22 @@ const digestPattern = /^[0-9a-f]{64}$/;
 const capabilityPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const configKeyPattern = /^[A-Za-z][A-Za-z0-9]*$/;
 const hostPattern = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+const hookErrorCodes = new Set([
+  "input_invalid",
+  "snapshot_unavailable",
+  "snapshot_integrity_failed",
+  "plugin_artifact_invalid",
+  "plugin_timeout",
+  "plugin_memory_exceeded",
+  "plugin_subrequest_exceeded",
+  "plugin_result_invalid",
+  "capability_denied",
+  "capability_failed",
+  "egress_denied",
+  "destination_unavailable",
+  "evidence_unavailable",
+  "runtime_unavailable"
+]);
 const urlLikePattern = /[a-z][a-z0-9+.-]*:\/\/[^\s<>"'`]+/giu;
 const requiredSourceSuffixes = [
   "package.json",
@@ -198,7 +214,6 @@ function validateSubmission(directoryName) {
   validateSortedStrings(submission.configKeys, "configKeys", displayPath, configKeyPattern);
   validateVerification(
     submission.verification,
-    submission.hook?.name,
     submission.hook?.type,
     submission.capabilities,
     displayPath
@@ -495,12 +510,29 @@ function validateHook(value, displayPath) {
     errors.push(`${displayPath}: hook must be an object`);
     return;
   }
-  validateAllowedFields(value, ["name", "type"], displayPath, { prefix: "hook." });
+  validateAllowedFields(value, ["name", "type", "failurePolicy"], displayPath, {
+    prefix: "hook."
+  });
   if (typeof value.name !== "string" || !hookNamePattern.test(value.name)) {
     errors.push(`${displayPath}: hook.name is invalid`);
   }
   if (!new Set(["event", "transform", "policy"]).has(value.type)) {
     errors.push(`${displayPath}: hook.type is invalid`);
+  }
+  const allowedFailurePolicies =
+    value.type === "event"
+      ? ["record-only"]
+      : value.type === "transform" || value.type === "policy"
+        ? ["fail-closed", "use-original"]
+        : [];
+  if (!allowedFailurePolicies.includes(value.failurePolicy)) {
+    errors.push(`${displayPath}: hook.failurePolicy does not match hook.type`);
+  }
+  if (
+    value.name === "webhook.outbound" &&
+    (value.type !== "transform" || value.failurePolicy !== "fail-closed")
+  ) {
+    errors.push(`${displayPath}: webhook.outbound must be a fail-closed transform hook`);
   }
 }
 
@@ -534,7 +566,7 @@ function validateEgress(value, displayPath) {
   }
 }
 
-function validateVerification(value, hookName, hookType, capabilities, displayPath) {
+function validateVerification(value, hookType, capabilities, displayPath) {
   if (!isRecord(value)) {
     errors.push(`${displayPath}: verification must be an object`);
     return;
@@ -574,10 +606,10 @@ function validateVerification(value, hookName, hookType, capabilities, displayPa
       }
     }
   }
-  validateBehaviorCases(value.behaviorCases, hookName, hookType, capabilities, displayPath);
+  validateBehaviorCases(value.behaviorCases, hookType, capabilities, displayPath);
 }
 
-function validateBehaviorCases(value, hookName, hookType, capabilities, displayPath) {
+function validateBehaviorCases(value, hookType, capabilities, displayPath) {
   if (!Array.isArray(value) || value.length < 2 || value.length > 16) {
     errors.push(`${displayPath}: verification.behaviorCases must contain between 2 and 16 cases`);
     return;
@@ -612,7 +644,7 @@ function validateBehaviorCases(value, hookName, hookType, capabilities, displayP
     if (Buffer.byteLength(JSON.stringify(behaviorCase), "utf8") > maximumBehaviorCaseBytes) {
       errors.push(`${displayPath}: verification.behaviorCases entry exceeds the 16 KiB limit`);
     }
-    validateExpectedDispatchResult(behaviorCase.expected, hookName, hookType, displayPath);
+    validateExpectedDispatchResult(behaviorCase.expected, hookType, displayPath);
     validateCapabilityCalls(behaviorCase.capabilityCalls, capabilities, displayPath);
     if (isRecord(behaviorCase.expected) && behaviorCase.expected.ok === true) {
       hasSuccess = true;
@@ -664,20 +696,41 @@ function validateCapabilityCalls(value, capabilities, displayPath) {
   }
 }
 
-function validateExpectedDispatchResult(value, hookName, hookType, displayPath) {
+function validateExpectedDispatchResult(value, hookType, displayPath) {
   const prefix = "verification.behaviorCases.expected.";
   if (!isRecord(value) || typeof value.ok !== "boolean") {
     errors.push(`${displayPath}: verification.behaviorCases expected must contain boolean ok`);
     return;
   }
   if (value.ok) {
-    const successFields = hookType === "event" ? ["ok"] : ["ok", "value"];
-    validateAllowedFields(value, successFields, displayPath, { prefix });
-    // Event hooks deliberately discard handler values, while blocking hooks must prove the exact
-    // transformed or policy result that callers observe.
-    if (hookType !== "event" && !("value" in value)) {
+    validateAllowedFields(value, ["ok", "value"], displayPath, { prefix });
+    const result = value.value;
+    if (!isRecord(result)) {
+      errors.push(`${displayPath}: verification.behaviorCases success value must be an object`);
+      return;
+    }
+    if (hookType === "event") {
+      if (Object.keys(result).length !== 1 || result.status !== "accepted") {
+        errors.push(`${displayPath}: event success value must be { status: "accepted" }`);
+      }
+    } else if (hookType === "transform") {
+      if (
+        Object.keys(result).length !== 2 ||
+        result.status !== "transformed" ||
+        !Object.hasOwn(result, "output")
+      ) {
+        errors.push(
+          `${displayPath}: transform success value must contain status "transformed" and output`
+        );
+      }
+    } else if (
+      Object.keys(result).length !== 2 ||
+      (result.decision !== "allow" && result.decision !== "deny") ||
+      typeof result.reasonCode !== "string" ||
+      !/^[a-z][a-z0-9._-]{0,63}$/u.test(result.reasonCode)
+    ) {
       errors.push(
-        `${displayPath}: verification.behaviorCases blocking-hook success is missing value`
+        `${displayPath}: policy success value must contain decision and a bounded reasonCode`
       );
     }
     return;
@@ -688,23 +741,9 @@ function validateExpectedDispatchResult(value, hookName, hookType, displayPath) 
     errors.push(`${displayPath}: verification.behaviorCases failure is missing error`);
     return;
   }
-  const errorsWithMessages = new Set(["PluginHandlerError", "HookReturnContractError"]);
-  const errorsWithoutMessages = new Set(["UnknownHookError", "MissingHandlerError"]);
-  const errorName = value.error.name;
-  const allowedErrorFields = errorsWithMessages.has(errorName)
-    ? ["name", "hookName", "message"]
-    : ["name", "hookName"];
-  validateAllowedFields(value.error, allowedErrorFields, displayPath, {
-    prefix: `${prefix}error.`
-  });
-  if (!errorsWithMessages.has(errorName) && !errorsWithoutMessages.has(errorName)) {
-    errors.push(`${displayPath}: verification.behaviorCases error name is invalid`);
-  }
-  if (value.error.hookName !== hookName) {
-    errors.push(`${displayPath}: verification.behaviorCases error hookName must match hook.name`);
-  }
-  if (errorsWithMessages.has(errorName) && typeof value.error.message !== "string") {
-    errors.push(`${displayPath}: verification.behaviorCases error message is required`);
+  validateAllowedFields(value.error, ["code"], displayPath, { prefix: `${prefix}error.` });
+  if (!hookErrorCodes.has(value.error.code)) {
+    errors.push(`${displayPath}: verification.behaviorCases error code is invalid`);
   }
 }
 

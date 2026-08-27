@@ -30,7 +30,7 @@ describe("definePlugin", () => {
     const plugin = definePlugin({
       manifest,
       handlers: {
-        "invoice.created": vi.fn().mockResolvedValue({ ignored: true })
+        "invoice.created": vi.fn().mockResolvedValue({ status: "accepted" })
       }
     });
 
@@ -40,7 +40,7 @@ describe("definePlugin", () => {
       context
     });
 
-    expect(result).toEqual({ ok: true, value: undefined });
+    expect(result).toEqual({ ok: true, value: { status: "accepted" } });
   });
 
   it("rejects calls to hooks not declared in the manifest", async () => {
@@ -54,7 +54,7 @@ describe("definePlugin", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { name: "UnknownHookError", hookName: "unknown.hook" }
+      error: { code: "plugin_artifact_invalid" }
     });
   });
 
@@ -76,11 +76,11 @@ describe("definePlugin", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { name: "PluginHandlerError", hookName: "invoice.created", message: "boom" }
+      error: { code: "plugin_result_invalid" }
     });
   });
 
-  it("requires transform hooks to return a payload", async () => {
+  it("requires transform hooks to return a transformed result", async () => {
     const plugin = definePlugin({
       manifest,
       handlers: {
@@ -96,11 +96,7 @@ describe("definePlugin", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: {
-        name: "HookReturnContractError",
-        hookName: "webhook.outbound",
-        message: "transform hooks must return a payload"
-      }
+      error: { code: "plugin_result_invalid" }
     });
   });
 
@@ -120,19 +116,15 @@ describe("definePlugin", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: {
-        name: "HookReturnContractError",
-        hookName: "invoice.approve",
-        message: "policy hooks must return allow, deny, or modify with a payload"
-      }
+      error: { code: "plugin_result_invalid" }
     });
   });
 
-  it("rejects modify policy decisions without a payload", async () => {
+  it("rejects policy decisions without a reason code", async () => {
     const plugin = definePlugin({
       manifest,
       handlers: {
-        "invoice.approve": () => ({ decision: "modify" })
+        "invoice.approve": () => ({ decision: "deny" })
       }
     });
 
@@ -144,32 +136,88 @@ describe("definePlugin", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: {
-        name: "HookReturnContractError",
-        hookName: "invoice.approve",
-        message: "policy hooks must return allow, deny, or modify with a payload"
-      }
+      error: { code: "plugin_result_invalid" }
     });
   });
 
-  it("accepts a modify decision whose payload is explicitly null", async () => {
+  it("rejects the removed modify policy decision", async () => {
     const plugin = definePlugin({
       manifest,
       handlers: {
-        "invoice.approve": () => ({ decision: "modify", payload: null })
+        "invoice.approve": () => ({ decision: "modify", reasonCode: "not_allowed" })
       }
     });
 
     await expect(
       plugin.dispatch({ hookName: "invoice.approve", payload: {}, context })
-    ).resolves.toEqual({ ok: true, value: { decision: "modify", payload: null } });
+    ).resolves.toEqual({ ok: false, error: { code: "plugin_result_invalid" } });
   });
 
-  it("accepts policy allow, deny, and modify decisions", async () => {
+  it("rejects inherited handlers instead of dispatching them", async () => {
+    const inheritedHandlers = Object.create({
+      "invoice.created": () => ({ status: "accepted" })
+    }) as Record<string, (payload: unknown, context: PluginContext) => unknown>;
+    const plugin = definePlugin({ manifest, handlers: inheritedHandlers });
+
+    await expect(
+      plugin.dispatch({ hookName: "invoice.created", payload: {}, context })
+    ).resolves.toEqual({ ok: false, error: { code: "plugin_artifact_invalid" } });
+  });
+
+  it("collapses result accessors that throw into a stable error", async () => {
+    const plugin = definePlugin({
+      manifest,
+      handlers: {
+        "invoice.created": () =>
+          Object.defineProperty({ status: "accepted" }, "status", {
+            enumerable: true,
+            get: () => {
+              throw new Error("result-secret");
+            }
+          })
+      }
+    });
+
+    await expect(
+      plugin.dispatch({ hookName: "invoice.created", payload: {}, context })
+    ).resolves.toEqual({ ok: false, error: { code: "plugin_result_invalid" } });
+  });
+
+  it("rejects non-enumerable host-owned fields in a result", async () => {
+    const plugin = definePlugin({
+      manifest,
+      handlers: {
+        "invoice.created": () =>
+          Object.defineProperty({ status: "accepted" }, "tenantId", {
+            enumerable: false,
+            value: "tenant-secret"
+          })
+      }
+    });
+
+    await expect(
+      plugin.dispatch({ hookName: "invoice.created", payload: {}, context })
+    ).resolves.toEqual({ ok: false, error: { code: "plugin_result_invalid" } });
+  });
+
+  it("rejects canonical results with a custom prototype", async () => {
+    const plugin = definePlugin({
+      manifest,
+      handlers: {
+        "invoice.created": () =>
+          Object.assign(Object.create({ inherited: true }), { status: "accepted" })
+      }
+    });
+
+    await expect(
+      plugin.dispatch({ hookName: "invoice.created", payload: {}, context })
+    ).resolves.toEqual({ ok: false, error: { code: "plugin_result_invalid" } });
+  });
+
+  it("accepts policy allow and deny decisions with reason codes", async () => {
     for (const decision of [
-      { decision: "allow" },
-      { decision: "deny", reason: "not a manager" },
-      { decision: "modify", payload: { approved: false } }
+      { decision: "allow", reasonCode: "approved" },
+      { decision: "deny", reasonCode: "not_a_manager" }
     ]) {
       const plugin = definePlugin({
         manifest,

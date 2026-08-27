@@ -24,8 +24,13 @@ try {
   const input = readFileSync(0);
   assert(input.length >= 1 && input.length <= MAX_INPUT_BYTES);
   const envelope = JSON.parse(input.toString("utf8"));
-  assertExactKeys(envelope, ["schemaVersion", "authenticationKey", "behaviorCase"]);
+  assertExactKeys(envelope, ["schemaVersion", "authenticationKey", "hookType", "behaviorCase"]);
   assert(envelope.schemaVersion === 1);
+  assert(
+    envelope.hookType === "event" ||
+      envelope.hookType === "transform" ||
+      envelope.hookType === "policy"
+  );
   const authenticationKey = Buffer.from(envelope.authenticationKey, "base64url");
   assert(
     authenticationKey.length === 32 &&
@@ -39,6 +44,7 @@ try {
   const runtimeResult = await runScopedPluginDispatch({
     bundleCode: readFileSync(bundlePath, "utf8"),
     hookName: behaviorCase.hookName,
+    hookType: envelope.hookType,
     payload: behaviorCase.payload,
     context: {
       capability: async (name, capabilityInput) => {

@@ -96,18 +96,20 @@ describe("example-saas TenantScript E2E demo", () => {
     );
   });
 
-  it("falls back to the original webhook payload when a transform plugin is missing", async () => {
+  it("fails closed when a transform plugin is missing", async () => {
     const app = createExampleSaasDemo({ omitTransformPlugin: true });
     const payload = {
       headers: { "content-type": "application/json" },
       body: { invoiceId: "inv_1" }
     };
 
-    await expect(app.transformWebhookOutbound(payload)).resolves.toEqual(payload);
+    await expect(app.transformWebhookOutbound(payload)).rejects.toMatchObject({
+      code: "plugin_artifact_invalid"
+    });
     expect(app.executionLog.searchExecutions({ hookName: "webhook.outbound" })).toEqual([
       expect.objectContaining({
         status: "error",
-        error: "MissingHandlerError"
+        error: "plugin_artifact_invalid"
       })
     ]);
     await expect(

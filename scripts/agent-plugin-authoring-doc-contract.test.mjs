@@ -16,7 +16,7 @@ test("agent plugin guide preserves the executable least-privilege path", () => {
     "pnpm build",
     "pnpm test",
     'egress: { mode: "deny" }',
-    "UnknownHookError",
+    "plugin_artifact_invalid",
     "Manifest JSON Schema",
     "SDK reference",
     "Not live verified"

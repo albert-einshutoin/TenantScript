@@ -63,6 +63,7 @@ export function createPluginAuthoringSecurityTestAdapter({
           input: JSON.stringify({
             schemaVersion: 1,
             authenticationKey: authenticationKey.toString("base64url"),
+            hookType: context.task.hook.type,
             securityCase,
             allowedCapabilities: context.task.capabilities
           }),

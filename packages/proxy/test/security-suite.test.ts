@@ -12,11 +12,9 @@ describe("proxy security suite", () => {
         inboundPath: "/hooks/evil",
         tenantId: "tenant_1",
         destinationUrl: "https://attacker.example.net/collect",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow(
-      "proxy destination https://attacker.example.net/collect is outside the allowlist"
-    );
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
   });
 
   it("rejects link-local destinations even when written as URLs", async () => {
@@ -29,11 +27,9 @@ describe("proxy security suite", () => {
         inboundPath: "/hooks/metadata",
         tenantId: "tenant_1",
         destinationUrl: "http://169.254.169.254/latest/meta-data",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow(
-      "proxy destination http://169.254.169.254/latest/meta-data is not a public http(s) URL"
-    );
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
   });
 
   it("rejects private IPv6 destinations", async () => {
@@ -46,27 +42,27 @@ describe("proxy security suite", () => {
         inboundPath: "/hooks/loopback",
         tenantId: "tenant_1",
         destinationUrl: "http://[::1]/internal",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow("proxy destination http://[::1]/internal is not a public http(s) URL");
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
 
     await expect(
       store.upsertProxyMapping({
         inboundPath: "/hooks/unique-local",
         tenantId: "tenant_1",
         destinationUrl: "http://[fd00::1]/internal",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow("proxy destination http://[fd00::1]/internal is not a public http(s) URL");
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
 
     await expect(
       store.upsertProxyMapping({
         inboundPath: "/hooks/link-local-v6",
         tenantId: "tenant_1",
         destinationUrl: "http://[fe80::1]/internal",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow("proxy destination http://[fe80::1]/internal is not a public http(s) URL");
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
   });
 
   it("rejects malformed inbound paths and destination URLs", async () => {
@@ -79,18 +75,18 @@ describe("proxy security suite", () => {
         inboundPath: "hooks/stripe",
         tenantId: "tenant_1",
         destinationUrl: "https://origin.example.com/stripe",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow("proxy inbound path must start with /");
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
 
     await expect(
       store.upsertProxyMapping({
         inboundPath: "/hooks/bad-url",
         tenantId: "tenant_1",
         destinationUrl: "not a url",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow("proxy destination not a url is not a valid URL");
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
   });
 
   it("rejects non-http and local destinations", async () => {
@@ -103,19 +99,17 @@ describe("proxy security suite", () => {
         inboundPath: "/hooks/ftp",
         tenantId: "tenant_1",
         destinationUrl: "ftp://origin.example.com/file",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow(
-      "proxy destination ftp://origin.example.com/file is not a public http(s) URL"
-    );
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
 
     await expect(
       store.upsertProxyMapping({
         inboundPath: "/hooks/localhost",
         tenantId: "tenant_1",
         destinationUrl: "http://localhost/internal",
-        transformHookName: "webhook.proxy.transform"
+        transformHookName: "webhook.outbound"
       })
-    ).rejects.toThrow("proxy destination http://localhost/internal is not a public http(s) URL");
+    ).rejects.toMatchObject({ name: "ProxyContractError", code: "input_invalid" });
   });
 });

@@ -1,5 +1,6 @@
 import type { ExecutionStatus } from "./index.js";
 import type { D1DatabaseLike } from "./storage.js";
+import { isHookType, type HookType } from "@tenantscript/manifest";
 
 export interface AnalyticsEngineDataPoint {
   indexes?: ((ArrayBuffer | string) | null)[];
@@ -11,7 +12,7 @@ export interface AnalyticsEngineDatasetLike {
   writeDataPoint: (event?: AnalyticsEngineDataPoint) => void;
 }
 
-export type UsageHookType = "event" | "transform" | "policy";
+export type UsageHookType = HookType;
 
 export interface RecordUsageMetricRequest {
   tenantId: string;
@@ -357,7 +358,7 @@ async function withSummaryLock<T>(
 function validateUsageMetric(request: RecordUsageMetricRequest): void {
   validateIdentifier("tenantId", request.tenantId);
   validateIdentifier("pluginId", request.pluginId);
-  if (!(["event", "transform", "policy"] as const).includes(request.hookType)) {
+  if (!isHookType(request.hookType)) {
     throw new Error("hookType must be event, transform, or policy");
   }
   if (

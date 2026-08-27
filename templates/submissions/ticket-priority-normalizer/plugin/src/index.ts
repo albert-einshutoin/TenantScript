@@ -40,7 +40,10 @@ function normalizeTicketPayload(payload: unknown): Required<TicketPayload> {
 export const plugin = definePlugin({
   manifest,
   handlers: {
-    "ticket.created": async (payload, _context) => normalizeTicketPayload(payload)
+    "ticket.created": async (payload, _context) => ({
+      status: "transformed",
+      output: normalizeTicketPayload(payload)
+    })
   }
 });
 

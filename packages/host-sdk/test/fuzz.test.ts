@@ -35,7 +35,7 @@ describe("hook payload boundary fuzzing", () => {
 
         expect(execute).not.toHaveBeenCalled();
         expect(result.error.name).toBe("HookPayloadError");
-        expect(result.error.issues.every(isStructuredIssue)).toBe(true);
+        expect("issues" in result.error && result.error.issues.every(isStructuredIssue)).toBe(true);
       }),
       {
         numRuns: parsePositiveInteger(process.env.FUZZ_RUNS, 1_000),

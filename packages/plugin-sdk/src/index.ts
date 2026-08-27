@@ -1,4 +1,4 @@
-import type { TenantScriptManifest } from "@tenantscript/manifest";
+import type { HookType, TenantScriptManifest } from "@tenantscript/manifest";
 
 export interface PluginContext {
   capability: (name: string, input: unknown) => Promise<unknown>;
@@ -22,10 +22,22 @@ export type DispatchResult =
   | { ok: false; error: PluginDispatchError };
 
 export type PluginDispatchError =
-  | { name: "UnknownHookError"; hookName: string }
-  | { name: "MissingHandlerError"; hookName: string }
-  | { name: "PluginHandlerError"; hookName: string; message: string }
-  | { name: "HookReturnContractError"; hookName: string; message: string };
+  | { code: "plugin_artifact_invalid" }
+  | { code: "plugin_result_invalid" };
+
+export interface TransformResult<TOutput = unknown> {
+  status: "transformed";
+  output: TOutput;
+}
+
+export interface PolicyResult {
+  decision: "allow" | "deny";
+  reasonCode: string;
+}
+
+export interface EventResult {
+  status: "accepted";
+}
 
 export interface DefinePluginInput {
   manifest: TenantScriptManifest;
@@ -43,84 +55,100 @@ async function dispatchPlugin(
   input: DefinePluginInput,
   request: DispatchRequest
 ): Promise<DispatchResult> {
-  const hook = input.manifest.hooks.find((candidate) => candidate.name === request.hookName);
+  let hook;
+  try {
+    hook = input.manifest.hooks.find((candidate) => candidate.name === request.hookName);
+  } catch {
+    return { ok: false, error: { code: "plugin_artifact_invalid" } };
+  }
   if (hook === undefined) {
-    return { ok: false, error: { name: "UnknownHookError", hookName: request.hookName } };
+    return { ok: false, error: { code: "plugin_artifact_invalid" } };
   }
 
-  const handler = input.handlers[request.hookName];
-  if (handler === undefined) {
-    return { ok: false, error: { name: "MissingHandlerError", hookName: request.hookName } };
+  let handler: PluginHandler;
+  try {
+    if (!Object.hasOwn(input.handlers, request.hookName)) {
+      return { ok: false, error: { code: "plugin_artifact_invalid" } };
+    }
+    const candidate = input.handlers[request.hookName];
+    if (typeof candidate !== "function") {
+      return { ok: false, error: { code: "plugin_artifact_invalid" } };
+    }
+    handler = candidate;
+  } catch {
+    return { ok: false, error: { code: "plugin_artifact_invalid" } };
   }
 
   let handlerResult: unknown;
   try {
     handlerResult = await handler(request.payload, request.context);
-  } catch (error) {
-    return {
-      ok: false,
-      error: {
-        name: "PluginHandlerError",
-        hookName: request.hookName,
-        message: error instanceof Error ? error.message : "Unknown plugin handler failure"
-      }
-    };
+  } catch {
+    return { ok: false, error: { code: "plugin_result_invalid" } };
   }
 
-  return validateHookReturn(request.hookName, hook.type, handlerResult);
+  try {
+    return validateHookReturn(request.hookName, hook.type, handlerResult);
+  } catch {
+    return { ok: false, error: { code: "plugin_result_invalid" } };
+  }
 }
 
-function validateHookReturn(
-  hookName: string,
-  hookType: "event" | "transform" | "policy",
-  value: unknown
-): DispatchResult {
+function validateHookReturn(_hookName: string, hookType: HookType, value: unknown): DispatchResult {
   if (hookType === "event") {
-    return { ok: true, value: undefined };
+    return isEventResult(value)
+      ? { ok: true, value }
+      : { ok: false, error: { code: "plugin_result_invalid" } };
   }
 
   if (hookType === "transform") {
-    if (value === undefined) {
-      return {
-        ok: false,
-        error: {
-          name: "HookReturnContractError",
-          hookName,
-          message: "transform hooks must return a payload"
-        }
-      };
-    }
-    return { ok: true, value };
+    return isTransformResult(value)
+      ? { ok: true, value }
+      : { ok: false, error: { code: "plugin_result_invalid" } };
   }
 
-  if (!isPolicyDecision(value)) {
-    return {
-      ok: false,
-      error: {
-        name: "HookReturnContractError",
-        hookName,
-        message: "policy hooks must return allow, deny, or modify with a payload"
-      }
-    };
-  }
-
-  return { ok: true, value };
+  return isPolicyResult(value)
+    ? { ok: true, value }
+    : { ok: false, error: { code: "plugin_result_invalid" } };
 }
 
-function isPolicyDecision(
-  value: unknown
-): value is
-  | { decision: "allow" }
-  | { decision: "deny"; reason?: string }
-  | { decision: "modify"; payload: unknown } {
-  if (typeof value !== "object" || value === null || !("decision" in value)) {
+function isEventResult(value: unknown): value is EventResult {
+  return isRecordWithKeys(value, ["status"]) && value.status === "accepted";
+}
+
+function isTransformResult(value: unknown): value is TransformResult {
+  return (
+    isRecordWithKeys(value, ["status", "output"]) &&
+    value.status === "transformed" &&
+    value.output !== undefined
+  );
+}
+
+function isPolicyResult(value: unknown): value is PolicyResult {
+  return (
+    isRecordWithKeys(value, ["decision", "reasonCode"]) &&
+    (value.decision === "allow" || value.decision === "deny") &&
+    typeof value.reasonCode === "string" &&
+    /^[a-z][a-z0-9._-]{0,63}$/.test(value.reasonCode)
+  );
+}
+
+function isRecordWithKeys(
+  value: unknown,
+  keys: readonly string[]
+): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  const ownNames = Object.getOwnPropertyNames(value);
+  if (
+    ownNames.length !== keys.length ||
+    Object.getOwnPropertySymbols(value).length !== 0 ||
+    !keys.every((key) => ownNames.includes(key))
+  ) {
     return false;
   }
-
-  const decision = value.decision;
-  if (decision === "allow" || decision === "deny") {
-    return true;
-  }
-
-  return decision === "modify" && "payload" in value;
+  return keys.every((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && "value" in descriptor;
+  });
 }

@@ -327,6 +327,13 @@ function pluginSdkRuntime(stateRoot) {
   // Keep this runtime deliberately smaller than the public SDK surface: candidate code can only
   // receive the reviewed definePlugin dispatch behavior needed by the fixed authoring corpus.
   return `import { registerPluginDefinition } from ${JSON.stringify(join(stateRoot, "index.js"))};
+const safeGetPrototypeOf = Object.getPrototypeOf;
+const safeGetOwnPropertyNames = Object.getOwnPropertyNames;
+const safeGetOwnPropertySymbols = Object.getOwnPropertySymbols;
+const safeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const safeArrayIsArray = Array.isArray;
+const safeArrayIncludes = Function.prototype.call.bind(Array.prototype.includes);
+const safeObjectPrototype = Object.prototype;
 export function definePlugin(input) {
   const plugin = {
     manifest: input.manifest,
@@ -343,25 +350,40 @@ export function definePlugin(input) {
 }
 async function dispatchPlugin(input, request) {
   const hook = input.manifest.hooks.find((candidate) => candidate.name === request.hookName);
-  if (hook === undefined) return { ok: false, error: { name: "UnknownHookError", hookName: request.hookName } };
+  if (hook === undefined) return { ok: false, error: { code: "plugin_artifact_invalid" } };
   const handler = input.handlers[request.hookName];
-  if (handler === undefined) return { ok: false, error: { name: "MissingHandlerError", hookName: request.hookName } };
+  if (handler === undefined) return { ok: false, error: { code: "plugin_artifact_invalid" } };
   let value;
   try { value = await handler(request.payload, request.context); }
   catch (error) {
-    return { ok: false, error: { name: "PluginHandlerError", hookName: request.hookName, message: error instanceof Error ? error.message : "Unknown plugin handler failure" } };
+    return { ok: false, error: { code: "plugin_result_invalid" } };
   }
-  if (hook.type === "event") return { ok: true, value: undefined };
+  if (hook.type === "event") return exactKeys(value, ["status"]) && value.status === "accepted"
+    ? { ok: true, value }
+    : { ok: false, error: { code: "plugin_result_invalid" } };
   if (hook.type === "transform") {
-    return value === undefined
-      ? { ok: false, error: { name: "HookReturnContractError", hookName: request.hookName, message: "transform hooks must return a payload" } }
-      : { ok: true, value };
+    return exactKeys(value, ["status", "output"]) && value.status === "transformed" && value.output !== undefined
+      ? { ok: true, value }
+      : { ok: false, error: { code: "plugin_result_invalid" } };
   }
-  const valid = value !== null && typeof value === "object" && "decision" in value &&
-    (value.decision === "allow" || value.decision === "deny" || (value.decision === "modify" && "payload" in value));
+  const valid = exactKeys(value, ["decision", "reasonCode"]) &&
+    (value.decision === "allow" || value.decision === "deny") &&
+    typeof value.reasonCode === "string" && /^[a-z][a-z0-9._-]{0,63}$/.test(value.reasonCode);
   return valid
     ? { ok: true, value }
-    : { ok: false, error: { name: "HookReturnContractError", hookName: request.hookName, message: "policy hooks must return allow, deny, or modify with a payload" } };
+    : { ok: false, error: { code: "plugin_result_invalid" } };
+}
+function exactKeys(value, keys) {
+  if (value === null || typeof value !== "object" || safeArrayIsArray(value)) return false;
+  const prototype = safeGetPrototypeOf(value);
+  if (prototype !== safeObjectPrototype && prototype !== null) return false;
+  const ownNames = safeGetOwnPropertyNames(value);
+  if (ownNames.length !== keys.length || safeGetOwnPropertySymbols(value).length !== 0) return false;
+  return keys.every((key) => {
+    if (!safeArrayIncludes(ownNames, key)) return false;
+    const descriptor = safeGetOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && "value" in descriptor;
+  });
 }
 `;
 }

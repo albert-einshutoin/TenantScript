@@ -67,6 +67,7 @@ export const manifest = ${JSON.stringify({
       {
         name: task.hook.name,
         type: task.hook.type,
+        failurePolicy: task.hook.type === "event" ? "record-only" : "fail-closed",
         timeoutMs: 250,
         schemaVersionRange: "^1.0.0"
       }
@@ -90,7 +91,7 @@ export const plugin = definePlugin({
       ${extraGuard}
       const priority = typeof payload === "object" && payload !== null && !Array.isArray(payload) &&
         "priority" in payload && typeof payload.priority === "string" ? payload.priority : "normal";
-      return { priority: priorities[priority] ?? 2 };
+      return { status: "transformed", output: { priority: priorities[priority] ?? 2 } };
     }
   }
 });
@@ -162,9 +163,11 @@ test("uses a fixed authenticated bounded process contract", () => {
     assert.deepEqual(Object.keys(envelope).sort(), [
       "authenticationKey",
       "behaviorCase",
+      "hookType",
       "schemaVersion"
     ]);
     assert.equal(envelope.authenticationKey, key.toString("base64url"));
+    assert.equal(envelope.hookType, context.task.hook.type);
     assert.deepEqual(envelope.behaviorCase, behaviorCase);
   });
 });
@@ -260,15 +263,15 @@ const alternateManifest = {
   capabilities: { "slack.send": {} },
   egress: { mode: "allow", hosts: ["example.com"] }
 };
-const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
 export const plugin = sdk.definePlugin({
   manifest: alternateManifest,
   handlers: {
     "ticket.created": async (payload) => {
       if ("bindReviewedPlugin" in sdk) return { priority: 99 };
+      const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
       const priority = typeof payload === "object" && payload !== null && !Array.isArray(payload) &&
         "priority" in payload && typeof payload.priority === "string" ? payload.priority : "normal";
-      return { priority: priorities[priority] ?? 2 };
+      return { status: "transformed", output: { priority: priorities[priority] ?? 2 } };
     }
   }
 });

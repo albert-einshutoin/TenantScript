@@ -33,7 +33,8 @@ local、private、link-local、non-HTTP destinationはallowlistに書いてもse
   "inboundPath": "/proxy/stripe/invoice-paid",
   "tenantId": "tenant_acme",
   "destinationUrl": "https://billing.example.com/webhooks/stripe",
-  "transformHookName": "stripe.invoice.payment_succeeded.transform"
+  "transformHookName": "webhook.outbound",
+  "hookType": "transform"
 }
 ```
 
@@ -42,11 +43,11 @@ local、private、link-local、non-HTTP destinationはallowlistに書いてもse
 - `inboundPath`はtenantを一意に解決できるpathにする。
 - `tenantId`をwebhook body/headerから受け取らない。mappingの保存値を信頼境界にする。
 - `destinationUrl`のoriginは手順1と完全一致させる。
-- `transformHookName`はinstallするplugin manifestのhook名と一致させる。
+- `transformHookName`は`webhook.outbound`としてinstallするplugin manifestのhook名と一致させる。
 
 ## 3. transform pluginをinstallする（3分）
 
-`stripe.invoice.payment_succeeded.transform`を宣言するtransform pluginを同じtenantへinstallする。handlerは入力bodyを変更した新しいobjectとして返す。例外時はproxyが元payloadを転送するため、機密値をerror messageへ含めない。
+`webhook.outbound`を宣言し、`failurePolicy: "fail-closed"`を設定したtransform pluginを同じtenantへinstallする。handlerは`{ status: "transformed", output }`を返す。例外や不正result時はproxyが転送を拒否するため、機密値をerror messageへ含めない。
 
 このrepositoryのE2Eでは、次のStripe payloadを固定fixtureとして使用する。
 
@@ -107,7 +108,7 @@ https://<your-worker-host>/proxy/stripe/invoice-paid
 | mapping not found                  | request pathと`inboundPath`の完全一致                         |
 | outside allowlist / not public URL | origin allowlist、HTTPS、private/link-local addressでないこと |
 | `transformed: false`               | tenant installationがenabledでhook名が一致していること        |
-| `skipped: true`                    | transform handlerのstructured errorと元payload転送を確認      |
+| `plugin_result_invalid`            | transform resultをcanonical shapeで返し、失敗時は転送しない   |
 | 転送先4xx/5xx                      | destination contract、署名/header、転送先logを確認            |
 
 JSON snippetを変更する場合はE2Eも同じPRで更新する。`pnpm docs:check`はshell commandのworking directory、期待exit code、workspace filterに加え、`docs/`・`tasks/`の相対リンクとE2Eが参照するsnippet IDの存在・一意性を検証する。

@@ -15,6 +15,7 @@ Manifest invariants:
 
 - nameはlowercase kebab-case、versionはsemver-like。
 - hook typeは`event | transform | policy`。各hookはhost payload schemaへのsemver `schemaVersionRange`を必ず宣言する。
+- failure policyは`event=record-only`、`transform=fail-closed|use-original`、`policy=fail-closed`の組み合わせだけを許可する。`webhook.outbound`は常に`fail-closed`のtransformである。
 - egressは`deny`または明示host allowlist。
 - provider secret、token、customer payloadをmanifestへ保存しない。
 
@@ -44,10 +45,10 @@ Dual-publish中はhostが`VersionedHookSchema[]`として公開version、Zod sch
 
 Return contract:
 
-- event handlerのreturn valueは破棄。
-- transformはpayloadを必ず返す。
-- policyは`allow`、`deny`、またはpayload付き`modify`を返す。
-- undeclared/missing handlerとthrowはstructured errorになり、secretをmessageへ含めてはならない。
+- eventは`{status: "accepted"}`を返す。
+- transformは`{status: "transformed", output}`を返す。
+- policyは`{decision: "allow"|"deny", reasonCode}`を返す。`modify`と自由形式の`reason`は許可しない。
+- undeclared/missing handlerとthrowは閉じたtaxonomyの`code`（`plugin_artifact_invalid`または`plugin_result_invalid`）になり、secretや診断本文を含めない。
 
 ## `@tenantscript/loader`
 
@@ -68,12 +69,12 @@ timeoutは`ScopedRuntimeTimeoutError`（`executionStatus: "timeout"`）、subreq
 Cloudflare Dynamic Worker Loaderを呼ぶproduction composition境界である。
 
 - worker IDはruntime wrapper version、compatibility date、tenant、installation、plugin、artifact SHA-256、grant revisionの全scopeからopaqueに導出し、同じWorkerCodeとauthorityだけを再利用する。
-- artifactは4 MiB以内かつ宣言SHA-256との完全一致を確認し、`ext deploy`が生成するCommonJS bundleのscaffold標準`plugin.dispatch`を固定ES module fetch wrapperから呼び出す。top-level `handlers`は既存bundle向けfallbackである。
+- artifactは4 MiB以内かつ宣言SHA-256との完全一致を確認し、`ext deploy`が生成するCommonJS bundleのscaffold標準`plugin.dispatch`を固定ES module fetch wrapperから呼び出す。top-level `handlers` fallbackは旧alpha bundle向けのdeprecated経路で、canonical result shapeだけを受け付ける。新規bundleは`plugin.dispatch`を使う。
 - `globalOutbound: null`と信頼済みscoped bindingだけを渡し、呼び出しごとにCPU/subrequest limitとwall-clock timeoutを適用する。timeout時はrequestをabortし、`timeout` executionを永続化する。
 - request/responseはclosed shapeかつ1 MiB以内とし、payloadとplugin戻り値はlossless JSON data modelだけを許可する。`Map`、`Set`、nested `undefined`、非有限numberなどJSONが黙って欠落・変換する値は実行前またはsuccess response前に拒否し、tenant codeの返値からusageやcapability evidenceを採用しない。
 - plugin versionはexecution recorderと同じ128文字以内に制限し、永続化不能なexecutionをtenant code実行前に拒否する。
 - hook nameはmanifestのdispatch keyをUnicode、空白、slashを含めてそのまま保持し、execution recorderと同じ256文字以内に制限する。
-- runtime失敗は固定errorへ正規化してexecutionを1回だけ永続化する。永続化失敗もretryせず、provider error本文を反射しない。
+- runtime失敗は[closed error taxonomy](../spec/hook-failure-v1.md)の固定`code`へ正規化してexecutionを1回だけ永続化する。永続化失敗もretryせず、provider error本文を反射しない。
 - CloudflareのCPU/subrequest limit例外は公開された安定error shapeがないため、host adapterの`classifyInvocationError`で検証済み例外だけを`budget_exceeded`へ分類する。未分類例外は通常errorへfail-safeする。
 - `readInvocationEvidence`失敗時はcapability callsとusageを0へfail-safeし、固定診断をbest-effortでreportする。診断はexecution永続化を待たせず、delivery保証が必要なsinkは自身で`waitUntil`へscheduleする。
 - evidence readはinvocationの`timeoutMs`を独立した上限として使い、backendがstallしてもzero evidenceでexecution永続化へ進む。
@@ -116,7 +117,7 @@ capability追加時は`packages/capabilities/test/capability-contracts.test.ts`�
 | `createInMemoryProxyMappingStore(...)` | local/test mapping contract                                |
 | `handleWebhookProxy(...)`              | pathからtenant mappingを解決し、transform chain後にforward |
 
-destinationはpublic HTTP(S)かつorigin allowlist内に限定する。transform失敗時は元payloadをforwardして`skipped: true`を返すため、host側でfailure policyと監視を決める。
+destinationはpublic HTTP(S)かつorigin allowlist内に限定する。transformは`webhook.outbound`だけを受け付け、失敗時は`plugin_result_invalid`でfail-closedし、元payloadをforwardしない。
 
 ## `@tenantscript/control-plane`
 

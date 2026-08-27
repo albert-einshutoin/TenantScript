@@ -199,17 +199,17 @@ export default definePlugin({
 // hook定義: 型(event / transform / policy)ごとに実行モードとfailure policyが決まる(D-012)
 defineHooks({
   "invoice.created": {
-    type: "event",              // 並列実行、non-blocking、fail-open
+    type: "event",              // 並列実行、non-blocking、record-only
     schema: invoiceCreatedSchemaV1,  // versioned payload schema
   },
   "webhook.outbound": {
     type: "transform",          // Installation.priority順の直列チェーン
-    onPluginFailure: "skip",    // 失敗pluginはスキップし、元のpayloadを次段へ
+    failurePolicy: "fail-closed", // 不正resultや失敗時は転送しない
     budgetMs: 500,
   },
   "api.request": {
-    type: "policy",             // 直列。allow/deny/modifyを返す
-    onPluginFailure: "deny",    // fail-closed
+    type: "policy",             // 直列。allow/denyとreasonCodeを返す
+    failurePolicy: "fail-closed",
     budgetMs: 150,
   },
 });
@@ -299,10 +299,10 @@ hook payload schemaはsemverで版管理する。pluginはmanifestで互換range
 4. Manifestとinstallation grantを照合してscoped capability bindingsを生成し、installation configをctx.configとして束縛する。
 5. Egress policy、CPU/subrequest/timeout、tenant budgetを設定して実行する。
 6. capability callはexecutionごとのjournal(Durable Object)に記録する。retry時はjournal済みのcallをskipし、二重送信を防ぐ(D-014)。
-7. transform hookは前段の出力payloadを後段の入力にする。policy hookはallow/deny/modifyを返し、denyの時点でチェーンを打ち切る。
+7. transform hookは`{status: "transformed", output}`を前段から後段へ渡す。policy hookは`{decision, reasonCode}`を返し、denyの時点でチェーンを打ち切る。
 8. 結果、ログ、duration、error、usageをExecutionとして保存する。
 9. ctx.approvals.request()が呼ばれた場合、Workflowが承認のライフサイクル(通知、リマインド、エスカレーション、期限切れ)を管理し、決定時にresumeHookを新しいexecutionとして起動する。plugin実行自体はsuspendしない(D-011)。
-10. 失敗時はhookのfailure policy(event: fail-open / transform: skipまたはabort / policy: fail-closed)に従い、retry、plugin disable、rollback候補を提示する。
+10. 失敗時はhookのfailure policy(event: record-only / transform: fail-closedまたは明示的use-original / policy: fail-closed)に従い、retry、plugin disable、rollback候補を提示する。
 
 ---
 
@@ -364,7 +364,7 @@ transform / policy hookはhost本体のrequest pathに入るため、SLOを設�
 | Runtime limits | CPU、subrequests、timeout、memory相当、workflow runs、daily budgetをtenant/pluginごとに制限する。 |
 | Audit-first | capability call、approval decision、egress attempt、version change、rollbackをExecution Logに残す。 |
 | Capability callの冪等化 | executionごとのjournalに記録し、retry時は完了済みcallをskipする。通知の二重送信を防ぐ。 |
-| Failure policyはhook型で決まる | policy hookはfail-closed(deny)、event hookはfail-open(本体処理を止めない)、transform hookはskip / abortをhost側で宣言する。manifest不一致、grant不足、secret missing、budget超過による「実行可否」の判断は常にfail-closed(実行しない)。 |
+| Failure policyはhook型で決まる | policy hookはfail-closed、event hookはrecord-only、transform hookはfail-closedまたはhostが安全性を明示したuse-originalだけを許可する。manifest不一致、grant不足、secret missing、budget超過による「実行可否」の判断は常にfail-closed(実行しない)。 |
 
 ---
 

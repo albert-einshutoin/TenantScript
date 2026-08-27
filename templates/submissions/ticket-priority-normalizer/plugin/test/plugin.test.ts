@@ -20,7 +20,10 @@ describe("ticket-priority-normalizer", () => {
       context: { capability }
     });
 
-    expect(result).toEqual({ ok: true, value: expected });
+    expect(result).toEqual({
+      ok: true,
+      value: { status: "transformed", output: expected }
+    });
     expect(capability).not.toHaveBeenCalled();
   });
 
@@ -43,9 +46,7 @@ describe("ticket-priority-normalizer", () => {
     expect(result).toEqual({
       ok: false,
       error: {
-        name: "PluginHandlerError",
-        hookName: "ticket.created",
-        message: "invalid ticket payload"
+        code: "plugin_result_invalid"
       }
     });
     expect(capability).not.toHaveBeenCalled();
@@ -71,9 +72,7 @@ describe("ticket-priority-normalizer", () => {
     expect(result).toEqual({
       ok: false,
       error: {
-        name: "PluginHandlerError",
-        hookName: "ticket.created",
-        message: "invalid ticket payload"
+        code: "plugin_result_invalid"
       }
     });
     expect(capability).not.toHaveBeenCalled();
@@ -89,7 +88,7 @@ describe("ticket-priority-normalizer", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { name: "UnknownHookError", hookName: "ticket.deleted" }
+      error: { code: "plugin_artifact_invalid" }
     });
   });
 });

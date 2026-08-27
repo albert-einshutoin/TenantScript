@@ -154,6 +154,7 @@ test("uses a fixed authenticated bounded process contract and sanitized canaries
     assert.equal(isAbsolute(options.env.TENANTSCRIPT_SECURITY_ESCAPE_PATH), true);
     const envelope = JSON.parse(options.input);
     assert.equal(envelope.authenticationKey, key.toString("base64url"));
+    assert.equal(envelope.hookType, context.task.hook.type);
     assert.deepEqual(envelope.securityCase, securityCase);
     assert.deepEqual(envelope.allowedCapabilities, task.capabilities);
   });

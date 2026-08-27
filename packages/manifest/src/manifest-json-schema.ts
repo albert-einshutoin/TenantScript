@@ -28,31 +28,101 @@ export const tenantScriptManifestJsonSchema: TenantScriptManifestJsonSchema = de
     hooks: {
       type: "array",
       items: {
-        type: "object",
-        properties: {
-          name: {
-            type: "string",
-            minLength: 1
+        anyOf: [
+          {
+            type: "object",
+            properties: {
+              name: {
+                type: "string",
+                minLength: 1
+              },
+              timeoutMs: {
+                type: "integer",
+                exclusiveMinimum: 0
+              },
+              schemaVersionRange: {
+                type: "string",
+                description:
+                  "npm-compatible semantic version range; parseManifest is authoritative for semantic validation"
+              },
+              priority: {
+                type: "integer"
+              },
+              type: {
+                type: "string",
+                const: "event"
+              },
+              failurePolicy: {
+                type: "string",
+                const: "record-only"
+              }
+            },
+            required: ["name", "timeoutMs", "schemaVersionRange", "type"],
+            additionalProperties: false
           },
-          type: {
-            type: "string",
-            enum: ["event", "transform", "policy"]
+          {
+            type: "object",
+            properties: {
+              name: {
+                type: "string",
+                minLength: 1
+              },
+              timeoutMs: {
+                type: "integer",
+                exclusiveMinimum: 0
+              },
+              schemaVersionRange: {
+                type: "string",
+                description:
+                  "npm-compatible semantic version range; parseManifest is authoritative for semantic validation"
+              },
+              priority: {
+                type: "integer"
+              },
+              type: {
+                type: "string",
+                const: "transform"
+              },
+              failurePolicy: {
+                type: "string",
+                enum: ["fail-closed", "use-original"]
+              }
+            },
+            required: ["name", "timeoutMs", "schemaVersionRange", "type"],
+            additionalProperties: false
           },
-          timeoutMs: {
-            type: "integer",
-            exclusiveMinimum: 0
-          },
-          schemaVersionRange: {
-            type: "string",
-            description:
-              "npm-compatible semantic version range; parseManifest is authoritative for semantic validation"
-          },
-          priority: {
-            type: "integer"
+          {
+            type: "object",
+            properties: {
+              name: {
+                type: "string",
+                minLength: 1
+              },
+              timeoutMs: {
+                type: "integer",
+                exclusiveMinimum: 0
+              },
+              schemaVersionRange: {
+                type: "string",
+                description:
+                  "npm-compatible semantic version range; parseManifest is authoritative for semantic validation"
+              },
+              priority: {
+                type: "integer"
+              },
+              type: {
+                type: "string",
+                const: "policy"
+              },
+              failurePolicy: {
+                type: "string",
+                const: "fail-closed"
+              }
+            },
+            required: ["name", "timeoutMs", "schemaVersionRange", "type"],
+            additionalProperties: false
           }
-        },
-        required: ["name", "type", "timeoutMs", "schemaVersionRange"],
-        additionalProperties: false
+        ]
       },
       minItems: 1
     },

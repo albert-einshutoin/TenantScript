@@ -86,7 +86,7 @@ pnpm test:agent-scaffold
 生成された`test/plugin.test.ts`は、次のsecurity baselineを既に持ちます。
 
 - manifestで宣言したhookだけがdispatch成功する
-- undeclared hookは`UnknownHookError`になる
+- undeclared hookは`plugin_artifact_invalid`になる
 - 空の`capabilities`でcapability brokerを呼ばない
 
 要件を追加するときは、先にtestを失敗させます。Slack通知を追加する例なら「閾値未満では呼ばない」「閾値以上で`slack.send`を1回だけ呼ぶ」「tokenをinput/resultへ含めない」を先に固定します。

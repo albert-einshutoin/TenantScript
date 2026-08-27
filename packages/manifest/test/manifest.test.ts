@@ -234,6 +234,44 @@ describe("parseManifest", () => {
     }
   });
 
+  it.each([
+    ["event", "fail-closed"],
+    ["event", "use-original"],
+    ["transform", "record-only"],
+    ["policy", "use-original"],
+    ["transform", "skip"],
+    ["policy", "deny"]
+  ])("rejects failure policy %s for %s hook", (type, failurePolicy) => {
+    const result = parseManifest({
+      ...validManifest,
+      hooks: [{ ...validManifest.hooks[0], type, failurePolicy }]
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((error) => error.path === "hooks.0.failurePolicy")).toBe(true);
+    }
+  });
+
+  it("rejects use-original for the canonical webhook.outbound transform", () => {
+    const result = parseManifest({
+      ...validManifest,
+      hooks: [
+        {
+          ...validManifest.hooks[0],
+          name: "webhook.outbound",
+          type: "transform",
+          failurePolicy: "use-original"
+        }
+      ]
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((error) => error.path === "hooks.0.failurePolicy")).toBe(true);
+    }
+  });
+
   it.each(manifestBoundaryCases)(
     "rejects $name with a stable redacted issue",
     ({ createInput, expected }) => {

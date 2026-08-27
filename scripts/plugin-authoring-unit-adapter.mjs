@@ -53,6 +53,7 @@ export function createPluginAuthoringUnitTestAdapter({
           input: JSON.stringify({
             schemaVersion: 1,
             authenticationKey: authenticationKey.toString("base64url"),
+            hookType: context.task.hook.type,
             behaviorCase
           }),
           killSignal: "SIGKILL",

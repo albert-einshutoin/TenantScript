@@ -58,7 +58,10 @@ describe("zero-integration proxy mode quickstart", () => {
           hooks: [hookName]
         }
       ],
-      executeTransform: (_step, payload) => normalizeStripeInvoicePaid(payload),
+      executeTransform: (_step, payload) => ({
+        status: "transformed",
+        output: normalizeStripeInvoicePaid(payload)
+      }),
       forward: (request) => {
         forwarded.push(request);
         return { status: 202, body: { accepted: true } };

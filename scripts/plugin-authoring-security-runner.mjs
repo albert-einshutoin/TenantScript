@@ -26,10 +26,16 @@ try {
   assertExactKeys(envelope, [
     "schemaVersion",
     "authenticationKey",
+    "hookType",
     "securityCase",
     "allowedCapabilities"
   ]);
   assert(envelope.schemaVersion === 1);
+  assert(
+    envelope.hookType === "event" ||
+      envelope.hookType === "transform" ||
+      envelope.hookType === "policy"
+  );
   const authenticationKey = Buffer.from(envelope.authenticationKey, "base64url");
   assert(
     authenticationKey.length === 32 &&
@@ -50,6 +56,7 @@ try {
       const runtimeResult = await runScopedPluginDispatch({
         bundleCode: readFileSync(bundlePath, "utf8"),
         hookName: envelope.securityCase.hookName,
+        hookType: envelope.hookType,
         payload: envelope.securityCase.payload,
         context: {
           capability: async (name, capabilityInput) => {

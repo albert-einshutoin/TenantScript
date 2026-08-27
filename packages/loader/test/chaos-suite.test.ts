@@ -72,7 +72,7 @@ describe("loader chaos scenarios", () => {
         context: { capability: vi.fn() },
         limits: { timeoutMs: 250, memoryMb: 32 }
       })
-    ).rejects.toMatchObject({ name: "RangeError" });
+    ).rejects.toMatchObject({ code: "plugin_result_invalid" });
   });
 
   it("propagates a stopped broker as an execution failure without hanging", async () => {
@@ -93,30 +93,29 @@ describe("loader chaos scenarios", () => {
         },
         limits: { timeoutMs: 250, memoryMb: 32 }
       })
-    ).rejects.toThrow("synthetic broker unavailable");
+    ).rejects.toMatchObject({ code: "capability_failed" });
   });
 
-  it.each([
-    [{ timeoutMs: 0 }, "runtime timeoutMs must be a positive safe integer"],
-    [{ maxSubrequests: -1 }, "runtime maxSubrequests must be a non-negative safe integer"],
-    [{ memoryMb: 7 }, "runtime memoryMb must be a safe integer of at least 8"]
-  ] as const)("rejects invalid runtime limits before worker startup", async (limits, message) => {
-    const bundle = await bundleFromSource(`
+  it.each([{ timeoutMs: 0 }, { maxSubrequests: -1 }, { memoryMb: 7 }] as const)(
+    "rejects invalid runtime limits before worker startup",
+    async (limits) => {
+      const bundle = await bundleFromSource(`
       exports.handlers = {
         "invoice.created": () => "ok"
       };
     `);
 
-    await expect(
-      runScopedHandler({
-        bundleCode: bundle,
-        handlerName: "invoice.created",
-        payload: {},
-        context: { capability: vi.fn() },
-        limits
-      })
-    ).rejects.toThrow(message);
-  });
+      await expect(
+        runScopedHandler({
+          bundleCode: bundle,
+          handlerName: "invoice.created",
+          payload: {},
+          context: { capability: vi.fn() },
+          limits
+        })
+      ).rejects.toMatchObject({ code: "input_invalid" });
+    }
+  );
 });
 
 async function bundleFromSource(source: string): Promise<string> {

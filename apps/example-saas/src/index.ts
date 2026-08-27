@@ -17,10 +17,12 @@ import {
   type UsageMeter
 } from "@tenantscript/control-plane";
 import {
+  HookContractError,
   planExecution,
   runTransformChain,
   type ExecutionStep,
-  type Installation
+  type Installation,
+  type TransformHookResult
 } from "@tenantscript/host-sdk";
 import {
   definePlugin,
@@ -66,7 +68,15 @@ export interface ExampleSaasDemoOptions {
 const notifyManifest = {
   name: "large-invoice-notify",
   version: "1.0.0",
-  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
+  hooks: [
+    {
+      name: "invoice.created",
+      type: "event",
+      failurePolicy: "record-only",
+      timeoutMs: 250,
+      schemaVersionRange: "^1.0.0"
+    }
+  ],
   capabilities: { "slack.send": { channel: "C123" } },
   configSchema: { properties: {}, required: [] },
   egress: { mode: "deny" },
@@ -77,7 +87,13 @@ const transformManifest = {
   name: "payload-transformer",
   version: "1.0.0",
   hooks: [
-    { name: "webhook.outbound", type: "transform", timeoutMs: 250, schemaVersionRange: "^1.0.0" }
+    {
+      name: "webhook.outbound",
+      type: "transform",
+      failurePolicy: "fail-closed",
+      timeoutMs: 250,
+      schemaVersionRange: "^1.0.0"
+    }
   ],
   capabilities: {},
   configSchema: { properties: {}, required: [] },
@@ -183,10 +199,10 @@ async function transformWebhookOutbound(params: {
     });
 
     if (!result.ok) {
-      return currentPayload;
+      throw new HookContractError(result.error.code);
     }
 
-    return result.value as WebhookPayload;
+    return result.value as TransformHookResult<WebhookPayload>;
   });
 }
 
@@ -203,6 +219,7 @@ function createPlugins(options: ExampleSaasDemoOptions): Record<string, TenantSc
               text: `Large invoice ${invoice.invoiceId}: ${String(invoice.amountCents)}`
             });
           }
+          return { status: "accepted" };
         }
       }
     }),
@@ -212,14 +229,17 @@ function createPlugins(options: ExampleSaasDemoOptions): Record<string, TenantSc
         "webhook.outbound": (payload) => {
           const webhook = payload as WebhookPayload;
           return {
-            ...webhook,
-            headers: {
-              ...webhook.headers,
-              "x-tenantscript-demo": "payload-transformer"
-            },
-            body: {
-              ...webhook.body,
-              transformedBy: "payload-transformer"
+            status: "transformed",
+            output: {
+              ...webhook,
+              headers: {
+                ...webhook.headers,
+                "x-tenantscript-demo": "payload-transformer"
+              },
+              body: {
+                ...webhook.body,
+                transformedBy: "payload-transformer"
+              }
             }
           };
         }
@@ -269,10 +289,7 @@ async function dispatchAndRecord(params: {
     params.plugin === undefined
       ? ({
           ok: false,
-          error: {
-            name: "MissingHandlerError",
-            hookName: params.hookName
-          }
+          error: { code: "plugin_artifact_invalid" }
         } satisfies DispatchResult)
       : await params.plugin.dispatch({
           hookName: params.hookName,
@@ -290,9 +307,7 @@ async function dispatchAndRecord(params: {
       version: "1.0.0",
       status: result.ok ? "success" : "error",
       durationMs,
-      ...(result.ok
-        ? {}
-        : { error: "message" in result.error ? result.error.message : result.error.name }),
+      ...(result.ok ? {} : { error: result.error.code }),
       capabilityCalls:
         params.hookName === "invoice.created" ? [{ name: "slack.send", status: "success" }] : [],
       createdAt: new Date("2026-06-12T00:00:00.000Z")

@@ -1,25 +1,78 @@
 import { validRange } from "semver";
 import { z } from "zod";
+import {
+  defaultFailurePolicyForHookType,
+  isAllowedFailurePolicy,
+  isValidHookConfiguration
+} from "./contracts.js";
 
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
 const capabilityKeyPattern = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/;
 
+const hookCommonShape = {
+  name: z.string().min(1),
+  timeoutMs: z.number().int().positive(),
+  schemaVersionRange: z
+    .string()
+    .refine((range) => validRange(range) !== null, {
+      message: "schemaVersionRange must be a valid semver range"
+    })
+    .describe(
+      "npm-compatible semantic version range; parseManifest is authoritative for semantic validation"
+    ),
+  priority: z.number().int().optional()
+};
+
 const hookSchema = z
-  .object({
-    name: z.string().min(1),
-    type: z.enum(["event", "transform", "policy"]),
-    timeoutMs: z.number().int().positive(),
-    schemaVersionRange: z
-      .string()
-      .refine((range) => validRange(range) !== null, {
-        message: "schemaVersionRange must be a valid semver range"
+  .discriminatedUnion("type", [
+    z
+      .object({
+        ...hookCommonShape,
+        type: z.literal("event"),
+        failurePolicy: z.literal("record-only").optional()
       })
-      .describe(
-        "npm-compatible semantic version range; parseManifest is authoritative for semantic validation"
-      ),
-    priority: z.number().int().optional()
-  })
-  .strict();
+      .strict(),
+    z
+      .object({
+        ...hookCommonShape,
+        type: z.literal("transform"),
+        failurePolicy: z.enum(["fail-closed", "use-original"]).optional()
+      })
+      .strict(),
+    z
+      .object({
+        ...hookCommonShape,
+        type: z.literal("policy"),
+        failurePolicy: z.literal("fail-closed").optional()
+      })
+      .strict()
+  ])
+  .superRefine((hook, context) => {
+    const failurePolicy = hook.failurePolicy ?? defaultFailurePolicyForHookType(hook.type);
+    if (!isAllowedFailurePolicy(hook.type, failurePolicy)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["failurePolicy"],
+        message: `failurePolicy is not allowed for ${hook.type} hooks`
+      });
+    }
+
+    if (!isValidHookConfiguration(hook.name, hook.type, failurePolicy)) {
+      if (hook.name === "webhook.outbound" && hook.type !== "transform") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["type"],
+          message: "webhook.outbound must be a transform hook"
+        });
+      } else if (hook.name === "webhook.outbound") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["failurePolicy"],
+          message: "webhook.outbound must use fail-closed"
+        });
+      }
+    }
+  });
 
 const configFieldSchema = z
   .object({

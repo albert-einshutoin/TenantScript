@@ -31,7 +31,7 @@ describe("ext init", () => {
       name: "@tenantscript-plugin/webhook-transformer"
     });
     await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
-      'hooks: [{ name: "webhook.received", type: "transform"'
+      'hooks: [{ name: "webhook.outbound", type: "transform", failurePolicy: "fail-closed"'
     );
     await expect(readFile(join(target, "src", "manifest.ts"), "utf8")).resolves.toContain(
       "capabilities: {}"
@@ -40,10 +40,10 @@ describe("ext init", () => {
       'egress: { mode: "deny" }'
     );
     await expect(readFile(join(target, "src", "index.ts"), "utf8")).resolves.toContain(
-      '"webhook.received": async (payload, _context) => payload'
+      '"webhook.outbound": async (payload, _context) => ({ status: "transformed", output: payload })'
     );
     await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
-      'expect(result).toEqual({ ok: true, value: { id: "evt_1" } })'
+      'expect(result).toEqual({ ok: true, value: { status: "transformed", output: { id: "evt_1" } } })'
     );
     const securityNote = await readFile(join(target, "SECURITY.md"), "utf8");
     expect(securityNote).toContain("untrusted");
@@ -121,8 +121,8 @@ describe("ext init", () => {
     expect(source).toContain("Number.isSafeInteger(payload.amountCents)");
     expect(source).toContain("payload.amountCents >= 0");
     expect(source).toContain("!Array.isArray(payload)");
-    expect(source).toContain('decision: "deny", reason: "invalid invoice amount"');
-    expect(source).toContain('decision: "deny", reason: "manual approval required"');
+    expect(source).toContain('decision: "deny", reasonCode: "invalid_invoice_amount"');
+    expect(source).toContain('decision: "deny", reasonCode: "manual_approval_required"');
 
     const generatedTest = await readFile(join(target, "test", "plugin.test.ts"), "utf8");
     for (const required of [
@@ -215,8 +215,8 @@ describe("ext init", () => {
     expect(source).toContain('payload.method === "GET" || payload.method === "HEAD"');
     expect(source).toContain("payload.path !== ALLOWED_ROUTE");
     expect(source).toContain("!payload.path.startsWith(`${ALLOWED_ROUTE}/`)");
-    expect(source).toContain('decision: "deny", reason: "invalid API request"');
-    expect(source).toContain('decision: "deny", reason: "API request not allowed"');
+    expect(source).toContain('decision: "deny", reasonCode: "invalid_api_request"');
+    expect(source).toContain('decision: "deny", reasonCode: "request_not_allowed"');
 
     const generatedTest = await readFile(join(target, "test", "plugin.test.ts"), "utf8");
     for (const required of [
@@ -320,7 +320,7 @@ describe("ext init", () => {
       'name: "large-invoice-notify"'
     );
     await expect(readFile(join(target, "src", "index.ts"), "utf8")).resolves.toContain(
-      '"invoice.created": async (_payload, _context) => undefined'
+      '"invoice.created": async (_payload, _context) => ({ status: "accepted" })'
     );
     await expect(readFile(join(target, "test", "plugin.test.ts"), "utf8")).resolves.toContain(
       'hookName: "invoice.created"'
@@ -408,7 +408,7 @@ describe("ext init", () => {
     ).resolves.toBe(0);
 
     await expect(readFile(join(target, "src", "index.ts"), "utf8")).resolves.toContain(
-      '"webhook.outbound": async (payload, _context) => payload'
+      '"webhook.outbound": async (payload, _context) => ({ status: "transformed", output: payload })'
     );
   });
 
@@ -459,7 +459,7 @@ describe("ext init", () => {
     ).resolves.toBe(0);
 
     await expect(readFile(join(target, "src", "index.ts"), "utf8")).resolves.toContain(
-      '"invoice.approve": async (_payload, _context) => ({ decision: "allow" })'
+      '"invoice.approve": async (_payload, _context) => ({ decision: "allow", reasonCode: "allowed" })'
     );
   });
 

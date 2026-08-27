@@ -45,6 +45,7 @@
     "@tenantscript/test-config": "workspace:*"
   },
   "dependencies": {
-    "@tenantscript/host-sdk": "workspace:*"
+    "@tenantscript/host-sdk": "workspace:*",
+    "@tenantscript/manifest": "workspace:*"
   }
 }

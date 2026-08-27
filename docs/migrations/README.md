@@ -9,3 +9,4 @@ guideには影響package、before/after、移行手順、互換期間、rollback
 ## Available guides
 
 - [App-scoped provider secret references](app-scoped-secret-refs.md)
+- [Hook contract v1](hook-contract-v1.md)

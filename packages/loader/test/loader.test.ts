@@ -104,7 +104,7 @@ describe("runScopedHandler", () => {
         payload: {},
         context: { capability: vi.fn() }
       })
-    ).rejects.toThrow("egress denied: https://example.com/webhook");
+    ).rejects.toMatchObject({ code: "egress_denied" });
   });
 
   it("keeps egress denial logs for audit", async () => {
@@ -371,7 +371,7 @@ describe("runScopedHandler", () => {
           capability: vi.fn().mockRejectedValue(new Error("capability failed"))
         }
       })
-    ).rejects.toThrow("capability failed");
+    ).rejects.toMatchObject({ code: "capability_failed" });
   });
 
   it("serializes non-error capability failures across the worker boundary", async () => {
@@ -392,7 +392,7 @@ describe("runScopedHandler", () => {
           capability: vi.fn().mockRejectedValue("capability failed")
         }
       })
-    ).rejects.toThrow("capability failed");
+    ).rejects.toMatchObject({ code: "capability_failed" });
   });
 
   it("rejects bundles without a handlers object", async () => {
@@ -403,7 +403,7 @@ describe("runScopedHandler", () => {
         payload: {},
         context: { capability: vi.fn() }
       })
-    ).rejects.toThrow("plugin bundle must export a handlers object");
+    ).rejects.toMatchObject({ code: "plugin_artifact_invalid" });
   });
 
   it("rejects missing handlers", async () => {
@@ -414,11 +414,126 @@ describe("runScopedHandler", () => {
         payload: {},
         context: { capability: vi.fn() }
       })
-    ).rejects.toThrow("plugin bundle does not export handler invoice.created");
+    ).rejects.toMatchObject({ code: "plugin_artifact_invalid" });
   });
 });
 
 describe("runScopedPluginDispatch", () => {
+  it("enforces the canonical hook result when the hook type is supplied", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async () => ({ ok: true, value: { transformed: true } })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "webhook.outbound",
+        hookType: "transform",
+        payload: { subject: "safe" },
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toMatchObject({ code: "plugin_result_invalid" });
+  });
+
+  it("accepts the canonical transform result", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async () => ({ ok: true, value: { status: "transformed", output: { ok: true } } })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "webhook.outbound",
+        hookType: "transform",
+        payload: { subject: "safe" },
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toMatchObject({
+      value: { ok: true, value: { status: "transformed", output: { ok: true } } },
+      logs: []
+    });
+  });
+
+  it("converts local policy handler failures to a stable deny result", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = { dispatch: async () => { throw new Error("provider-secret"); } };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "invoice.approve",
+        hookType: "policy",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({
+      value: { ok: true, value: { decision: "deny", reasonCode: "plugin_result_invalid" } },
+      logs: []
+    });
+  });
+
+  it("converts local policy timeouts to a stable deny result", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = { dispatch: () => { while (true) {} } };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "invoice.approve",
+        hookType: "policy",
+        payload: {},
+        context: { capability: vi.fn() },
+        limits: { timeoutMs: 10 }
+      })
+    ).resolves.toEqual({
+      value: { ok: true, value: { decision: "deny", reasonCode: "plugin_timeout" } },
+      logs: []
+    });
+  });
+
+  it("converts malformed local policy results to a stable deny result", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async () => ({ ok: true, value: { decision: "maybe", reasonCode: "bad" } })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "invoice.approve",
+        hookType: "policy",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toEqual({
+      value: { ok: true, value: { decision: "deny", reasonCode: "plugin_result_invalid" } },
+      logs: []
+    });
+  });
+
+  it("rejects a non-transform dispatch for webhook.outbound", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = { dispatch: async () => ({ ok: true, value: { decision: "allow", reasonCode: "ok" } }) };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "webhook.outbound",
+        hookType: "policy",
+        payload: {},
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toMatchObject({ code: "input_invalid" });
+  });
+
   it("runs the standard plugin dispatch export without ambient Node globals", async () => {
     const bundle = await bundleFromSource(`
       exports.plugin = {
