@@ -56,15 +56,17 @@ async function dispatchPlugin(
   request: DispatchRequest
 ): Promise<DispatchResult> {
   let hook;
+  let hookType: unknown;
   try {
     hook = input.manifest.hooks.find((candidate) => candidate.name === request.hookName);
+    hookType = hook?.type;
   } catch {
     return { ok: false, error: { code: "plugin_artifact_invalid" } };
   }
   if (hook === undefined) {
     return { ok: false, error: { code: "plugin_artifact_invalid" } };
   }
-  if (!isHookType(hook.type)) {
+  if (!isHookType(hookType)) {
     return { ok: false, error: { code: "plugin_artifact_invalid" } };
   }
 
@@ -91,7 +93,7 @@ async function dispatchPlugin(
   }
 
   try {
-    return validateHookReturn(request.hookName, hook.type, handlerResult);
+    return validateHookReturn(request.hookName, hookType, handlerResult);
   } catch {
     return { ok: false, error: { code: "plugin_result_invalid" } };
   }

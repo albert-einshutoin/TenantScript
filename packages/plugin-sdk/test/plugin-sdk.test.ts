@@ -50,6 +50,37 @@ describe("definePlugin", () => {
     ).resolves.toEqual({ ok: false, error: { code: "plugin_artifact_invalid" } });
   });
 
+  it("collapses throwing manifest hook types into an artifact error", async () => {
+    const malformedHook = Object.defineProperty(
+      {
+        name: "invoice.unknown",
+        timeoutMs: 250,
+        schemaVersionRange: "^1.0.0"
+      },
+      "type",
+      {
+        enumerable: true,
+        get: () => {
+          throw new Error("manifest-type-secret");
+        }
+      }
+    );
+    const malformedManifest = {
+      ...manifest,
+      hooks: [malformedHook]
+    } as unknown as TenantScriptManifest;
+    const plugin = definePlugin({
+      manifest: malformedManifest,
+      handlers: {
+        "invoice.unknown": () => ({ decision: "allow", reasonCode: "accepted" })
+      }
+    });
+
+    await expect(
+      plugin.dispatch({ hookName: "invoice.unknown", payload: {}, context })
+    ).resolves.toEqual({ ok: false, error: { code: "plugin_artifact_invalid" } });
+  });
+
   it("dispatches a declared handler", async () => {
     const plugin = definePlugin({
       manifest,
