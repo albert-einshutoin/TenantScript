@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "source": {
     "repository": "https://github.com/albert-einshutoin/TenantScript",
-    "revision": "45aa61f68204f82bebe7e98ebfb6ab930d70fc0e",
+    "revision": "d997dd9a6779b12746d94872cc99e945581518a3",
     "directory": "templates/submissions/ticket-priority-normalizer/plugin",
     "files": {
       "templates/submissions/ticket-priority-normalizer/plugin/package.json": "4fda93b654f0b6c53d6693f8e03546dd99dc44909ecfa57294c423719f8e9bfb",
