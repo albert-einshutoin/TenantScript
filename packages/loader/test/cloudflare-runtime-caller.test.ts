@@ -83,7 +83,9 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     );
     expect(runtimeModule).toContain("assertJsonValue(value);");
     expect(runtimeModule).toContain("invalid TenantScript plugin return value");
-    expect(runtimeModule).toContain("validateHookReturn(input.hookType, result.value)");
+    expect(runtimeModule).toContain(
+      "value = validatePluginDispatchResult(input.hookType, result);"
+    );
     expect(runtimeModule).toContain("serializeJsonValue(value === undefined ? null : value)");
     expect(runtimeModule).toContain("commonJsExports?.plugin");
     expect(runtimeModule).toContain('safeObjectGetOwnPropertyDescriptor(value, "decision")');
@@ -113,6 +115,30 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         {}
       )
     ).rejects.toThrow("invalid TenantScript plugin return value");
+    const identityOverrideRuntimeSource = runtimeModule.replace(
+      'const pluginModule = await import("./tenant-plugin.cjs");',
+      'const pluginModule = { default: { plugin: { dispatch: async () => ({ ok: true, value: { status: "accepted" }, tenantId: "attacker" }) } } };'
+    );
+    const identityOverrideRuntimeNamespace = (await import(
+      `data:text/javascript;base64,${Buffer.from(identityOverrideRuntimeSource).toString("base64")}`
+    )) as unknown as {
+      default: { fetch: (request: Request, env: Record<string, unknown>) => Promise<Response> };
+    };
+    await expect(
+      identityOverrideRuntimeNamespace.default.fetch(
+        new Request("https://runtime.tenantscript.internal/v1/executions/exec_identity_override", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            executionId: "exec_identity_override",
+            hookName: "invoice.created",
+            hookType: "event",
+            payload: {}
+          })
+        }),
+        {}
+      )
+    ).rejects.toThrow("TenantScript plugin dispatch failed");
     const legacyRuntimeSource = runtimeModule.replace(
       'const pluginModule = await import("./tenant-plugin.cjs");',
       'const pluginModule = { handlers: { "invoice.policy": async () => ({ arbitrary: true }) } };'

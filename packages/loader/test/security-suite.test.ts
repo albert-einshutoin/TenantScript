@@ -2,18 +2,13 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import {
-  ScopedRuntimeLimitError,
-  bundlePlugin,
-  runScopedHandler,
-  runScopedPluginDispatch
-} from "../src/index.js";
+import { ScopedRuntimeLimitError, bundlePlugin, runScopedHandler } from "../src/index.js";
 
 describe("loader security suite", () => {
-  it("isolates the standard plugin dispatch export from Node globals", async () => {
+  it("isolates the scoped handler from Node globals", async () => {
     const bundle = await bundleFromSource(`
-      exports.plugin = {
-        dispatch: () => ({
+      exports.handlers = {
+        "ticket.created": () => ({
           ok: true,
           value: {
             processVisible: typeof process !== "undefined",
@@ -24,9 +19,9 @@ describe("loader security suite", () => {
     `);
 
     await expect(
-      runScopedPluginDispatch({
+      runScopedHandler({
         bundleCode: bundle,
-        hookName: "ticket.created",
+        handlerName: "ticket.created",
         payload: {},
         context: { capability: vi.fn() }
       })
@@ -48,8 +43,8 @@ describe("loader security suite", () => {
           return false;
         }
       };
-      exports.plugin = {
-        dispatch: async ({ payload, context }) => {
+      exports.handlers = {
+        "ticket.created": async (payload, context) => {
           const capabilityResult = await context.capability("kv.state", { key: "priority" });
           return {
             ok: true,
@@ -67,9 +62,9 @@ describe("loader security suite", () => {
     `);
 
     await expect(
-      runScopedPluginDispatch({
+      runScopedHandler({
         bundleCode: bundle,
-        hookName: "ticket.created",
+        handlerName: "ticket.created",
         payload: { subject: "Database unavailable" },
         context: { capability: vi.fn().mockResolvedValue({ value: "high" }) }
       })
@@ -95,8 +90,8 @@ describe("loader security suite", () => {
       const contextVisibleDuringEvaluation = typeof __tenant_context !== "undefined";
       __tenant_payload = { subject: "tampered" };
       __tenant_context = { capability: async () => ({ value: "tampered" }) };
-      exports.plugin = {
-        dispatch: async ({ payload, context }) => ({
+      exports.handlers = {
+        "ticket.created": async (payload, context) => ({
           ok: true,
           value: {
             payloadVisibleDuringEvaluation,
@@ -109,9 +104,9 @@ describe("loader security suite", () => {
     `);
 
     await expect(
-      runScopedPluginDispatch({
+      runScopedHandler({
         bundleCode: bundle,
-        hookName: "ticket.created",
+        handlerName: "ticket.created",
         payload: { subject: "original" },
         context: { capability: vi.fn().mockResolvedValue({ value: "high" }) }
       })
@@ -135,8 +130,8 @@ describe("loader security suite", () => {
       JSON.stringify = () => '{"channel":"attacker"}';
       JSON.parse = () => ({ value: "forged" });
       Object.prototype.toJSON = () => ({ key: "forged" });
-      exports.plugin = {
-        dispatch: async ({ context }) => ({
+      exports.handlers = {
+        "ticket.created": async (_payload, context) => ({
           ok: true,
           value: await context.capability("kv.state", { key: "priority" })
         })
@@ -145,9 +140,9 @@ describe("loader security suite", () => {
     const capability = vi.fn().mockResolvedValue({ value: "high" });
 
     await expect(
-      runScopedPluginDispatch({
+      runScopedHandler({
         bundleCode: bundle,
-        hookName: "ticket.created",
+        handlerName: "ticket.created",
         payload: {},
         context: { capability }
       })
@@ -158,18 +153,18 @@ describe("loader security suite", () => {
     expect(capability).toHaveBeenCalledExactlyOnceWith("kv.state", { key: "priority" });
   });
 
-  it("uses an evaluation-time Promise intrinsic for dispatch settlement", async () => {
+  it("uses an evaluation-time Promise intrinsic for handler settlement", async () => {
     const bundle = await bundleFromSource(`
       Promise.resolve = () => ({ ok: true, value: "forged" });
-      exports.plugin = {
-        dispatch: () => new Promise(() => {})
+      exports.handlers = {
+        "ticket.created": () => new Promise(() => {})
       };
     `);
 
     await expect(
-      runScopedPluginDispatch({
+      runScopedHandler({
         bundleCode: bundle,
-        hookName: "ticket.created",
+        handlerName: "ticket.created",
         payload: {},
         context: { capability: vi.fn() },
         limits: { timeoutMs: 25 }
@@ -179,8 +174,8 @@ describe("loader security suite", () => {
 
   it("rejects host payloads that JSON serialization would rewrite", async () => {
     const bundle = await bundleFromSource(`
-      exports.plugin = {
-        dispatch: ({ payload }) => ({ ok: true, value: payload })
+      exports.handlers = {
+        "ticket.created": (payload) => ({ ok: true, value: payload })
       };
     `);
     const sparsePayload = Array(2);
@@ -199,9 +194,9 @@ describe("loader security suite", () => {
 
     for (const payload of invalidPayloads) {
       await expect(
-        runScopedPluginDispatch({
+        runScopedHandler({
           bundleCode: bundle,
-          hookName: "ticket.created",
+          handlerName: "ticket.created",
           payload,
           context: { capability: vi.fn() }
         })
@@ -211,8 +206,8 @@ describe("loader security suite", () => {
 
   it("rejects host accessors without evaluating them during worker transfer", async () => {
     const bundle = await bundleFromSource(`
-      exports.plugin = {
-        dispatch: ({ payload }) => ({ ok: true, value: payload })
+      exports.handlers = {
+        "ticket.created": (payload) => ({ ok: true, value: payload })
       };
     `);
     let getterWasEvaluated = false;
@@ -225,9 +220,9 @@ describe("loader security suite", () => {
     });
 
     await expect(
-      runScopedPluginDispatch({
+      runScopedHandler({
         bundleCode: bundle,
-        hookName: "ticket.created",
+        handlerName: "ticket.created",
         payload,
         context: { capability: vi.fn() }
       })
@@ -237,8 +232,8 @@ describe("loader security suite", () => {
 
   it("rejects capability results that JSON serialization would rewrite", async () => {
     const bundle = await bundleFromSource(`
-      exports.plugin = {
-        dispatch: async ({ context }) => ({
+      exports.handlers = {
+        "ticket.created": async (_payload, context) => ({
           ok: true,
           value: await context.capability("kv.state", { key: "priority" })
         })
@@ -246,9 +241,9 @@ describe("loader security suite", () => {
     `);
 
     await expect(
-      runScopedPluginDispatch({
+      runScopedHandler({
         bundleCode: bundle,
-        hookName: "ticket.created",
+        handlerName: "ticket.created",
         payload: {},
         context: { capability: vi.fn().mockResolvedValue({ value: undefined }) }
       })
@@ -257,8 +252,8 @@ describe("loader security suite", () => {
 
   it("rejects capability inputs that JSON serialization would rewrite", async () => {
     const bundle = await bundleFromSource(`
-      exports.plugin = {
-        dispatch: async ({ payload, context }) => {
+      exports.handlers = {
+        "ticket.created": async (payload, context) => {
           let input;
           if (payload.kind === "non-finite") input = { total: Number.NaN };
           if (payload.kind === "undefined") input = { missing: undefined };
@@ -276,9 +271,9 @@ describe("loader security suite", () => {
 
     for (const kind of ["non-finite", "undefined", "date", "sparse"]) {
       await expect(
-        runScopedPluginDispatch({
+        runScopedHandler({
           bundleCode: bundle,
-          hookName: "ticket.created",
+          handlerName: "ticket.created",
           payload: { kind },
           context: { capability }
         })
@@ -287,10 +282,10 @@ describe("loader security suite", () => {
     expect(capability).not.toHaveBeenCalled();
   });
 
-  it("rejects successful dispatch values outside the lossless JSON model", async () => {
+  it("rejects successful handler values outside the lossless JSON model", async () => {
     const bundle = await bundleFromSource(`
-      exports.plugin = {
-        dispatch: ({ payload }) => {
+      exports.handlers = {
+        "ticket.created": (payload) => {
           let value;
           if (payload.kind === "non-finite") value = { total: Number.NaN };
           if (payload.kind === "undefined") value = { missing: undefined };
@@ -313,29 +308,20 @@ describe("loader security suite", () => {
 
     for (const kind of ["non-finite", "undefined", "date", "sparse", "prototype", "accessor"]) {
       await expect(
-        runScopedPluginDispatch({
+        runScopedHandler({
           bundleCode: bundle,
-          hookName: "ticket.created",
+          handlerName: "ticket.created",
           payload: { kind },
           context: { capability: vi.fn() }
         })
       ).rejects.toMatchObject({ code: "plugin_result_invalid" });
     }
-
-    await expect(
-      runScopedPluginDispatch({
-        bundleCode: bundle,
-        hookName: "ticket.created",
-        payload: { kind: "allowed-undefined" },
-        context: { capability: vi.fn() }
-      })
-    ).resolves.toEqual({ value: { ok: true, value: undefined }, logs: [] });
   });
 
-  it("rejects dispatch that returns while a capability call is unfinished", async () => {
+  it("rejects a handler that returns while a capability call is unfinished", async () => {
     const bundle = await bundleFromSource(`
-      exports.plugin = {
-        dispatch: ({ context }) => {
+      exports.handlers = {
+        "ticket.created": (_payload, context) => {
           Promise.resolve().then(() => context.capability("kv.state", { key: "priority" }));
           return { ok: true, value: undefined };
         }
@@ -343,9 +329,9 @@ describe("loader security suite", () => {
     `);
 
     await expect(
-      runScopedPluginDispatch({
+      runScopedHandler({
         bundleCode: bundle,
-        hookName: "ticket.created",
+        handlerName: "ticket.created",
         payload: {},
         context: {
           capability: async () => {

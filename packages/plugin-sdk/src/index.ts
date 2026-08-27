@@ -67,14 +67,15 @@ async function dispatchPlugin(
 
   let handler: PluginHandler;
   try {
-    if (!Object.hasOwn(input.handlers, request.hookName)) {
+    const descriptor = Object.getOwnPropertyDescriptor(input.handlers, request.hookName);
+    if (
+      descriptor === undefined ||
+      !("value" in descriptor) ||
+      typeof descriptor.value !== "function"
+    ) {
       return { ok: false, error: { code: "plugin_artifact_invalid" } };
     }
-    const candidate = input.handlers[request.hookName];
-    if (typeof candidate !== "function") {
-      return { ok: false, error: { code: "plugin_artifact_invalid" } };
-    }
-    handler = candidate;
+    handler = descriptor.value as PluginHandler;
   } catch {
     return { ok: false, error: { code: "plugin_artifact_invalid" } };
   }

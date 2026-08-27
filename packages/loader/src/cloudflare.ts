@@ -877,6 +877,37 @@ function validateHookReturn(hookType, value) {
   return value;
 }
 
+function validatePluginDispatchResult(hookType, result) {
+  if (
+    result === null ||
+    typeof result !== "object" ||
+    safeArrayIsArray(result) ||
+    (() => {
+      const prototype = safeObjectGetPrototypeOf(result);
+      return prototype !== safeObjectPrototype && prototype !== null;
+    })() ||
+    safeObjectKeys(result).length !== 2 ||
+    safeObjectGetOwnPropertyNames(result).length !== 2 ||
+    safeObjectGetOwnPropertySymbols(result).length !== 0 ||
+    !safeObjectHasOwn(result, "ok") ||
+    !safeObjectHasOwn(result, "value")
+  ) {
+    throw new Error("TenantScript plugin dispatch failed");
+  }
+  const ok = safeObjectGetOwnPropertyDescriptor(result, "ok");
+  const value = safeObjectGetOwnPropertyDescriptor(result, "value");
+  if (
+    ok === undefined ||
+    !("value" in ok) ||
+    ok.value !== true ||
+    value === undefined ||
+    !("value" in value)
+  ) {
+    throw new Error("TenantScript plugin dispatch failed");
+  }
+  return validateHookReturn(hookType, value.value);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
@@ -962,15 +993,7 @@ export default {
         payload: input.payload,
         context
       });
-      if (
-        result === null ||
-        typeof result !== "object" ||
-        result.ok !== true ||
-        !("value" in result)
-      ) {
-        throw new Error("TenantScript plugin dispatch failed");
-      }
-      value = validateHookReturn(input.hookType, result.value);
+      value = validatePluginDispatchResult(input.hookType, result);
     } else {
       const handlerDescriptor = safeObjectGetOwnPropertyDescriptor(handlers, input.hookName);
       if (

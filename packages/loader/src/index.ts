@@ -157,12 +157,12 @@ export async function runScopedHandler(params: {
 export async function runScopedPluginDispatch(params: {
   bundleCode: string;
   hookName: string;
-  hookType?: HookType;
+  hookType: HookType;
   payload: unknown;
   context: ScopedRuntimeContext;
   limits?: ScopedRuntimeLimits;
 }): Promise<ScopedRuntimeResult> {
-  if (params.hookType !== undefined && !isHookType(params.hookType)) {
+  if (!isHookType(params.hookType)) {
     throw new ScopedRuntimeInputError();
   }
   if (params.hookName === "webhook.outbound" && params.hookType !== "transform") {
@@ -175,7 +175,7 @@ export async function runScopedPluginDispatch(params: {
       handlerName: params.hookName,
       payload: params.payload,
       context: params.context,
-      ...(params.hookType === undefined ? {} : { hookType: params.hookType }),
+      hookType: params.hookType,
       entrypoint: "pluginDispatch",
       limits
     });

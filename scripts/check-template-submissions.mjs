@@ -522,9 +522,11 @@ function validateHook(value, displayPath) {
   const allowedFailurePolicies =
     value.type === "event"
       ? ["record-only"]
-      : value.type === "transform" || value.type === "policy"
+      : value.type === "transform"
         ? ["fail-closed", "use-original"]
-        : [];
+        : value.type === "policy"
+          ? ["fail-closed"]
+          : [];
   if (!allowedFailurePolicies.includes(value.failurePolicy)) {
     errors.push(`${displayPath}: hook.failurePolicy does not match hook.type`);
   }

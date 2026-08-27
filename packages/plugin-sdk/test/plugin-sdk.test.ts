@@ -164,6 +164,23 @@ describe("definePlugin", () => {
     ).resolves.toEqual({ ok: false, error: { code: "plugin_artifact_invalid" } });
   });
 
+  it("rejects accessor handlers without evaluating them", async () => {
+    let getterEvaluated = false;
+    const accessorHandlers = Object.defineProperty({}, "invoice.created", {
+      enumerable: true,
+      get: () => {
+        getterEvaluated = true;
+        return () => ({ status: "accepted" });
+      }
+    }) as Record<string, (payload: unknown, context: PluginContext) => unknown>;
+    const plugin = definePlugin({ manifest, handlers: accessorHandlers });
+
+    await expect(
+      plugin.dispatch({ hookName: "invoice.created", payload: {}, context })
+    ).resolves.toEqual({ ok: false, error: { code: "plugin_artifact_invalid" } });
+    expect(getterEvaluated).toBe(false);
+  });
+
   it("collapses result accessors that throw into a stable error", async () => {
     const plugin = definePlugin({
       manifest,

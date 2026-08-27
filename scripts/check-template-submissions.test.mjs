@@ -329,6 +329,23 @@ test("requires canonical event success and blocking-hook values", () => {
   });
 });
 
+test("rejects use-original for policy hooks", () => {
+  withRepository(({ root, submission }) => {
+    submission.hook.type = "policy";
+    submission.hook.failurePolicy = "use-original";
+    submission.verification.behaviorCases[0].expected = {
+      ok: true,
+      value: { decision: "allow", reasonCode: "approved" }
+    };
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /hook\.failurePolicy does not match hook\.type/);
+  });
+});
+
 test("rejects closed-schema, identity, SDK, hook, and egress violations", () => {
   withRepository(({ root, submission }) => {
     submission.unexpected = true;
@@ -1078,6 +1095,14 @@ test("publishes a closed JSON Schema for the submission packet", () => {
   assert.deepEqual(schema.properties.kind.enum, ["community", "simulation"]);
   assert.equal(schema.properties.source.additionalProperties, false);
   assert.equal(schema.properties.verification.additionalProperties, false);
+  assert.equal(schema.properties.hook.oneOf.length, 3);
+  assert.ok(
+    schema.properties.hook.allOf.some(
+      (condition) =>
+        condition.if?.properties?.name?.const === "webhook.outbound" &&
+        condition.then?.properties?.failurePolicy?.const === "fail-closed"
+    )
+  );
   assert.ok(schema.properties.verification.required.includes("behaviorCases"));
   assert.equal(schema.properties.egress.properties.mode.const, "deny");
   assert.equal(schema.properties.egress.properties.allowHosts.maxItems, 0);

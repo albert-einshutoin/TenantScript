@@ -293,3 +293,44 @@ export {};
     }
   );
 });
+
+test("rejects inherited handlers instead of dispatching them", () => {
+  const source = `import { definePlugin } from "@tenantscript/plugin-sdk";
+import { manifest } from "./manifest.js";
+const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
+const handlers = Object.create({
+  "ticket.created": async (payload: unknown) => {
+    const priority = typeof payload === "object" && payload !== null && !Array.isArray(payload) &&
+      "priority" in payload && typeof payload.priority === "string" ? payload.priority : "normal";
+    return { status: "transformed", output: { priority: priorities[priority] ?? 2 } };
+  }
+});
+export const plugin = definePlugin({ manifest, handlers });
+export default plugin;
+`;
+
+  withFixture((context) => {
+    assert.equal(createPluginAuthoringUnitTestAdapter()(context), false);
+  }, source);
+});
+
+test("rejects accessor handlers instead of evaluating them", () => {
+  const source = `import { definePlugin } from "@tenantscript/plugin-sdk";
+import { manifest } from "./manifest.js";
+const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
+const handlers = Object.defineProperty({}, "ticket.created", {
+  enumerable: true,
+  get: () => (payload: unknown) => {
+    const priority = typeof payload === "object" && payload !== null && !Array.isArray(payload) &&
+      "priority" in payload && typeof payload.priority === "string" ? payload.priority : "normal";
+    return { status: "transformed", output: { priority: priorities[priority] ?? 2 } };
+  }
+});
+export const plugin = definePlugin({ manifest, handlers });
+export default plugin;
+`;
+
+  withFixture((context) => {
+    assert.equal(createPluginAuthoringUnitTestAdapter()(context), false);
+  }, source);
+});

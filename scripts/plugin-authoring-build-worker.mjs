@@ -351,8 +351,15 @@ export function definePlugin(input) {
 async function dispatchPlugin(input, request) {
   const hook = input.manifest.hooks.find((candidate) => candidate.name === request.hookName);
   if (hook === undefined) return { ok: false, error: { code: "plugin_artifact_invalid" } };
-  const handler = input.handlers[request.hookName];
-  if (handler === undefined) return { ok: false, error: { code: "plugin_artifact_invalid" } };
+  const handlerDescriptor = safeGetOwnPropertyDescriptor(input.handlers, request.hookName);
+  if (
+    handlerDescriptor === undefined ||
+    !("value" in handlerDescriptor) ||
+    typeof handlerDescriptor.value !== "function"
+  ) {
+    return { ok: false, error: { code: "plugin_artifact_invalid" } };
+  }
+  const handler = handlerDescriptor.value;
   let value;
   try { value = await handler(request.payload, request.context); }
   catch (error) {
