@@ -204,8 +204,11 @@ describe("definePlugin", () => {
     const plugin = definePlugin({
       manifest,
       handlers: {
-        "invoice.created": () =>
-          Object.assign(Object.create({ inherited: true }), { status: "accepted" })
+        "invoice.created": () => {
+          const custom = { status: "accepted" as const };
+          Reflect.setPrototypeOf(custom, { inherited: true });
+          return custom;
+        }
       }
     });
 

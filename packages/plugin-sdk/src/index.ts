@@ -137,7 +137,7 @@ function isRecordWithKeys(
   keys: readonly string[]
 ): value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
+  const prototype = Reflect.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) return false;
   const ownNames = Object.getOwnPropertyNames(value);
   if (
