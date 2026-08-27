@@ -122,6 +122,22 @@ export const tenantScriptManifestJsonSchema: TenantScriptManifestJsonSchema = de
             required: ["name", "timeoutMs", "schemaVersionRange", "type"],
             additionalProperties: false
           }
+        ],
+        allOf: [
+          {
+            if: {
+              required: ["name"],
+              properties: {
+                name: { const: "webhook.outbound" }
+              }
+            },
+            then: {
+              properties: {
+                type: { const: "transform" },
+                failurePolicy: { const: "fail-closed" }
+              }
+            }
+          }
         ]
       },
       minItems: 1

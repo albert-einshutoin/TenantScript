@@ -16,6 +16,7 @@ const DYNAMIC_WORKER_RUNTIME_VERSION = "v2";
 const DYNAMIC_WORKER_MAIN_MODULE = "tenantscript-runtime.js";
 const DYNAMIC_WORKER_PLUGIN_MODULE = "tenant-plugin.cjs";
 type DynamicWorkerInvocationFailureCode =
+  | "plugin_artifact_invalid"
   | "plugin_memory_exceeded"
   | "plugin_subrequest_exceeded"
   | "plugin_result_invalid"
@@ -222,7 +223,12 @@ export function createCloudflareDynamicWorkerCaller(
           )
           .then(readResponseValue);
         value = await withWallClockTimeout(invocation, request.limits.timeoutMs, abortController);
-        if (request.hookType === "policy" && !isCanonicalPolicyResult(value)) {
+        const dispatchFailureCode = getPluginDispatchFailureCode(value);
+        if (dispatchFailureCode !== undefined) {
+          invocationFailed = true;
+          classifiedFailureCode = dispatchFailureCode;
+          value = undefined;
+        } else if (request.hookType === "policy" && !isCanonicalPolicyResult(value)) {
           invocationFailed = true;
           value = undefined;
         }
@@ -693,6 +699,24 @@ function isCanonicalPolicyResult(
   }
 }
 
+function getPluginDispatchFailureCode(
+  value: unknown
+): "plugin_artifact_invalid" | "plugin_result_invalid" | undefined {
+  if (!isRecord(value) || !Object.hasOwn(value, "ok")) return undefined;
+  if (
+    !hasExactKeys(value, ["ok", "error"]) ||
+    value.ok !== false ||
+    !isRecord(value.error) ||
+    !hasExactKeys(value.error, ["code"])
+  ) {
+    return "plugin_result_invalid";
+  }
+  return value.error.code === "plugin_artifact_invalid" ||
+    value.error.code === "plugin_result_invalid"
+    ? value.error.code
+    : "plugin_result_invalid";
+}
+
 // JSON.stringify silently rewrites several JavaScript values. Validate the exact JSON data model
 // first so the tenant receives the same payload that the trusted host authorized.
 function assertLosslessJsonValue(value: unknown, ancestors = new Set<object>()): void {
@@ -906,20 +930,19 @@ function validatePluginDispatchResult(hookType, result) {
     safeObjectKeys(result).length !== 2 ||
     safeObjectGetOwnPropertyNames(result).length !== 2 ||
     safeObjectGetOwnPropertySymbols(result).length !== 0 ||
-    !safeObjectHasOwn(result, "ok") ||
-    !safeObjectHasOwn(result, "value")
+    !safeObjectHasOwn(result, "ok")
   ) {
     throw new Error("TenantScript plugin dispatch failed");
   }
   const ok = safeObjectGetOwnPropertyDescriptor(result, "ok");
+  if (ok === undefined || !("value" in ok)) {
+    throw new Error("TenantScript plugin dispatch failed");
+  }
+  if (ok.value === false) {
+    return result;
+  }
   const value = safeObjectGetOwnPropertyDescriptor(result, "value");
-  if (
-    ok === undefined ||
-    !("value" in ok) ||
-    ok.value !== true ||
-    value === undefined ||
-    !("value" in value)
-  ) {
+  if (ok.value !== true || value === undefined || !("value" in value)) {
     throw new Error("TenantScript plugin dispatch failed");
   }
   return validateHookReturn(hookType, value.value);

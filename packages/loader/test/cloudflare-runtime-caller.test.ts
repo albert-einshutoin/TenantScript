@@ -115,6 +115,31 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         {}
       )
     ).rejects.toThrow("invalid TenantScript plugin return value");
+    const dispatchFailureRuntimeSource = runtimeModule.replace(
+      'const pluginModule = await import("./tenant-plugin.cjs");',
+      'const pluginModule = { default: { plugin: { dispatch: async () => ({ ok: false, error: { code: "plugin_artifact_invalid" } }) } } };'
+    );
+    const dispatchFailureRuntimeNamespace = (await import(
+      `data:text/javascript;base64,${Buffer.from(dispatchFailureRuntimeSource).toString("base64")}`
+    )) as unknown as {
+      default: { fetch: (request: Request, env: Record<string, unknown>) => Promise<Response> };
+    };
+    const dispatchFailureResponse = await dispatchFailureRuntimeNamespace.default.fetch(
+      new Request("https://runtime.tenantscript.internal/v1/executions/exec_dispatch_failure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          executionId: "exec_dispatch_failure",
+          hookName: "invoice.created",
+          hookType: "event",
+          payload: {}
+        })
+      }),
+      {}
+    );
+    await expect(dispatchFailureResponse.json()).resolves.toEqual({
+      value: { ok: false, error: { code: "plugin_artifact_invalid" } }
+    });
     const identityOverrideRuntimeSource = runtimeModule.replace(
       'const pluginModule = await import("./tenant-plugin.cjs");',
       'const pluginModule = { default: { plugin: { dispatch: async () => ({ ok: true, value: { status: "accepted" }, tenantId: "attacker" }) } } };'
@@ -568,6 +593,43 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         workflowRuns: 0
       }
     });
+  });
+
+  it("preserves canonical plugin dispatch failures at the host boundary", async () => {
+    const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
+      Promise.resolve(request.execution)
+    );
+    const caller = createCloudflareDynamicWorkerCaller({
+      loader: createCachingLoader(() =>
+        Response.json({ value: { ok: false, error: { code: "plugin_artifact_invalid" } } })
+      ),
+      compatibilityDate: "2026-07-21",
+      loadArtifact: () => Promise.resolve("runtime-code"),
+      createScopeBindings: () => ({}),
+      readInvocationEvidence: () =>
+        Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
+      recorder: { record }
+    });
+
+    await expect(
+      caller.run({
+        executionId: "exec_dispatch_failure",
+        tenantId: "tenant_1",
+        installationId: "installation_1",
+        pluginId: "plugin_1",
+        hookName: "invoice.created",
+        hookType: "event",
+        version: "1.0.0",
+        artifactSha256: sha256("runtime-code"),
+        grantRevision: "grant_1",
+        payload: {},
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
+      })
+    ).rejects.toMatchObject({ code: "plugin_artifact_invalid" });
+    const recording = record.mock.calls[0]?.[0];
+    expect(recording).toBeDefined();
+    expect(recording?.execution.status).toBe("error");
+    expect(recording?.execution.error).toBe("plugin_artifact_invalid");
   });
 
   it("returns a stable deny result when a policy invocation fails", async () => {

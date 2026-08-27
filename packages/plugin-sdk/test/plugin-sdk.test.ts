@@ -26,6 +26,30 @@ const context: PluginContext = {
 };
 
 describe("definePlugin", () => {
+  it("rejects manifests with an unknown hook type at dispatch time", async () => {
+    const malformedManifest = {
+      ...manifest,
+      hooks: [
+        {
+          name: "invoice.unknown",
+          type: "unknown",
+          timeoutMs: 250,
+          schemaVersionRange: "^1.0.0"
+        }
+      ]
+    } as unknown as TenantScriptManifest;
+    const plugin = definePlugin({
+      manifest: malformedManifest,
+      handlers: {
+        "invoice.unknown": () => ({ decision: "allow", reasonCode: "accepted" })
+      }
+    });
+
+    await expect(
+      plugin.dispatch({ hookName: "invoice.unknown", payload: {}, context })
+    ).resolves.toEqual({ ok: false, error: { code: "plugin_artifact_invalid" } });
+  });
+
   it("dispatches a declared handler", async () => {
     const plugin = definePlugin({
       manifest,

@@ -384,6 +384,7 @@ export async function runTransformChain<TPayload>(
 }
 
 export function retryPolicyForHookType(hookType: HookType): HookRetryPolicy {
+  if (!isHookType(hookType)) throw new HookContractError("input_invalid");
   return {
     hookType,
     failurePolicy: defaultFailurePolicyForHookType(hookType),

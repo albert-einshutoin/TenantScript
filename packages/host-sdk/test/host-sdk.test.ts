@@ -281,6 +281,16 @@ describe("schema dual-publish routing", () => {
 });
 
 describe("retry policy", () => {
+  it("rejects unknown hook types before executing retry callbacks", async () => {
+    expect(() => retryPolicyForHookType("unknown" as HookType)).toThrow("input_invalid");
+    const execute = vi.fn();
+
+    await expect(runWithRetryPolicy({ hookType: "unknown" as HookType, execute })).rejects.toThrow(
+      "input_invalid"
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it.each([
     { hookType: "event", failurePolicy: "record-only", retry: true },
     { hookType: "transform", failurePolicy: "fail-closed", retry: false },

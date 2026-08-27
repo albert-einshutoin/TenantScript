@@ -37,11 +37,14 @@ export const hookErrorCodes = [
 export type HookErrorCode = (typeof hookErrorCodes)[number];
 
 export function defaultFailurePolicyForHookType(type: HookType): FailurePolicy {
+  if (!isHookType(type)) throw new Error("input_invalid");
   return defaultFailurePolicies[type];
 }
 
 export function isAllowedFailurePolicy(type: HookType, policy: FailurePolicy): boolean {
-  return allowedFailurePolicies[type].includes(policy);
+  return isHookType(type) && (failurePolicies as readonly string[]).includes(policy)
+    ? allowedFailurePolicies[type].includes(policy)
+    : false;
 }
 
 export function isValidHookConfiguration(

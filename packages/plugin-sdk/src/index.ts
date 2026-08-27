@@ -1,4 +1,4 @@
-import type { HookType, TenantScriptManifest } from "@tenantscript/manifest";
+import { isHookType, type TenantScriptManifest } from "@tenantscript/manifest";
 
 export interface PluginContext {
   capability: (name: string, input: unknown) => Promise<unknown>;
@@ -64,6 +64,9 @@ async function dispatchPlugin(
   if (hook === undefined) {
     return { ok: false, error: { code: "plugin_artifact_invalid" } };
   }
+  if (!isHookType(hook.type)) {
+    return { ok: false, error: { code: "plugin_artifact_invalid" } };
+  }
 
   let handler: PluginHandler;
   try {
@@ -94,7 +97,7 @@ async function dispatchPlugin(
   }
 }
 
-function validateHookReturn(_hookName: string, hookType: HookType, value: unknown): DispatchResult {
+function validateHookReturn(_hookName: string, hookType: unknown, value: unknown): DispatchResult {
   if (hookType === "event") {
     return isEventResult(value)
       ? { ok: true, value }
@@ -107,6 +110,9 @@ function validateHookReturn(_hookName: string, hookType: HookType, value: unknow
       : { ok: false, error: { code: "plugin_result_invalid" } };
   }
 
+  if (hookType !== "policy") {
+    return { ok: false, error: { code: "plugin_result_invalid" } };
+  }
   return isPolicyResult(value)
     ? { ok: true, value }
     : { ok: false, error: { code: "plugin_result_invalid" } };

@@ -479,6 +479,45 @@ describe("runScopedPluginDispatch", () => {
     });
   });
 
+  it("preserves the canonical plugin failure envelope", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async () => ({ ok: false, error: { code: "plugin_artifact_invalid" } })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "webhook.outbound",
+        hookType: "transform",
+        payload: { subject: "safe" },
+        context: { capability: vi.fn() }
+      })
+    ).resolves.toMatchObject({
+      value: { ok: false, error: { code: "plugin_artifact_invalid" } },
+      logs: []
+    });
+  });
+
+  it("does not trust non-SDK error codes from a plugin failure envelope", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = {
+        dispatch: async () => ({ ok: false, error: { code: "capability_denied" } })
+      };
+    `);
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "webhook.outbound",
+        hookType: "transform",
+        payload: { subject: "safe" },
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toMatchObject({ code: "plugin_result_invalid" });
+  });
+
   it("converts local policy handler failures to a stable deny result", async () => {
     const bundle = await bundleFromSource(`
       exports.plugin = { dispatch: async () => { throw new Error("provider-secret"); } };
