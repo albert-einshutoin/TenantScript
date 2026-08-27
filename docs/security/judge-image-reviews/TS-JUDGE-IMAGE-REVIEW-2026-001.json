@@ -4,33 +4,33 @@
   "id": "TS-JUDGE-IMAGE-REVIEW-2026-001",
   "source": {
     "repository": "albert-einshutoin/TenantScript",
-    "pullRequest": 356,
-    "headSha": "c57fccc72bd63622383eb865c489fd083c9d962f"
+    "pullRequest": 455,
+    "headSha": "3846234225e74032384808d88366dcf8f3e2bab7"
   },
   "workflow": {
     "event": "pull_request",
-    "runId": 32648424914,
-    "jobId": 97216176892,
-    "mergeSha": "cb7323031a08705864480899f769184b64198a90",
+    "runId": 33077672438,
+    "jobId": 98536067466,
+    "mergeSha": "196445aaee08ed33014b6b6978f1234ae66bffe6",
     "conclusion": "success",
-    "completedAt": "2026-08-23T15:33:56.000Z",
-    "url": "https://github.com/albert-einshutoin/TenantScript/actions/runs/32648424914"
+    "completedAt": "2026-08-27T13:45:40.000Z",
+    "url": "https://github.com/albert-einshutoin/TenantScript/actions/runs/33077672438"
   },
   "artifact": {
-    "id": 9495561532,
-    "name": "plugin-authoring-judge-image-evidence-cb7323031a08705864480899f769184b64198a90",
-    "digest": "sha256:8bb20e4cdb8fa898b0ae0dacef38fd2741940bbf3887522e456dd25f0ce62894",
-    "sizeBytes": 113725,
-    "createdAt": "2026-08-23T15:28:40.000Z",
-    "expiresAt": "2026-09-06T15:28:39.000Z",
-    "evidenceSha256": "be5dca60d46734b7017f2597f2bb7466cfcc9a6db3a1afdb6d371f88829f9c22",
-    "sbomSha256": "3c5b9b01a136b6385b74ea95063c86f8c40126490ebc6b869f89e694cfc127e1"
+    "id": 9648740887,
+    "name": "plugin-authoring-judge-image-evidence-196445aaee08ed33014b6b6978f1234ae66bffe6",
+    "digest": "sha256:9f005811cab6842367f7d204954dc0e5346829f043b181e958fca27f04eb1337",
+    "sizeBytes": 113724,
+    "createdAt": "2026-08-27T13:40:37.000Z",
+    "expiresAt": "2026-09-10T13:40:36.000Z",
+    "evidenceSha256": "1596111f840970750494d6b97cd79882c7f322af1b18c1b73e4fd3a6bcd8fc96",
+    "sbomSha256": "f9f794e5c0b50194da037be906a98016d96f1e8460138a7020b9ec7463de550b"
   },
   "review": {
     "provider": "codex",
-    "reviewedCommit": "c57fccc72bd63622383eb865c489fd083c9d962f",
+    "reviewedCommit": "3846234225e74032384808d88366dcf8f3e2bab7",
     "outcome": "no-major-issues",
-    "url": "https://github.com/albert-einshutoin/TenantScript/pull/356#issuecomment-5386830276"
+    "url": "https://github.com/albert-einshutoin/TenantScript/pull/455#issuecomment-5440054474"
   },
   "decision": {
     "status": "candidate",
