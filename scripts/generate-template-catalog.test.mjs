@@ -129,7 +129,7 @@ test("writes a deterministic minimal compatibility catalog from approved submiss
             revision: submission.source.revision
           },
           sdk: submission.sdk,
-          hook: submission.hook,
+          hook: { name: submission.hook.name, type: submission.hook.type },
           capabilities: submission.capabilities,
           egress: { mode: "deny" },
           configKeys: submission.configKeys,
