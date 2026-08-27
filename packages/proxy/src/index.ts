@@ -7,7 +7,7 @@ import {
   type Installation,
   type HookType
 } from "@tenantscript/host-sdk";
-import { isHookErrorCode, type HookErrorCode } from "@tenantscript/manifest";
+import type { HookErrorCode } from "@tenantscript/manifest";
 
 export interface ProxyWebhookRequest {
   path: string;
@@ -133,9 +133,7 @@ export async function handleWebhookProxy(params: {
   } catch (error) {
     if (error instanceof ProxyContractError) throw error;
     if (error instanceof HookContractError) throw new ProxyContractError(error.code);
-    throw new ProxyContractError(
-      isRecord(error) && isHookErrorCode(error.code) ? error.code : "plugin_result_invalid"
-    );
+    throw new ProxyContractError("plugin_result_invalid");
   }
 
   const forwardResponse = await params.forward({
@@ -232,8 +230,4 @@ function isPrivateIpv6(hostname: string): boolean {
 
 function cloneProxyMapping(mapping: ProxyMapping): ProxyMapping {
   return { ...mapping };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
