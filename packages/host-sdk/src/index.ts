@@ -434,7 +434,7 @@ function isCanonicalTransformResult<TOutput>(
 ): value is TransformHookResult<TOutput> {
   try {
     if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-    const prototype = Object.getPrototypeOf(value);
+    const prototype = Reflect.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return false;
     const names = Object.getOwnPropertyNames(value);
     if (
