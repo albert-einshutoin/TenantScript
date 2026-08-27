@@ -539,6 +539,67 @@ describe("runScopedPluginDispatch", () => {
     });
   });
 
+  it.each([
+    [
+      "structured result",
+      `
+        exports.plugin = {
+          dispatch: async () => ({ ok: false, error: { code: "input_invalid" } })
+        };
+      `
+    ],
+    [
+      "thrown error",
+      `
+        exports.plugin = {
+          dispatch: async () => {
+            const error = new Error("plugin-controlled input invalid");
+            error.code = "input_invalid";
+            throw error;
+          }
+        };
+      `
+    ]
+  ])(
+    "maps a plugin-controlled input_invalid %s to a stable deny result",
+    async (_label, source) => {
+      const bundle = await bundleFromSource(source);
+
+      await expect(
+        runScopedPluginDispatch({
+          bundleCode: bundle,
+          hookName: "invoice.approve",
+          hookType: "policy",
+          payload: {},
+          context: { capability: vi.fn() }
+        })
+      ).resolves.toEqual({
+        value: { ok: true, value: { decision: "deny", reasonCode: "plugin_result_invalid" } },
+        logs: []
+      });
+    }
+  );
+
+  it("preserves host-side input validation for policy payloads", async () => {
+    const bundle = await bundleFromSource(`
+      exports.plugin = { dispatch: async () => ({ ok: true, value: { decision: "allow", reasonCode: "ok" } }) };
+    `);
+    const payload = Object.defineProperty({}, "secret", {
+      enumerable: true,
+      get: () => "host-invalid"
+    });
+
+    await expect(
+      runScopedPluginDispatch({
+        bundleCode: bundle,
+        hookName: "invoice.approve",
+        hookType: "policy",
+        payload,
+        context: { capability: vi.fn() }
+      })
+    ).rejects.toMatchObject({ name: "ScopedRuntimeInputError", code: "input_invalid" });
+  });
+
   it("rejects a non-transform dispatch for webhook.outbound", async () => {
     const bundle = await bundleFromSource(`
       exports.plugin = { dispatch: async () => ({ ok: true, value: { decision: "allow", reasonCode: "ok" } }) };

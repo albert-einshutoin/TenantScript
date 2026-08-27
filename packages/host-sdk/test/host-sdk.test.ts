@@ -368,22 +368,47 @@ describe("planExecution", () => {
     expect(plan.steps.map((step) => step.installationId)).toEqual(["inst_3", "inst_1", "inst_2"]);
   });
 
-  it("plans transform hooks for serial priority order and excludes disabled installations", () => {
+  it("plans the single active transform and excludes disabled installations", () => {
     const plan = planExecution({
       hookName: "invoice.created",
       hookType: "transform",
-      installations
+      installations: [
+        installation({ id: "inst_1", pluginId: "plugin_a", priority: 10 }),
+        installation({ id: "disabled", pluginId: "plugin_disabled", priority: 0, enabled: false }),
+        installation({
+          id: "other_hook",
+          pluginId: "plugin_other",
+          priority: 5,
+          hooks: ["other.hook"]
+        })
+      ]
     });
 
     expect(plan.mode).toBe("serial");
-    expect(plan.steps.map((step) => step.installationId)).toEqual(["inst_1", "inst_2", "inst_3"]);
+    expect(plan.steps.map((step) => step.installationId)).toEqual(["inst_1"]);
   });
+
+  it.each([
+    { installations: [] },
+    { installations: [installation({ id: "inst_1" }), installation({ id: "inst_2" })] }
+  ])(
+    "rejects transforms unless exactly one active installation is selected",
+    ({ installations }) => {
+      expect(() =>
+        planExecution({
+          hookName: "invoice.created",
+          hookType: "transform",
+          installations
+        })
+      ).toThrow("input_invalid");
+    }
+  );
 
   it("threads transform output into the next transform input", async () => {
     const plan = planExecution({
       hookName: "invoice.created",
       hookType: "transform",
-      installations
+      installations: [installation({ id: "inst_1" })]
     });
 
     const result = await runTransformChain(plan, { value: "" }, (step, payload) => ({
@@ -391,7 +416,7 @@ describe("planExecution", () => {
       output: { value: `${payload.value}${step.installationId}` }
     }));
 
-    expect(result.value).toBe("inst_1inst_2inst_3");
+    expect(result.value).toBe("inst_1");
   });
 
   it.each([
@@ -444,22 +469,6 @@ describe("planExecution", () => {
 
     await expect(
       runTransformChain(plan, { value: "original" }, () => ({ status: "transformed" }) as never)
-    ).resolves.toEqual({ value: "original" });
-  });
-
-  it("restores the initial payload when a later safe transform fails", async () => {
-    const plan = planExecution({
-      hookName: "invoice.created",
-      hookType: "transform",
-      failurePolicy: "use-original",
-      installations: [installation({ id: "inst_1" }), installation({ id: "inst_2" })]
-    });
-
-    await expect(
-      runTransformChain(plan, { value: "original" }, (step, payload) => {
-        if (step.installationId === "inst_2") throw new Error("transform failure");
-        return { status: "transformed", output: { value: `${payload.value}-partial` } };
-      })
     ).resolves.toEqual({ value: "original" });
   });
 

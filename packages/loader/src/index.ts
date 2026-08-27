@@ -184,11 +184,14 @@ export async function runScopedPluginDispatch(params: {
     if (params.hookType !== "policy") {
       throw error;
     }
-    const code = policyFailureCode(error);
-    if (code === "input_invalid") {
+    if (error instanceof ScopedRuntimeInputError) {
       throw error;
     }
-    return policyDenyResult(code, policyFailureLogs(error));
+    const code = policyFailureCode(error);
+    return policyDenyResult(
+      code === "input_invalid" ? "plugin_result_invalid" : code,
+      policyFailureLogs(error)
+    );
   }
 }
 
@@ -197,11 +200,8 @@ function normalizeLocalPolicyResult(result: ScopedRuntimeResult): ScopedRuntimeR
     return result;
   }
   const code = result.value.error.code;
-  if (!isHookErrorCode(code)) {
+  if (!isHookErrorCode(code) || code === "input_invalid") {
     return policyDenyResult("plugin_result_invalid", result.logs);
-  }
-  if (code === "input_invalid") {
-    throw new ScopedRuntimeInputError();
   }
   return policyDenyResult(code, result.logs);
 }

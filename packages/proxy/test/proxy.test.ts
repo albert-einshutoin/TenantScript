@@ -6,12 +6,11 @@ import {
 } from "../src/index.js";
 
 describe("handleWebhookProxy", () => {
-  it("resolves the tenant, applies transform plugins in priority order, and forwards", async () => {
+  it("resolves the tenant, applies the transform, and forwards", async () => {
     const forwarded: ProxyForwardRequest[] = [];
     const resolveInstallations = vi
       .fn()
       .mockResolvedValue([
-        installation({ id: "inst_late", pluginId: "plugin_late", priority: 20 }),
         installation({ id: "inst_first", pluginId: "plugin_first", priority: 10 })
       ]);
 
@@ -59,7 +58,7 @@ describe("handleWebhookProxy", () => {
         destinationUrl: "https://origin.example.com/stripe",
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: { invoiceId: "inv_1", tags: ["inst_first", "inst_late"] }
+        body: { invoiceId: "inv_1", tags: ["inst_first"] }
       }
     ]);
     expect(result).toEqual({
@@ -69,6 +68,55 @@ describe("handleWebhookProxy", () => {
       skipped: false,
       forwardResponse: { status: 202, body: "accepted" }
     });
+  });
+
+  it("fails closed unless exactly one active transform is installed", async () => {
+    const forward = vi.fn(() => Promise.resolve({ status: 202 }));
+    const request = {
+      path: "/hooks/stripe",
+      method: "POST",
+      headers: {},
+      body: { invoiceId: "inv_1" }
+    };
+    const mappingStore = {
+      findProxyMappingByPath: () =>
+        Promise.resolve({
+          inboundPath: "/hooks/stripe",
+          tenantId: "tenant_1",
+          destinationUrl: "https://origin.example.com/stripe",
+          transformHookName: "webhook.outbound"
+        })
+    };
+    const executeTransform = (
+      _step: { installationId: string; pluginId: string; priority: number },
+      payload: Record<string, unknown>
+    ) => ({
+      status: "transformed" as const,
+      output: payload
+    });
+    const run = (installations: readonly ReturnType<typeof installation>[]) =>
+      handleWebhookProxy({
+        request,
+        mappingStore,
+        resolveInstallations: () => installations,
+        executeTransform,
+        forward
+      });
+
+    await expect(run([])).rejects.toMatchObject({
+      name: "ProxyContractError",
+      code: "input_invalid"
+    });
+    await expect(
+      run([
+        installation({ id: "inst_1", pluginId: "plugin_1" }),
+        installation({ id: "inst_2", pluginId: "plugin_2" })
+      ])
+    ).rejects.toMatchObject({
+      name: "ProxyContractError",
+      code: "input_invalid"
+    });
+    expect(forward).not.toHaveBeenCalled();
   });
 
   it("fails closed when a transform fails", async () => {

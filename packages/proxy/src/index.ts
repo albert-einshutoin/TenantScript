@@ -119,15 +119,15 @@ export async function handleWebhookProxy(params: {
     tenantId: mapping.tenantId,
     hookName: mapping.transformHookName
   });
-  const plan = planExecution({
-    hookName: mapping.transformHookName,
-    hookType: mapping.hookType ?? "transform",
-    installations
-  });
 
   let body = params.request.body;
   let transformed = false;
   try {
+    const plan = planExecution({
+      hookName: mapping.transformHookName,
+      hookType: mapping.hookType ?? "transform",
+      installations
+    });
     body = await runTransformChain(plan, body, params.executeTransform);
     transformed = plan.steps.length > 0;
   } catch (error) {

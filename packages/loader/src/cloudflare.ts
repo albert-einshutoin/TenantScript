@@ -15,6 +15,11 @@ const MAX_RECORDED_PLUGIN_VERSION_LENGTH = 128;
 const DYNAMIC_WORKER_RUNTIME_VERSION = "v2";
 const DYNAMIC_WORKER_MAIN_MODULE = "tenantscript-runtime.js";
 const DYNAMIC_WORKER_PLUGIN_MODULE = "tenant-plugin.cjs";
+type DynamicWorkerInvocationFailureCode =
+  | "plugin_memory_exceeded"
+  | "plugin_subrequest_exceeded"
+  | "plugin_result_invalid"
+  | "runtime_unavailable";
 
 export type DynamicWorkerModule = string | { cjs: string };
 
@@ -118,7 +123,7 @@ export interface CloudflareDynamicWorkerCallerConfiguration {
     pluginId: string;
     grantRevision: string;
   }) => Record<string, unknown>;
-  classifyInvocationError?: (error: unknown) => "budget_exceeded" | "error";
+  classifyInvocationError?: (error: unknown) => DynamicWorkerInvocationFailureCode;
   readInvocationEvidence: (request: {
     executionId: string;
     tenantId: string;
@@ -191,6 +196,7 @@ export function createCloudflareDynamicWorkerCaller(
       const started = monotonicNow();
       let value: unknown;
       let invocationBudgetExceeded = false;
+      let classifiedFailureCode: DynamicWorkerInvocationFailureCode | undefined;
       let invocationEgressDenied = false;
       let invocationFailed = false;
       let invocationTimedOut = false;
@@ -230,15 +236,34 @@ export function createCloudflareDynamicWorkerCaller(
         if (error instanceof DynamicWorkerInvocationTimeoutError) {
           invocationTimedOut = true;
         } else {
-          let classification: "budget_exceeded" | "error" = "error";
+          let classification: DynamicWorkerInvocationFailureCode = "plugin_result_invalid";
           try {
-            const classified = configuration.classifyInvocationError?.(error);
-            if (classified === "budget_exceeded") classification = classified;
+            const classifier = configuration.classifyInvocationError;
+            if (classifier !== undefined) {
+              const classified: unknown = classifier(error);
+              if (
+                classified === "plugin_memory_exceeded" ||
+                classified === "plugin_subrequest_exceeded" ||
+                classified === "plugin_result_invalid" ||
+                classified === "runtime_unavailable"
+              ) {
+                classification = classified;
+              } else {
+                classification = "runtime_unavailable";
+              }
+            }
           } catch {
-            // A classifier is an adapter hint, never a new failure or persistence authority.
+            classification = "runtime_unavailable";
           }
-          if (classification === "budget_exceeded") invocationBudgetExceeded = true;
-          else invocationFailed = true;
+          classifiedFailureCode = classification;
+          if (
+            classification === "plugin_memory_exceeded" ||
+            classification === "plugin_subrequest_exceeded"
+          ) {
+            invocationBudgetExceeded = true;
+          } else {
+            invocationFailed = true;
+          }
         }
       }
       const durationMs = Math.max(0, monotonicNow() - started);
@@ -278,6 +303,15 @@ export function createCloudflareDynamicWorkerCaller(
         }
       }
       if ((evidence.deniedEgressAttempts ?? 0) > 0) invocationEgressDenied = true;
+      const invocationFailureCode = invocationTimedOut
+        ? "plugin_timeout"
+        : invocationBudgetExceeded
+          ? (classifiedFailureCode ?? "runtime_unavailable")
+          : invocationEgressDenied
+            ? "egress_denied"
+            : invocationFailed
+              ? (classifiedFailureCode ?? "plugin_result_invalid")
+              : undefined;
       let execution: ControlPlaneExecutionRecord;
       try {
         execution = await configuration.recorder.record({
@@ -297,15 +331,7 @@ export function createCloudflareDynamicWorkerCaller(
                     ? "error"
                     : "success",
             durationMs,
-            ...(invocationTimedOut
-              ? { error: "dynamic_worker_timeout" }
-              : invocationBudgetExceeded
-                ? { error: "dynamic_worker_budget_exceeded" }
-                : invocationEgressDenied
-                  ? { error: "dynamic_worker_egress_denied" }
-                  : invocationFailed
-                    ? { error: "dynamic_worker_invocation_failed" }
-                    : {}),
+            ...(invocationFailureCode === undefined ? {} : { error: invocationFailureCode }),
             capabilityCalls: evidence.capabilityCalls,
             createdAt: startedAt
           },
@@ -323,15 +349,6 @@ export function createCloudflareDynamicWorkerCaller(
         // prevents a D1/provider message from crossing the host integration boundary.
         throw new CloudflareDynamicWorkerCallerError("runtime_unavailable");
       }
-      const invocationFailureCode = invocationTimedOut
-        ? "plugin_timeout"
-        : invocationBudgetExceeded
-          ? "plugin_subrequest_exceeded"
-          : invocationEgressDenied
-            ? "egress_denied"
-            : invocationFailed
-              ? "plugin_result_invalid"
-              : undefined;
       if (invocationFailureCode !== undefined) {
         if (request.hookType === "policy") {
           return {

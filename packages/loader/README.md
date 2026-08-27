@@ -47,8 +47,10 @@ Evidence reads use the invocation wall-clock limit as a separate upper bound; a 
 treated as unavailable so zero evidence can still be persisted.
 
 Cloudflare documents that custom CPU/subrequest limits throw, but does not publish a stable thrown
-error shape. Provide `classifyInvocationError` in the host adapter to map verified platform limit
-exceptions to `budget_exceeded`; unclassified exceptions remain ordinary runtime errors.
+error shape. Provide `classifyInvocationError` in the host adapter to map verified exceptions to a
+concrete canonical code (`plugin_memory_exceeded`, `plugin_subrequest_exceeded`,
+`plugin_result_invalid`, or `runtime_unavailable`). Use `runtime_unavailable` when a platform
+failure cannot be classified safely; the adapter never guesses a resource category.
 
 See the [SDK reference](https://github.com/albert-einshutoin/TenantScript/blob/main/docs/reference/sdk.md#tenantscriptloader)
 and [usage meter operations](https://github.com/albert-einshutoin/TenantScript/blob/main/docs/operations/usage-meter.md)

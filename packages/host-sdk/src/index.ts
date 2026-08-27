@@ -245,6 +245,10 @@ export function planExecution(params: {
       priority: installation.priority
     }));
 
+  if (params.hookType === "transform" && steps.length !== 1) {
+    throw new HookContractError("input_invalid");
+  }
+
   if (params.hookType === "event") {
     return {
       hookName: params.hookName,

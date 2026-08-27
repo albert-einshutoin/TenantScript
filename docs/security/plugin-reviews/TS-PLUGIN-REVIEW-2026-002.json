@@ -98,8 +98,8 @@
   ],
   "evidenceDigests": {
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
-    "packages/loader/src/index.ts": "ddfeee14916d7ea95cde2aed42270564ede220399e1401485ab93059f4891b6d",
-    "packages/loader/test/loader.test.ts": "aca9e179de48fc402a978800462e96b30dbb91a1896836c3d716e27a7cbe5a95",
+    "packages/loader/src/index.ts": "5dbf3682184eac9d37f9b31b318b2331fecaaeb8b2b99d2e5600d6d47fa513a8",
+    "packages/loader/test/loader.test.ts": "940f1a7d304f0b8296a3afa9b1e62ad12b4b7bb39f87113696ed1aa66e3ed831",
     "packages/loader/test/security-suite.test.ts": "89e3d216c4e582d49ad121cfe1a13b821aa48cedb330ce6d8c603e0b2c6f005f",
     "scripts/check-template-submissions.mjs": "d21ef006e7a6d45ab9bed45ffa2dafad7ffb73e0636557d45804b5c0f8dddc9a",
     "scripts/check-template-submissions.test.mjs": "220a49d41aefce896f40dec261265acba994f3091aecf70e5b25f364a4efa48a",

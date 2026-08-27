@@ -557,7 +557,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
         version: "1.0.0",
         status: "error",
         durationMs: 7,
-        error: "dynamic_worker_invocation_failed",
+        error: "plugin_result_invalid",
         capabilityCalls: [{ name: "slack.send", status: "error" }],
         createdAt: new Date("2026-07-21T01:00:00.000Z")
       },
@@ -602,7 +602,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       })
     ).resolves.toMatchObject({
       value: { decision: "deny", reasonCode: "plugin_result_invalid" },
-      execution: { status: "error", error: "dynamic_worker_invocation_failed" }
+      execution: { status: "error", error: "plugin_result_invalid" }
     });
     expect(record).toHaveBeenCalledOnce();
     expect(JSON.stringify(record.mock.calls)).not.toContain("policy-provider-secret-sentinel");
@@ -660,7 +660,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       await vi.advanceTimersByTimeAsync(5);
       await expect(run).resolves.toMatchObject({
         value: { decision: "deny", reasonCode: "plugin_timeout" },
-        execution: { status: "timeout", error: "dynamic_worker_timeout" }
+        execution: { status: "timeout", error: "plugin_timeout" }
       });
       expect(record).toHaveBeenCalledOnce();
     } finally {
@@ -700,7 +700,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       })
     ).resolves.toMatchObject({
       value: { decision: "deny", reasonCode: "plugin_result_invalid" },
-      execution: { status: "error", error: "dynamic_worker_invocation_failed" }
+      execution: { status: "error", error: "plugin_result_invalid" }
     });
     expect(JSON.stringify(record.mock.calls)).not.toContain("provider-secret");
   });
@@ -718,7 +718,8 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       compatibilityDate: "2026-07-21",
       loadArtifact: () => Promise.resolve("runtime-code"),
       createScopeBindings: () => ({}),
-      classifyInvocationError: (error) => (error === limitError ? "budget_exceeded" : "error"),
+      classifyInvocationError: (error) =>
+        error === limitError ? "plugin_subrequest_exceeded" : "plugin_result_invalid",
       readInvocationEvidence: () =>
         Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
       recorder: { record }
@@ -743,7 +744,48 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(thrown).toMatchObject({ code: "plugin_subrequest_exceeded" });
     expect(record.mock.calls[0]?.[0].execution).toMatchObject({
       status: "budget_exceeded",
-      error: "dynamic_worker_budget_exceeded"
+      error: "plugin_subrequest_exceeded"
+    });
+  });
+
+  it("records an unclassifiable platform failure as runtime unavailable", async () => {
+    const limitError = new Error("opaque platform limit");
+    const record = vi.fn((request: ExecutionUsageRecordingRequest) =>
+      Promise.resolve(request.execution)
+    );
+    const caller = createCloudflareDynamicWorkerCaller({
+      loader: createCachingLoader(() => {
+        throw limitError;
+      }),
+      compatibilityDate: "2026-07-21",
+      loadArtifact: () => Promise.resolve("runtime-code"),
+      createScopeBindings: () => ({}),
+      classifyInvocationError: () => "budget_exceeded" as never,
+      readInvocationEvidence: () =>
+        Promise.resolve({ capabilityCalls: [], subrequests: 0, workflowRuns: 0 }),
+      recorder: { record }
+    });
+
+    const thrown = await caller
+      .run({
+        executionId: "exec_unclassified_budget",
+        tenantId: "tenant_1",
+        installationId: "installation_1",
+        pluginId: "plugin_1",
+        hookName: "invoice.created",
+        hookType: "event",
+        version: "1.0.0",
+        artifactSha256: sha256("runtime-code"),
+        grantRevision: "grant_1",
+        payload: {},
+        limits: { cpuMs: 10, timeoutMs: 250, subrequests: 2 }
+      })
+      .catch((error: unknown) => error);
+
+    expect(thrown).toMatchObject({ code: "runtime_unavailable" });
+    expect(record.mock.calls[0]?.[0].execution).toMatchObject({
+      status: "error",
+      error: "runtime_unavailable"
     });
   });
 
@@ -833,7 +875,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
       expect(record.mock.calls[0]?.[0].execution).toMatchObject({
         status: "timeout",
         durationMs: 7,
-        error: "dynamic_worker_timeout"
+        error: "plugin_timeout"
       });
     } finally {
       vi.useRealTimers();
@@ -884,7 +926,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     expect(record).toHaveBeenCalledOnce();
     expect(record.mock.calls[0]?.[0].execution).toMatchObject({
       status: "error",
-      error: "dynamic_worker_invocation_failed"
+      error: "plugin_result_invalid"
     });
   });
 
@@ -924,7 +966,7 @@ describe("Cloudflare Dynamic Worker runtime caller", () => {
     ).rejects.toMatchObject({ code: "egress_denied" });
     expect(record.mock.calls[0]?.[0].execution).toMatchObject({
       status: "egress_denied",
-      error: "dynamic_worker_egress_denied"
+      error: "egress_denied"
     });
   });
 
