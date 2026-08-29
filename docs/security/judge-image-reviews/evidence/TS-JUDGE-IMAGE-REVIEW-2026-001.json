@@ -2,24 +2,24 @@
   "schemaVersion": 1,
   "kind": "plugin-authoring-judge-image-candidate",
   "platform": "linux/amd64",
-  "sourceRevision": "196445aaee08ed33014b6b6978f1234ae66bffe6",
+  "sourceRevision": "c8c6bc9bba095e49a4c20fceec012bd0860d16a7",
   "inputs": {
     "baseImage": "gcr.io/distroless/nodejs24-debian13@sha256:e251b09ca1d32d7ae2dcba1721370cde41b5c69713edbb99bc644c6e4e101d2f",
     "dockerfileFrontend": "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
     "dockerfileSha256": "940892ef3b38941bf4748f77d50a6d103a3b8f756242f0a51af0ba5f0575045b",
     "lockfileSha256": "1fa6e21a8da63eea46facc1c02cd5daa71346fd5adf5af34274308095fc57ba6",
-    "contextSha256": "ace0e8ce616138b0e41c024cd4e633090f790303a73c8f263d3a1228187439d0"
+    "contextSha256": "b7b61e501b752a9b0efedae5ca71b43350d3d08c9406c359860ef976565a2a04"
   },
   "image": {
     "reference": "tenantscript/plugin-authoring-judge:evidence",
-    "id": "sha256:2a5c816167dff983033ef73a9f4d1c26d1fb0d93b9211b26387dcab5712587c2",
-    "archiveSha256": "16ed6ed5df65c66d70e2abde4e8c0e4da7442fff926388298291c0f5d0b2f4b2",
-    "archiveBytes": 197437952
+    "id": "sha256:2a3ee191b3c865a8f5c91687313db4f5ef4834e912e2c3c8f76d50f5f7a3e171",
+    "archiveSha256": "27e2d5b8fbf7a8acc1b5168778c8e4eb18fc1e3c1274058ec4a50d3cd9ce6de4",
+    "archiveBytes": 197444608
   },
   "sbom": {
     "format": "CycloneDX",
     "specVersion": "1.7",
-    "sha256": "f9f794e5c0b50194da037be906a98016d96f1e8460138a7020b9ec7463de550b",
+    "sha256": "da38191f710889e44f5a0e77c72486ff47c5c0b287fd484855b8941e0ed3acd9",
     "bytes": 397102,
     "components": 1317,
     "dependencies": 8,
