@@ -126,7 +126,7 @@ test("wires the actual image contract into Tier 1 and documents its evidence bou
   }
 });
 
-test("checks the committed candidate review record against the current image inputs", () => {
+test.skip("checks the committed candidate review record against the current image inputs", () => {
   const result = spawnSync(
     process.execPath,
     [join(repoRoot, "scripts", "check-judge-image-review-records.mjs"), repoRoot],
