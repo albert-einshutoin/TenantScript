@@ -1,9 +1,9 @@
 import type {
   CapabilityCallRecord,
   ControlPlaneExecutionRecord,
-  ExecutionUsageRecorder,
-  UsageHookType
+  ExecutionUsageRecorder
 } from "@tenantscript/control-plane";
+import { isHookType, type HookErrorCode, type HookType } from "@tenantscript/manifest";
 
 const MAX_DYNAMIC_WORKER_RESPONSE_BYTES = 1_048_576;
 const MAX_DYNAMIC_WORKER_REQUEST_BYTES = 1_048_576;
@@ -15,6 +15,12 @@ const MAX_RECORDED_PLUGIN_VERSION_LENGTH = 128;
 const DYNAMIC_WORKER_RUNTIME_VERSION = "v2";
 const DYNAMIC_WORKER_MAIN_MODULE = "tenantscript-runtime.js";
 const DYNAMIC_WORKER_PLUGIN_MODULE = "tenant-plugin.cjs";
+type DynamicWorkerInvocationFailureCode =
+  | "plugin_artifact_invalid"
+  | "plugin_memory_exceeded"
+  | "plugin_subrequest_exceeded"
+  | "plugin_result_invalid"
+  | "runtime_unavailable";
 
 export type DynamicWorkerModule = string | { cjs: string };
 
@@ -56,7 +62,7 @@ export interface DynamicWorkerCapabilityBinding {
 }
 
 export interface CloudflareDynamicWorkerCallerFailure {
-  code: "runtime_evidence_unavailable";
+  code: "evidence_unavailable";
   executionId: string;
   tenantId: string;
   pluginId: string;
@@ -68,7 +74,7 @@ export interface CloudflareDynamicWorkerRunRequest {
   installationId: string;
   pluginId: string;
   hookName: string;
-  hookType: UsageHookType;
+  hookType: HookType;
   version: string;
   artifactSha256: string;
   grantRevision: string;
@@ -89,16 +95,7 @@ export interface CloudflareDynamicWorkerCaller {
   run: (request: CloudflareDynamicWorkerRunRequest) => Promise<CloudflareDynamicWorkerRunResult>;
 }
 
-export type CloudflareDynamicWorkerCallerErrorCode =
-  | "artifact_integrity_failed"
-  | "artifact_unavailable"
-  | "execution_recording_failed"
-  | "invalid_configuration"
-  | "invalid_request"
-  | "runtime_invocation_budget_exceeded"
-  | "runtime_invocation_egress_denied"
-  | "runtime_invocation_failed"
-  | "runtime_invocation_timed_out";
+export type CloudflareDynamicWorkerCallerErrorCode = HookErrorCode;
 
 export class CloudflareDynamicWorkerCallerError extends Error {
   override readonly name = "CloudflareDynamicWorkerCallerError";
@@ -127,7 +124,7 @@ export interface CloudflareDynamicWorkerCallerConfiguration {
     pluginId: string;
     grantRevision: string;
   }) => Record<string, unknown>;
-  classifyInvocationError?: (error: unknown) => "budget_exceeded" | "error";
+  classifyInvocationError?: (error: unknown) => DynamicWorkerInvocationFailureCode;
   readInvocationEvidence: (request: {
     executionId: string;
     tenantId: string;
@@ -160,16 +157,16 @@ export function createCloudflareDynamicWorkerCaller(
             sha256: request.artifactSha256
           });
         } catch {
-          throw new CloudflareDynamicWorkerCallerError("artifact_unavailable");
+          throw new CloudflareDynamicWorkerCallerError("plugin_artifact_invalid");
         }
         if (
           typeof artifact !== "string" ||
           new TextEncoder().encode(artifact).byteLength > MAX_DYNAMIC_WORKER_ARTIFACT_BYTES
         ) {
-          throw new CloudflareDynamicWorkerCallerError("artifact_unavailable");
+          throw new CloudflareDynamicWorkerCallerError("plugin_artifact_invalid");
         }
         if ((await sha256(artifact)) !== request.artifactSha256) {
-          throw new CloudflareDynamicWorkerCallerError("artifact_integrity_failed");
+          throw new CloudflareDynamicWorkerCallerError("plugin_artifact_invalid");
         }
         let bindings: Record<string, unknown>;
         try {
@@ -183,7 +180,7 @@ export function createCloudflareDynamicWorkerCaller(
           );
         } catch (error) {
           if (error instanceof CloudflareDynamicWorkerCallerError) throw error;
-          throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+          throw new CloudflareDynamicWorkerCallerError("runtime_unavailable");
         }
         return {
           compatibilityDate: configuration.compatibilityDate,
@@ -200,6 +197,7 @@ export function createCloudflareDynamicWorkerCaller(
       const started = monotonicNow();
       let value: unknown;
       let invocationBudgetExceeded = false;
+      let classifiedFailureCode: DynamicWorkerInvocationFailureCode | undefined;
       let invocationEgressDenied = false;
       let invocationFailed = false;
       let invocationTimedOut = false;
@@ -225,27 +223,53 @@ export function createCloudflareDynamicWorkerCaller(
           )
           .then(readResponseValue);
         value = await withWallClockTimeout(invocation, request.limits.timeoutMs, abortController);
+        const dispatchFailureCode = getPluginDispatchFailureCode(value);
+        if (dispatchFailureCode !== undefined) {
+          invocationFailed = true;
+          classifiedFailureCode = dispatchFailureCode;
+          value = undefined;
+        } else if (request.hookType === "policy" && !isCanonicalPolicyResult(value)) {
+          invocationFailed = true;
+          value = undefined;
+        }
       } catch (error) {
         if (
           error instanceof CloudflareDynamicWorkerCallerError &&
-          (error.code === "artifact_integrity_failed" ||
-            error.code === "artifact_unavailable" ||
-            error.code === "invalid_configuration")
+          (error.code === "plugin_artifact_invalid" || error.code === "runtime_unavailable")
         ) {
           throw error;
         }
         if (error instanceof DynamicWorkerInvocationTimeoutError) {
           invocationTimedOut = true;
         } else {
-          let classification: "budget_exceeded" | "error" = "error";
+          let classification: DynamicWorkerInvocationFailureCode = "plugin_result_invalid";
           try {
-            const classified = configuration.classifyInvocationError?.(error);
-            if (classified === "budget_exceeded") classification = classified;
+            const classifier = configuration.classifyInvocationError;
+            if (classifier !== undefined) {
+              const classified: unknown = classifier(error);
+              if (
+                classified === "plugin_memory_exceeded" ||
+                classified === "plugin_subrequest_exceeded" ||
+                classified === "plugin_result_invalid" ||
+                classified === "runtime_unavailable"
+              ) {
+                classification = classified;
+              } else {
+                classification = "runtime_unavailable";
+              }
+            }
           } catch {
-            // A classifier is an adapter hint, never a new failure or persistence authority.
+            classification = "runtime_unavailable";
           }
-          if (classification === "budget_exceeded") invocationBudgetExceeded = true;
-          else invocationFailed = true;
+          classifiedFailureCode = classification;
+          if (
+            classification === "plugin_memory_exceeded" ||
+            classification === "plugin_subrequest_exceeded"
+          ) {
+            invocationBudgetExceeded = true;
+          } else {
+            invocationFailed = true;
+          }
         }
       }
       const durationMs = Math.max(0, monotonicNow() - started);
@@ -273,7 +297,7 @@ export function createCloudflareDynamicWorkerCaller(
             // caller must continue to authoritative recording even if the sink never settles.
             void Promise.resolve(
               configuration.reportFailure({
-                code: "runtime_evidence_unavailable",
+                code: "evidence_unavailable",
                 executionId: request.executionId,
                 tenantId: request.tenantId,
                 pluginId: request.pluginId
@@ -285,6 +309,15 @@ export function createCloudflareDynamicWorkerCaller(
         }
       }
       if ((evidence.deniedEgressAttempts ?? 0) > 0) invocationEgressDenied = true;
+      const invocationFailureCode = invocationTimedOut
+        ? "plugin_timeout"
+        : invocationBudgetExceeded
+          ? (classifiedFailureCode ?? "runtime_unavailable")
+          : invocationEgressDenied
+            ? "egress_denied"
+            : invocationFailed
+              ? (classifiedFailureCode ?? "plugin_result_invalid")
+              : undefined;
       let execution: ControlPlaneExecutionRecord;
       try {
         execution = await configuration.recorder.record({
@@ -304,15 +337,7 @@ export function createCloudflareDynamicWorkerCaller(
                     ? "error"
                     : "success",
             durationMs,
-            ...(invocationTimedOut
-              ? { error: "dynamic_worker_timeout" }
-              : invocationBudgetExceeded
-                ? { error: "dynamic_worker_budget_exceeded" }
-                : invocationEgressDenied
-                  ? { error: "dynamic_worker_egress_denied" }
-                  : invocationFailed
-                    ? { error: "dynamic_worker_invocation_failed" }
-                    : {}),
+            ...(invocationFailureCode === undefined ? {} : { error: invocationFailureCode }),
             capabilityCalls: evidence.capabilityCalls,
             createdAt: startedAt
           },
@@ -328,19 +353,16 @@ export function createCloudflareDynamicWorkerCaller(
       } catch {
         // Persistence is the execution authority, so it is never retried here. The stable error
         // prevents a D1/provider message from crossing the host integration boundary.
-        throw new CloudflareDynamicWorkerCallerError("execution_recording_failed");
+        throw new CloudflareDynamicWorkerCallerError("runtime_unavailable");
       }
-      if (invocationTimedOut) {
-        throw new CloudflareDynamicWorkerCallerError("runtime_invocation_timed_out");
-      }
-      if (invocationBudgetExceeded) {
-        throw new CloudflareDynamicWorkerCallerError("runtime_invocation_budget_exceeded");
-      }
-      if (invocationEgressDenied) {
-        throw new CloudflareDynamicWorkerCallerError("runtime_invocation_egress_denied");
-      }
-      if (invocationFailed) {
-        throw new CloudflareDynamicWorkerCallerError("runtime_invocation_failed");
+      if (invocationFailureCode !== undefined) {
+        if (request.hookType === "policy") {
+          return {
+            value: { decision: "deny", reasonCode: invocationFailureCode },
+            execution
+          };
+        }
+        throw new CloudflareDynamicWorkerCallerError(invocationFailureCode);
       }
       return { value, execution };
     }
@@ -378,13 +400,13 @@ function validateConfiguration(
     (value.now !== undefined && typeof value.now !== "function") ||
     (value.monotonicNow !== undefined && typeof value.monotonicNow !== "function")
   ) {
-    throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+    throw new CloudflareDynamicWorkerCallerError("runtime_unavailable");
   }
 }
 
 function validateScopeBindings(value: unknown): Record<string, unknown> {
   if (!isRecord(value) || Object.keys(value).length > 64) {
-    throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+    throw new CloudflareDynamicWorkerCallerError("runtime_unavailable");
   }
   for (const [name, binding] of Object.entries(value)) {
     if (
@@ -394,10 +416,10 @@ function validateScopeBindings(value: unknown): Record<string, unknown> {
       ((typeof binding !== "object" || binding === null || Array.isArray(binding)) &&
         typeof binding !== "function")
     ) {
-      throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+      throw new CloudflareDynamicWorkerCallerError("runtime_unavailable");
     }
     if (name === "CAPABILITIES" && (!isRecord(binding) || typeof binding.call !== "function")) {
-      throw new CloudflareDynamicWorkerCallerError("invalid_configuration");
+      throw new CloudflareDynamicWorkerCallerError("runtime_unavailable");
     }
   }
   return value;
@@ -487,11 +509,7 @@ function validateRunRequest(value: unknown): string {
     !isIdentifier(value.version) ||
     value.version.length > MAX_RECORDED_PLUGIN_VERSION_LENGTH ||
     !isIdentifier(value.grantRevision) ||
-    !(
-      value.hookType === "event" ||
-      value.hookType === "transform" ||
-      value.hookType === "policy"
-    ) ||
+    !isHookType(value.hookType) ||
     typeof value.artifactSha256 !== "string" ||
     !/^[a-f0-9]{64}$/u.test(value.artifactSha256) ||
     !isRecord(value.limits) ||
@@ -505,7 +523,10 @@ function validateRunRequest(value: unknown): string {
     (value.limits.subrequests as number) < 0 ||
     value.payload === undefined
   ) {
-    throw new CloudflareDynamicWorkerCallerError("invalid_request");
+    throw new CloudflareDynamicWorkerCallerError("input_invalid");
+  }
+  if (value.hookName === "webhook.outbound" && value.hookType !== "transform") {
+    throw new CloudflareDynamicWorkerCallerError("input_invalid");
   }
   try {
     assertLosslessJsonValue(value.payload);
@@ -516,12 +537,12 @@ function validateRunRequest(value: unknown): string {
       payload: value.payload
     });
     if (new TextEncoder().encode(body).byteLength > MAX_DYNAMIC_WORKER_REQUEST_BYTES) {
-      throw new CloudflareDynamicWorkerCallerError("invalid_request");
+      throw new CloudflareDynamicWorkerCallerError("input_invalid");
     }
     return body;
   } catch (error) {
     if (error instanceof CloudflareDynamicWorkerCallerError) throw error;
-    throw new CloudflareDynamicWorkerCallerError("invalid_request");
+    throw new CloudflareDynamicWorkerCallerError("input_invalid");
   }
 }
 
@@ -648,6 +669,54 @@ function isIdentifier(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value);
 }
 
+function isCanonicalPolicyResult(
+  value: unknown
+): value is { decision: "allow" | "deny"; reasonCode: string } {
+  try {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+    const names = Object.getOwnPropertyNames(value);
+    if (
+      names.length !== 2 ||
+      !names.includes("decision") ||
+      !names.includes("reasonCode") ||
+      Object.getOwnPropertySymbols(value).length !== 0
+    ) {
+      return false;
+    }
+    const decision = Object.getOwnPropertyDescriptor(value, "decision");
+    const reasonCode = Object.getOwnPropertyDescriptor(value, "reasonCode");
+    return (
+      decision !== undefined &&
+      "value" in decision &&
+      (decision.value === "allow" || decision.value === "deny") &&
+      reasonCode !== undefined &&
+      "value" in reasonCode &&
+      typeof reasonCode.value === "string" &&
+      /^[a-z][a-z0-9._-]{0,63}$/u.test(reasonCode.value)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getPluginDispatchFailureCode(
+  value: unknown
+): "plugin_artifact_invalid" | "plugin_result_invalid" | undefined {
+  if (!isRecord(value) || !Object.hasOwn(value, "ok")) return undefined;
+  if (
+    !hasExactKeys(value, ["ok", "error"]) ||
+    value.ok !== false ||
+    !isRecord(value.error) ||
+    !hasExactKeys(value.error, ["code"])
+  ) {
+    return "plugin_result_invalid";
+  }
+  return value.error.code === "plugin_artifact_invalid" ||
+    value.error.code === "plugin_result_invalid"
+    ? value.error.code
+    : "plugin_result_invalid";
+}
+
 // JSON.stringify silently rewrites several JavaScript values. Validate the exact JSON data model
 // first so the tenant receives the same payload that the trusted host authorized.
 function assertLosslessJsonValue(value: unknown, ancestors = new Set<object>()): void {
@@ -701,8 +770,9 @@ function assertLosslessJsonValue(value: unknown, ancestors = new Set<object>()):
   }
 }
 
-// ext deploy emits a CommonJS bundle whose scaffold exports `plugin.dispatch` (older entries may
-// export `handlers`). A fixed trusted wrapper adapts either verified CJS shape to Worker fetch.
+// ext deploy emits a CommonJS bundle whose scaffold exports `plugin.dispatch`. The deprecated
+// top-level `handlers` fallback is retained for already-pinned alpha artifacts, but it still must
+// return the canonical result for the requested hook type.
 const DYNAMIC_WORKER_RUNTIME_SOURCE = String.raw`
 const SafeSet = Set;
 const safeArrayIsArray = Array.isArray;
@@ -800,22 +870,82 @@ function serializeJsonValue(value) {
 }
 
 function validateHookReturn(hookType, value) {
-  if (hookType === "event") return undefined;
-  if (hookType === "transform") {
-    if (value === undefined) throw new Error("TenantScript legacy hook return contract failed");
+  if (value === null || typeof value !== "object" || safeArrayIsArray(value)) {
+    throw new Error("invalid TenantScript plugin return value");
+  }
+  const keys = safeObjectKeys(value);
+  if (hookType === "event") {
+    if (keys.length !== 1 || keys[0] !== "status") {
+      throw new Error("invalid TenantScript plugin return value");
+    }
+    const status = safeObjectGetOwnPropertyDescriptor(value, "status");
+    if (status === undefined || !("value" in status) || status.value !== "accepted") {
+      throw new Error("invalid TenantScript plugin return value");
+    }
     return value;
   }
-  if (value === null || typeof value !== "object") {
-    throw new Error("TenantScript legacy hook return contract failed");
+  if (hookType === "transform") {
+    if (keys.length !== 2 || !safeObjectHasOwn(value, "status") || !safeObjectHasOwn(value, "output")) {
+      throw new Error("invalid TenantScript plugin return value");
+    }
+    const status = safeObjectGetOwnPropertyDescriptor(value, "status");
+    const output = safeObjectGetOwnPropertyDescriptor(value, "output");
+    if (
+      status === undefined || !("value" in status) || status.value !== "transformed" ||
+      output === undefined || !("value" in output) || output.value === undefined
+    ) {
+      throw new Error("invalid TenantScript plugin return value");
+    }
+    return value;
   }
-  const decisionDescriptor = safeObjectGetOwnPropertyDescriptor(value, "decision");
-  if (decisionDescriptor === undefined || !("value" in decisionDescriptor)) {
-    throw new Error("TenantScript legacy hook return contract failed");
+  if (
+    keys.length !== 2 ||
+    !safeObjectHasOwn(value, "decision") ||
+    !safeObjectHasOwn(value, "reasonCode")
+  ) {
+    throw new Error("invalid TenantScript plugin return value");
   }
-  const decision = decisionDescriptor.value;
-  if (decision === "allow" || decision === "deny") return value;
-  if (decision === "modify" && safeObjectHasOwn(value, "payload")) return value;
-  throw new Error("TenantScript legacy hook return contract failed");
+  const decision = safeObjectGetOwnPropertyDescriptor(value, "decision");
+  const reasonCode = safeObjectGetOwnPropertyDescriptor(value, "reasonCode");
+  if (
+    decision === undefined || !("value" in decision) ||
+    (decision.value !== "allow" && decision.value !== "deny") ||
+    reasonCode === undefined || !("value" in reasonCode) ||
+    typeof reasonCode.value !== "string" || !/^[a-z][a-z0-9._-]{0,63}$/.test(reasonCode.value)
+  ) {
+    throw new Error("invalid TenantScript plugin return value");
+  }
+  return value;
+}
+
+function validatePluginDispatchResult(hookType, result) {
+  if (
+    result === null ||
+    typeof result !== "object" ||
+    safeArrayIsArray(result) ||
+    (() => {
+      const prototype = safeObjectGetPrototypeOf(result);
+      return prototype !== safeObjectPrototype && prototype !== null;
+    })() ||
+    safeObjectKeys(result).length !== 2 ||
+    safeObjectGetOwnPropertyNames(result).length !== 2 ||
+    safeObjectGetOwnPropertySymbols(result).length !== 0 ||
+    !safeObjectHasOwn(result, "ok")
+  ) {
+    throw new Error("TenantScript plugin dispatch failed");
+  }
+  const ok = safeObjectGetOwnPropertyDescriptor(result, "ok");
+  if (ok === undefined || !("value" in ok)) {
+    throw new Error("TenantScript plugin dispatch failed");
+  }
+  if (ok.value === false) {
+    return result;
+  }
+  const value = safeObjectGetOwnPropertyDescriptor(result, "value");
+  if (ok.value !== true || value === undefined || !("value" in value)) {
+    throw new Error("TenantScript plugin dispatch failed");
+  }
+  return validateHookReturn(hookType, value.value);
 }
 
 export default {
@@ -903,15 +1033,7 @@ export default {
         payload: input.payload,
         context
       });
-      if (
-        result === null ||
-        typeof result !== "object" ||
-        result.ok !== true ||
-        !("value" in result)
-      ) {
-        throw new Error("TenantScript plugin dispatch failed");
-      }
-      value = validateHookReturn(input.hookType, result.value);
+      value = validatePluginDispatchResult(input.hookType, result);
     } else {
       const handlerDescriptor = safeObjectGetOwnPropertyDescriptor(handlers, input.hookName);
       if (

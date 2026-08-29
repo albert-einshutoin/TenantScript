@@ -17,7 +17,7 @@ pnpm install --frozen-lockfile
 
 ## 1. Host: payload contractを先にtestする
 
-Host SDKは`defineHooks`でevent/transform/policyを定義する。blocking hookは`budgetMs`必須で、標準failure policyはevent=`fail-open`、transform=`skip`、policy=`deny`である。
+Host SDKは`defineHooks`でevent/transform/policyを定義する。blocking hookは`budgetMs`必須で、標準failure policyはevent=`record-only`、transform=`fail-closed`、policy=`fail-closed`である。
 
 ```ts
 import { z } from "zod";
@@ -52,7 +52,15 @@ import type { TenantScriptManifest } from "@tenantscript/manifest";
 export const manifest = {
   name: "large-invoice-notify",
   version: "1.0.0",
-  hooks: [{ name: "invoice.created", type: "event", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
+  hooks: [
+    {
+      name: "invoice.created",
+      type: "event",
+      failurePolicy: "record-only",
+      timeoutMs: 250,
+      schemaVersionRange: "^1.0.0"
+    }
+  ],
   capabilities: { "slack.send": { channel: "$config.notifyChannel" } },
   configSchema: {
     properties: { notifyChannel: { type: "string" } },
@@ -80,6 +88,7 @@ export const plugin = definePlugin({
           text: `Large invoice ${invoice.invoiceId}`
         });
       }
+      return { status: "accepted" };
     }
   }
 });

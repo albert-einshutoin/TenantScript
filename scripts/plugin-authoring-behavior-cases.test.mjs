@@ -43,7 +43,7 @@ test("loads a closed judge-owned behavior matrix for every corpus task", () => {
   assert.equal(fractionalRefund?.payload.purchaseAgeDays, 29.5);
   assert.deepEqual(fractionalRefund?.expected.result, {
     ok: true,
-    value: { decision: "deny", reason: "approval_required" }
+    value: { decision: "deny", reasonCode: "approval_required" }
   });
 });
 

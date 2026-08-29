@@ -36,9 +36,9 @@ describe("defineHooks", () => {
     ]);
 
     expect(definition.hooks.map((hook) => [hook.type, hook.failurePolicy])).toEqual([
-      ["event", "fail-open"],
-      ["transform", "skip"],
-      ["policy", "deny"]
+      ["event", "record-only"],
+      ["transform", "fail-closed"],
+      ["policy", "fail-closed"]
     ]);
   });
 
@@ -52,6 +52,18 @@ describe("defineHooks", () => {
         } as unknown as HookDefinition
       ])
     ).toThrow();
+  });
+
+  it("rejects webhook.outbound when its type is not transform", () => {
+    expect(() =>
+      defineHooks([
+        {
+          type: "event",
+          name: "webhook.outbound",
+          payloadSchema: invoicePayloadSchema
+        }
+      ])
+    ).toThrow("input_invalid");
   });
 
   it("rejects blocking hooks without a budget at type level", () => {
@@ -76,6 +88,7 @@ describe("runHook", () => {
       ok: false,
       error: {
         name: "HookPayloadError",
+        code: "input_invalid",
         hookName: "invoice.created",
         issues: [{ path: "amountCents", message: "Required" }]
       }
@@ -268,10 +281,20 @@ describe("schema dual-publish routing", () => {
 });
 
 describe("retry policy", () => {
+  it("rejects unknown hook types before executing retry callbacks", async () => {
+    expect(() => retryPolicyForHookType("unknown" as HookType)).toThrow("input_invalid");
+    const execute = vi.fn();
+
+    await expect(runWithRetryPolicy({ hookType: "unknown" as HookType, execute })).rejects.toThrow(
+      "input_invalid"
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it.each([
-    { hookType: "event", failurePolicy: "fail-open", retry: true },
-    { hookType: "transform", failurePolicy: "skip", retry: false },
-    { hookType: "policy", failurePolicy: "deny", retry: false }
+    { hookType: "event", failurePolicy: "record-only", retry: true },
+    { hookType: "transform", failurePolicy: "fail-closed", retry: false },
+    { hookType: "policy", failurePolicy: "fail-closed", retry: false }
   ] as const)("maps $hookType hooks to retry=$retry", ({ hookType, failurePolicy, retry }) => {
     expect(retryPolicyForHookType(hookType)).toEqual({
       hookType,
@@ -314,8 +337,8 @@ describe("retry policy", () => {
   });
 
   it.each([
-    { hookType: "transform", failurePolicy: "skip" },
-    { hookType: "policy", failurePolicy: "deny" }
+    { hookType: "transform", failurePolicy: "fail-closed" },
+    { hookType: "policy", failurePolicy: "fail-closed" }
   ] as const)("does not retry $hookType failures", async ({ hookType, failurePolicy }) => {
     const error = new Error("blocking failure");
     const execute = vi.fn<() => Promise<string>>().mockRejectedValue(error);
@@ -355,29 +378,119 @@ describe("planExecution", () => {
     expect(plan.steps.map((step) => step.installationId)).toEqual(["inst_3", "inst_1", "inst_2"]);
   });
 
-  it("plans transform hooks for serial priority order and excludes disabled installations", () => {
+  it("plans the single active transform and excludes disabled installations", () => {
     const plan = planExecution({
       hookName: "invoice.created",
       hookType: "transform",
-      installations
+      installations: [
+        installation({ id: "inst_1", pluginId: "plugin_a", priority: 10 }),
+        installation({ id: "disabled", pluginId: "plugin_disabled", priority: 0, enabled: false }),
+        installation({
+          id: "other_hook",
+          pluginId: "plugin_other",
+          priority: 5,
+          hooks: ["other.hook"]
+        })
+      ]
     });
 
     expect(plan.mode).toBe("serial");
-    expect(plan.steps.map((step) => step.installationId)).toEqual(["inst_1", "inst_2", "inst_3"]);
+    expect(plan.steps.map((step) => step.installationId)).toEqual(["inst_1"]);
   });
+
+  it.each([
+    { installations: [] },
+    { installations: [installation({ id: "inst_1" }), installation({ id: "inst_2" })] }
+  ])(
+    "rejects transforms unless exactly one active installation is selected",
+    ({ installations }) => {
+      expect(() =>
+        planExecution({
+          hookName: "invoice.created",
+          hookType: "transform",
+          installations
+        })
+      ).toThrow("input_invalid");
+    }
+  );
 
   it("threads transform output into the next transform input", async () => {
     const plan = planExecution({
       hookName: "invoice.created",
       hookType: "transform",
-      installations
+      installations: [installation({ id: "inst_1" })]
     });
 
     const result = await runTransformChain(plan, { value: "" }, (step, payload) => ({
-      value: `${payload.value}${step.installationId}`
+      status: "transformed",
+      output: { value: `${payload.value}${step.installationId}` }
     }));
 
-    expect(result.value).toBe("inst_1inst_2inst_3");
+    expect(result.value).toBe("inst_1");
+  });
+
+  it.each([
+    { status: "transformed", output: { value: "ok" }, extra: true },
+    { status: "transformed", output: undefined },
+    Object.assign(Object.create({ inherited: true }), {
+      status: "transformed",
+      output: { value: "ok" }
+    }),
+    Object.defineProperty({ output: { value: "ok" } }, "status", {
+      enumerable: true,
+      get: () => {
+        throw new Error("result-secret");
+      }
+    })
+  ])("rejects a non-exact transform result", async (result) => {
+    const plan = planExecution({
+      hookName: "invoice.created",
+      hookType: "transform",
+      installations: [installation({ id: "inst_1" })]
+    });
+
+    await expect(
+      runTransformChain(plan, { value: "original" }, () => result as never)
+    ).rejects.toMatchObject({ code: "plugin_result_invalid" });
+  });
+
+  it("uses the original payload only for an explicitly safe transform policy", async () => {
+    const plan = planExecution({
+      hookName: "invoice.created",
+      hookType: "transform",
+      failurePolicy: "use-original",
+      installations: [installation({ id: "inst_1" })]
+    });
+
+    await expect(
+      runTransformChain(plan, { value: "original" }, () => {
+        throw new Error("transform failure");
+      })
+    ).resolves.toEqual({ value: "original" });
+  });
+
+  it("uses the original payload when an explicitly safe transform returns a malformed result", async () => {
+    const plan = planExecution({
+      hookName: "invoice.created",
+      hookType: "transform",
+      failurePolicy: "use-original",
+      installations: [installation({ id: "inst_1" })]
+    });
+
+    await expect(
+      runTransformChain(plan, { value: "original" }, () => ({ status: "transformed" }) as never)
+    ).resolves.toEqual({ value: "original" });
+  });
+
+  it("rejects use-original for webhook.outbound", () => {
+    expect(() =>
+      planExecution({
+        hookName: "webhook.outbound",
+        hookType: "transform",
+        failurePolicy: "use-original",
+        installations: []
+      })
+    ).toThrow("input_invalid");
   });
 });
 

@@ -6,6 +6,21 @@ export {
   type TenantScriptManifestJsonSchema
 } from "./manifest-json-schema.js";
 export { configSchemaSpec } from "./schema.js";
+export {
+  allowedFailurePolicies,
+  defaultFailurePolicies,
+  defaultFailurePolicyForHookType,
+  failurePolicies,
+  hookErrorCodes,
+  hookTypes,
+  isAllowedFailurePolicy,
+  isHookErrorCode,
+  isHookType,
+  isValidHookConfiguration,
+  type FailurePolicy,
+  type HookErrorCode,
+  type HookType
+} from "./contracts.js";
 
 const configReferencePattern = /^\$config\.([A-Za-z_][A-Za-z0-9_]*)$/;
 

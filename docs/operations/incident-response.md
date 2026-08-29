@@ -43,9 +43,9 @@ storage dependency without exporting customer data. Determine whether the failur
 - D1 mutation/read unavailability; or
 - R2 archive write/search unavailability.
 
-Check whether policy hooks are denying, transform hooks are skipping, and event hooks are retrying
-then failing open as designed. If behavior crosses a tenant or grant boundary, stop public
-discussion and use the private security response process.
+Check whether policy hooks are denying, transform hooks are failing closed without forwarding the
+original payload, and event hooks are record-only with bounded retry. If behavior crosses a tenant
+or grant boundary, stop public discussion and use the private security response process.
 
 ### 3. Contain
 
@@ -54,10 +54,10 @@ Choose the smallest safe action and preserve audit evidence:
 - **Runaway plugin:** keep the installation quarantined or explicitly disable it. Do not increase
   runtime limits to hide CPU or memory exhaustion. Roll back to a known-good version when its
   compatibility and grants are understood.
-- **Capability or broker failure:** do not bypass the broker or expose credentials. Policy hooks
-  fail closed, transform hooks skip the transformation, and event hooks exhaust their bounded
-  retry policy before failing open. Disable only the affected installation when the provider outage
-  makes continued attempts unsafe.
+- **Capability or broker failure:** do not bypass the broker or expose credentials. Policy and
+  transform hooks fail closed, while event hooks remain record-only after their bounded retry
+  policy. Disable only the affected installation when the provider outage makes continued attempts
+  unsafe.
 - **Budget incident:** keep the budget guard's durable disable state. Confirm the UTC period and
   usage evidence before an authenticated owner/admin re-enables execution; never mutate counters
   manually to force recovery.

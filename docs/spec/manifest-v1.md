@@ -22,6 +22,9 @@ every closed-object boundary defined by the structural schema.
   by the published pattern. A range such as `^1.0.0` is not a plugin version.
 - `hooks` MUST contain at least one hook. Hook names MUST be unique within the manifest.
 - A hook `type` MUST be `event`, `transform`, or `policy`. `timeoutMs` MUST be a positive integer.
+  Optional `failurePolicy` MUST be `record-only` for `event`, `fail-closed` or `use-original` for
+  `transform`, and `fail-closed` for `policy`. `webhook.outbound` MUST be a `transform` with
+  `fail-closed`.
   Optional `priority` MUST be an integer; negative priority is valid.
 - `schemaVersionRange` MUST be a valid npm-compatible semantic-version range. This is a semantic
   rule and cannot be inferred from the draft-07 structure alone.
@@ -35,6 +38,18 @@ every closed-object boundary defined by the structural schema.
 Validation MUST reject malformed input rather than removing unknown fields or coercing values.
 Object-key ordering has no meaning. Array ordering is preserved, except that hook-name uniqueness is
 evaluated independently of position.
+
+## Hook result examples
+
+The runtime result is closed by hook type. These examples show the valid shape and a rejected shape
+for each type; an adapter MUST map the rejected shape to `plugin_result_invalid` without returning
+the submitted value or diagnostic.
+
+| Type        | Valid                                                   | Rejected                                      |
+| ----------- | ------------------------------------------------------- | --------------------------------------------- |
+| `event`     | `{ "status": "accepted" }`                              | `{ "status": "accepted", "tenantId": "..." }` |
+| `transform` | `{ "status": "transformed", "output": { "ok": true } }` | `{ "output": { "ok": true } }`                |
+| `policy`    | `{ "decision": "deny", "reasonCode": "not_allowed" }`   | `{ "decision": "modify", "payload": {} }`     |
 
 ## Authority and runtime boundary
 
@@ -68,6 +83,7 @@ capability implementation, and performance are outside Manifest v1 conformance.
 | `hooks.non-empty`                  | Require at least one hook.                                           |
 | `hooks.unique-name`                | Reject duplicate hook names.                                         |
 | `hook.type.enum`                   | Accept only event, transform, or policy.                             |
+| `hook.failure-policy`              | Enforce the hook-type policy matrix and webhook.outbound invariant.  |
 | `hook.timeout.positive-integer`    | Require a positive integer hook timeout.                             |
 | `hook.priority.integer`            | Require an integer when priority is present.                         |
 | `hook.schema-version-range.semver` | Require an npm-compatible semantic-version range.                    |

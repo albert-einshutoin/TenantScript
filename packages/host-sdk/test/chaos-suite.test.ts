@@ -8,9 +8,9 @@ import {
 } from "../src/index.js";
 
 const hookPolicies = [
-  { hookType: "event", attempts: 2, failurePolicy: "fail-open" },
-  { hookType: "transform", attempts: 1, failurePolicy: "skip" },
-  { hookType: "policy", attempts: 1, failurePolicy: "deny" }
+  { hookType: "event", attempts: 2, failurePolicy: "record-only" },
+  { hookType: "transform", attempts: 1, failurePolicy: "fail-closed" },
+  { hookType: "policy", attempts: 1, failurePolicy: "fail-closed" }
 ] as const satisfies readonly {
   hookType: HookType;
   attempts: number;

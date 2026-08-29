@@ -3,15 +3,15 @@
   "kind": "github-actions-artifact-observation",
   "repository": "albert-einshutoin/TenantScript",
   "artifact": {
-    "id": 9495561532,
-    "name": "plugin-authoring-judge-image-evidence-cb7323031a08705864480899f769184b64198a90",
-    "digest": "sha256:8bb20e4cdb8fa898b0ae0dacef38fd2741940bbf3887522e456dd25f0ce62894",
+    "id": 9716469268,
+    "name": "plugin-authoring-judge-image-evidence-c8c6bc9bba095e49a4c20fceec012bd0860d16a7",
+    "digest": "sha256:235b3062925747470e5cfa9c9d09b4d0be63ff10b07d700eedce5bfaa9dc1d82",
     "sizeBytes": 113725,
-    "createdAt": "2026-08-23T15:28:40.000Z",
-    "expiresAt": "2026-09-06T15:28:39.000Z"
+    "createdAt": "2026-08-29T14:41:17.000Z",
+    "expiresAt": "2026-09-12T14:41:16.000Z"
   },
   "workflowRun": {
-    "id": 32648424914,
-    "headSha": "c57fccc72bd63622383eb865c489fd083c9d962f"
+    "id": 33258041510,
+    "headSha": "d55fae261d8608c9a07965af6c6a42a1548b6a4d"
   }
 }

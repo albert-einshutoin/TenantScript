@@ -1,9 +1,13 @@
 import {
+  HookContractError,
   planExecution,
   runTransformChain,
+  type TransformHookResult,
   type ExecutionStep,
-  type Installation
+  type Installation,
+  type HookType
 } from "@tenantscript/host-sdk";
+import type { HookErrorCode } from "@tenantscript/manifest";
 
 export interface ProxyWebhookRequest {
   path: string;
@@ -19,6 +23,7 @@ export interface ProxyMapping {
   tenantId: string;
   destinationUrl: string;
   transformHookName: string;
+  hookType?: HookType;
 }
 
 export interface ProxyMappingStore {
@@ -49,6 +54,14 @@ export interface WebhookProxyResult {
   transformed: boolean;
   skipped: boolean;
   forwardResponse: ProxyForwardResponse;
+}
+
+export class ProxyContractError extends Error {
+  override readonly name = "ProxyContractError";
+
+  constructor(readonly code: HookErrorCode) {
+    super(code);
+  }
 }
 
 export function createInMemoryProxyMappingStore(params: {
@@ -87,33 +100,40 @@ export async function handleWebhookProxy(params: {
   executeTransform: (
     step: ExecutionStep,
     payload: ProxyWebhookBody
-  ) => Promise<ProxyWebhookBody> | ProxyWebhookBody;
+  ) => Promise<TransformHookResult<ProxyWebhookBody>> | TransformHookResult<ProxyWebhookBody>;
   forward: (request: ProxyForwardRequest) => Promise<ProxyForwardResponse> | ProxyForwardResponse;
 }): Promise<WebhookProxyResult> {
   const mapping = await params.mappingStore.findProxyMappingByPath(params.request.path);
   if (mapping === null) {
-    throw new Error(`proxy mapping for ${params.request.path} was not found`);
+    throw new ProxyContractError("input_invalid");
+  }
+
+  if (mapping.hookType !== undefined && mapping.hookType !== "transform") {
+    throw new ProxyContractError("input_invalid");
+  }
+  if (mapping.transformHookName !== "webhook.outbound") {
+    throw new ProxyContractError("input_invalid");
   }
 
   const installations = await params.resolveInstallations({
     tenantId: mapping.tenantId,
     hookName: mapping.transformHookName
   });
-  const plan = planExecution({
-    hookName: mapping.transformHookName,
-    hookType: "transform",
-    installations
-  });
 
   let body = params.request.body;
   let transformed = false;
-  let skipped = false;
   try {
+    const plan = planExecution({
+      hookName: mapping.transformHookName,
+      hookType: mapping.hookType ?? "transform",
+      installations
+    });
     body = await runTransformChain(plan, body, params.executeTransform);
     transformed = plan.steps.length > 0;
-  } catch {
-    body = params.request.body;
-    skipped = true;
+  } catch (error) {
+    if (error instanceof ProxyContractError) throw error;
+    if (error instanceof HookContractError) throw new ProxyContractError(error.code);
+    throw new ProxyContractError("plugin_result_invalid");
   }
 
   const forwardResponse = await params.forward({
@@ -127,7 +147,7 @@ export async function handleWebhookProxy(params: {
     tenantId: mapping.tenantId,
     destinationUrl: mapping.destinationUrl,
     transformed,
-    skipped,
+    skipped: false,
     forwardResponse
   };
 }
@@ -136,16 +156,20 @@ function validateProxyMapping(
   mapping: ProxyMapping,
   allowedDestinationOrigins: readonly string[]
 ): void {
-  if (!mapping.inboundPath.startsWith("/")) {
-    throw new Error("proxy inbound path must start with /");
+  if (
+    !mapping.inboundPath.startsWith("/") ||
+    mapping.transformHookName !== "webhook.outbound" ||
+    (mapping.hookType !== undefined && mapping.hookType !== "transform")
+  ) {
+    throw new ProxyContractError("input_invalid");
   }
 
   const destination = parseDestinationUrl(mapping.destinationUrl);
   if (!isPublicHttpUrl(destination)) {
-    throw new Error(`proxy destination ${mapping.destinationUrl} is not a public http(s) URL`);
+    throw new ProxyContractError("input_invalid");
   }
   if (!allowedDestinationOrigins.includes(destination.origin)) {
-    throw new Error(`proxy destination ${mapping.destinationUrl} is outside the allowlist`);
+    throw new ProxyContractError("input_invalid");
   }
 }
 
@@ -153,7 +177,7 @@ function parseDestinationUrl(destinationUrl: string): URL {
   try {
     return new URL(destinationUrl);
   } catch {
-    throw new Error(`proxy destination ${destinationUrl} is not a valid URL`);
+    throw new ProxyContractError("input_invalid");
   }
 }
 

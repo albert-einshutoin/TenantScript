@@ -14,11 +14,11 @@ const allowedRuntimeDependencies = new Map([
   ["@tenantscript/test-config", new Set()],
   ["@tenantscript/manifest", new Set()],
   ["@tenantscript/plugin-sdk", new Set(["@tenantscript/manifest"])],
-  ["@tenantscript/host-sdk", new Set()],
+  ["@tenantscript/host-sdk", new Set(["@tenantscript/manifest"])],
   ["@tenantscript/capabilities", new Set()],
   ["@tenantscript/control-plane", new Set(["@tenantscript/host-sdk", "@tenantscript/manifest"])],
-  ["@tenantscript/loader", new Set(["@tenantscript/control-plane"])],
-  ["@tenantscript/proxy", new Set(["@tenantscript/host-sdk"])],
+  ["@tenantscript/loader", new Set(["@tenantscript/control-plane", "@tenantscript/manifest"])],
+  ["@tenantscript/proxy", new Set(["@tenantscript/host-sdk", "@tenantscript/manifest"])],
   [
     "@tenantscript/cli",
     new Set(["@tenantscript/control-plane", "@tenantscript/loader", "@tenantscript/manifest"])

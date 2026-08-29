@@ -113,7 +113,7 @@ function validSubmission(root, revision) {
       files
     },
     sdk: { range: "^0.0.0", lastTestedVersion: "0.0.0" },
-    hook: { name: "ticket.created", type: "transform" },
+    hook: { name: "ticket.created", type: "transform", failurePolicy: "fail-closed" },
     capabilities: [],
     egress: { mode: "deny", allowHosts: [] },
     configKeys: [],
@@ -131,7 +131,10 @@ function validSubmission(root, revision) {
           payload: { priority: "high", subject: "Database unavailable" },
           expected: {
             ok: true,
-            value: { priority: "high", subject: "Database unavailable" }
+            value: {
+              status: "transformed",
+              output: { priority: "high", subject: "Database unavailable" }
+            }
           },
           capabilityCalls: []
         },
@@ -141,9 +144,7 @@ function validSubmission(root, revision) {
           expected: {
             ok: false,
             error: {
-              name: "PluginHandlerError",
-              hookName: "ticket.created",
-              message: "invalid ticket payload"
+              code: "plugin_result_invalid"
             }
           },
           capabilityCalls: []
@@ -302,10 +303,14 @@ test("rejects unbounded, unordered, or open generated bundle behavior cases", ()
   }
 });
 
-test("allows value-less event success but requires blocking-hook values", () => {
+test("requires canonical event success and blocking-hook values", () => {
   withRepository(({ root, submission }) => {
     submission.hook.type = "event";
-    submission.verification.behaviorCases[0].expected = { ok: true };
+    submission.hook.failurePolicy = "record-only";
+    submission.verification.behaviorCases[0].expected = {
+      ok: true,
+      value: { status: "accepted" }
+    };
     writeSubmission(root, "example-template", submission);
 
     const result = runChecker(root);
@@ -320,7 +325,24 @@ test("allows value-less event success but requires blocking-hook values", () => 
     const result = runChecker(root);
 
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /blocking-hook success is missing value/);
+    assert.match(result.stderr, /missing field verification\.behaviorCases\.expected\.value/);
+  });
+});
+
+test("rejects use-original for policy hooks", () => {
+  withRepository(({ root, submission }) => {
+    submission.hook.type = "policy";
+    submission.hook.failurePolicy = "use-original";
+    submission.verification.behaviorCases[0].expected = {
+      ok: true,
+      value: { decision: "allow", reasonCode: "approved" }
+    };
+    writeSubmission(root, "example-template", submission);
+
+    const result = runChecker(root);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /hook\.failurePolicy does not match hook\.type/);
   });
 });
 
@@ -1073,6 +1095,14 @@ test("publishes a closed JSON Schema for the submission packet", () => {
   assert.deepEqual(schema.properties.kind.enum, ["community", "simulation"]);
   assert.equal(schema.properties.source.additionalProperties, false);
   assert.equal(schema.properties.verification.additionalProperties, false);
+  assert.equal(schema.properties.hook.oneOf.length, 3);
+  assert.ok(
+    schema.properties.hook.allOf.some(
+      (condition) =>
+        condition.if?.properties?.name?.const === "webhook.outbound" &&
+        condition.then?.properties?.failurePolicy?.const === "fail-closed"
+    )
+  );
   assert.ok(schema.properties.verification.required.includes("behaviorCases"));
   assert.equal(schema.properties.egress.properties.mode.const, "deny");
   assert.equal(schema.properties.egress.properties.allowHosts.maxItems, 0);

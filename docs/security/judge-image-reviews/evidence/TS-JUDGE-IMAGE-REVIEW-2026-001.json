@@ -2,24 +2,24 @@
   "schemaVersion": 1,
   "kind": "plugin-authoring-judge-image-candidate",
   "platform": "linux/amd64",
-  "sourceRevision": "cb7323031a08705864480899f769184b64198a90",
+  "sourceRevision": "c8c6bc9bba095e49a4c20fceec012bd0860d16a7",
   "inputs": {
     "baseImage": "gcr.io/distroless/nodejs24-debian13@sha256:e251b09ca1d32d7ae2dcba1721370cde41b5c69713edbb99bc644c6e4e101d2f",
     "dockerfileFrontend": "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
     "dockerfileSha256": "940892ef3b38941bf4748f77d50a6d103a3b8f756242f0a51af0ba5f0575045b",
-    "lockfileSha256": "392d9239582279377235545e577ace4e0c29763c69a7449fc05049201ef53a4d",
-    "contextSha256": "f047eb55a8de1489ea634c01c0fe3153d062bc0e80c8d1c2453a867884ca5b72"
+    "lockfileSha256": "1fa6e21a8da63eea46facc1c02cd5daa71346fd5adf5af34274308095fc57ba6",
+    "contextSha256": "b7b61e501b752a9b0efedae5ca71b43350d3d08c9406c359860ef976565a2a04"
   },
   "image": {
     "reference": "tenantscript/plugin-authoring-judge:evidence",
-    "id": "sha256:748c701e98eb72b4d27a74253afcc4c66509eeebb1a0c7b9f63345a2dce80ab0",
-    "archiveSha256": "fbed0924a24a1d04dc02cb686e67b18b90644aa226605646648a2b2431aa869e",
-    "archiveBytes": 197375488
+    "id": "sha256:2a3ee191b3c865a8f5c91687313db4f5ef4834e912e2c3c8f76d50f5f7a3e171",
+    "archiveSha256": "27e2d5b8fbf7a8acc1b5168778c8e4eb18fc1e3c1274058ec4a50d3cd9ce6de4",
+    "archiveBytes": 197444608
   },
   "sbom": {
     "format": "CycloneDX",
     "specVersion": "1.7",
-    "sha256": "3c5b9b01a136b6385b74ea95063c86f8c40126490ebc6b869f89e694cfc127e1",
+    "sha256": "da38191f710889e44f5a0e77c72486ff47c5c0b287fd484855b8941e0ed3acd9",
     "bytes": 397102,
     "components": 1317,
     "dependencies": 8,

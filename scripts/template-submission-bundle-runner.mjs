@@ -15,11 +15,21 @@ try {
   const authenticateUpdate = authenticator.update.bind(authenticator);
   const authenticateDigest = authenticator.digest.bind(authenticator);
   const request = envelope.request;
+  if (
+    request === null ||
+    typeof request !== "object" ||
+    Array.isArray(request) ||
+    Object.keys(request).sort().join("\0") !== "capabilityCalls\0hookName\0hookType\0payload" ||
+    !["event", "transform", "policy"].includes(request.hookType)
+  ) {
+    throw new Error("invalid dispatch request");
+  }
   const capabilityCalls = [];
   let outstandingCapabilityCalls = 0;
   const runtimeResult = await runScopedPluginDispatch({
     bundleCode: readFileSync(bundlePath, "utf8"),
     hookName: request.hookName,
+    hookType: request.hookType,
     payload: request.payload,
     context: {
       capability: async (name, input) => {

@@ -272,6 +272,9 @@ importers:
 
   packages/host-sdk:
     dependencies:
+      '@tenantscript/manifest':
+        specifier: workspace:*
+        version: link:../manifest
       semver:
         specifier: 7.8.4
         version: 7.8.4
@@ -294,6 +297,9 @@ importers:
       '@tenantscript/control-plane':
         specifier: workspace:*
         version: link:../control-plane
+      '@tenantscript/manifest':
+        specifier: workspace:*
+        version: link:../manifest
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
@@ -339,6 +345,9 @@ importers:
       '@tenantscript/host-sdk':
         specifier: workspace:*
         version: link:../host-sdk
+      '@tenantscript/manifest':
+        specifier: workspace:*
+        version: link:../manifest
     devDependencies:
       '@tenantscript/test-config':
         specifier: workspace:*

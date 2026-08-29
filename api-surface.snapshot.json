@@ -565,15 +565,24 @@
         {
           "subpath": ".",
           "exports": [
+            { "name": "allowedFailurePolicies", "kind": "value" },
             { "name": "BlockingHookDefinition", "kind": "type" },
+            { "name": "defaultFailurePolicies", "kind": "value" },
+            { "name": "defaultFailurePolicyForHookType", "kind": "value" },
             { "name": "DefinedHook", "kind": "type" },
             { "name": "defineHooks", "kind": "value" },
             { "name": "EventHookDefinition", "kind": "type" },
+            { "name": "EventHookResult", "kind": "type" },
             { "name": "ExecutionMode", "kind": "type" },
             { "name": "ExecutionPlan", "kind": "type" },
             { "name": "ExecutionStep", "kind": "type" },
+            { "name": "failurePolicies", "kind": "value" },
             { "name": "FailurePolicy", "kind": "type" },
+            { "name": "HookContractError", "kind": "type+value" },
             { "name": "HookDefinition", "kind": "type" },
+            { "name": "HookErrorCode", "kind": "type" },
+            { "name": "hookErrorCodes", "kind": "value" },
+            { "name": "HookExecutionError", "kind": "type" },
             { "name": "HookFailureKind", "kind": "type" },
             { "name": "hookFailureKinds", "kind": "value" },
             { "name": "HookPayloadError", "kind": "type" },
@@ -585,7 +594,13 @@
             { "name": "HookType", "kind": "type" },
             { "name": "hookTypes", "kind": "value" },
             { "name": "Installation", "kind": "type" },
+            { "name": "isAllowedFailurePolicy", "kind": "value" },
+            { "name": "isHookErrorCode", "kind": "value" },
+            { "name": "isHookType", "kind": "value" },
+            { "name": "isValidHookConfiguration", "kind": "value" },
             { "name": "planExecution", "kind": "value" },
+            { "name": "PolicyHookDefinition", "kind": "type" },
+            { "name": "PolicyHookResult", "kind": "type" },
             { "name": "retryPolicyForHookType", "kind": "value" },
             { "name": "RoutedHookPayload", "kind": "type" },
             { "name": "routeHookPayloads", "kind": "value" },
@@ -594,6 +609,8 @@
             { "name": "runWithRetryPolicy", "kind": "value" },
             { "name": "SchemaCompatibleInstallation", "kind": "type" },
             { "name": "shouldRetryHookFailure", "kind": "value" },
+            { "name": "TransformHookDefinition", "kind": "type" },
+            { "name": "TransformHookResult", "kind": "type" },
             { "name": "VersionedHookSchema", "kind": "type" }
           ]
         }
@@ -612,6 +629,8 @@
             { "name": "runScopedHandler", "kind": "value" },
             { "name": "runScopedPluginDispatch", "kind": "value" },
             { "name": "ScopedRuntimeContext", "kind": "type" },
+            { "name": "ScopedRuntimeError", "kind": "type+value" },
+            { "name": "ScopedRuntimeInputError", "kind": "type+value" },
             { "name": "ScopedRuntimeLimitError", "kind": "type+value" },
             { "name": "ScopedRuntimeLimits", "kind": "type" },
             { "name": "ScopedRuntimeLog", "kind": "type" },
@@ -647,10 +666,23 @@
         {
           "subpath": ".",
           "exports": [
+            { "name": "allowedFailurePolicies", "kind": "value" },
             { "name": "configSchemaSpec", "kind": "value" },
             { "name": "ConfigSchemaSpec", "kind": "type" },
+            { "name": "defaultFailurePolicies", "kind": "value" },
+            { "name": "defaultFailurePolicyForHookType", "kind": "value" },
+            { "name": "failurePolicies", "kind": "value" },
+            { "name": "FailurePolicy", "kind": "type" },
             { "name": "GrantMap", "kind": "type" },
+            { "name": "HookErrorCode", "kind": "type" },
+            { "name": "hookErrorCodes", "kind": "value" },
+            { "name": "HookType", "kind": "type" },
+            { "name": "hookTypes", "kind": "value" },
             { "name": "InstallationConfig", "kind": "type" },
+            { "name": "isAllowedFailurePolicy", "kind": "value" },
+            { "name": "isHookErrorCode", "kind": "value" },
+            { "name": "isHookType", "kind": "value" },
+            { "name": "isValidHookConfiguration", "kind": "value" },
             { "name": "parseManifest", "kind": "value" },
             { "name": "resolveGrants", "kind": "value" },
             { "name": "TenantScriptManifest", "kind": "type" },
@@ -673,10 +705,13 @@
             { "name": "DefinePluginInput", "kind": "type" },
             { "name": "DispatchRequest", "kind": "type" },
             { "name": "DispatchResult", "kind": "type" },
+            { "name": "EventResult", "kind": "type" },
             { "name": "PluginContext", "kind": "type" },
             { "name": "PluginDispatchError", "kind": "type" },
             { "name": "PluginHandler", "kind": "type" },
-            { "name": "TenantScriptPlugin", "kind": "type" }
+            { "name": "PolicyResult", "kind": "type" },
+            { "name": "TenantScriptPlugin", "kind": "type" },
+            { "name": "TransformResult", "kind": "type" }
           ]
         }
       ]
@@ -689,6 +724,7 @@
           "exports": [
             { "name": "createInMemoryProxyMappingStore", "kind": "value" },
             { "name": "handleWebhookProxy", "kind": "value" },
+            { "name": "ProxyContractError", "kind": "type+value" },
             { "name": "ProxyForwardRequest", "kind": "type" },
             { "name": "ProxyForwardResponse", "kind": "type" },
             { "name": "ProxyMapping", "kind": "type" },

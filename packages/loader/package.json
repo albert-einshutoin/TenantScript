@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "@tenantscript/control-plane": "workspace:*",
+    "@tenantscript/manifest": "workspace:*",
     "esbuild": "^0.28.1"
   }
 }

@@ -117,6 +117,7 @@ export const manifest = ${JSON.stringify({
       {
         name: task.hook.name,
         type: task.hook.type,
+        failurePolicy: task.hook.type === "event" ? "record-only" : "fail-closed",
         timeoutMs: 250,
         schemaVersionRange: "^1.0.0"
       }
@@ -158,45 +159,45 @@ function knownGoodBehaviorSource(taskId) {
   const handlers = {
     "approval-invoice-threshold": `const value = record(payload)?.totalCents;
       if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error("invalid_invoice_total");
-      return value >= 100000 ? { decision: "deny", reason: "approval_required" } : { decision: "allow" };`,
+      return value >= 100000 ? { decision: "deny", reasonCode: "approval_required" } : { decision: "allow", reasonCode: "allowed" };`,
     "approval-refund-review": `const value = record(payload)?.purchaseAgeDays;
       return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 30
-        ? { decision: "allow" } : { decision: "deny", reason: "approval_required" };`,
+        ? { decision: "allow", reasonCode: "allowed" } : { decision: "deny", reasonCode: "approval_required" };`,
     "capability-github-issue": `const value = record(payload);
       const id = bounded(value?.deploymentId, 64); const reason = bounded(value?.reason, 160);
       if (id === undefined || reason === undefined) throw new Error("invalid_deployment");
       try { await context.capability("github.issue.create", { title: \`Deployment \${id} failed\`, body: reason }); }
-      catch { throw new Error("issue_creation_failed"); }`,
+      catch { throw new Error("issue_creation_failed"); } return { status: "accepted" };`,
     "capability-slack-alert": `const value = record(payload);
       const id = bounded(value?.orderId, 64); const reason = bounded(value?.reason, 160);
       const channel = bounded(value?.channel, 80);
       if (id === undefined || reason === undefined || channel === undefined) throw new Error("invalid_blocked_order");
       try { await context.capability("slack.send", { channel, message: \`Order \${id} blocked: \${reason}\` }); }
-      catch { throw new Error("alert_failed"); }`,
+      catch { throw new Error("alert_failed"); } return { status: "accepted" };`,
     "error-malformed-payload": `const value = record(payload); const customerId = bounded(value?.customerId, 64);
       const displayName = bounded(value?.displayName, 100);
       if (customerId === undefined || displayName === undefined) throw new Error("invalid_customer");
-      return { customerId, displayName };`,
+      return { status: "transformed", output: { customerId, displayName } };`,
     "error-provider-failure": `const value = record(payload); const id = bounded(value?.incidentId, 64);
       const channel = bounded(value?.channel, 80);
       if (id === undefined || channel === undefined) throw new Error("invalid_incident");
       try { const result = record(await context.capability("slack.send", { channel, message: \`Incident \${id} opened\` }));
         if (bounded(result?.messageId, 80) === undefined) throw new Error("bad result");
-      } catch { throw new Error("notification_failed"); }`,
+      } catch { throw new Error("notification_failed"); } return { status: "accepted" };`,
     "policy-api-method-allowlist": `const value = record(payload); const keys = value === undefined ? [] : Object.keys(value);
       const allowed = keys.length === 2 && keys.includes("method") && keys.includes("url") &&
         (value?.method === "GET" || value?.method === "POST") && typeof value?.url === "string" &&
         (value.url === "https://api.example.com" || value.url.startsWith("https://api.example.com/"));
-      return allowed ? { decision: "allow" } : { decision: "deny", reason: "request_not_allowed" };`,
+      return allowed ? { decision: "allow", reasonCode: "allowed" } : { decision: "deny", reasonCode: "request_not_allowed" };`,
     "policy-data-residency": `return record(payload)?.region === "eu-west"
-      ? { decision: "allow" } : { decision: "deny", reason: "region_not_allowed" };`,
+      ? { decision: "allow", reasonCode: "allowed" } : { decision: "deny", reasonCode: "region_not_allowed" };`,
     "webhook-currency-normalizer": `const value = record(payload); const currency = value?.currency; const amount = value?.amount;
       if (typeof currency !== "string" || !/^[A-Za-z]{3}$/.test(currency) || typeof amount !== "number" ||
           !Number.isSafeInteger(amount) || amount < 0) throw new Error("invalid_payment");
-      return { currency: currency.toUpperCase(), amount };`,
+      return { status: "transformed", output: { currency: currency.toUpperCase(), amount } };`,
     "webhook-ticket-priority": `const value = record(payload)?.priority;
       const priorities: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
-      return { priority: typeof value === "string" ? priorities[value] ?? 2 : 2 };`
+      return { status: "transformed", output: { priority: typeof value === "string" ? priorities[value] ?? 2 : 2 } };`
   };
   const body = handlers[taskId];
   assert.notEqual(body, undefined);

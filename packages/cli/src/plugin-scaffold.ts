@@ -33,7 +33,7 @@ const pluginTemplateDefinitions: Record<PluginTemplateName, PluginTemplateDefini
   "webhook-transformer": {
     name: "webhook-transformer",
     defaultPluginName: "webhook-transformer",
-    hookName: "webhook.received",
+    hookName: "webhook.outbound",
     hookType: "transform"
   },
   "invoice-approval": {
@@ -211,12 +211,13 @@ function tsconfigTemplate(): string {
 }
 
 function manifestTemplate(request: PluginScaffoldRequest): string {
+  const failurePolicy = request.hookType === "event" ? "record-only" : "fail-closed";
   return `import type { TenantScriptManifest } from "@tenantscript/manifest";
 
 export const manifest = {
   name: "${request.name}",
   version: "0.1.0",
-  hooks: [{ name: "${request.hookName}", type: "${request.hookType}", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
+  hooks: [{ name: "${request.hookName}", type: "${request.hookType}", failurePolicy: "${failurePolicy}", timeoutMs: 250, schemaVersionRange: "^1.0.0" }],
   capabilities: {},
   configSchema: {
     properties: {},
@@ -308,33 +309,35 @@ function handlerTemplate(request: PluginScaffoldRequest): string {
   if (request.template === "invoice-approval") {
     return `async (payload, _context) => {
       if (!isInvoiceApprovalPayload(payload)) {
-        return { decision: "deny", reason: "invalid invoice amount" };
+        return { decision: "deny", reasonCode: "invalid_invoice_amount" };
       }
       if (payload.amountCents > AUTO_APPROVAL_LIMIT_CENTS) {
-        return { decision: "deny", reason: "manual approval required" };
+        return { decision: "deny", reasonCode: "manual_approval_required" };
       }
-      return { decision: "allow" };
+      return { decision: "allow", reasonCode: "approved" };
     }`;
   }
   if (request.template === "api-policy") {
     return `async (payload, _context) => {
       if (!isApiRequestPayload(payload)) {
-        return { decision: "deny", reason: "invalid API request" };
+        return { decision: "deny", reasonCode: "invalid_api_request" };
       }
       if (
         payload.path !== ALLOWED_ROUTE &&
         !payload.path.startsWith(\`\${ALLOWED_ROUTE}/\`)
       ) {
-        return { decision: "deny", reason: "API request not allowed" };
+        return { decision: "deny", reasonCode: "request_not_allowed" };
       }
-      return { decision: "allow" };
+      return { decision: "allow", reasonCode: "allowed" };
     }`;
   }
-  if (request.hookType === "transform") return "async (payload, _context) => payload";
-  if (request.hookType === "policy") {
-    return 'async (_payload, _context) => ({ decision: "allow" })';
+  if (request.hookType === "transform") {
+    return 'async (payload, _context) => ({ status: "transformed", output: payload })';
   }
-  return "async (_payload, _context) => undefined";
+  if (request.hookType === "policy") {
+    return 'async (_payload, _context) => ({ decision: "allow", reasonCode: "allowed" })';
+  }
+  return 'async (_payload, _context) => ({ status: "accepted" })';
 }
 
 function pluginTestTemplate(request: PluginScaffoldRequest): string {
@@ -373,7 +376,7 @@ ${transformResultAssertion(request.hookType)}
 
     expect(result).toEqual({
       ok: false,
-      error: { name: "UnknownHookError", hookName: "${undeclaredHookName}" }
+      error: { code: "plugin_artifact_invalid" }
     });
   });
 });
@@ -389,15 +392,15 @@ import { plugin } from "../src/index.js";
 
 describe("${request.name}", () => {
   it.each([
-    [{ amountCents: 100_000 }, { decision: "allow" }],
-    [{ amountCents: 100_001 }, { decision: "deny", reason: "manual approval required" }],
-    [{}, { decision: "deny", reason: "invalid invoice amount" }],
-    [[], { decision: "deny", reason: "invalid invoice amount" }],
-    [{ amountCents: -1 }, { decision: "deny", reason: "invalid invoice amount" }],
-    [{ amountCents: 1.5 }, { decision: "deny", reason: "invalid invoice amount" }],
+    [{ amountCents: 100_000 }, { decision: "allow", reasonCode: "approved" }],
+    [{ amountCents: 100_001 }, { decision: "deny", reasonCode: "manual_approval_required" }],
+    [{}, { decision: "deny", reasonCode: "invalid_invoice_amount" }],
+    [[], { decision: "deny", reasonCode: "invalid_invoice_amount" }],
+    [{ amountCents: -1 }, { decision: "deny", reasonCode: "invalid_invoice_amount" }],
+    [{ amountCents: 1.5 }, { decision: "deny", reasonCode: "invalid_invoice_amount" }],
     [
       { amountCents: Number.MAX_SAFE_INTEGER + 1 },
-      { decision: "deny", reason: "invalid invoice amount" }
+      { decision: "deny", reasonCode: "invalid_invoice_amount" }
     ]
   ])("decides invoice approval without capabilities for %#", async (payload, decision) => {
     const capability = vi.fn();
@@ -420,7 +423,7 @@ describe("${request.name}", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { name: "UnknownHookError", hookName: "${undeclaredHookName}" }
+      error: { code: "plugin_artifact_invalid" }
     });
   });
 });
@@ -433,18 +436,18 @@ import { plugin } from "../src/index.js";
 
 describe("${request.name}", () => {
   it.each([
-    [{ method: "GET", path: "/v1/reports" }, { decision: "allow" }],
-    [{ method: "HEAD", path: "/v1/reports/weekly" }, { decision: "allow" }],
-    [{ method: "POST", path: "/v1/reports" }, { decision: "deny", reason: "invalid API request" }],
-    [{ method: "GET", path: "/v1/reports-private" }, { decision: "deny", reason: "API request not allowed" }],
-    [{ method: "GET", path: "/v1/reports?admin=true" }, { decision: "deny", reason: "invalid API request" }],
-    [{ method: "GET", path: "/v1/reports/%2e%2e/private" }, { decision: "deny", reason: "invalid API request" }],
-    [{ method: "GET", path: "/v1/reports\\\\private" }, { decision: "deny", reason: "invalid API request" }],
-    [{ method: "GET", path: "/v1/reports\\u0000private" }, { decision: "deny", reason: "invalid API request" }],
-    [{ method: "GET", path: "/v1/reports/../private" }, { decision: "deny", reason: "invalid API request" }],
-    [{ method: "get", path: "/v1/reports" }, { decision: "deny", reason: "invalid API request" }],
-    [{}, { decision: "deny", reason: "invalid API request" }],
-    [[], { decision: "deny", reason: "invalid API request" }]
+    [{ method: "GET", path: "/v1/reports" }, { decision: "allow", reasonCode: "allowed" }],
+    [{ method: "HEAD", path: "/v1/reports/weekly" }, { decision: "allow", reasonCode: "allowed" }],
+    [{ method: "POST", path: "/v1/reports" }, { decision: "deny", reasonCode: "invalid_api_request" }],
+    [{ method: "GET", path: "/v1/reports-private" }, { decision: "deny", reasonCode: "request_not_allowed" }],
+    [{ method: "GET", path: "/v1/reports?admin=true" }, { decision: "deny", reasonCode: "invalid_api_request" }],
+    [{ method: "GET", path: "/v1/reports/%2e%2e/private" }, { decision: "deny", reasonCode: "invalid_api_request" }],
+    [{ method: "GET", path: "/v1/reports\\\\private" }, { decision: "deny", reasonCode: "invalid_api_request" }],
+    [{ method: "GET", path: "/v1/reports\\u0000private" }, { decision: "deny", reasonCode: "invalid_api_request" }],
+    [{ method: "GET", path: "/v1/reports/../private" }, { decision: "deny", reasonCode: "invalid_api_request" }],
+    [{ method: "get", path: "/v1/reports" }, { decision: "deny", reasonCode: "invalid_api_request" }],
+    [{}, { decision: "deny", reasonCode: "invalid_api_request" }],
+    [[], { decision: "deny", reasonCode: "invalid_api_request" }]
   ])("decides API access without capabilities for %#", async (payload, decision) => {
     const capability = vi.fn();
     const result = await plugin.dispatch({
@@ -466,7 +469,7 @@ describe("${request.name}", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: { name: "UnknownHookError", hookName: "${undeclaredHookName}" }
+      error: { code: "plugin_artifact_invalid" }
     });
   });
 });
@@ -475,7 +478,7 @@ describe("${request.name}", () => {
 
 function transformResultAssertion(hookType: PluginScaffoldRequest["hookType"]): string {
   if (hookType !== "transform") return "";
-  return '    expect(result).toEqual({ ok: true, value: { id: "evt_1" } });';
+  return '    expect(result).toEqual({ ok: true, value: { status: "transformed", output: { id: "evt_1" } } });';
 }
 
 function templateSecurityNote(template: PluginTemplateName): string {

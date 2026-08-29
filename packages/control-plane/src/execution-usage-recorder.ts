@@ -1,4 +1,5 @@
 import type { ControlPlaneExecutionRecord } from "./api.js";
+import { isHookType } from "@tenantscript/manifest";
 import type { UsageHookType, UsageMeter } from "./usage-meter.js";
 
 export interface ExecutionUsageMetrics {
@@ -123,9 +124,7 @@ function validateRequest(value: unknown): asserts value is ExecutionUsageRecordi
     !hasExactKeys(value, ["execution", "metrics"]) ||
     !isRecord(value.metrics) ||
     !hasExactKeys(value.metrics, ["hookType", "cpuMs", "subrequests", "workflowRuns"]) ||
-    !(["event", "transform", "policy"] as const).includes(
-      value.metrics.hookType as UsageHookType
-    ) ||
+    !isHookType(value.metrics.hookType) ||
     !isNonNegativeFinite(value.metrics.cpuMs) ||
     !isNonNegativeInteger(value.metrics.subrequests) ||
     !isNonNegativeInteger(value.metrics.workflowRuns)

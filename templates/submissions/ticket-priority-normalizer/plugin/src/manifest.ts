@@ -7,6 +7,7 @@ export const manifest = {
     {
       name: "ticket.created",
       type: "transform",
+      failurePolicy: "fail-closed",
       timeoutMs: 250,
       schemaVersionRange: "^1.0.0"
     }

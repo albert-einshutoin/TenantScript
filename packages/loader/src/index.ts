@@ -6,6 +6,12 @@ import type {
   ControlPlaneExecutionRecord,
   ContinuationRunner
 } from "@tenantscript/control-plane";
+import {
+  isHookErrorCode,
+  isHookType,
+  type HookErrorCode,
+  type HookType
+} from "@tenantscript/manifest";
 
 export interface PluginBundle {
   code: string;
@@ -44,6 +50,7 @@ export interface ApprovalContinuationRunnerOptions {
 export class ScopedRuntimeTimeoutError extends Error {
   override readonly name = "ScopedRuntimeTimeoutError";
   readonly executionStatus = "timeout";
+  readonly code = "plugin_timeout" as const;
 }
 
 export class ScopedRuntimeLimitError extends Error {
@@ -51,10 +58,27 @@ export class ScopedRuntimeLimitError extends Error {
   readonly executionStatus = "budget_exceeded";
 
   constructor(
-    message: string,
+    readonly code: "plugin_subrequest_exceeded" | "plugin_memory_exceeded",
     readonly logs: readonly ScopedRuntimeLog[] = []
   ) {
-    super(message);
+    super(code);
+  }
+}
+
+export class ScopedRuntimeError extends Error {
+  override readonly name = "ScopedRuntimeError";
+
+  constructor(readonly code: HookErrorCode) {
+    super(code);
+  }
+}
+
+export class ScopedRuntimeInputError extends TypeError {
+  override readonly name = "ScopedRuntimeInputError";
+  readonly code = "input_invalid" as const;
+
+  constructor() {
+    super("input_invalid");
   }
 }
 
@@ -67,8 +91,7 @@ interface RuntimeLimitState {
 type ScopedRuntimeEntrypoint = "handler" | "pluginDispatch";
 
 interface SerializedRuntimeError {
-  name: string;
-  message: string;
+  code: HookErrorCode;
   executionStatus?: string;
   logs?: readonly ScopedRuntimeLog[];
 }
@@ -82,20 +105,25 @@ type RuntimeWorkerMessage =
 const RUNTIME_STARTUP_TIMEOUT_MS = 5_000;
 
 export async function bundlePlugin(entryPoint: string): Promise<PluginBundle> {
-  const result = await build({
-    entryPoints: [entryPoint],
-    bundle: true,
-    write: false,
-    format: "cjs",
-    platform: "neutral",
-    sourcemap: false,
-    legalComments: "none",
-    logLevel: "silent"
-  });
+  let result;
+  try {
+    result = await build({
+      entryPoints: [entryPoint],
+      bundle: true,
+      write: false,
+      format: "cjs",
+      platform: "neutral",
+      sourcemap: false,
+      legalComments: "none",
+      logLevel: "silent"
+    });
+  } catch {
+    throw new ScopedRuntimeError("plugin_artifact_invalid");
+  }
 
   const output = result.outputFiles[0]?.text;
   if (output === undefined) {
-    throw new Error("esbuild did not produce a plugin bundle");
+    throw new ScopedRuntimeError("plugin_artifact_invalid");
   }
 
   return {
@@ -129,19 +157,75 @@ export async function runScopedHandler(params: {
 export async function runScopedPluginDispatch(params: {
   bundleCode: string;
   hookName: string;
+  hookType: HookType;
   payload: unknown;
   context: ScopedRuntimeContext;
   limits?: ScopedRuntimeLimits;
 }): Promise<ScopedRuntimeResult> {
+  if (!isHookType(params.hookType)) {
+    throw new ScopedRuntimeInputError();
+  }
+  if (params.hookName === "webhook.outbound" && params.hookType !== "transform") {
+    throw new ScopedRuntimeInputError();
+  }
   const limits = normalizeLimits(params.limits);
-  return await runHandlerInWorker({
-    bundleCode: params.bundleCode,
-    handlerName: params.hookName,
-    payload: params.payload,
-    context: params.context,
-    entrypoint: "pluginDispatch",
-    limits
-  });
+  try {
+    const result = await runHandlerInWorker({
+      bundleCode: params.bundleCode,
+      handlerName: params.hookName,
+      payload: params.payload,
+      context: params.context,
+      hookType: params.hookType,
+      entrypoint: "pluginDispatch",
+      limits
+    });
+    return params.hookType === "policy" ? normalizeLocalPolicyResult(result) : result;
+  } catch (error) {
+    if (params.hookType !== "policy") {
+      throw error;
+    }
+    if (error instanceof ScopedRuntimeInputError) {
+      throw error;
+    }
+    const code = policyFailureCode(error);
+    return policyDenyResult(
+      code === "input_invalid" ? "plugin_result_invalid" : code,
+      policyFailureLogs(error)
+    );
+  }
+}
+
+function normalizeLocalPolicyResult(result: ScopedRuntimeResult): ScopedRuntimeResult {
+  if (!isRecord(result.value) || result.value.ok !== false || !isRecord(result.value.error)) {
+    return result;
+  }
+  const code = result.value.error.code;
+  if (!isHookErrorCode(code) || code === "input_invalid") {
+    return policyDenyResult("plugin_result_invalid", result.logs);
+  }
+  return policyDenyResult(code, result.logs);
+}
+
+function policyDenyResult(
+  reasonCode: HookErrorCode,
+  logs: readonly ScopedRuntimeLog[] = []
+): ScopedRuntimeResult {
+  return {
+    value: { ok: true, value: { decision: "deny", reasonCode } },
+    logs
+  };
+}
+
+function policyFailureCode(error: unknown): HookErrorCode {
+  if (error instanceof ScopedRuntimeTimeoutError) return error.code;
+  if (error instanceof ScopedRuntimeLimitError) return error.code;
+  if (error instanceof ScopedRuntimeError) return error.code;
+  if (error instanceof ScopedRuntimeInputError) return error.code;
+  return isRecord(error) && isHookErrorCode(error.code) ? error.code : "plugin_result_invalid";
+}
+
+function policyFailureLogs(error: unknown): readonly ScopedRuntimeLog[] {
+  return error instanceof ScopedRuntimeLimitError ? error.logs : [];
 }
 
 export function createApprovalContinuationRunner(
@@ -182,16 +266,16 @@ function normalizeLimits(limits: ScopedRuntimeLimits | undefined): RuntimeLimitS
     memoryMb: limits?.memoryMb ?? 128
   };
   if (!Number.isSafeInteger(normalized.timeoutMs) || normalized.timeoutMs < 1) {
-    throw new TypeError("runtime timeoutMs must be a positive safe integer");
+    throw new ScopedRuntimeInputError();
   }
   if (
     normalized.maxSubrequests !== Number.POSITIVE_INFINITY &&
     (!Number.isSafeInteger(normalized.maxSubrequests) || normalized.maxSubrequests < 0)
   ) {
-    throw new TypeError("runtime maxSubrequests must be a non-negative safe integer");
+    throw new ScopedRuntimeInputError();
   }
   if (!Number.isSafeInteger(normalized.memoryMb) || normalized.memoryMb < 8) {
-    throw new TypeError("runtime memoryMb must be a safe integer of at least 8");
+    throw new ScopedRuntimeInputError();
   }
   return normalized;
 }
@@ -204,7 +288,7 @@ function assertLosslessHostJsonValue(
   try {
     assertLosslessHostJsonValueStructure(value, ancestors);
   } catch {
-    throw new TypeError(`${label} must be lossless JSON`);
+    throw new ScopedRuntimeInputError();
   }
 }
 
@@ -265,36 +349,42 @@ function assertLosslessHostJsonValueStructure(value: unknown, ancestors: Set<obj
 function runHandlerInWorker(params: {
   bundleCode: string;
   handlerName: string;
+  hookType?: HookType;
   payload: unknown;
   context: ScopedRuntimeContext;
   entrypoint: ScopedRuntimeEntrypoint;
   limits: RuntimeLimitState;
 }): Promise<ScopedRuntimeResult> {
   assertLosslessHostJsonValue(params.payload, "handler payload");
-  const worker = new Worker(RUNTIME_WORKER_SOURCE, {
-    eval: true,
-    // The local sandbox should not inherit credentials even if a future runtime regression exposes
-    // part of the worker environment. Production execution remains isolated by Cloudflare.
-    env: {},
-    // A worker-level V8 heap cap contains allocation storms independently from the wall-clock
-    // timeout, protecting local tooling from a plugin that exhausts memory before it yields.
-    resourceLimits: { maxOldGenerationSizeMb: params.limits.memoryMb },
-    workerData: {
-      bundleCode: params.bundleCode,
-      entrypoint: params.entrypoint,
-      handlerName: params.handlerName,
-      payload: params.payload,
-      limits: params.limits
-    }
-  });
+  let worker: Worker;
+  try {
+    worker = new Worker(RUNTIME_WORKER_SOURCE, {
+      eval: true,
+      execArgv: ["--input-type=commonjs"],
+      // The local sandbox should not inherit credentials even if a future runtime regression exposes
+      // part of the worker environment. Production execution remains isolated by Cloudflare.
+      env: {},
+      // A worker-level V8 heap cap contains allocation storms independently from the wall-clock
+      // timeout, protecting local tooling from a plugin that exhausts memory before it yields.
+      resourceLimits: { maxOldGenerationSizeMb: params.limits.memoryMb },
+      workerData: {
+        bundleCode: params.bundleCode,
+        entrypoint: params.entrypoint,
+        handlerName: params.handlerName,
+        hookType: params.hookType,
+        payload: params.payload,
+        limits: params.limits
+      }
+    });
+  } catch {
+    return Promise.reject(new ScopedRuntimeError("runtime_unavailable"));
+  }
 
   return new Promise((resolve, reject) => {
     let settled = false;
     let handlerTimeout: ReturnType<typeof setTimeout> | undefined;
     const startupTimeout = setTimeout(() => {
-      finishReject(
-        new Error(`runtime worker did not start within ${String(RUNTIME_STARTUP_TIMEOUT_MS)}ms`)
-      );
+      finishReject(new ScopedRuntimeError("runtime_unavailable"));
     }, RUNTIME_STARTUP_TIMEOUT_MS);
     const cleanup = () => {
       if (settled) {
@@ -341,18 +431,14 @@ function runHandlerInWorker(params: {
 
     worker.on("message", (rawMessage: unknown) => {
       if (!isRuntimeWorkerMessage(rawMessage)) {
-        finishReject(new Error("runtime worker sent an invalid message"));
+        finishReject(new ScopedRuntimeError("runtime_unavailable"));
         return;
       }
 
       if (rawMessage.type === "started") {
         clearTimeout(startupTimeout);
         handlerTimeout = setTimeout(() => {
-          finishReject(
-            new ScopedRuntimeTimeoutError(
-              `handler ${params.handlerName} exceeded ${String(params.limits.timeoutMs)}ms`
-            )
-          );
+          finishReject(new ScopedRuntimeTimeoutError("plugin timeout"));
         }, params.limits.timeoutMs);
         return;
       }
@@ -373,16 +459,14 @@ function runHandlerInWorker(params: {
     worker.on("error", (error) => {
       finishReject(
         isWorkerOutOfMemoryError(error)
-          ? new ScopedRuntimeLimitError(
-              `handler ${params.handlerName} exceeded ${String(params.limits.memoryMb)}MB memory limit`
-            )
-          : (error as Error)
+          ? new ScopedRuntimeLimitError("plugin_memory_exceeded")
+          : new ScopedRuntimeError("runtime_unavailable")
       );
     });
 
     worker.on("exit", (code) => {
       if (!settled && code !== 0) {
-        finishReject(new Error(`runtime worker exited with code ${String(code)}`));
+        finishReject(new ScopedRuntimeError("runtime_unavailable"));
       }
     });
   });
@@ -397,24 +481,28 @@ function isWorkerOutOfMemoryError(error: unknown): boolean {
 }
 
 function serializeUnknownError(error: unknown): SerializedRuntimeError {
-  if (error instanceof Error) {
-    return { name: error.name, message: error.message };
+  try {
+    if (isRecord(error) && isHookErrorCode(error.code)) {
+      return { code: error.code };
+    }
+  } catch {
+    // Untrusted capability adapters can expose throwing accessors; they still map to one stable code.
   }
-  return { name: "Error", message: String(error) };
+  return { code: "capability_failed" };
 }
 
 function deserializeRuntimeError(error: SerializedRuntimeError): Error {
-  if (error.executionStatus === "timeout" || error.name === "ScopedRuntimeTimeoutError") {
-    return new ScopedRuntimeTimeoutError(error.message);
+  if (error.code === "plugin_timeout" || error.executionStatus === "timeout") {
+    return new ScopedRuntimeTimeoutError();
   }
 
-  if (error.executionStatus === "budget_exceeded" || error.name === "ScopedRuntimeLimitError") {
-    return new ScopedRuntimeLimitError(error.message, error.logs ?? []);
+  if (error.executionStatus === "budget_exceeded") {
+    const code =
+      error.code === "plugin_memory_exceeded" ? error.code : "plugin_subrequest_exceeded";
+    return new ScopedRuntimeLimitError(code, error.logs ?? []);
   }
 
-  const deserialized = new Error(error.message);
-  deserialized.name = error.name;
-  return deserialized;
+  return new ScopedRuntimeError(error.code);
 }
 
 function isRuntimeWorkerMessage(value: unknown): value is RuntimeWorkerMessage {
@@ -440,8 +528,7 @@ function isRuntimeWorkerMessage(value: unknown): value is RuntimeWorkerMessage {
 function isSerializedRuntimeError(value: unknown): value is SerializedRuntimeError {
   return (
     isRecord(value) &&
-    typeof value.name === "string" &&
-    typeof value.message === "string" &&
+    isHookErrorCode(value.code) &&
     (value.logs === undefined || Array.isArray(value.logs))
   );
 }
@@ -458,14 +545,16 @@ const { parentPort, workerData } = require("node:worker_threads");
 class ScopedRuntimeTimeoutError extends Error {
   name = "ScopedRuntimeTimeoutError";
   executionStatus = "timeout";
+  code = "plugin_timeout";
 }
 
 class ScopedRuntimeLimitError extends Error {
   name = "ScopedRuntimeLimitError";
   executionStatus = "budget_exceeded";
 
-  constructor(message, logs = []) {
-    super(message);
+  constructor(code = "plugin_subrequest_exceeded", logs = []) {
+    super(code);
+    this.code = code;
     this.logs = logs;
   }
 }
@@ -518,8 +607,15 @@ async function run() {
 
   const runtimeBindings = initializeSandbox(sandbox, limits);
 
-  evaluateBundle(workerData.bundleCode, sandbox, limits);
-  assertEntrypointExists(sandbox.module.exports, workerData.handlerName, workerData.entrypoint);
+  try {
+    evaluateBundle(workerData.bundleCode, sandbox, limits);
+    assertEntrypointExists(sandbox.module.exports, workerData.handlerName, workerData.entrypoint);
+  } catch (error) {
+    if (error?.code === "plugin_timeout") throw error;
+    const invalid = new Error("plugin_artifact_invalid");
+    invalid.code = "plugin_artifact_invalid";
+    throw invalid;
+  }
   installInvocationState(sandbox, limits, runtimeBindings.installerName);
 
   parentPort.postMessage({ type: "started" });
@@ -535,7 +631,7 @@ async function run() {
   if (pendingCapabilities.size !== 0) {
     throw new Error("handler returned with outstanding capability calls");
   }
-  return runtimeBindings.validateResult(value, workerData.entrypoint);
+  return runtimeBindings.validateResult(value, workerData.entrypoint, workerData.hookType);
 }
 
 function initializeSandbox(sandbox, limits) {
@@ -588,7 +684,9 @@ function initializeSandbox(sandbox, limits) {
     try {
       countSubrequest(limits, "fetch:" + target);
       logs.push({ reason: "egress_denied", target });
-      return Promise.reject(serializeBridgeError(new Error("egress denied: " + target)));
+      const error = new Error("egress denied");
+      error.code = "egress_denied";
+      return Promise.reject(serializeBridgeError(error));
     } catch (error) {
       return Promise.reject(serializeBridgeError(error));
     }
@@ -693,7 +791,45 @@ function initializeSandbox(sandbox, limits) {
       "    }",
       "    return serialized + '}';",
       "  };",
-      "  return (value, entrypoint) => {",
+      "  const canonicalPluginErrorCodes = new SafeSet([",
+      "    'plugin_artifact_invalid', 'plugin_result_invalid'",
+      "  ]);",
+      "  const descriptorValue = (value, key) => {",
+      "    const descriptor = safeObjectGetOwnPropertyDescriptor(value, key);",
+      "    return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;",
+      "  };",
+      "  const exactKeys = (value, keys) => {",
+      "    const ownKeys = safeObjectKeys(value);",
+      "    return ownKeys.length === keys.length && keys.every((key) => safeObjectHasOwn(value, key));",
+      "  };",
+      "  const validateCanonicalHookResult = (hookType, value) => {",
+      "    if (!isPlainRecord(value) || !safeObjectHasOwn(value, 'ok')) throw invalid();",
+      "    const ok = descriptorValue(value, 'ok');",
+      "    if (ok === false) {",
+      "      if (!exactKeys(value, ['ok', 'error'])) throw invalid();",
+      "      const error = descriptorValue(value, 'error');",
+      "      if (!isPlainRecord(error) || !exactKeys(error, ['code']) || !canonicalPluginErrorCodes.has(descriptorValue(error, 'code'))) throw invalid();",
+      "      return;",
+      "    }",
+      "    if (!exactKeys(value, ['ok', 'value'])) throw invalid();",
+      "    const result = descriptorValue(value, 'value');",
+      "    if (ok !== true || !isPlainRecord(result)) throw invalid();",
+      "    if (hookType === 'event') {",
+      "      if (!exactKeys(result, ['status']) || descriptorValue(result, 'status') !== 'accepted') throw invalid();",
+      "      return;",
+      "    }",
+      "    if (hookType === 'transform') {",
+      "      if (!exactKeys(result, ['status', 'output']) || descriptorValue(result, 'status') !== 'transformed' || descriptorValue(result, 'output') === undefined) throw invalid();",
+      "      return;",
+      "    }",
+      "    if (!exactKeys(result, ['decision', 'reasonCode']) || (descriptorValue(result, 'decision') !== 'allow' && descriptorValue(result, 'decision') !== 'deny') || typeof descriptorValue(result, 'reasonCode') !== 'string' || !/^[a-z][a-z0-9._-]{0,63}$/.test(descriptorValue(result, 'reasonCode'))) throw invalid();",
+      "  };",
+      "  const isPlainRecord = (value) => {",
+      "    if (value === null || typeof value !== 'object' || safeArrayIsArray(value)) return false;",
+      "    const prototype = safeObjectGetPrototypeOf(value);",
+      "    return prototype === safeObjectPrototype || prototype === null;",
+      "  };",
+      "  return (value, entrypoint, hookType) => {",
       "    if (value === undefined && entrypoint === 'handler') return value;",
       "    let allowedUndefinedKey;",
       "    if (entrypoint === 'pluginDispatch' && value !== null && typeof value === 'object') {",
@@ -704,6 +840,7 @@ function initializeSandbox(sandbox, limits) {
       "        result !== undefined && 'value' in result && result.value === undefined",
       "      ) allowedUndefinedKey = 'value';",
       "    }",
+      "    if (entrypoint === 'pluginDispatch' && hookType !== undefined) validateCanonicalHookResult(hookType, value);",
       "    assertJsonValue(value, new SafeSet(), allowedUndefinedKey);",
       "    if (entrypoint === 'capabilityInput') return serializeJsonValue(value);",
       "    return value;",
@@ -728,8 +865,8 @@ function initializeSandbox(sandbox, limits) {
       "  const bridgeError = (error) => {",
       "    try {",
       "      const packet = safeJsonParse(safeString(error));",
-      "      const bridged = new Error(packet.message);",
-      "      bridged.name = packet.name;",
+      "      const bridged = new Error(packet.code);",
+      "      bridged.code = packet.code;",
       "      if (packet.executionStatus === 'budget_exceeded') {",
       "        bridged.executionStatus = packet.executionStatus;",
       "        bridged.logs = packet.logs;",
@@ -845,7 +982,9 @@ function initializeSandbox(sandbox, limits) {
       "      try {",
       "        inputJson = " + resultValidatorName + "(input, 'capabilityInput');",
       "      } catch (_error) {",
-      "        throw new TypeError('capability input must be lossless JSON');",
+      "        const invalid = new TypeError('input_invalid');",
+      "        invalid.code = 'input_invalid';",
+      "        throw invalid;",
       "      }",
       "      try {",
       "        const resultJson = await capabilityBridge(safeString(name), inputJson);",
@@ -1057,10 +1196,7 @@ function countSubrequest(limits, target) {
   subrequests += 1;
   if (subrequests > limits.maxSubrequests) {
     logs.push({ reason: "subrequest_limit_exceeded", target });
-    throw new ScopedRuntimeLimitError(
-      "subrequest limit exceeded: " + String(limits.maxSubrequests),
-      logs
-    );
+    throw new ScopedRuntimeLimitError("plugin_subrequest_exceeded", logs);
   }
 }
 
@@ -1108,51 +1244,47 @@ function isVmTimeout(error) {
 function serializeError(error) {
   if (error instanceof ScopedRuntimeLimitError) {
     return {
-      name: error.name,
-      message: error.message,
+      code: error.code,
       executionStatus: error.executionStatus,
       logs: error.logs
     };
   }
   if (error instanceof ScopedRuntimeTimeoutError) {
     return {
-      name: error.name,
-      message: error.message,
+      code: error.code,
       executionStatus: error.executionStatus
     };
   }
-  if (error instanceof Error) {
-    return { name: error.name, message: error.message };
+  if (isRecord(error) && typeof error.code === "string" && [
+    "input_invalid", "snapshot_unavailable", "snapshot_integrity_failed",
+    "plugin_artifact_invalid", "plugin_timeout", "plugin_memory_exceeded",
+    "plugin_subrequest_exceeded", "plugin_result_invalid", "capability_denied",
+    "capability_failed", "egress_denied", "destination_unavailable",
+    "evidence_unavailable", "runtime_unavailable"
+  ].includes(error.code)) {
+    return { code: error.code, ...(error.executionStatus === "budget_exceeded" ? { executionStatus: error.executionStatus, logs: error.logs } : {}) };
   }
   if (
     isRecord(error) &&
     error.executionStatus === "budget_exceeded" &&
-    Array.isArray(error.logs) &&
-    typeof error.name === "string" &&
-    typeof error.message === "string"
+    Array.isArray(error.logs)
   ) {
     return {
-      name: error.name,
-      message: error.message,
+      code: "plugin_subrequest_exceeded",
       executionStatus: error.executionStatus,
       logs: error.logs
     };
   }
-  // Errors created inside node:vm are from another realm, so instanceof Error is false. Preserve
-  // only their stable name/message fields instead of reflecting stack or plugin-owned metadata.
-  if (isRecord(error) && typeof error.name === "string" && typeof error.message === "string") {
-    return { name: error.name, message: error.message };
-  }
-  const rendered = String(error);
-  const match = rendered.match(/^([A-Za-z]+Error):\s([\s\S]*)$/);
-  return match === null
-    ? { name: "Error", message: rendered }
-    : { name: match[1], message: match[2] };
+  return { code: "plugin_result_invalid" };
 }
 
 function deserializeError(error) {
-  const deserialized = new Error(error.message);
-  deserialized.name = error.name;
+  const deserialized = new Error(error.code);
+  deserialized.code = error.code;
+  if (error.executionStatus === "budget_exceeded") {
+    deserialized.executionStatus = error.executionStatus;
+    deserialized.logs = error.logs;
+  }
   return deserialized;
 }
 

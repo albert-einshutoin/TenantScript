@@ -1,10 +1,29 @@
 import type { z } from "zod";
 import { maxSatisfying, valid, validRange } from "semver";
+import {
+  defaultFailurePolicyForHookType,
+  isValidHookConfiguration,
+  isHookType,
+  type FailurePolicy,
+  type HookErrorCode,
+  type HookType
+} from "@tenantscript/manifest";
 
-export const hookTypes = ["event", "transform", "policy"] as const;
-
-export type HookType = (typeof hookTypes)[number];
-export type FailurePolicy = "fail-open" | "skip" | "deny";
+export {
+  allowedFailurePolicies,
+  defaultFailurePolicies,
+  defaultFailurePolicyForHookType,
+  failurePolicies,
+  hookErrorCodes,
+  hookTypes,
+  isAllowedFailurePolicy,
+  isHookErrorCode,
+  isHookType,
+  isValidHookConfiguration,
+  type FailurePolicy,
+  type HookErrorCode,
+  type HookType
+} from "@tenantscript/manifest";
 export type ExecutionMode = "parallel" | "serial";
 export const hookFailureKinds = ["handler_error", "timeout", "budget_exceeded"] as const;
 export type HookFailureKind = (typeof hookFailureKinds)[number];
@@ -13,18 +32,34 @@ export type EventHookDefinition<TPayload> = {
   type: "event";
   name: string;
   payloadSchema: z.ZodType<TPayload>;
+  failurePolicy?: "record-only";
   timeoutMs?: number;
   priority?: number;
 };
 
-export type BlockingHookDefinition<TPayload> = {
-  type: "transform" | "policy";
+export type TransformHookDefinition<TPayload> = {
+  type: "transform";
   name: string;
   payloadSchema: z.ZodType<TPayload>;
+  failurePolicy?: "fail-closed" | "use-original";
   budgetMs: number;
   timeoutMs?: number;
   priority?: number;
 };
+
+export type PolicyHookDefinition<TPayload> = {
+  type: "policy";
+  name: string;
+  payloadSchema: z.ZodType<TPayload>;
+  failurePolicy?: "fail-closed";
+  budgetMs: number;
+  timeoutMs?: number;
+  priority?: number;
+};
+
+export type BlockingHookDefinition<TPayload> =
+  | TransformHookDefinition<TPayload>
+  | PolicyHookDefinition<TPayload>;
 
 export type HookDefinition<TPayload = unknown> =
   | EventHookDefinition<TPayload>
@@ -40,11 +75,42 @@ export interface HooksDefinition<TPayload = unknown> {
 
 export interface HookPayloadError {
   name: "HookPayloadError";
+  code: "input_invalid";
   hookName: string;
   issues: Array<{ path: string; message: string }>;
 }
 
-export type HookRunResult<T> = { ok: true; value: T } | { ok: false; error: HookPayloadError };
+export interface HookExecutionError {
+  name: "HookExecutionError";
+  code: "plugin_result_invalid";
+  hookName: string;
+}
+
+export type HookRunResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: HookPayloadError | HookExecutionError };
+
+export class HookContractError extends Error {
+  override readonly name = "HookContractError";
+
+  constructor(readonly code: HookErrorCode) {
+    super(code);
+  }
+}
+
+export interface TransformHookResult<TOutput> {
+  status: "transformed";
+  output: TOutput;
+}
+
+export interface PolicyHookResult {
+  decision: "allow" | "deny";
+  reasonCode: string;
+}
+
+export interface EventHookResult {
+  status: "accepted";
+}
 
 export interface Installation {
   id: string;
@@ -85,6 +151,7 @@ export interface ExecutionStep {
 export interface ExecutionPlan {
   hookName: string;
   hookType: HookType;
+  failurePolicy: FailurePolicy;
   mode: ExecutionMode;
   steps: readonly ExecutionStep[];
 }
@@ -113,10 +180,16 @@ export function defineHooks<TPayload>(
   hooks: readonly HookDefinition<TPayload>[]
 ): HooksDefinition<TPayload> {
   return {
-    hooks: hooks.map((hook) => ({
-      ...hook,
-      failurePolicy: defaultFailurePolicyFor(hook.type)
-    }))
+    hooks: hooks.map((hook) => {
+      if (!isHookType(hook.type)) {
+        throw new HookContractError("input_invalid");
+      }
+      const failurePolicy = hook.failurePolicy ?? defaultFailurePolicyForHookType(hook.type);
+      if (!isValidHookConfiguration(hook.name, hook.type, failurePolicy)) {
+        throw new HookContractError("input_invalid");
+      }
+      return { ...hook, failurePolicy } as DefinedHook<TPayload>;
+    })
   };
 }
 
@@ -131,6 +204,7 @@ export async function runHook<TPayload, TResult>(
       ok: false,
       error: {
         name: "HookPayloadError",
+        code: "input_invalid",
         hookName: hook.name,
         issues: parsedPayload.error.issues.map((issue) => ({
           path: issue.path.join("."),
@@ -140,14 +214,29 @@ export async function runHook<TPayload, TResult>(
     };
   }
 
-  return { ok: true, value: await execute(parsedPayload.data) };
+  try {
+    return { ok: true, value: await execute(parsedPayload.data) };
+  } catch {
+    return {
+      ok: false,
+      error: { name: "HookExecutionError", code: "plugin_result_invalid", hookName: hook.name }
+    };
+  }
 }
 
 export function planExecution(params: {
   hookName: string;
   hookType: HookType;
+  failurePolicy?: FailurePolicy;
   installations: readonly Installation[];
 }): ExecutionPlan {
+  if (!isHookType(params.hookType)) {
+    throw new HookContractError("input_invalid");
+  }
+  const failurePolicy = params.failurePolicy ?? defaultFailurePolicyForHookType(params.hookType);
+  if (!isValidHookConfiguration(params.hookName, params.hookType, failurePolicy)) {
+    throw new HookContractError("input_invalid");
+  }
   const steps = params.installations
     .filter((installation) => installation.enabled && installation.hooks.includes(params.hookName))
     .map((installation) => ({
@@ -156,10 +245,15 @@ export function planExecution(params: {
       priority: installation.priority
     }));
 
+  if (params.hookType === "transform" && steps.length !== 1) {
+    throw new HookContractError("input_invalid");
+  }
+
   if (params.hookType === "event") {
     return {
       hookName: params.hookName,
       hookType: params.hookType,
+      failurePolicy,
       mode: "parallel",
       steps
     };
@@ -168,6 +262,7 @@ export function planExecution(params: {
   return {
     hookName: params.hookName,
     hookType: params.hookType,
+    failurePolicy,
     mode: "serial",
     steps: [...steps].sort((left, right) => left.priority - right.priority)
   };
@@ -260,23 +355,39 @@ export function routeHookPayloads<TPayload>(params: {
 export async function runTransformChain<TPayload>(
   plan: ExecutionPlan,
   initialPayload: TPayload,
-  execute: (step: ExecutionStep, payload: TPayload) => Promise<TPayload> | TPayload
+  execute: (
+    step: ExecutionStep,
+    payload: TPayload
+  ) => Promise<TransformHookResult<TPayload>> | TransformHookResult<TPayload>
 ): Promise<TPayload> {
   if (plan.hookType !== "transform") {
-    throw new Error("runTransformChain only accepts transform execution plans");
+    throw new HookContractError("input_invalid");
   }
 
   let payload = initialPayload;
   for (const step of plan.steps) {
-    payload = await execute(step, payload);
+    let result: TransformHookResult<TPayload>;
+    try {
+      result = await execute(step, payload);
+    } catch (error) {
+      if (plan.failurePolicy === "use-original") return initialPayload;
+      if (error instanceof HookContractError) throw error;
+      throw new HookContractError("plugin_result_invalid");
+    }
+    if (!isCanonicalTransformResult(result)) {
+      if (plan.failurePolicy === "use-original") return initialPayload;
+      throw new HookContractError("plugin_result_invalid");
+    }
+    payload = result.output;
   }
   return payload;
 }
 
 export function retryPolicyForHookType(hookType: HookType): HookRetryPolicy {
+  if (!isHookType(hookType)) throw new HookContractError("input_invalid");
   return {
     hookType,
-    failurePolicy: defaultFailurePolicyFor(hookType),
+    failurePolicy: defaultFailurePolicyForHookType(hookType),
     retry: hookType === "event",
     maxAttempts: hookType === "event" ? 2 : 1
   };
@@ -323,15 +434,33 @@ export async function runWithRetryPolicy<TResult>(params: {
   throw new Error(`retry policy exhausted without a result for ${params.hookType}`);
 }
 
-function defaultFailurePolicyFor(type: HookType): FailurePolicy {
-  switch (type) {
-    case "event":
-      return "fail-open";
-    case "transform":
-      return "skip";
-    case "policy":
-      return "deny";
+function isCanonicalTransformResult<TOutput>(
+  value: unknown
+): value is TransformHookResult<TOutput> {
+  try {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+    const prototype = Reflect.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    const names = Object.getOwnPropertyNames(value);
+    if (
+      names.length !== 2 ||
+      !names.includes("status") ||
+      !names.includes("output") ||
+      Object.getOwnPropertySymbols(value).length !== 0
+    ) {
+      return false;
+    }
+    const status = Object.getOwnPropertyDescriptor(value, "status");
+    const output = Object.getOwnPropertyDescriptor(value, "output");
+    return (
+      status !== undefined &&
+      "value" in status &&
+      status.value === "transformed" &&
+      output !== undefined &&
+      "value" in output &&
+      output.value !== undefined
+    );
+  } catch {
+    return false;
   }
-
-  throw new Error(`Unknown hook type: ${String(type)}`);
 }

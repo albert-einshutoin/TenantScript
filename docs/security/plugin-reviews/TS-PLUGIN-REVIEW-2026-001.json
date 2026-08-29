@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "TS-PLUGIN-REVIEW-2026-001",
-  "baselineCommit": "25be68072a2acd01b022ea98a2bd7faf8ddbfedc",
+  "baselineCommit": "d997dd9a6779b12746d94872cc99e945581518a3",
   "target": {
     "name": "Built-in ext init plugin scaffold and first-party templates",
     "scope": [
@@ -13,15 +13,15 @@
     "sourceDigests": {
       "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
       "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-      "packages/cli/src/plugin-scaffold.ts": "9183bdf835debce150c128fa1c6d354a7cb5fc1fb12653b65de72f3d487279a2",
-      "packages/cli/test/init.test.ts": "0966f68c4483bb38b7e3478b4147995508ca6ea7668a8af18a7688a01c04e7a3"
+      "packages/cli/src/plugin-scaffold.ts": "1b13bd6af21c599907aa0bea0fb0b100fdac1967bae2da85feba9b3a6065f736",
+      "packages/cli/test/init.test.ts": "243d26335e77811a7af4d1cc8966d060b0c3b73ff3b558f39c88f8a3354f23e5"
     }
   },
   "reviewer": {
     "identity": "TenantScript maintainers",
     "relationship": "First-party self-review of the built-in scaffold"
   },
-  "reviewedAt": "2026-08-23T13:59:14.000Z",
+  "reviewedAt": "2026-08-27T13:07:29.000Z",
   "domains": [
     {
       "name": "security",
@@ -76,13 +76,13 @@
   "evidenceDigests": {
     "packages/cli/src/index.ts": "0ab7047bb8b37e2ade0b2dd97486d6b2296c2e930ab31bb9cb87e1e272932f78",
     "packages/cli/src/plugin-audit.ts": "6ca66b3a4123dfe419f48251f24506d5289a3ab37fa037502c1f54a9931d507e",
-    "packages/cli/src/plugin-scaffold.ts": "9183bdf835debce150c128fa1c6d354a7cb5fc1fb12653b65de72f3d487279a2",
-    "packages/cli/test/init.test.ts": "0966f68c4483bb38b7e3478b4147995508ca6ea7668a8af18a7688a01c04e7a3",
+    "packages/cli/src/plugin-scaffold.ts": "1b13bd6af21c599907aa0bea0fb0b100fdac1967bae2da85feba9b3a6065f736",
+    "packages/cli/test/init.test.ts": "243d26335e77811a7af4d1cc8966d060b0c3b73ff3b558f39c88f8a3354f23e5",
     "scripts/agent-plugin-scaffold-e2e.test.mjs": "ab3a8261b460ed4409a3af1ea5885ab69d6c54bfddadeda3da52c2d213bd6a22",
-    "docs/quickstarts/agent-plugin-authoring.md": "8edf488739b7dd9cf1e9f3d1585603c014b2e84c491c3fb6c0416624e95259dc",
+    "docs/quickstarts/agent-plugin-authoring.md": "79e6ff5a15cdd0eb1e181bc2f95d33785f50623b38ffd2eaf31d231ec9de9f56",
     "docs/reference/cli.md": "8b15ef505ae8a3c9087689badd26cc4fd5d066a72f08afa3c4db99723b81e534",
     "docs/security/plugin-review-checklist.md": "1bee7b0bebadfd44b9cf86e288af48d3a8f9f42c0883d39823809dd1857f54f5",
-    "scripts/agent-plugin-authoring-doc-contract.test.mjs": "43d252858943a365440b9a27a505c5ae189211be17c87578279a6f286200f213",
+    "scripts/agent-plugin-authoring-doc-contract.test.mjs": "f61e2851a7e3df99f0097f3c48ed674a541e9a2908ccada78aeed3630b4b8bb8",
     "LICENSE": "e5f54170fd0cfdcac7d6439ca9cbfb97b0c2aef4c5ee9e18ebd3230873f0e7e3",
     "package.json": "7ff3f4884e5d34119571676f0a9f5b5e6de13bb3741cca12160a5a665f136dd8",
     "packages/cli/package.json": "3fc19043fe7b7fd7cc2fae985cc5be60785063d884c798f2e3a23c5425c43123"

@@ -59,11 +59,46 @@
     "hook": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "type"],
+      "required": ["name", "type", "failurePolicy"],
       "properties": {
         "name": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" },
-        "type": { "enum": ["event", "transform", "policy"] }
-      }
+        "type": { "enum": ["event", "transform", "policy"] },
+        "failurePolicy": { "enum": ["fail-closed", "use-original", "record-only"] }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "type": { "const": "event" },
+            "failurePolicy": { "const": "record-only" }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "transform" },
+            "failurePolicy": { "enum": ["fail-closed", "use-original"] }
+          }
+        },
+        {
+          "properties": {
+            "type": { "const": "policy" },
+            "failurePolicy": { "const": "fail-closed" }
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["name"],
+            "properties": { "name": { "const": "webhook.outbound" } }
+          },
+          "then": {
+            "properties": {
+              "type": { "const": "transform" },
+              "failurePolicy": { "const": "fail-closed" }
+            }
+          }
+        }
+      ]
     },
     "capabilities": {
       "type": "array",
@@ -131,7 +166,7 @@
                   {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": ["ok"],
+                    "required": ["ok", "value"],
                     "properties": { "ok": { "const": true }, "value": true }
                   },
                   {
@@ -141,29 +176,29 @@
                     "properties": {
                       "ok": { "const": false },
                       "error": {
-                        "oneOf": [
-                          {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "required": ["name", "hookName"],
-                            "properties": {
-                              "name": { "enum": ["UnknownHookError", "MissingHandlerError"] },
-                              "hookName": { "type": "string" }
-                            }
-                          },
-                          {
-                            "type": "object",
-                            "additionalProperties": false,
-                            "required": ["name", "hookName", "message"],
-                            "properties": {
-                              "name": {
-                                "enum": ["PluginHandlerError", "HookReturnContractError"]
-                              },
-                              "hookName": { "type": "string" },
-                              "message": { "type": "string" }
-                            }
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["code"],
+                        "properties": {
+                          "code": {
+                            "enum": [
+                              "input_invalid",
+                              "snapshot_unavailable",
+                              "snapshot_integrity_failed",
+                              "plugin_artifact_invalid",
+                              "plugin_timeout",
+                              "plugin_memory_exceeded",
+                              "plugin_subrequest_exceeded",
+                              "plugin_result_invalid",
+                              "capability_denied",
+                              "capability_failed",
+                              "egress_denied",
+                              "destination_unavailable",
+                              "evidence_unavailable",
+                              "runtime_unavailable"
+                            ]
                           }
-                        ]
+                        }
                       }
                     }
                   }

@@ -9,7 +9,7 @@
       "provenance": "simulation",
       "source": {
         "repository": "https://github.com/albert-einshutoin/TenantScript",
-        "revision": "45aa61f68204f82bebe7e98ebfb6ab930d70fc0e"
+        "revision": "d997dd9a6779b12746d94872cc99e945581518a3"
       },
       "sdk": {
         "range": "^0.0.0",

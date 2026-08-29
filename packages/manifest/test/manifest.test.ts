@@ -43,9 +43,39 @@ describe("public manifest JSON Schema", () => {
         "Canonical structural schema. Use parseManifest for complete semantic validation, including npm-compatible semver ranges."
     };
 
-    expect(manifestApi.tenantScriptManifestJsonSchema).toEqual(generated);
+    const generatedWithoutSemanticInvariant = JSON.parse(JSON.stringify(generated)) as {
+      properties: { hooks: { items: Record<string, unknown> } };
+    };
+    delete generatedWithoutSemanticInvariant.properties.hooks.items.allOf;
+
+    const publishedWithoutSemanticInvariant = JSON.parse(
+      JSON.stringify(manifestApi.tenantScriptManifestJsonSchema)
+    ) as { properties: { hooks: { items: Record<string, unknown> } } };
+    delete publishedWithoutSemanticInvariant.properties.hooks.items.allOf;
+
+    expect(publishedWithoutSemanticInvariant).toEqual(generatedWithoutSemanticInvariant);
     expect(manifestApi.tenantScriptManifestJsonSchema).toEqual(expected);
     expect(isDeeplyFrozen(manifestApi.tenantScriptManifestJsonSchema)).toBe(true);
+  });
+
+  it("publishes the webhook.outbound fail-closed invariant", () => {
+    const items = (
+      manifestApi.tenantScriptManifestJsonSchema as unknown as {
+        properties: { hooks: { items: { allOf?: unknown } } };
+      }
+    ).properties.hooks.items;
+
+    expect(items.allOf).toEqual([
+      {
+        if: { required: ["name"], properties: { name: { const: "webhook.outbound" } } },
+        then: {
+          properties: {
+            type: { const: "transform" },
+            failurePolicy: { const: "fail-closed" }
+          }
+        }
+      }
+    ]);
   });
 });
 
@@ -231,6 +261,44 @@ describe("parseManifest", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errors.some((error) => error.path === path)).toBe(true);
+    }
+  });
+
+  it.each([
+    ["event", "fail-closed"],
+    ["event", "use-original"],
+    ["transform", "record-only"],
+    ["policy", "use-original"],
+    ["transform", "skip"],
+    ["policy", "deny"]
+  ])("rejects failure policy %s for %s hook", (type, failurePolicy) => {
+    const result = parseManifest({
+      ...validManifest,
+      hooks: [{ ...validManifest.hooks[0], type, failurePolicy }]
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((error) => error.path === "hooks.0.failurePolicy")).toBe(true);
+    }
+  });
+
+  it("rejects use-original for the canonical webhook.outbound transform", () => {
+    const result = parseManifest({
+      ...validManifest,
+      hooks: [
+        {
+          ...validManifest.hooks[0],
+          name: "webhook.outbound",
+          type: "transform",
+          failurePolicy: "use-original"
+        }
+      ]
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((error) => error.path === "hooks.0.failurePolicy")).toBe(true);
     }
   });
 
