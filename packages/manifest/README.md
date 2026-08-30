@@ -1,7 +1,9 @@
 # @tenantscript/manifest
 
 Closed TenantScript plugin manifest schemas and compatibility validation. Use it to validate hooks,
-capability requests, version metadata, and runtime limits before registration.
+capability requests, version metadata, and runtime limits before registration. Use
+`compileExecutionSnapshotV1` and `parseExecutionSnapshotV1` for deterministic, digest-bound
+execution snapshot bytes; these APIs do not persist or publish snapshots.
 
 See the [SDK reference](https://github.com/albert-einshutoin/TenantScript/blob/main/docs/reference/sdk.md)
 and [schema diff CI guide](https://github.com/albert-einshutoin/TenantScript/blob/main/docs/reference/schema-diff-ci.md)

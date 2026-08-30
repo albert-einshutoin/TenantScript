@@ -2,6 +2,24 @@ import { z } from "zod";
 import { configSchemaSpec, manifestSchema } from "./schema.js";
 
 export {
+  compileExecutionSnapshotV1,
+  ExecutionSnapshotError,
+  executionSnapshotErrorCodes,
+  executionSnapshotRuntimeClasses,
+  parseExecutionSnapshotV1,
+  type CompileExecutionSnapshotInputV1,
+  type CompiledExecutionSnapshotV1,
+  type ExecutionSnapshotDestinationV1,
+  type ExecutionSnapshotErrorCode,
+  type ExecutionSnapshotPluginV1,
+  type ExecutionSnapshotRuntimeClass,
+  type ExecutionSnapshotV1,
+  type ValidatedHookContract,
+  type ValidatedPluginRelease,
+  type ValidatedRuntimeLimits
+} from "./execution-snapshot.js";
+
+export {
   tenantScriptManifestJsonSchema,
   type TenantScriptManifestJsonSchema
 } from "./manifest-json-schema.js";
