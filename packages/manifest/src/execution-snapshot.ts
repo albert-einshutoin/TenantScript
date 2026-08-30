@@ -180,11 +180,17 @@ export async function compileExecutionSnapshotV1(
       publishedAt: payload.publishedAt,
       sourceRevision: payload.sourceRevision
     });
-    const bytes = encodeText(serializeSnapshot(snapshot));
-    if (bytes.byteLength > MAX_SNAPSHOT_BYTES) {
+    const canonicalBytes = encodeText(serializeSnapshot(snapshot));
+    if (canonicalBytes.byteLength > MAX_SNAPSHOT_BYTES) {
       throw new ExecutionSnapshotError("snapshot_serialization_failed");
     }
-    return Object.freeze({ snapshot, bytes, digest });
+    return Object.freeze({
+      snapshot,
+      get bytes(): Uint8Array {
+        return new Uint8Array(canonicalBytes);
+      },
+      digest
+    });
   } catch (error) {
     throw preserveSnapshotError(error, "snapshot_serialization_failed");
   }

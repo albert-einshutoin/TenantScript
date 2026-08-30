@@ -94,6 +94,11 @@ describe("Execution Snapshot V1", () => {
     expect(Object.isFrozen(compiled.snapshot.limits)).toBe(true);
     expect(Object.isFrozen(compiled.snapshot.destination)).toBe(true);
 
+    const exposedBytes = compiled.bytes;
+    exposedBytes[0] = (exposedBytes[0] ?? 0) ^ 0xff;
+    expect(compiled.bytes).toEqual(encoder.encode(JSON.stringify(compiled.snapshot)));
+    expect(compiled.bytes).not.toBe(exposedBytes);
+
     const parsed = await parseExecutionSnapshotV1(compiled.bytes);
     expect(parsed).toEqual(compiled.snapshot);
     expect(new TextDecoder().decode(compiled.bytes)).toBe(JSON.stringify(compiled.snapshot));
