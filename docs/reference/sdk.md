@@ -10,6 +10,8 @@ Phase 1時点のpublic TypeScript surfaceの骨子。versionはまだ`0.0.0`で�
 | `parseManifest(input)`                | untrusted JSONをstrict validation                           | `{ok:false, errors:[{path,message}]}` |
 | `validateConfig(schema, config)`      | required/type/unknown key検証                               | config値をerrorへ含めない             |
 | `resolveGrants(capabilities, config)` | `$config.<key>`をinstallation scopeへ解決                   | 未定義referenceを拒否                 |
+| `compileExecutionSnapshotV1(input)`   | validated installation stateからimmutable snapshotを生成    | stable `ExecutionSnapshotError.code`  |
+| `parseExecutionSnapshotV1(bytes)`     | closed snapshot bytesを検証し、digest integrityを確認       | stable `ExecutionSnapshotError.code`  |
 
 Manifest invariants:
 
@@ -18,6 +20,13 @@ Manifest invariants:
 - failure policyは`event=record-only`、`transform=fail-closed|use-original`、`policy=fail-closed`の組み合わせだけを許可する。`webhook.outbound`は常に`fail-closed`のtransformである。
 - egressは`deny`または明示host allowlist。
 - provider secret、token、customer payloadをmanifestへ保存しない。
+
+Execution Snapshot V1:
+
+- `compileExecutionSnapshotV1`は、validatedなapp/tenant/installation、hook、inline plugin artifact、grant、canonical config bytes、5つのruntime limits、opaqueな`destinationReferenceId`、revision、`Date`を受け取る。
+- 出力は`schemaVersion: "1"`のclosed JSON UTF-8 bytesと`sha256:<hex>` identity。`plugin`、`configSha256`、`destination`、`publishedAt`、`sourceRevision`を含み、grantはsortして重複を拒否する。
+- canonical bytesにはraw config、credential、token、destination URL、artifact bytesを含めない。unknown field、accessor、custom prototype、sparse array、非有限number、tamperはstable error codeで拒否する。
+- `parseExecutionSnapshotV1`は保存・HTTP・active pointerを扱わず、snapshot schema、canonical field order、digestだけを検証する。storage、publication、runtime loadingは別Issueの責務である。
 
 ## `@tenantscript/host-sdk`
 
