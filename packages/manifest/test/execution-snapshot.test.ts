@@ -115,6 +115,16 @@ describe("Execution Snapshot V1", () => {
     expect(second.bytes).toEqual(first.bytes);
   });
 
+  it("keeps bounded config-array validation linear", async () => {
+    const input = validInput();
+    input.configCanonicalBytes = encoder.encode(
+      `{"items":[${new Array(60_000).fill("0").join(",")}]}`
+    );
+    const startedAt = performance.now();
+    await compileExecutionSnapshotV1(input);
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
+
   it("changes the digest when any authority-relevant field changes", async () => {
     const base = await compileExecutionSnapshotV1(validInput());
     const variants: CompileExecutionSnapshotInputV1[] = [];

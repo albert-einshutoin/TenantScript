@@ -590,7 +590,6 @@ function exactArray(
   const result: unknown[] = [];
   for (let index = 0; index < length; index += 1) {
     const name = String(index);
-    if (!names.includes(name)) throw new ExecutionSnapshotError(errorCode);
     const descriptor = Object.getOwnPropertyDescriptor(value, name);
     if (descriptor === undefined || !("value" in descriptor)) {
       throw new ExecutionSnapshotError(errorCode);
